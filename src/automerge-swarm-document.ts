@@ -1,64 +1,12 @@
 import IPFS from "ipfs";
+import pipe from 'it-pipe';
 import { Doc, init, Change, getHistory, applyChanges, change, getChanges } from "automerge";
+import { AutomergeSwarmSyncMessage } from "./automerge-swarm-message";
+import { AutomergeSwarm } from "./automerge-swarm";
 
-class AutomergeSwarm {
-  private _ipfsNode: any;
-  private _ipfsInfo: any;
+export type AutomergeSwarmDocumentChangeHandler<T = any> = (current: Doc<T>) => void;
 
-  public get ipfsNode(): any {
-    return this._ipfsNode;
-  }
-  public get ipfsInfo(): any {
-    return this._ipfsInfo;
-  }
-
-  // Initialize
-  async connect(addresses: string[]) {
-    // Setup IPFS node.
-    this._ipfsNode = await IPFS.create({
-      config: {
-        Addresses: {
-          // TODO: Move these into method parameters.
-          Swarm: [
-            '/ip4/0.0.0.0/tcp/4012',       // This is the desktop/relay node?
-            '/ip4/127.0.0.1/tcp/4013/ws'   // This is the signaling web-rtc-star server.
-          ],
-          API: '/ip4/127.0.0.1/tcp/5012',
-          Gateway: '/ip4/127.0.0.1/tcp/9191'
-        }
-      }
-    });
-    this._ipfsInfo = await this._ipfsNode.id();
-    console.log('IPFS node initialized:', this._ipfsInfo);
-
-    // TODO ===================================================================
-    // Listen for sync requests on libp2p channel:
-    // https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
-    //   Respond with full document or just hashes (compare speed?)
-    // /TODO ==================================================================
-    
-    // Connect to bootstrapping node(s).
-    const connectionPromises: Promise<any>[] = [];
-    for (const address of addresses) {
-      connectionPromises.push(this._ipfsNode.swarm.connect(address));
-    }
-    await Promise.all(connectionPromises);
-  }
-
-  // Open
-  async open(documentPath: string): Promise<AutomergeSwarmDocument | null> {
-    if (!this._ipfsNode || !this._ipfsInfo) {
-      return null;
-    }
-
-    // Return new document reference.
-    return new AutomergeSwarmDocument(this, documentPath)
-  }
-}
-
-type AutomergeSwarmDocumentChangeHandler<T = any> = (current: Doc<T>) => void;
-
-class AutomergeSwarmDocument<T = any> {
+export class AutomergeSwarmDocument<T = any> {
   // Only store/cache the full automerge document.
   private _document: Doc<T> = init();
   get document(): Doc<T> {
@@ -67,21 +15,77 @@ class AutomergeSwarmDocument<T = any> {
 
   private _hashes = new Set<string>();
 
-  // WARNING: This is a local cache of the hashes above ()
-
   private _remoteHandlers: { [id: string]: AutomergeSwarmDocumentChangeHandler } = {};
   private _localHandlers: { [id: string]: AutomergeSwarmDocumentChangeHandler } = {};
 
   constructor(
     public readonly swarm: AutomergeSwarm,
     public readonly documentPath: string
-  ) {
+  ) { }
+
+  // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
+  async load() {
+    // Pick a peer.
+    // TODO: In the future, try to re-use connections that already are open.
+    const peers = await this.swarm.ipfsNode.swarm.peers();
+    // TODO: Improve this selection algorithm.
+    const peerIndex = Math.floor(Math.random() * (peers.length - 1));
+    const { stream } = await this.swarm.ipfsNode.libp2p.dialProtocol(peers[peerIndex]);
+    // No need to send data, the handler will send data on stream init.
+
+    // TODO: Close connection upon receipt of data.
+    await pipe(
+      stream,
+      async (source: any) => {
+        let rawMessage = "";
+
+        // For each chunk of data
+        for await (const chunk of source) {
+          // TODO: Is this a full message or is a marker value needed?
+          rawMessage += chunk.toString();
+        }
+
+        console.log('received /automerge-swarm/doc-load/1.0.0 dial:', rawMessage);
+
+        const message = JSON.parse(rawMessage) as AutomergeSwarmSyncMessage;
+        await this.sync(message);
+
+        // Return an ACK.
+        return [];
+      }
+    );
+  }
+
+  async open() {
     // Open pubsub connection.
-    this.swarm.ipfsNode.pubsub.subscribe(documentPath, this.sync);
+    await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this.sync);
+
+    await this.swarm.ipfsNode.libp2p.handle('/automerge-swarm/doc-load/1.0.0', ({ stream }: any) => {
+      const loadMessage = { changes: {} } as AutomergeSwarmSyncMessage;
+      for (const hash of this._hashes) {
+        loadMessage.changes[hash] = null;
+      }
+
+      // Immediately send the connecting peer either the automerge.save'd document or a list of
+      // hashes with the changes that are cached locally.
+      pipe(
+        [JSON.stringify(loadMessage)],
+        stream,
+        async (source: any) =>  {
+          // Ignores responses.
+          for await (const _ of source) { }
+        }
+      );
+    });
 
     // TODO ===================================================================
     // Load initial document from peers.
     // /TODO ==================================================================
+    await this.load();
+  }
+
+  async close() {
+    await this.swarm.ipfsNode.pubsub.unsubscribe(this.documentPath);
   }
 
   async getFile(hash: string) {
@@ -127,7 +131,7 @@ class AutomergeSwarmDocument<T = any> {
 
     // Calculate set difference between hashes and doc history ids.
     const sender = message.from as string;
-    const messageData = JSON.parse(message.data.toString()) as AutomergeSwarmUpdateMessage;
+    const messageData = JSON.parse(message.data.toString()) as AutomergeSwarmSyncMessage;
     const messageHashes = Object.keys(messageData.changes);
     for (const [sentHash, sentChanges] of Object.entries(messageData.changes)) {
       if (sentHash && sentChanges) {
@@ -152,14 +156,6 @@ class AutomergeSwarmDocument<T = any> {
           console.error('Failed to fetch missing change from ipfs:', missingHash, err);
         });
     }
-  }
-
-  load() {
-    // Listen for a new message or send a sync message to 1 or more peers over libp2p channel.
-    //   sync when new hashes received.
-    
-    // Listen for new messages on pubsub channel.
-    //   sync when new hashes received.
   }
 
   subscribe(id: string, handler: AutomergeSwarmDocumentChangeHandler, originFilter: 'all' | 'remote' | 'local' = 'all') {
@@ -203,7 +199,7 @@ class AutomergeSwarmDocument<T = any> {
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: AutomergeSwarmUpdateMessage = { changes: { } };
+    const updateMessage: AutomergeSwarmSyncMessage = { changes: { } };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
@@ -213,16 +209,4 @@ class AutomergeSwarmDocument<T = any> {
     // Fire change handlers.
     this._fireLocalUpdateHandlers();
   }
-
-  close() {
-    this.swarm.ipfsNode.pubsub.unsubscribe(this.documentPath);
-  }
 }
-
-interface AutomergeSwarmUpdateMessage {
-  // A null value just means that the change was not sent explicitly.
-  changes: { [hash: string]: Change[] | null };
-}
-
-// Encoded using automerge.
-type AutomergeSwarmLoadMessage = string;
