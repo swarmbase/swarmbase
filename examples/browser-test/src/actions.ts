@@ -2,7 +2,23 @@ import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
 import { RootState } from "./reducers";
 import { Doc } from "automerge";
-import { AutomergeSwarmDocument } from "../../../src/automerge-swarm-document";
+import { AutomergeSwarmDocument } from "automerge-db";
+
+
+export function initializeAsync(): ThunkAction<Promise<void>, RootState, unknown, InitializeAction> {
+  return async (dispatch, getState) => {
+    const { node } = getState();
+    await node.initialize();
+    dispatch(initialize());
+    console.log('Node information:', node);
+  };
+}
+
+export const INITIALIZE = 'INITIALIZE';
+export interface InitializeAction extends Action<typeof INITIALIZE> { }
+export function initialize(): InitializeAction {
+  return { type: INITIALIZE };
+}
 
 
 export function connectAsync(addresses: string[]): ThunkAction<Promise<void>, RootState, unknown, ConnectAction> {
@@ -112,6 +128,7 @@ export function changeDocument<T=any>(documentId: string, document: Doc<T>): Cha
 }
 
 export type AllActions =
+  InitializeAction |
   ConnectAction |
   OpenDocumentAction |
   SyncDocumentAction |
