@@ -2,15 +2,26 @@ import IPFS from "ipfs";
 import pipe from 'it-pipe';
 import { Doc, init, Change, getHistory, applyChanges, change, getChanges } from "automerge";
 
+function shuffleArray<T=any>(array: T[]) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
 export class AutomergeSwarm {
   private _ipfsNode: any;
   private _ipfsInfo: any;
+  private _peerAddrs: string[] = [];
 
   public get ipfsNode(): any {
     return this._ipfsNode;
   }
   public get ipfsInfo(): any {
     return this._ipfsInfo;
+  }
+  public get peerAddrs(): string[] {
+    return this._peerAddrs;
   }
 
   public async initialize() {
@@ -43,10 +54,20 @@ export class AutomergeSwarm {
           ]
         },
         Bootstrap: [
-          '/ip4/127.0.0.1/tcp/4003/ws/ipfs/QmZtGzCNw2hnGaGf94C3HXPpq4UjuFStGAJp3gVQPYvTtK'
+          '/ip4/127.0.0.1/tcp/4003/ws/ipfs/QmRgNzjTje3BvSYbfbVQzZV33cecsApBYrvVRfyZnjVRpj'
         ],
       }
-    })
+    });
+    this._ipfsNode.libp2p.connectionManager.on('peer:connect', (connection: any) => {
+      this._peerAddrs.push(connection.remotePeer.toB58String());
+    });
+    this._ipfsNode.libp2p.connectionManager.on('peer:disconnect', (connection: any) => {
+      const peerAddr = connection.remotePeer.toB58String();
+      const peerIndex = this._peerAddrs.indexOf(peerAddr);
+      if (peerIndex > 0) {
+        this._peerAddrs.splice(peerIndex, 1);
+      }
+    });
     this._ipfsInfo = await this._ipfsNode.id();
     console.log('IPFS node initialized:', this._ipfsInfo);
   }
@@ -103,40 +124,54 @@ export class AutomergeSwarmDocument<T = any> {
       return;
     }
 
-    // TODO: Improve this selection algorithm.
-    const peerIndex = Math.floor(Math.random() * (peers.length - 1));
-    const selectedPeer = peers[peerIndex];
-    console.log('Selected peer addresses:', selectedPeer.addr.toString());
-    // const { stream } = await this.swarm.ipfsNode.libp2p.dialProtocol(selectedPeer.addr, '/automerge-swarm/doc-load/1.0.0');
-    const { stream } = await this.swarm.ipfsNode.libp2p.dialProtocol(selectedPeer.addr.toString(), '/automerge-swarm/doc-load/1.0.0');
-    // No need to send data, the handler will send data on stream init.
+    // Shuffle peer array.
+    const shuffledPeers = [...peers];
+    shuffleArray(shuffledPeers);
+
+    let stream: any;
+    for (const peer of shuffledPeers) {
+      try {
+        console.log('Selected peer addresses:', peer.addr.toString());
+        const docLoadConnection = await this.swarm.ipfsNode.libp2p.dialProtocol(peer.addr.toString(), ['/automerge-swarm/doc-load/1.0.0']);
+        stream = docLoadConnection.stream;
+        break;
+      } catch (err) {
+        console.warn('Failed to load document from:', peer.addr.toString(), err);
+      }
+    }
 
     // TODO: Close connection upon receipt of data.
-    await pipe(
-      stream,
-      async (source: any) => {
-        let rawMessage = "";
+    if (stream) {
+      await pipe(
+        stream,
+        async (source: any) => {
+          let rawMessage = "";
 
-        // For each chunk of data
-        for await (const chunk of source) {
-          // TODO: Is this a full message or is a marker value needed?
-          rawMessage += chunk.toString();
+          // For each chunk of data
+          for await (const chunk of source) {
+            // TODO: Is this a full message or is a marker value needed?
+            rawMessage += chunk.toString();
+          }
+
+          console.log('received /automerge-swarm/doc-load/1.0.0 response:', rawMessage);
+
+          const message = JSON.parse(rawMessage) as AutomergeSwarmSyncMessage;
+          await this.sync(message);
+
+          // Return an ACK.
+          return [];
         }
-
-        console.log('received /automerge-swarm/doc-load/1.0.0 response:', rawMessage);
-
-        const message = JSON.parse(rawMessage) as AutomergeSwarmSyncMessage;
-        await this.sync(message);
-
-        // Return an ACK.
-        return [];
-      }
-    );
+      );
+    }
   }
 
   public async open() {
     // Open pubsub connection.
-    await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this.sync);
+    // await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this.sync.bind(this));
+    await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, (rawMessage: any) => {
+      const message = JSON.parse(rawMessage.data.toString()) as AutomergeSwarmSyncMessage;
+      this.sync(message);
+    });
 
     // TODO: Make the messages on this specific to a document.
     await this.swarm.ipfsNode.libp2p.handle('/automerge-swarm/doc-load/1.0.0', ({ stream }: any) => {
@@ -196,45 +231,33 @@ export class AutomergeSwarmDocument<T = any> {
   }
 
   // Given a list of hashes, fetch missing update messages.
-  public async sync(message: any) {
-    // Get document history.
-    const history = getHistory(this._document);
-    const historyHashes = new Set<string>();
-    for (const state of history) {
-      if (state.change.message) {
-        historyHashes.add(state.change.message);
-      } else {
-        console.error('Found a history state without a hash', state);
-        console.error('Was syncing:', message);
+  public async sync(message: AutomergeSwarmSyncMessage) {
+    // Apply sent changes.
+    for (const [sentHash, sentChanges] of Object.entries(message.changes)) {
+      if (sentHash && !this._hashes.has(sentHash)) {
+        // Only process hashes that we haven't seen yet.
+        if (sentChanges) {
+          // Apply the changes that were sent directly.
+          this._document = applyChanges(this.document, sentChanges);
+          this._hashes.add(sentHash);
+          this._fireRemoteUpdateHandlers();
+        } else {
+          // Fetch missing hashes using IPFS.
+          this.getFile(sentHash)
+            .then(missingChanges => {
+              if (missingChanges) {
+                this._document = applyChanges(this.document, missingChanges);
+                this._hashes.add(sentHash);
+                this._fireLocalUpdateHandlers();
+              } else {
+                console.error(`'/ipfs/${sentHash}' returned nothing`, missingChanges);
+              }
+            })
+            .catch(err => {
+              console.error('Failed to fetch missing change from ipfs:', sentHash, err);
+            });
+        }
       }
-    }
-
-    // Calculate set difference between hashes and doc history ids.
-    const sender = message.from as string;
-    const messageData = JSON.parse(message.data.toString()) as AutomergeSwarmSyncMessage;
-    const messageHashes = Object.keys(messageData.changes);
-    for (const [sentHash, sentChanges] of Object.entries(messageData.changes)) {
-      if (sentHash && sentChanges) {
-        this._document = applyChanges(this.document, sentChanges);
-        this._hashes.add(sentHash);
-        this._fireRemoteUpdateHandlers();
-      }
-    }
-
-    // Fetch missing hashes using IPFS.
-    const missingHashes = messageHashes.filter(x => messageData.changes[x] && !historyHashes.has(x));
-    for (const missingHash of missingHashes) {
-      this.getFile(missingHash)
-        .then(missingChanges => {
-          if (missingChanges) {
-            this._document = applyChanges(this.document, missingChanges);
-            this._hashes.add(missingHash);
-            this._fireLocalUpdateHandlers();
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch missing change from ipfs:', missingHash, err);
-        });
     }
   }
 

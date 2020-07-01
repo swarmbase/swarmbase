@@ -1,7 +1,7 @@
 import { Doc } from "automerge";
 import { AutomergeSwarm } from "automerge-db";
 import { AutomergeSwarmDocument } from "automerge-db";
-import { AllActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT } from "./actions";
+import { AllActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE } from "./actions";
 
 export interface AnnouncementDocument {
   announcement: string;
@@ -22,6 +22,12 @@ export const initialState: RootState = {
 
 export function rootReducer(state: RootState = initialState, action: AllActions): RootState {
   switch (action.type) {
+    // Initialization
+    case INITIALIZE: {
+      return {
+        ...state
+      };
+    }
     // Connection
     case CONNECT: {
       return state;

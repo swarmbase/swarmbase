@@ -36,19 +36,31 @@ class App extends React.Component<AppProps, AppState, RootState> {
   }
 
   render() {
+    const ipfsInfo = this.props.state.node.ipfsInfo;
+
     return (
       <div>
+        <div id="info">
+          <div><strong>Node Addresses:</strong></div>
+          <ul>
+            {ipfsInfo && ipfsInfo.addresses && ipfsInfo.addresses.map((address: any, i: number) => <li key={i}><pre>{address.toString()}</pre></li>)}
+          </ul>
+          <div><strong>Connected Peers:</strong></div>
+          <ul>
+            {this.props.state.node.peerAddrs.map((address: any, i: number) => <li key={i}><pre>{address}</pre></li>)}
+          </ul>
+        </div>
         <div id="connect">
           <input type="text" defaultValue={this.state.connectionAddress} onChange={(e) => this.setState({ connectionAddress: e.currentTarget.value })} />
           <button onClick={() => this.props.onConnect([this.state.connectionAddress])}>Connect</button>
         </div>
         <div id="open">
-          <input type="text" value={this.state.documentId} onInput={(e) => this.setState({ documentId: e.currentTarget.value })} />
+          <input type="text" value={this.state.documentId} onChange={(e) => this.setState({ documentId: e.currentTarget.value })} />
           <button onClick={() => this.props.onDocumentOpen(this.state.documentId)}>Open</button>
           <button onClick={() => this.props.onDocumentClose(this.state.documentId)}>Close</button>
         </div>
         <pre id="current">
-          {JSON.stringify(document, null, 2)}
+          {JSON.stringify(this.props.state.document, null, 2)}
         </pre>
         <div id="actions">
           <button onClick={() => {

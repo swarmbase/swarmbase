@@ -12,12 +12,12 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
-    "tslint": "^6.1.2",
+    "eslint": "^7.3.1",
     "typescript": "^3.9.5"
   },
   "dependencies": {
     "automerge": "^0.14.1",
-    "ipfs": "^0.46.0",
+    "ipfs": "^0.47.0",
     "it-pipe": "^1.1.0"
   }
 }
