@@ -105,7 +105,7 @@ export function changeDocumentAsync<T=any>(docId: string, changeFn: (current: T)
   return async (dispatch, getState) => {
     const { documentRef, documentId } = getState();
     if (documentId !== docId) {
-      throw 'Trying to edit a document that is not opened: ' + docId;
+      throw new Error(`Trying to edit a document that is not opened: ${docId}`);
     }
 
     if (documentRef) {
@@ -114,7 +114,7 @@ export function changeDocumentAsync<T=any>(docId: string, changeFn: (current: T)
       return documentRef.document;
     }
 
-    throw 'Trying to edit a document that is not opened: ' + docId;
+    throw new Error(`Trying to edit a document that is not opened: ${docId}`);
   };
 }
 

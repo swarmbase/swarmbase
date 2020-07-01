@@ -119,7 +119,6 @@ export class AutomergeSwarmDocument<T = any> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
     const peers = await this.swarm.ipfsNode.swarm.peers();
-    console.log('Current peers:', peers);
     if (peers.length === 0) {
       return;
     }
