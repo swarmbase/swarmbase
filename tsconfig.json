@@ -12,7 +12,7 @@
     //   "automerge-swarm-document.d.ts",
     //   "automerge-swarm-message.d.ts"
     // ],
-    "typeRoots": ["./types"],
+    "typeRoots": ["types"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -23,7 +23,8 @@
     "examples"
   ],
   "include": [
-    "./src",
-    "./types"
+    "src",
+    "types",
+    "bin"
   ]
 }

@@ -7,12 +7,16 @@
     "prepublish": "npm run tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "automerge-swarm-d": "bin/automerge-swarm-d.ts"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
     "eslint": "^7.3.1",
+    "ts-node": "^8.10.2",
     "typescript": "^3.9.5"
   },
   "dependencies": {
