@@ -1,5 +1,6 @@
 import IPFS from "ipfs";
 import { AutomergeSwarmDocument } from "./automerge-swarm-document";
+import { AutomergeSwarmConfig, DEFAULT_CONFIG } from "./automerge-swarm-config";
 
 export class AutomergeSwarm {
   private _ipfsNode: any;
@@ -16,27 +17,11 @@ export class AutomergeSwarm {
     return this._peerAddrs;
   }
 
+  constructor(public readonly config: AutomergeSwarmConfig = DEFAULT_CONFIG) { }
+
   public async initialize() {
     // Setup IPFS node.
-    this._ipfsNode = await IPFS.create({
-      relay: {
-        enabled: true, // enable circuit relay dialer and listener
-        hop: {
-          enabled: true // enable circuit relay HOP (make this node a relay)
-        }
-      },
-      config: {
-        Addresses: {
-          Swarm: [
-            '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
-            // '/dns4/star-signal.cloud.ipfs.team/tcp/443/wss/p2p-webrtc-star'
-          ]
-        },
-        Bootstrap: [
-          '/ip4/127.0.0.1/tcp/4003/ws/ipfs/QmRgNzjTje3BvSYbfbVQzZV33cecsApBYrvVRfyZnjVRpj'
-        ],
-      }
-    });
+    this._ipfsNode = await IPFS.create(this.config.ipfs);
     this._ipfsNode.libp2p.connectionManager.on('peer:connect', (connection: any) => {
       this._peerAddrs.push(connection.remotePeer.toB58String());
     });

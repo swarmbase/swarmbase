@@ -1,9 +1,34 @@
 import { AutomergeSwarm } from "./automerge-swarm";
 import { AutomergeSwarmDocument } from "./automerge-swarm-document";
 import { AutomergeSwarmSyncMessage } from "./automerge-swarm-messages";
+import { AutomergeSwarmConfig } from "./automerge-swarm-config";
+
+export const DEFAULT_NODE_CONFIG: AutomergeSwarmConfig = {
+  ipfs: {
+    relay: {
+      enabled: true, // enable circuit relay dialer and listener
+      hop: {
+        enabled: true // enable circuit relay HOP (make this node a relay)
+      }
+    },
+    config: {
+      Addresses: {
+        Swarm: [
+          '/ip4/0.0.0.0/tcp/4003/ws',
+          '/ip4/0.0.0.0/tcp/4001',
+          'ip6/::/tcp/4001'
+        ]
+      },
+      Bootstrap: [],
+    }
+  },
+
+  pubsubDocumentPrefix: '/document/',
+  pubsubDocumentPublishPath: '/documents'
+};
 
 export class AutomergeSwarmNode {
-  private _swarm = new AutomergeSwarm();
+  private _swarm = new AutomergeSwarm(this.config);
   public get swarm(): AutomergeSwarm {
     return this._swarm;
   }
@@ -14,7 +39,7 @@ export class AutomergeSwarmNode {
   private _docPublishHandler: ((rawMessage: any) => void) | null = null;
 
   constructor(
-    public readonly documentsPath = '/documents'
+    public readonly config: AutomergeSwarmConfig = DEFAULT_NODE_CONFIG
   ) {}
 
   // Start
@@ -62,13 +87,13 @@ export class AutomergeSwarmNode {
         console.error('Error:', err);
       }
     };
-    await this.swarm.ipfsNode.pubsub.subscribe(this.documentsPath, this._docPublishHandler);
-    console.log(`Listening for pinning requests on: ${this.documentsPath}`)
+    await this.swarm.ipfsNode.pubsub.subscribe(this.config.pubsubDocumentPublishPath, this._docPublishHandler);
+    console.log(`Listening for pinning requests on: ${this.config.pubsubDocumentPublishPath}`)
   }
 
   public stop() {
     if (this._docPublishHandler) {
-      this.swarm.ipfsNode.pubsub.unsubscribe(this.documentsPath, this._docPublishHandler);
+      this.swarm.ipfsNode.pubsub.unsubscribe(this.config.pubsubDocumentPublishPath, this._docPublishHandler);
     }
     if (this._subscriptions) {
       for (const [id, ref] of this._subscriptions) {
