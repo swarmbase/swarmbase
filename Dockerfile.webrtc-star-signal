@@ -1,0 +1,15 @@
+FROM node:14-alpine
+
+FROM node:14-alpine AS builder
+
+RUN apk update && apk add python make gcc g++
+USER root
+RUN mkdir -p /app
+WORKDIR /app
+RUN npm install libp2p-webrtc-star@0.18.5
+
+FROM node:14-alpine
+
+COPY --from=builder /app /app
+WORKDIR /app
+CMD npx star-signal

@@ -1,6 +1,6 @@
 import IPFS from "ipfs";
 import pipe from "it-pipe";
-import { Doc, init, Change, applyChanges, change, getChanges } from "automerge";
+import { Doc, init, Change, applyChanges, change, getChanges, getHistory } from "automerge";
 import { AutomergeSwarm } from "./automerge-swarm";
 import { shuffleArray } from "./utils";
 import { AutomergeSwarmDocumentChangeHandler } from "./automerge-swarm-change-handlers";
@@ -50,6 +50,7 @@ export class AutomergeSwarmDocument<T = any> {
 
     // TODO: Close connection upon receipt of data.
     if (stream) {
+      console.log('Opening stream for /automerge-swarm/doc-load/1.0.0', stream);
       await pipe(
         stream,
         async (source: any) => {
@@ -70,6 +71,26 @@ export class AutomergeSwarmDocument<T = any> {
           return [];
         }
       );
+    } else {
+      console.log('Failed to open this document on any nodes. Assuming this is a new document...');
+      // Apply local change w/ automerge.
+      const changes = getHistory(this.document).map(state => state.change);
+
+      // Store changes in ipfs.
+      const newFileResult = this.swarm.ipfsNode.add(JSON.stringify(changes));
+      let newFile: any = null;
+      for await (newFile of newFileResult) { }
+      const hash = newFile.cid.toString() as string;
+      this._hashes.add(hash);
+
+      // Send new message.
+      const updateMessage: AutomergeSwarmSyncMessage = { documentId: this.documentPath, changes: { } };
+      for (const oldHash of this._hashes) {
+        updateMessage.changes[oldHash] = null;
+      }
+      updateMessage.changes[hash] = changes;
+
+      this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
     }
   }
 

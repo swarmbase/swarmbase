@@ -16,7 +16,7 @@ export const DEFAULT_NODE_CONFIG: AutomergeSwarmConfig = {
         Swarm: [
           '/ip4/0.0.0.0/tcp/4003/ws',
           '/ip4/0.0.0.0/tcp/4001',
-          'ip6/::/tcp/4001'
+          '/ip6/::/tcp/4001'
         ]
       },
       Bootstrap: [],
@@ -45,13 +45,14 @@ export class AutomergeSwarmNode {
   // Start
   public async start() {
     await this.swarm.initialize();
-    console.log('Node Addresses:', this.swarm.ipfsInfo.addresses);
+    // console.log('Node Addresses:', this.swarm.ipfsInfo.addresses);
     
     // Open a pubsub channel (set by some config) for controlling this swarm of listeners.
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage: any) => {
       try {
         const message = JSON.parse(rawMessage.data.toString()) as AutomergeSwarmSyncMessage;
+        console.log('Received Document Publish message:', rawMessage);
         const docRef = this.swarm.doc(message.documentId);
 
         if (docRef) {

@@ -1,0 +1,5 @@
+Dockerfile.browser-test
+Dockerfile.node
+node_modules/
+examples/browser-test/node_modules
+examples/browser-test/.env

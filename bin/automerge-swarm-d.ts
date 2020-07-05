@@ -1,8 +1,8 @@
-#!/usr/bin/env ts-node --files=bin/automerge-swarm.d.ts
+#!/usr/bin/env node
 
 import { AutomergeSwarmNode } from '../src';
 
+console.log('Creating a new swarm node...');
 const swarmNode = new AutomergeSwarmNode();
-console.log('Node:', swarmNode);
 console.log('Starting node...');
 swarmNode.start();

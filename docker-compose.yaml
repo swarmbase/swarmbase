@@ -1,0 +1,28 @@
+version: "3.7"
+services:
+  browser-test:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.browser-test
+    image: automerge-swarm-browser-test:latest
+    ports:
+      - 3000:3000
+    volumes:
+      - ./:/app
+  node:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.node
+    image: automerge-swarm-node:latest
+    ports:
+      - 4001:4001
+      - 4003:4003
+    volumes:
+      - ./:/app
+  star-signal:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.webrtc-star-signal
+    image: automerge-swarm-signal:latest
+    ports:
+      - 9090:9090

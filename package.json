@@ -4,11 +4,11 @@
   "description": "",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
-    "prepublish": "npm run tsc",
+    "prepublishOnly": "npm run tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "automerge-swarm-d": "bin/automerge-swarm-d.ts"
+    "automerge-swarm-d": "dist/bin/automerge-swarm-d.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
