@@ -1,12 +1,12 @@
 import React from 'react';
 import './App.css';
-import { connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AllActions, initializeAsync } from './actions';
-import { RootState } from './reducers';
+import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from 'automerge-swarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
+import { AnnouncementDocument } from './models';
 
 interface AppProps {
-  state: RootState;
+  state: AutomergeSwarmState<AnnouncementDocument>;
   onInitialize: () => Promise<void>;
   onConnect: (addresses: string[]) => any;
   onDocumentOpen: (documentId: string) => any;
@@ -19,7 +19,7 @@ interface AppState {
   documentId: string;
 }
 
-class App extends React.Component<AppProps, AppState, RootState> {
+class App extends React.Component<AppProps, AppState, AutomergeSwarmState<AnnouncementDocument>> {
   constructor(public props: AppProps) {
     super(props)
 
@@ -47,7 +47,7 @@ class App extends React.Component<AppProps, AppState, RootState> {
           </ul>
           <div><strong>Connected Peers:</strong></div>
           <ul>
-            {this.props.state.node.peerAddrs.map((address: any, i: number) => <li key={i}><pre>{address}</pre></li>)}
+            {this.props.state.peers.map((address: string, i: number) => <li key={i}><pre>{address}</pre></li>)}
           </ul>
         </div>
         <div id="connect">
@@ -57,32 +57,35 @@ class App extends React.Component<AppProps, AppState, RootState> {
         <div id="open">
           <input type="text" value={this.state.documentId} onChange={(e) => this.setState({ documentId: e.currentTarget.value })} />
           <button onClick={() => this.props.onDocumentOpen(this.state.documentId)}>Open</button>
-          <button onClick={() => this.props.onDocumentClose(this.state.documentId)}>Close</button>
         </div>
-        <pre id="current">
-          {JSON.stringify(this.props.state.document, null, 2)}
-        </pre>
-        <div id="actions">
-          <button onClick={() => {
-            if (this.props.state.documentId) {
+        {Object.entries(this.props.state.documents).map(([documentPath, documentState]) => <React.Fragment key={documentPath}>
+          <h3>{documentPath}</h3>
+          <pre>
+            {JSON.stringify(documentState.document, null, 2)}
+          </pre>
+          <div>
+            <button onClick={() => {
               const r = Math.random().toString(36).substring(7);
-              console.log('Setting document message to:', r);
-              this.props.onDocumentChange(this.props.state.documentId, currentDoc => {
+              console.log(`Setting the message field of document '${documentPath}' to:`, r);
+              this.props.onDocumentChange(documentPath, currentDoc => {
                 currentDoc.message = r;
               });
-            }
-          }}>Update Document</button>
-        </div>
+            }}>Update Document</button>
+            <button onClick={() => {
+              this.props.onDocumentClose(documentPath);
+            }}>Close Document</button>
+          </div>
+        </React.Fragment>)}
       </div>
     );
   }
 }
 
-function mapStateToProps(state: RootState) {
+function mapStateToProps(state: AutomergeSwarmState<AnnouncementDocument>) {
   return { state };
 }
 
-function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AllActions>) {
+function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<AnnouncementDocument>, unknown, AutomergeSwarmActions>) {
   return {
     onInitialize: () => dispatch(initializeAsync()),
     onConnect: (addresses: string[]) => dispatch(connectAsync(addresses)),

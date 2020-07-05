@@ -5,8 +5,9 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
-import { rootReducer } from './reducers';
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from 'automerge-swarm-redux';
 import thunk from 'redux-thunk';
+import { AnnouncementDocument } from './models';
 
 const logger: Middleware = store => next => action => {
   console.log('dispatching', action);
@@ -15,7 +16,7 @@ const logger: Middleware = store => next => action => {
   return result;
 }
 
-const store = createStore(rootReducer, applyMiddleware(thunk, logger));
+const store = createStore<AutomergeSwarmState<AnnouncementDocument>, AutomergeSwarmActions, unknown, unknown>(automergeSwarmReducer, applyMiddleware(thunk, logger));
 
 ReactDOM.render(
   <Provider store={store}>

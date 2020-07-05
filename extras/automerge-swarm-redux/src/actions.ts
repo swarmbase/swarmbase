@@ -7,9 +7,15 @@ import { AutomergeSwarmDocument } from "automerge-swarm";
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 
-export function initializeAsync(): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, InitializeAction> {
+export function initializeAsync<T>(): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
+    node.subscribeToPeerConnect('peer-connect', (address: string) => {
+      dispatch(peerConnect(address));
+    });
+    node.subscribeToPeerDisconnect('peer-disconnect', (address: string) => {
+      dispatch(peerDisconnect(address));
+    })
     await node.initialize();
     dispatch(initialize());
     console.log('Node information:', node);
@@ -23,7 +29,7 @@ export function initialize(): InitializeAction {
 }
 
 
-export function connectAsync(addresses: string[]): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, ConnectAction> {
+export function connectAsync<T>(addresses: string[]): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
     await node.connect(addresses);
@@ -42,7 +48,7 @@ export function connect(addresses: string[]): ConnectAction {
 }
 
 
-export function openDocumentAsync(documentId: string): ThunkAction<Promise<AutomergeSwarmDocument | null>, AutomergeSwarmState, unknown, OpenDocumentAction | SyncDocumentAction> {
+export function openDocumentAsync<T>(documentId: string): ThunkAction<Promise<AutomergeSwarmDocument | null>, AutomergeSwarmState<T>, unknown, OpenDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
     const documentRef = node.doc(documentId);
@@ -76,7 +82,7 @@ export function openDocument(documentId: string, documentRef: AutomergeSwarmDocu
 }
 
 
-export function closeDocumentAsync(documentId: string): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, CloseDocumentAction | SyncDocumentAction> {
+export function closeDocumentAsync<T>(documentId: string): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, CloseDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
     const { documents } = getState();
     if (documents[documentId] && documents[documentId].documentRef) {
@@ -109,7 +115,7 @@ export function syncDocument(documentId: string, document: Doc<any>): SyncDocume
 }
 
 
-export function changeDocumentAsync<T=any>(documentId: string, changeFn: (current: T) => void, message?: string): ThunkAction<Promise<Doc<T>>, AutomergeSwarmState, unknown, ChangeDocumentAction> {
+export function changeDocumentAsync<T>(documentId: string, changeFn: (current: T) => void, message?: string): ThunkAction<Promise<Doc<T>>, AutomergeSwarmState<T>, unknown, ChangeDocumentAction> {
   return async (dispatch, getState) => {
     const { documents } = getState();
     if (documents[documentId] && documents[documentId].documentRef) {
@@ -128,9 +134,28 @@ export interface ChangeDocumentAction extends Action<typeof CHANGE_DOCUMENT> {
   documentId: string;
   document: Doc<any>;
 }
-export function changeDocument<T=any>(documentId: string, document: Doc<T>): ChangeDocumentAction {
+export function changeDocument<T>(documentId: string, document: Doc<T>): ChangeDocumentAction {
   return { type: CHANGE_DOCUMENT, documentId, document };
 }
+
+
+export const PEER_CONNECT = 'AUTOMERGE_SWARM_PEER_CONNECT';
+export interface PeerConnectAction extends Action<typeof PEER_CONNECT> {
+  peerAddress: string;
+}
+export function peerConnect(peerAddress: string): PeerConnectAction {
+  return { type: PEER_CONNECT, peerAddress };
+}
+
+
+export const PEER_DISCONNECT = 'AUTOMERGE_SWARM_PEER_DISCONNECT';
+export interface PeerDisconnectAction extends Action<typeof PEER_DISCONNECT> {
+  peerAddress: string;
+}
+export function peerDisconnect(peerAddress: string): PeerDisconnectAction {
+  return { type: PEER_DISCONNECT, peerAddress };
+}
+
 
 export type AutomergeSwarmActions =
   InitializeAction |
@@ -138,4 +163,6 @@ export type AutomergeSwarmActions =
   OpenDocumentAction |
   CloseDocumentAction |
   SyncDocumentAction |
-  ChangeDocumentAction;
+  ChangeDocumentAction |
+  PeerConnectAction |
+  PeerDisconnectAction;

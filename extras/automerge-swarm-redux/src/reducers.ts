@@ -1,34 +1,31 @@
 import { Doc } from "automerge";
 import { AutomergeSwarm } from "automerge-swarm";
 import { AutomergeSwarmDocument } from "automerge-swarm";
-import { AutomergeSwarmActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE, CLOSE_DOCUMENT } from "./actions";
+import { AutomergeSwarmActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE, CLOSE_DOCUMENT, PEER_CONNECT, PEER_DISCONNECT } from "./actions";
 
-export interface AnnouncementDocument {
-  announcement: string;
-}
 
 // user id should be the same as peer id.
-export interface AutomergeSwarmState {
+export interface AutomergeSwarmState<T> {
   node: AutomergeSwarm;
-  documents: {[documentPath: string]: AutomergeSwarmDocumentState};
-
-  // TODO: Add peers list.
+  documents: {[documentPath: string]: AutomergeSwarmDocumentState<T>};
+  peers: string[];
 }
 
-export interface AutomergeSwarmDocumentState {
+export interface AutomergeSwarmDocumentState<T> {
   // documentId: string;
   documentRef: AutomergeSwarmDocument;
-  document: Doc<AnnouncementDocument>;
+  document: Doc<T>;
 
   // TODO: Add peers list.
 }
 
-export const initialState: AutomergeSwarmState = {
+export const initialState: AutomergeSwarmState<any> = {
   node: new AutomergeSwarm(),
-  documents: {}
+  documents: {},
+  peers: []
 };
 
-export function rootReducer(state: AutomergeSwarmState = initialState, action: AutomergeSwarmActions): AutomergeSwarmState {
+export function automergeSwarmReducer<T>(state: AutomergeSwarmState<T> = initialState, action: AutomergeSwarmActions): AutomergeSwarmState<T> {
   switch (action.type) {
     // Initialization
     case INITIALIZE: {
@@ -89,9 +86,32 @@ export function rootReducer(state: AutomergeSwarmState = initialState, action: A
       const documents = { ...state.documents };
       const documentState = { ...documents[action.documentId] };
       documentState.document = action.document;
+      documents[action.documentId] = documentState;
       return {
         ...state,
         documents
+      };
+    }
+    case PEER_CONNECT: {
+      const currentPeers = new Set(state.peers);
+      if (currentPeers.has(action.peerAddress)) {
+        return state;
+      }
+      currentPeers.add(action.peerAddress);
+      const peers = [...currentPeers];
+      return {
+        ...state,
+        peers
+      };
+    }
+    case PEER_DISCONNECT: {
+      const peers = state.peers.filter(addr => addr !== action.peerAddress);
+      if (state.peers.length === peers.length) {
+        return state;
+      }
+      return {
+        ...state,
+        peers
       };
     }
     default: {
