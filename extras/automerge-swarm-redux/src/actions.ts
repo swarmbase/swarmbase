@@ -1,11 +1,13 @@
 import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
-import { RootState } from "./reducers";
+import { AutomergeSwarmState } from "./reducers";
 import { Doc } from "automerge";
 import { AutomergeSwarmDocument } from "automerge-swarm";
 
 
-export function initializeAsync(): ThunkAction<Promise<void>, RootState, unknown, InitializeAction> {
+// TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
+
+export function initializeAsync(): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, InitializeAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
     await node.initialize();
@@ -14,14 +16,14 @@ export function initializeAsync(): ThunkAction<Promise<void>, RootState, unknown
   };
 }
 
-export const INITIALIZE = 'INITIALIZE';
+export const INITIALIZE = 'AUTOMERGE_SWARM_INITIALIZE';
 export interface InitializeAction extends Action<typeof INITIALIZE> { }
 export function initialize(): InitializeAction {
   return { type: INITIALIZE };
 }
 
 
-export function connectAsync(addresses: string[]): ThunkAction<Promise<void>, RootState, unknown, ConnectAction> {
+export function connectAsync(addresses: string[]): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
     await node.connect(addresses);
@@ -31,7 +33,7 @@ export function connectAsync(addresses: string[]): ThunkAction<Promise<void>, Ro
   };
 }
 
-export const CONNECT = 'CONNECT';
+export const CONNECT = 'AUTOMERGE_SWARM_CONNECT';
 export interface ConnectAction extends Action<typeof CONNECT> {
   addresses: string[]
 }
@@ -40,7 +42,7 @@ export function connect(addresses: string[]): ConnectAction {
 }
 
 
-export function openDocumentAsync(documentId: string): ThunkAction<Promise<AutomergeSwarmDocument | null>, RootState, unknown, OpenDocumentAction | SyncDocumentAction> {
+export function openDocumentAsync(documentId: string): ThunkAction<Promise<AutomergeSwarmDocument | null>, AutomergeSwarmState, unknown, OpenDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
     const { node } = getState();
     const documentRef = node.doc(documentId);
@@ -64,7 +66,7 @@ export function openDocumentAsync(documentId: string): ThunkAction<Promise<Autom
   };
 }
 
-export const OPEN_DOCUMENT = 'OPEN_DOCUMENT';
+export const OPEN_DOCUMENT = 'AUTOMERGE_SWARM_OPEN_DOCUMENT';
 export interface OpenDocumentAction extends Action<typeof OPEN_DOCUMENT> {
   documentId: string;
   documentRef: AutomergeSwarmDocument;
@@ -74,10 +76,11 @@ export function openDocument(documentId: string, documentRef: AutomergeSwarmDocu
 }
 
 
-export function closeDocumentAsync(documentId: string): ThunkAction<Promise<void>, RootState, unknown, CloseDocumentAction | SyncDocumentAction> {
+export function closeDocumentAsync(documentId: string): ThunkAction<Promise<void>, AutomergeSwarmState, unknown, CloseDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
-    const { documentRef } = getState();
-    if (documentRef) {
+    const { documents } = getState();
+    if (documents[documentId] && documents[documentId].documentRef) {
+      const documentRef = documents[documentId].documentRef;
       documentRef.unsubscribe(documentId);
       await documentRef.close();
       dispatch(closeDocument(documentId));
@@ -87,7 +90,7 @@ export function closeDocumentAsync(documentId: string): ThunkAction<Promise<void
   };
 }
 
-export const CLOSE_DOCUMENT = 'CLOSE_DOCUMENT';
+export const CLOSE_DOCUMENT = 'AUTOMERGE_SWARM_CLOSE_DOCUMENT';
 export interface CloseDocumentAction extends Action<typeof CLOSE_DOCUMENT> {
   documentId: string;
 }
@@ -96,7 +99,7 @@ export function closeDocument(documentId: string): CloseDocumentAction {
 }
 
 
-export const SYNC_DOCUMENT = 'SYNC_DOCUMENT';
+export const SYNC_DOCUMENT = 'AUTOMERGE_SWARM_SYNC_DOCUMENT';
 export interface SyncDocumentAction extends Action<typeof SYNC_DOCUMENT> {
   documentId: string;
   document: Doc<any>;
@@ -106,24 +109,21 @@ export function syncDocument(documentId: string, document: Doc<any>): SyncDocume
 }
 
 
-export function changeDocumentAsync<T=any>(docId: string, changeFn: (current: T) => void, message?: string): ThunkAction<Promise<Doc<T>>, RootState, unknown, ChangeDocumentAction> {
+export function changeDocumentAsync<T=any>(documentId: string, changeFn: (current: T) => void, message?: string): ThunkAction<Promise<Doc<T>>, AutomergeSwarmState, unknown, ChangeDocumentAction> {
   return async (dispatch, getState) => {
-    const { documentRef, documentId } = getState();
-    if (documentId !== docId) {
-      throw new Error(`Trying to edit a document that is not opened: ${docId}`);
-    }
-
-    if (documentRef) {
+    const { documents } = getState();
+    if (documents[documentId] && documents[documentId].documentRef) {
+      const documentRef = documents[documentId].documentRef;
       await documentRef.change(changeFn, message);
       dispatch(changeDocument(documentId, documentRef.document));
       return documentRef.document;
+    } else {
+      throw new Error(`Trying to edit a document that is not opened: ${documentId}`);
     }
-
-    throw new Error(`Trying to edit a document that is not opened: ${docId}`);
   };
 }
 
-export const CHANGE_DOCUMENT = 'CHANGE_DOCUMENT';
+export const CHANGE_DOCUMENT = 'AUTOMERGE_SWARM_CHANGE_DOCUMENT';
 export interface ChangeDocumentAction extends Action<typeof CHANGE_DOCUMENT> {
   documentId: string;
   document: Doc<any>;
@@ -132,9 +132,10 @@ export function changeDocument<T=any>(documentId: string, document: Doc<T>): Cha
   return { type: CHANGE_DOCUMENT, documentId, document };
 }
 
-export type AllActions =
+export type AutomergeSwarmActions =
   InitializeAction |
   ConnectAction |
   OpenDocumentAction |
+  CloseDocumentAction |
   SyncDocumentAction |
   ChangeDocumentAction;

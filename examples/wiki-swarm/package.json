@@ -1,5 +1,5 @@
 {
-  "name": "browser-test",
+  "name": "wiki-swarm",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -10,6 +10,7 @@
     "@types/node": "^12.12.47",
     "@types/react": "^16.9.38",
     "@types/react-dom": "^16.9.8",
+    "@types/react-redux": "^7.1.9",
     "automerge-swarm": "file:../..",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
