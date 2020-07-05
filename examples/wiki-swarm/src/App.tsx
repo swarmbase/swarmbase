@@ -40,6 +40,16 @@ class App extends React.Component<AppProps, AppState, RootState> {
 
     return (
       <div>
+        {/* 
+        - Navbar
+          - Search
+          - Profile
+        - Content
+          - Title/Editor
+          - Content/Editor
+        - Footer
+          - Audit info
+          */}
         <div id="info">
           <div><strong>Node Addresses:</strong></div>
           <ul>
