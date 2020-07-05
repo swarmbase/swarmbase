@@ -4,8 +4,12 @@ RUN apk update && apk add python make gcc g++
 
 RUN mkdir -p /app
 COPY ./ /app
-WORKDIR /app/examples/browser-test
 
+WORKDIR /app
+RUN npm install
+RUN npm run tsc
+
+WORKDIR /app/examples/browser-test
 RUN npm install
 
 FROM node:14-alpine

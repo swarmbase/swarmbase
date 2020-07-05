@@ -15,7 +15,8 @@ export const DEFAULT_CONFIG: AutomergeSwarmConfig = {
         ]
       },
       Bootstrap: [
-        '/ip4/127.0.0.1/tcp/4003/ws/ipfs/QmRgNzjTje3BvSYbfbVQzZV33cecsApBYrvVRfyZnjVRpj'
+        // '/ip4/127.0.0.1/tcp/4003/ws/ipfs/QmRgNzjTje3BvSYbfbVQzZV33cecsApBYrvVRfyZnjVRpj'
+        '/ip4/127.0.0.1/tcp/4003/ws/p2p/Qmd9UZjcronq51wdeRWpNqH4K4dHpTwvaxVKuNtyd4nNa2'
       ],
     }
   },

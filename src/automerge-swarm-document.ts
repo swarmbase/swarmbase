@@ -24,12 +24,12 @@ export class AutomergeSwarmDocument<T = any> {
   ) { }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
-  public async load() {
+  public async load(): Promise<boolean> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
     const peers = await this.swarm.ipfsNode.swarm.peers();
     if (peers.length === 0) {
-      return;
+      return false;
     }
 
     // Shuffle peer array.
@@ -71,30 +71,35 @@ export class AutomergeSwarmDocument<T = any> {
           return [];
         }
       );
+      return true;
     } else {
-      console.log('Failed to open this document on any nodes. Assuming this is a new document...');
-      // Apply local change w/ automerge.
-      const changes = getHistory(this.document).map(state => state.change);
-
-      // Store changes in ipfs.
-      const newFileResult = this.swarm.ipfsNode.add(JSON.stringify(changes));
-      let newFile: any = null;
-      for await (newFile of newFileResult) { }
-      const hash = newFile.cid.toString() as string;
-      this._hashes.add(hash);
-
-      // Send new message.
-      const updateMessage: AutomergeSwarmSyncMessage = { documentId: this.documentPath, changes: { } };
-      for (const oldHash of this._hashes) {
-        updateMessage.changes[oldHash] = null;
-      }
-      updateMessage.changes[hash] = changes;
-
-      this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
+      console.log('Failed to open document on any nodes.', this);
+      return false;
     }
   }
 
-  public async open() {
+  public async pin() {
+    // Apply local change w/ automerge.
+    const changes = getHistory(this.document).map(state => state.change);
+
+    // Store changes in ipfs.
+    const newFileResult = this.swarm.ipfsNode.add(JSON.stringify(changes));
+    let newFile: any = null;
+    for await (newFile of newFileResult) { }
+    const hash = newFile.cid.toString() as string;
+    this._hashes.add(hash);
+
+    // Send new message.
+    const updateMessage: AutomergeSwarmSyncMessage = { documentId: this.documentPath, changes: { } };
+    for (const oldHash of this._hashes) {
+      updateMessage.changes[oldHash] = null;
+    }
+    updateMessage.changes[hash] = changes;
+
+    this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
+  }
+
+  public async open(): Promise<boolean> {
     // Open pubsub connection.
     // await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this.sync.bind(this));
     await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, (rawMessage: any) => {
@@ -125,7 +130,7 @@ export class AutomergeSwarmDocument<T = any> {
     // TODO ===================================================================
     // Load initial document from peers.
     // /TODO ==================================================================
-    await this.load();
+    return await this.load();
   }
 
   public async close() {
@@ -161,32 +166,46 @@ export class AutomergeSwarmDocument<T = any> {
 
   // Given a list of hashes, fetch missing update messages.
   public async sync(message: AutomergeSwarmSyncMessage) {
-    // Apply sent changes.
-    for (const [sentHash, sentChanges] of Object.entries(message.changes)) {
-      if (sentHash && !this._hashes.has(sentHash)) {
-        // Only process hashes that we haven't seen yet.
-        if (sentChanges) {
-          // Apply the changes that were sent directly.
-          this._document = applyChanges(this.document, sentChanges);
-          this._hashes.add(sentHash);
-          this._fireRemoteUpdateHandlers([sentHash]);
-        } else {
-          // Fetch missing hashes using IPFS.
-          this.getFile(sentHash)
-            .then(missingChanges => {
-              if (missingChanges) {
-                this._document = applyChanges(this.document, missingChanges);
-                this._hashes.add(sentHash);
-                this._fireLocalUpdateHandlers([sentHash]);
-              } else {
-                console.error(`'/ipfs/${sentHash}' returned nothing`, missingChanges);
-              }
-            })
-            .catch(err => {
-              console.error('Failed to fetch missing change from ipfs:', sentHash, err);
-            });
-        }
+    // Only process hashes that we haven't seen yet.
+    const newChangeEntries = Object.entries(message.changes).filter(([sentHash]) => sentHash && !this._hashes.has(sentHash));
+
+    // First apply changes that were sent directly.
+    let newDocument = this.document;
+    const newDocumentHashes: string[] = [];
+    const missingDocumentHashes: string[] = [];
+    for (const [sentHash, sentChanges] of newChangeEntries) {
+      if (sentChanges) {
+        // Apply the changes that were sent directly.
+        newDocument = applyChanges(newDocument, sentChanges);
+        newDocumentHashes.push(sentHash);
+      } else {
+        missingDocumentHashes.push(sentHash);
       }
+    }
+    if (newDocumentHashes.length) {
+      this._document = newDocument;
+      for (const newHash of newDocumentHashes) {
+        this._hashes.add(newHash);
+      }
+      this._fireLocalUpdateHandlers(newDocumentHashes);
+    }
+
+    // Then apply missing hashes by fetching them via IPFS.
+    for (const missingHash of missingDocumentHashes) {
+      // Fetch missing hashes using IPFS.
+      this.getFile(missingHash)
+        .then(missingChanges => {
+          if (missingChanges) {
+            this._document = applyChanges(this._document, missingChanges);
+            this._hashes.add(missingHash);
+            this._fireRemoteUpdateHandlers([missingHash]);
+          } else {
+            console.error(`'/ipfs/${missingHash}' returned nothing`, missingChanges);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch missing change from ipfs:', missingHash, err);
+        });
     }
   }
 

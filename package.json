@@ -5,13 +5,14 @@
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc-watch": "tsc -w -p tsconfig.json"
   },
   "bin": {
     "automerge-swarm-d": "dist/bin/automerge-swarm-d.js"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {

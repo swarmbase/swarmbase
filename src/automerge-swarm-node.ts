@@ -51,37 +51,44 @@ export class AutomergeSwarmNode {
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage: any) => {
       try {
-        const message = JSON.parse(rawMessage.data.toString()) as AutomergeSwarmSyncMessage;
-        console.log('Received Document Publish message:', rawMessage);
-        const docRef = this.swarm.doc(message.documentId);
+        const thisNodeId = this.swarm.ipfsInfo.id.toString()
+        const senderNodeId = rawMessage.from;
 
-        if (docRef) {
-          // Also add a subscription that pins new received files.
-          this._subscriptions.set(message.documentId, docRef);
-          docRef.subscribe('pinning-handler', (doc, hashes) => {
-            for (const cid of hashes) {
+        if (thisNodeId !== senderNodeId) {
+          const message = JSON.parse(rawMessage.data.toString()) as AutomergeSwarmSyncMessage;
+          console.log('Received Document Publish message:', rawMessage);
+          const docRef = this.swarm.doc(message.documentId);
+
+          if (docRef) {
+            // Also add a subscription that pins new received files.
+            this._subscriptions.set(message.documentId, docRef);
+            docRef.subscribe('pinning-handler', (doc, hashes) => {
+              for (const cid of hashes) {
+                if (!this._seenCids.has(cid)) {
+                  // TODO: Handle this operation failing (retry).
+                  this.swarm.ipfsNode.pin.add(cid);
+                  this._seenCids.add(cid);
+                }
+              }
+            });
+      
+            // Listen to the file.
+            docRef.open();
+      
+            // Pin all of the files that were received.
+            for (const cid of Object.keys(message.changes)) {
               if (!this._seenCids.has(cid)) {
                 // TODO: Handle this operation failing (retry).
                 this.swarm.ipfsNode.pin.add(cid);
                 this._seenCids.add(cid);
               }
             }
-          });
-    
-          // Listen to the file.
-          docRef.open();
-    
-          // Pin all of the files that were received.
-          for (const cid of Object.keys(message.changes)) {
-            if (!this._seenCids.has(cid)) {
-              // TODO: Handle this operation failing (retry).
-              this.swarm.ipfsNode.pin.add(cid);
-              this._seenCids.add(cid);
-            }
+          } else {
+            console.warn('Failed to process incoming document pin message:', rawMessage);
+            console.warn('Unable to load document', message.documentId);
           }
         } else {
-          console.warn('Failed to process incoming document pin message:', rawMessage);
-          console.warn('Unable to load document', message.documentId);
+          console.log('Skipping publish message from this node...');
         }
       } catch (err) {
         console.error('Failed to process incoming document pin message:', rawMessage);

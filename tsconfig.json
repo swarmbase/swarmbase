@@ -7,11 +7,6 @@
     "downlevelIteration": true,
     "strict": true,
     "declaration": true,
-    // "types": [
-    //   "automerge-swarm.d.ts",
-    //   "automerge-swarm-document.d.ts",
-    //   "automerge-swarm-message.d.ts"
-    // ],
     "typeRoots": ["types"],
     "esModuleInterop": true,
     "skipLibCheck": true,

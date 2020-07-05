@@ -7,8 +7,9 @@ services:
     image: automerge-swarm-browser-test:latest
     ports:
       - 3000:3000
-    volumes:
-      - ./:/app
+    #volumes:
+    #  - ./:/app
+    stdin_open: true
   node:
     build:
       context: ./
@@ -17,8 +18,8 @@ services:
     ports:
       - 4001:4001
       - 4003:4003
-    volumes:
-      - ./:/app
+    #volumes:
+    #  - ./:/app
   star-signal:
     build:
       context: ./

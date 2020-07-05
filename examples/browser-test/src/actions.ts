@@ -49,7 +49,12 @@ export function openDocumentAsync(documentId: string): ThunkAction<Promise<Autom
       documentRef.subscribe(documentId, document => {
         dispatch(syncDocument(documentId, document));
       });
-      await documentRef.open();
+      const loaded = await documentRef.open();
+      if (!loaded) {
+        // Assume this is a new document.
+        console.log('Failed to load document from peers, assuming this is a new document...', documentRef);
+        await documentRef.pin();
+      }
       dispatch(openDocument(documentId, documentRef));
       return documentRef;
     } else {
