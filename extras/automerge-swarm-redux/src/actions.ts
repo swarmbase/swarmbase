@@ -7,9 +7,11 @@ import { AutomergeSwarmDocument } from "automerge-swarm";
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 
-export function initializeAsync<T>(): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
+export function initializeAsync<T=any, S=AutomergeSwarmState<any>>(
+  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
+): ThunkAction<Promise<void>, S, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
   return async (dispatch, getState) => {
-    const { node } = getState();
+    const { node } = selectAutomergeSwarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
       dispatch(peerConnect(address));
     });
@@ -29,9 +31,12 @@ export function initialize(): InitializeAction {
 }
 
 
-export function connectAsync<T>(addresses: string[]): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, ConnectAction> {
+export function connectAsync<T=any, S=AutomergeSwarmState<any>>(
+  addresses: string[],
+  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
+): ThunkAction<Promise<void>, S, unknown, ConnectAction> {
   return async (dispatch, getState) => {
-    const { node } = getState();
+    const { node } = selectAutomergeSwarmState(getState());
     await node.connect(addresses);
     dispatch(connect(addresses));
     console.log('Node information:', node);
@@ -48,9 +53,12 @@ export function connect(addresses: string[]): ConnectAction {
 }
 
 
-export function openDocumentAsync<T>(documentId: string): ThunkAction<Promise<AutomergeSwarmDocument | null>, AutomergeSwarmState<T>, unknown, OpenDocumentAction | SyncDocumentAction> {
+export function openDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+  documentId: string,
+  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
+): ThunkAction<Promise<AutomergeSwarmDocument | null>, S, unknown, OpenDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
-    const { node } = getState();
+    const { node } = selectAutomergeSwarmState(getState());
     const documentRef = node.doc(documentId);
     // TODO: Close previous document (if any).
     if (documentRef) {
@@ -82,9 +90,12 @@ export function openDocument(documentId: string, documentRef: AutomergeSwarmDocu
 }
 
 
-export function closeDocumentAsync<T>(documentId: string): ThunkAction<Promise<void>, AutomergeSwarmState<T>, unknown, CloseDocumentAction | SyncDocumentAction> {
+export function closeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+  documentId: string,
+  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
+): ThunkAction<Promise<void>, S, unknown, CloseDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
-    const { documents } = getState();
+    const { documents } = selectAutomergeSwarmState(getState());
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
       documentRef.unsubscribe(documentId);
@@ -115,9 +126,14 @@ export function syncDocument(documentId: string, document: Doc<any>): SyncDocume
 }
 
 
-export function changeDocumentAsync<T>(documentId: string, changeFn: (current: T) => void, message?: string): ThunkAction<Promise<Doc<T>>, AutomergeSwarmState<T>, unknown, ChangeDocumentAction> {
+export function changeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+  documentId: string,
+  changeFn: (current: T) => void,
+  message?: string,
+  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
+): ThunkAction<Promise<Doc<T>>, S, unknown, ChangeDocumentAction> {
   return async (dispatch, getState) => {
-    const { documents } = getState();
+    const { documents } = selectAutomergeSwarmState(getState());
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
       await documentRef.change(changeFn, message);

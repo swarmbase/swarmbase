@@ -1,8 +1,9 @@
 import { Text } from 'automerge';
+import { RawDraftContentState } from 'draft-js';
 
 export interface WikiSwarmArticle {
   title: Text;
-  content: Text;
+  content: RawDraftContentState;
   tags: string[];
 
   createdBy: string;

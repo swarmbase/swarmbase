@@ -1,25 +1,20 @@
 import React from 'react';
 import './App.css';
-import { connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AllActions, initializeAsync } from './actions';
-import { RootState } from './reducers';
+import { RootState, WikiAppState } from './reducers';
+import { Route, Link, Switch } from 'react-router-dom';
+import WikiNavbar from './containers/WikiNavbar';
+import WikiArticle from './containers/WikiArticle';
+import { WikiHome } from './containers/WikiHome';
 import { connect } from 'react-redux';
+import { initializeAsync, AutomergeSwarmActions } from 'automerge-swarm-redux';
 import { ThunkDispatch } from 'redux-thunk';
+import { WikiSwarmArticle } from './models';
 
 interface AppProps {
-  state: RootState;
   onInitialize: () => Promise<void>;
-  onConnect: (addresses: string[]) => any;
-  onDocumentOpen: (documentId: string) => any;
-  onDocumentClose: (documentId: string) => any;
-  onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => any;
 }
 
-interface AppState {
-  connectionAddress: string;
-  documentId: string;
-}
-
-class App extends React.Component<AppProps, AppState, RootState> {
+class App extends React.Component<AppProps, unknown, RootState> {
   constructor(public props: AppProps) {
     super(props)
 
@@ -36,70 +31,27 @@ class App extends React.Component<AppProps, AppState, RootState> {
   }
 
   render() {
-    const ipfsInfo = this.props.state.node.ipfsInfo;
-
     return (
       <div>
-        {/* 
-        - Navbar
-          - Search
-          - Profile
-        - Content
-          - Title/Editor
-          - Content/Editor
-        - Footer
-          - Audit info
-          */}
-        <div id="info">
-          <div><strong>Node Addresses:</strong></div>
-          <ul>
-            {ipfsInfo && ipfsInfo.addresses && ipfsInfo.addresses.map((address: any, i: number) => <li key={i}><pre>{address.toString()}</pre></li>)}
-          </ul>
-          <div><strong>Connected Peers:</strong></div>
-          <ul>
-            {this.props.state.node.peerAddrs.map((address: any, i: number) => <li key={i}><pre>{address}</pre></li>)}
-          </ul>
-        </div>
-        <div id="connect">
-          <input type="text" defaultValue={this.state.connectionAddress} onChange={(e) => this.setState({ connectionAddress: e.currentTarget.value })} />
-          <button onClick={() => this.props.onConnect([this.state.connectionAddress])}>Connect</button>
-        </div>
-        <div id="open">
-          <input type="text" value={this.state.documentId} onChange={(e) => this.setState({ documentId: e.currentTarget.value })} />
-          <button onClick={() => this.props.onDocumentOpen(this.state.documentId)}>Open</button>
-          <button onClick={() => this.props.onDocumentClose(this.state.documentId)}>Close</button>
-        </div>
-        <pre id="current">
-          {JSON.stringify(this.props.state.document, null, 2)}
-        </pre>
-        <div id="actions">
-          <button onClick={() => {
-            if (this.props.state.documentId) {
-              const r = Math.random().toString(36).substring(7);
-              console.log('Setting document message to:', r);
-              this.props.onDocumentChange(this.props.state.documentId, currentDoc => {
-                currentDoc.message = r;
-              });
-            }
-          }}>Update Document</button>
-        </div>
+        <WikiNavbar />
+        <Switch>
+          <Route path="/document/:documentId" component={WikiArticle} />
+          <Route path="/" component={WikiHome} />
+        </Switch>
       </div>
     );
   }
 }
 
 function mapStateToProps(state: RootState) {
-  return { state };
+  return {};
 }
 
-function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AllActions>) {
+function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {
   return {
-    onInitialize: () => dispatch(initializeAsync()),
-    onConnect: (addresses: string[]) => dispatch(connectAsync(addresses)),
-    onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync(documentId)),
-    onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync(documentId)),
-    onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync(documentId, changeFn, message)),
+    onInitialize: () => dispatch(initializeAsync<WikiSwarmArticle, RootState>(state => state.automergeSwarm)),
   };
 }
 
 export default connect(mapStateToProps, mapDispatchToProps)(App);
+// export default App;
