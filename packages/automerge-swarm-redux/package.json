@@ -1,0 +1,25 @@
+{
+  "name": "automerge-swarm-redux",
+  "description": "Redux bindings for automerge-swarm",
+  "scripts": {
+    "tsc": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc-watch": "tsc -w -p tsconfig.json"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "allegrormc@gmail.com",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^7.3.1",
+    "ts-node": "^8.10.2",
+    "typescript": "^3.9.5",
+    "redux": "^4.0.5",
+    "redux-thunk": "^2.3.0"
+  },
+  "dependencies": {
+    "automerge": "^0.14.1",
+    "automerge-swarm": "1.0.0"
+  }
+}

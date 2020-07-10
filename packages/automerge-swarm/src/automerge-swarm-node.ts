@@ -16,7 +16,7 @@ export const DEFAULT_NODE_CONFIG: AutomergeSwarmConfig = {
         Swarm: [
           '/ip4/0.0.0.0/tcp/4003/ws',
           '/ip4/0.0.0.0/tcp/4001',
-          '/ip6/::/tcp/4001'
+          '/ip6/::/tcp/4002'
         ]
       },
       Bootstrap: [],

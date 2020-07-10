@@ -1,25 +1,46 @@
 version: "3.7"
 services:
-  browser-test:
+  # browser-test:
+  #   build:
+  #     context: ./
+  #     dockerfile: ./Dockerfile
+  #   image: automerge-swarm:latest
+  #   ports:
+  #     - 3001:3000
+  #   #volumes:
+  #   #  - ./:/app
+  #   stdin_open: true
+  #   working_dir: /app/examples/browser-test
+  #   command:
+  #     - npm
+  #     - start
+  wiki-swarm:
     build:
       context: ./
-      dockerfile: ./Dockerfile.browser-test
-    image: automerge-swarm-browser-test:latest
+      dockerfile: ./Dockerfile
+    image: automerge-swarm:latest
+    environment:
+      - "PORT=3000"
     ports:
       - 3000:3000
-    #volumes:
-    #  - ./:/app
+    volumes:
+      - ./:/app
     stdin_open: true
+    working_dir: /app/examples/wiki-swarm
+    command:
+      - npm
+      - start
   node:
     build:
       context: ./
-      dockerfile: ./Dockerfile.node
-    image: automerge-swarm-node:latest
+      dockerfile: ./Dockerfile
+    image: automerge-swarm:latest
     ports:
       - 4001:4001
+      - 4002:4002
       - 4003:4003
-    #volumes:
-    #  - ./:/app
+    volumes:
+      - ./:/app
   star-signal:
     build:
       context: ./
