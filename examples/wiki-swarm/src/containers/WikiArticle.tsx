@@ -96,7 +96,7 @@ class WikiArticle extends React.Component<WikiArticleProps, WikiArticleState, Ro
         EditorState.createWithContent(newContentState),
         this.state.editorState.getSelection()
       );
-      return <div>
+      return <div className="m-3">
         <div>TODO: Title goes here</div>
         <div>
           <Editor

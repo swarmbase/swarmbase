@@ -7,7 +7,7 @@ import { LinkContainer } from 'react-router-bootstrap';
 export default function WikiNavbar() {
   const [currentSearch, setCurrentSearch] = useState('');
 
-  return <div>
+  return <div className="m-3">
     <InputGroup className="mb-3">
       <InputGroup.Prepend>
         <InputGroup.Text id="document-prefix">/documents/</InputGroup.Text>
