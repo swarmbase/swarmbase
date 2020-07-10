@@ -64,7 +64,7 @@ export function openDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
     if (documentRef) {
       documentRef.subscribe(documentId, document => {
         dispatch(syncDocument(documentId, document));
-      });
+      }, 'remote');
       const loaded = await documentRef.open();
       if (!loaded) {
         // Assume this is a new document.
@@ -136,8 +136,9 @@ export function changeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
     const { documents } = selectAutomergeSwarmState(getState());
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
-      await documentRef.change(changeFn, message);
+      const changePromise = documentRef.change(changeFn, message);
       dispatch(changeDocument(documentId, documentRef.document));
+      await changePromise
       return documentRef.document;
     } else {
       throw new Error(`Trying to edit a document that is not opened: ${documentId}`);

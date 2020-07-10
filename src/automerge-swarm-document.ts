@@ -187,7 +187,7 @@ export class AutomergeSwarmDocument<T = any> {
       for (const newHash of newDocumentHashes) {
         this._hashes.add(newHash);
       }
-      this._fireLocalUpdateHandlers(newDocumentHashes);
+      this._fireRemoteUpdateHandlers(newDocumentHashes);
     }
 
     // Then apply missing hashes by fetching them via IPFS.

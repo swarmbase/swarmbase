@@ -8,6 +8,7 @@ import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
 import { rootReducer } from './reducers';
 import thunk from 'redux-thunk';
+import { BrowserRouter } from 'react-router-dom';
 
 const logger: Middleware = store => next => action => {
   console.log('dispatching', action);
@@ -21,7 +22,9 @@ const store = createStore(rootReducer, applyMiddleware(thunk, logger));
 ReactDOM.render(
   <Provider store={store}>
     <React.StrictMode>
-      <App />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </React.StrictMode>
   </Provider>,
   document.getElementById('root')

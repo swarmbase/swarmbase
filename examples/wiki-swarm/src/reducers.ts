@@ -1,18 +1,24 @@
 import { combineReducers, CombinedState } from "redux";
 import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "automerge-swarm-redux";
 import { WikiSwarmArticle } from "./models";
-import { WikiSwarmActions } from "./actions";
+import { WikiSwarmActions, SEARCH } from "./actions";
+import { EditorState } from "draft-js";
 
 export interface WikiAppState {
-  currentDocumentPath: string | null;
+  editorState: EditorState;
 }
 
 export const wikiAppInitialState: WikiAppState = {
-  currentDocumentPath: null
+  editorState: EditorState.createEmpty(),
 };
 
 export function wikiAppReducer(state: WikiAppState = wikiAppInitialState, action: any): WikiAppState {
   switch (action.type) {
+    case SEARCH: {
+      return {
+        ...state
+      };
+    }
     default: {
       return state;
     }

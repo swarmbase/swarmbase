@@ -1,19 +1,10 @@
 import React, { useState } from 'react';
-import { connect } from 'react-redux';
-import { ThunkDispatch } from 'redux-thunk';
 import Button from 'react-bootstrap/Button';
 import FormControl from 'react-bootstrap/FormControl';
 import InputGroup from 'react-bootstrap/InputGroup';
-import { RootState } from '../reducers';
-import { WikiSwarmActions } from '../actions';
+import { LinkContainer } from 'react-router-bootstrap';
 
-interface WikiNavbarProps {
-  onWikiSearch: (currentSearch: string) => void;
-}
-
-function WikiNavbar({
-  onWikiSearch
-}: WikiNavbarProps) {
+export default function WikiNavbar() {
   const [currentSearch, setCurrentSearch] = useState('');
 
   return <div>
@@ -29,20 +20,10 @@ function WikiNavbar({
         onChange={e => setCurrentSearch(e.target.value)}
       />
       <InputGroup.Append>
-        <Button variant="outline-secondary" onClick={() => onWikiSearch(currentSearch)}>Search</Button>
+        <LinkContainer to={`/document/${currentSearch}`}>
+          <Button variant="outline-secondary">Search</Button>
+        </LinkContainer>
       </InputGroup.Append>
     </InputGroup>
   </div>
 }
-
-function mapStateToProps(state: RootState) {
-  return {
-  };
-}
-
-function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, WikiSwarmActions>) {
-  return {
-  };
-}
-
-export default connect(mapStateToProps, mapDispatchToProps)(WikiNavbar);
