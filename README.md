@@ -160,3 +160,14 @@ cd ../..
 ```
 
 To run the examples, see their corresponding README.md files.
+
+### Local Development (docker-compose)
+
+There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default:
+
+```sh
+docker-compose build
+docker-compose up
+```
+
+The browser-test can also be uncommented and run as well.
