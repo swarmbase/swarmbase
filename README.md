@@ -16,7 +16,7 @@ CollabSwarm has official bindings for the following CRDTs:
 
 ## Getting Started (Redux Bindings)
 
-Install `collab-swarm` and its redux bindings:
+Install `automerge-swarm` and its redux bindings:
 
 ```sh
 npm install --save automerge-swarm automerge-swarm-redux
@@ -146,22 +146,16 @@ To build automerge-swarm (plus its packages):
 
 ```
 npm install
-npx lerna link
+npx lerna bootstrap
 
 cd packages/automerge-swarm
-npm install
 npm run tsc
 cd ../..
 
 cd packages/automerge-swarm-redux
-npm install
 npm run tsc
 cd ../..
 ```
-
-To run the examples, see their corresponding README.md files.
-
-### Local Development (docker-compose)
 
 There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default:
 
