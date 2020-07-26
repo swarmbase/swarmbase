@@ -146,7 +146,7 @@ To build automerge-swarm (plus its packages):
 
 ```
 npm install
-npx lerna bootstrap
+npx lerna bootstrap --force-local
 
 cd packages/automerge-swarm
 npm run tsc
