@@ -19,7 +19,14 @@ CollabSwarm has official bindings for the following CRDTs:
 Install `automerge-swarm` and its redux bindings:
 
 ```sh
+# Install using NPM (COMING SOON)
 npm install --save automerge-swarm automerge-swarm-redux
+
+# - OR -
+
+# Install using a local checkout of the library
+git clone https://github.com/robotoer/automerge-swarm
+npm install --save ./automerge-swarm    # This installs automerge-swarm as a local directory.
 ```
 
 Define document types (only if you're using typescript)
