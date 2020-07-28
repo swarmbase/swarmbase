@@ -19,22 +19,31 @@ CollabSwarm has official bindings for the following CRDTs:
 Install `automerge-swarm` and its redux bindings:
 
 ```sh
-# Install using NPM (COMING SOON)
-npm install --save automerge-swarm automerge-swarm-redux
-
-# - OR -
-
-# Install using a local checkout of the library
+# Clone the automerge-swarm library somewhere
 git clone https://github.com/robotoer/automerge-swarm
-cd automerge-swarm
-npm install
-npx lerna bootstrap --force-local
-(cd packages/automerge-swarm && npm run tsc)
-(cd packages/automerge-swarm-redux && npm run tsc)
-cd -                    # Return to your original package directory
-npm install --save \    # This installs automerge-swarm as a local directory.
-    ./automerge-swarm/packages/automerge-swarm \
-    ./automerge-swarm/packages/automerge-swarm-redux
+
+# Install package deps and link local dependencies
+(cd automerge-swarm && npm install && npx lerna bootstrap --force-local)
+
+# Build packages/automerge-swarm/dist
+(cd automerge-swarm/packages/automerge-swarm && npm run tsc)
+
+# Build packages/automerge-swarm-redux/dist
+(cd automerge-swarm/packages/automerge-swarm-redux && npm run tsc)
+
+# Change directories to the package/application you are working on.
+
+# Installs automerge-swarm + automerge-swarm-redux as a local directory.
+npm install --save \
+    ./automerge-swarm/packages/automerge-swarm \      # Adjust these paths to point to the location of automerge-swarm on your machine.
+    ./automerge-swarm/packages/automerge-swarm-redux  #
+```
+
+In the future we will support installation via NPM repositories:
+
+```sh
+# NOT CURRENTLY SUPPORTED!
+npm install --save automerge-swarm automerge-swarm-redux
 ```
 
 Define document types (only if you're using typescript)
