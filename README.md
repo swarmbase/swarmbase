@@ -26,7 +26,13 @@ npm install --save automerge-swarm automerge-swarm-redux
 
 # Install using a local checkout of the library
 git clone https://github.com/robotoer/automerge-swarm
-npm install --save ./automerge-swarm    # This installs automerge-swarm as a local directory.
+cd automerge-swarm
+npm install
+npx lerna bootstrap --force-local
+cd -                    # Return to your original package directory
+npm install --save \    # This installs automerge-swarm as a local directory.
+    ./automerge-swarm/packages/automerge-swarm \
+    ./automerge-swarm/packages/automerge-swarm-redux
 ```
 
 Define document types (only if you're using typescript)

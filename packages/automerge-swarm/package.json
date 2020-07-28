@@ -1,6 +1,7 @@
 {
   "name": "automerge-swarm",
   "description": "",
+  "version": "1.0.0",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",

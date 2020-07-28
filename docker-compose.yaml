@@ -1,26 +1,26 @@
 version: "3.7"
 services:
-  # browser-test:
-  #   build:
-  #     context: ./
-  #     dockerfile: ./Dockerfile
-  #   image: automerge-swarm:latest
-  #   environment:
-  #     - "PORT=3000"
-  #   ports:
-  #     - 3001:3000
-  #   volumes:
-  #     - ./packages/automgerge-swarm/bin:/app/packages/automerge-swarm/bin
-  #     - ./packages/automgerge-swarm/src:/app/packages/automerge-swarm/src
-  #     - ./packages/automgerge-swarm/types:/app/packages/automerge-swarm/types
-  #     - ./packages/automgerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
-  #     - ./examples/browser-test/public:/app/examples/browser-test/public
-  #     - ./examples/browser-test/src:/app/examples/browser-test/src
-  #   stdin_open: true
-  #   working_dir: /app/examples/browser-test
-  #   command:
-  #     - npm
-  #     - start
+  browser-test:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    image: automerge-swarm:latest
+    environment:
+      - "PORT=3000"
+    ports:
+      - 3001:3000
+    volumes:
+      - ./packages/automgerge-swarm/bin:/app/packages/automerge-swarm/bin
+      - ./packages/automgerge-swarm/src:/app/packages/automerge-swarm/src
+      - ./packages/automgerge-swarm/types:/app/packages/automerge-swarm/types
+      - ./packages/automgerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
+      - ./examples/browser-test/public:/app/examples/browser-test/public
+      - ./examples/browser-test/src:/app/examples/browser-test/src
+    stdin_open: true
+    working_dir: /app/examples/browser-test
+    command:
+      - npm
+      - start
   wiki-swarm:
     build:
       context: ./
