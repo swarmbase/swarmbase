@@ -35,8 +35,8 @@ git clone https://github.com/robotoer/automerge-swarm
 
 # Installs automerge-swarm + automerge-swarm-redux as a local directory.
 npm install --save \
-    ./automerge-swarm/packages/automerge-swarm \      # Adjust these paths to point to the location of automerge-swarm on your machine.
-    ./automerge-swarm/packages/automerge-swarm-redux  #
+    ./automerge-swarm/packages/automerge-swarm \      # Adjust these paths to point to the location
+    ./automerge-swarm/packages/automerge-swarm-redux  # of automerge-swarm on your machine.
 ```
 
 In the future we will support installation via NPM repositories:
