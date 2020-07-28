@@ -65,7 +65,9 @@ export class AutomergeSwarmDocument<T = any> {
           console.log('received /automerge-swarm/doc-load/1.0.0 response:', rawMessage);
 
           const message = JSON.parse(rawMessage) as AutomergeSwarmSyncMessage;
-          await this.sync(message);
+          if (message.documentId === this.documentPath) {
+            await this.sync(message);
+          }
 
           // Return an ACK.
           return [];
@@ -113,7 +115,10 @@ export class AutomergeSwarmDocument<T = any> {
     // TODO: Make the messages on this specific to a document.
     await this.swarm.ipfsNode.libp2p.handle('/automerge-swarm/doc-load/1.0.0', ({ stream }: any) => {
       console.log('received /automerge-swarm/doc-load/1.0.0 dial');
-      const loadMessage = { changes: {} } as AutomergeSwarmSyncMessage;
+      const loadMessage = {
+        documentId: this.documentPath,
+        changes: {},
+      } as AutomergeSwarmSyncMessage;
       for (const hash of this._hashes) {
         loadMessage.changes[hash] = null;
       }
