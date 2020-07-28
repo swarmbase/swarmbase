@@ -29,6 +29,8 @@ git clone https://github.com/robotoer/automerge-swarm
 cd automerge-swarm
 npm install
 npx lerna bootstrap --force-local
+(cd packages/automerge-swarm && npm run tsc)
+(cd packages/automerge-swarm-redux && npm run tsc)
 cd -                    # Return to your original package directory
 npm install --save \    # This installs automerge-swarm as a local directory.
     ./automerge-swarm/packages/automerge-swarm \
