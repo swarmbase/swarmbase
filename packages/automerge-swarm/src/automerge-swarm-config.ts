@@ -9,14 +9,9 @@ export const DEFAULT_CONFIG: AutomergeSwarmConfig = {
     },
     config: {
       Addresses: {
-        Swarm: [
-          // '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
-          // '/dns4/star-signal.cloud.ipfs.team/tcp/443/wss/p2p-webrtc-star'
-        ]
+        Swarm: []
       },
-      Bootstrap: [
-        // '/ip4/127.0.0.1/tcp/4003/ws/p2p/Qmd9UZjcronq51wdeRWpNqH4K4dHpTwvaxVKuNtyd4nNa2'
-      ],
+      Bootstrap: [],
     }
   },
 

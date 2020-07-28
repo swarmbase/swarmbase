@@ -77,12 +77,14 @@ Initialize the swarm node
 
 ```ts
 // App.tsx
+import { AutomergeSwarmConfig } from "automerge-swarm";
 import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "automerge-swarm-redux";
 
 // Use the actions connected below in your application's container(s) to interact with CollabSwarm.
 function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {
   return {
-    initializeAutomergeSwarm: () => dispatch(initializeAsync<WikiSwarmArticle, RootState>(state => state.automergeSwarm)),
+    // To automatically add nodes to the list of peers on startup, add multi-addrs to: config.ipfs.config.Bootstrap
+    initializeAutomergeSwarm: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<WikiSwarmArticle, RootState>(config, state => state.automergeSwarm)),
     connectToPeer: (addresses: string[]) => dispatch(connectAsync(addresses, selectAutomergeSwarmState)),
     openDocument: (documentId: string) => dispatch(openDocumentAsync(documentId, selectAutomergeSwarmState)),
     closeDocument: (documentId: string) => dispatch(closeDocumentAsync(documentId, selectAutomergeSwarmState)),
