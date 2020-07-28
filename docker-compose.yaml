@@ -7,6 +7,9 @@ services:
     image: automerge-swarm:latest
     environment:
       - "PORT=3000"
+      - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
+      # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
+      - "CHOKIDAR_USEPOLLING=true"
     ports:
       - 3001:3000
     volumes:
@@ -16,9 +19,12 @@ services:
       - ./packages/automgerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
       - ./examples/browser-test/public:/app/examples/browser-test/public
       - ./examples/browser-test/src:/app/examples/browser-test/src
+      - ./client-config.env:/app/examples/browser-test/.env
     stdin_open: true
     working_dir: /app/examples/browser-test
     command:
+      - /app/wait-for-file.sh
+      - .env
       - npm
       - start
   wiki-swarm:
@@ -28,6 +34,9 @@ services:
     image: automerge-swarm:latest
     environment:
       - "PORT=3000"
+      - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
+      # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
+      - "CHOKIDAR_USEPOLLING=true"
     ports:
       - 3000:3000
     volumes:
@@ -37,9 +46,12 @@ services:
       - ./packages/automerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
       - ./examples/wiki-swarm/public:/app/examples/wiki-swarm/public
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
+      - ./client-config.env:/app/examples/wiki-swarm/.env
     stdin_open: true
     working_dir: /app/examples/wiki-swarm
     command:
+      - /app/wait-for-file.sh
+      - .env
       - npm
       - start
   node:
@@ -47,6 +59,10 @@ services:
       context: ./
       dockerfile: ./Dockerfile
     image: automerge-swarm:latest
+    environment:
+      - "CLIENT_CONFIG_FILE=/app/client-config.env"
+      # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
+      # - "CHOKIDAR_USEPOLLING=true"
     ports:
       - 4001:4001
       - 4002:4002
@@ -55,6 +71,7 @@ services:
       - ./packages/automerge-swarm/bin:/app/packages/automerge-swarm/bin
       - ./packages/automerge-swarm/src:/app/packages/automerge-swarm/src
       - ./packages/automerge-swarm/types:/app/packages/automerge-swarm/types
+      - ./client-config.env:/app/client-config.env
   star-signal:
     build:
       context: ./

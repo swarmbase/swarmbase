@@ -2,14 +2,15 @@ import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
 import { AutomergeSwarmState } from "./reducers";
 import { Doc } from "automerge";
-import { AutomergeSwarmDocument } from "automerge-swarm";
+import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from "automerge-swarm";
 
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 
 export function initializeAsync<T=any, S=AutomergeSwarmState<any>>(
+  config: AutomergeSwarmConfig = DEFAULT_CONFIG,
   selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<void>, S, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
+): ThunkAction<Promise<AutomergeSwarm>, S, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectAutomergeSwarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
@@ -18,16 +19,19 @@ export function initializeAsync<T=any, S=AutomergeSwarmState<any>>(
     node.subscribeToPeerDisconnect('peer-disconnect', (address: string) => {
       dispatch(peerDisconnect(address));
     })
-    await node.initialize();
-    dispatch(initialize());
+    await node.initialize(config);
+    dispatch(initialize(node));
     console.log('Node information:', node);
+    return node;
   };
 }
 
 export const INITIALIZE = 'AUTOMERGE_SWARM_INITIALIZE';
-export interface InitializeAction extends Action<typeof INITIALIZE> { }
-export function initialize(): InitializeAction {
-  return { type: INITIALIZE };
+export interface InitializeAction extends Action<typeof INITIALIZE> {
+  node: AutomergeSwarm
+}
+export function initialize(node: AutomergeSwarm): InitializeAction {
+  return { type: INITIALIZE, node };
 }
 
 
@@ -37,6 +41,10 @@ export function connectAsync<T=any, S=AutomergeSwarmState<any>>(
 ): ThunkAction<Promise<void>, S, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectAutomergeSwarmState(getState());
+    if (!node) {
+      console.warn('Node not initialized yet! Unable to connect to:', addresses);
+      return;
+    }
     await node.connect(addresses);
     dispatch(connect(addresses));
     console.log('Node information:', node);
@@ -59,6 +67,10 @@ export function openDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
 ): ThunkAction<Promise<AutomergeSwarmDocument | null>, S, unknown, OpenDocumentAction | SyncDocumentAction> {
   return async (dispatch, getState) => {
     const { node } = selectAutomergeSwarmState(getState());
+    if (!node) {
+      console.warn('Node not initialized yet! Unable to open document:', documentId);
+      return null;
+    }
     const documentRef = node.doc(documentId);
     // TODO: Close previous document (if any).
     if (documentRef) {

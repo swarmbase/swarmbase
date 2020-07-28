@@ -16,6 +16,7 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^14.0.26",
     "eslint": "^7.3.1",
     "ts-node": "^8.10.2",
     "typescript": "^3.9.5"

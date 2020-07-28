@@ -96,6 +96,9 @@ export class AutomergeSwarmDocument<T = any> {
     }
     updateMessage.changes[hash] = changes;
 
+    if (!this.swarm.config) {
+      throw 'Can not pin a file when the node has not been initialized'!;
+    }
     this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
   }
 

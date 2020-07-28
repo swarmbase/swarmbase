@@ -1,5 +1,6 @@
 import React from 'react';
 import './App.css';
+import { AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from 'automerge-swarm';
 import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from 'automerge-swarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
@@ -7,7 +8,7 @@ import { AnnouncementDocument } from './models';
 
 interface AppProps {
   state: AutomergeSwarmState<AnnouncementDocument>;
-  onInitialize: () => Promise<void>;
+  onInitialize: (config: AutomergeSwarmConfig) => Promise<AutomergeSwarm>;
   onConnect: (addresses: string[]) => any;
   onDocumentOpen: (documentId: string) => any;
   onDocumentClose: (documentId: string) => any;
@@ -31,12 +32,16 @@ class App extends React.Component<AppProps, AppState, AutomergeSwarmState<Announ
 
   componentDidMount() {
     if (this.props.onInitialize) {
-      this.props.onInitialize();
+      const config = process.env.REACT_APP_CLIENT_CONFIG ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG) : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+      if (process.env.REACT_APP_SIGNALING_SERVER) {
+        config.ipfs.config.Addresses.Swarm.push(process.env.REACT_APP_SIGNALING_SERVER);
+      }
+      this.props.onInitialize(config);
     }
   }
 
   render() {
-    const ipfsInfo = this.props.state.node.ipfsInfo;
+    const ipfsInfo = this.props.state.node ? this.props.state.node.ipfsInfo : null;
 
     return (
       <div>
@@ -87,7 +92,7 @@ function mapStateToProps(state: AutomergeSwarmState<AnnouncementDocument>) {
 
 function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<AnnouncementDocument>, unknown, AutomergeSwarmActions>) {
   return {
-    onInitialize: () => dispatch(initializeAsync()),
+    onInitialize: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<AnnouncementDocument, AutomergeSwarmState<AnnouncementDocument>>(config)),
     onConnect: (addresses: string[]) => dispatch(connectAsync(addresses)),
     onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync(documentId)),
     onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync(documentId)),

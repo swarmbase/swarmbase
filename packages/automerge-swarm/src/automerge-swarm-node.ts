@@ -1,7 +1,8 @@
 import { AutomergeSwarm } from "./automerge-swarm";
 import { AutomergeSwarmDocument } from "./automerge-swarm-document";
 import { AutomergeSwarmSyncMessage } from "./automerge-swarm-messages";
-import { AutomergeSwarmConfig } from "./automerge-swarm-config";
+import { AutomergeSwarmConfig, DEFAULT_CONFIG } from "./automerge-swarm-config";
+import * as fs from 'fs';
 
 export const DEFAULT_NODE_CONFIG: AutomergeSwarmConfig = {
   ipfs: {
@@ -28,7 +29,7 @@ export const DEFAULT_NODE_CONFIG: AutomergeSwarmConfig = {
 };
 
 export class AutomergeSwarmNode {
-  private _swarm = new AutomergeSwarm(this.config);
+  private _swarm = new AutomergeSwarm();
   public get swarm(): AutomergeSwarm {
     return this._swarm;
   }
@@ -44,8 +45,21 @@ export class AutomergeSwarmNode {
 
   // Start
   public async start() {
-    await this.swarm.initialize();
+    await this.swarm.initialize(this.config);
     // console.log('Node Addresses:', this.swarm.ipfsInfo.addresses);
+    const websocketAddress = this.swarm.ipfsInfo.addresses.find((address: any) => address.toString().includes('/ws/'));
+    const clientConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as AutomergeSwarmConfig;
+    if (websocketAddress) {
+      clientConfig.ipfs.config.Bootstrap.push(websocketAddress)
+    }
+    const clientConfigFile = process.env.REACT_APP_CLIENT_CONFIG_FILE || 'client-config.env';
+    fs.writeFile(clientConfigFile, `REACT_APP_CLIENT_CONFIG='${JSON.stringify(clientConfig)}'`, (err: any) => {
+      if (err) {
+        console.error(`Failed to write ${clientConfigFile}:`, err);
+      } else {
+        console.log(`Wrote ${clientConfigFile}:`, clientConfig);
+      }
+    })
     
     // Open a pubsub channel (set by some config) for controlling this swarm of listeners.
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.

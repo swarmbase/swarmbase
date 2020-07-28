@@ -5,6 +5,7 @@ import { AutomergeSwarmConfig, DEFAULT_CONFIG } from "./automerge-swarm-config";
 export type AutomergeSwarmPeersHandler = (address: string, connection: any) => void;
 
 export class AutomergeSwarm {
+  protected _config: AutomergeSwarmConfig | null = null;
   private _ipfsNode: any;
   private _ipfsInfo: any;
   private _peerAddrs: string[] = [];
@@ -20,12 +21,15 @@ export class AutomergeSwarm {
   public get peerAddrs(): string[] {
     return this._peerAddrs;
   }
+  public get config(): AutomergeSwarmConfig | null {
+    return this._config;
+  }
 
-  constructor(public readonly config: AutomergeSwarmConfig = DEFAULT_CONFIG) { }
+  public async initialize(config: AutomergeSwarmConfig = DEFAULT_CONFIG) {
+    this._config = config;
 
-  public async initialize() {
     // Setup IPFS node.
-    this._ipfsNode = await IPFS.create(this.config.ipfs);
+    this._ipfsNode = await IPFS.create(config.ipfs);
     this._ipfsNode.libp2p.connectionManager.on('peer:connect', (connection: any) => {
       const peerAddress = connection.remotePeer.toB58String();
       this._peerAddrs.push(peerAddress);

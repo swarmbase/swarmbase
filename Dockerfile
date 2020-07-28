@@ -42,5 +42,8 @@ RUN npm run tsc
 COPY examples/browser-test/. /app/examples/browser-test/
 COPY examples/wiki-swarm/. /app/examples/wiki-swarm/
 
+COPY wait-for-file.sh /app/wait-for-file.sh
+RUN chmod +x /app/wait-for-file.sh
+
 WORKDIR /app
 CMD automerge-swarm-d
