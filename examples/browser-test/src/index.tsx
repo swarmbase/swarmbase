@@ -7,7 +7,7 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from 'automerge-swarm-redux';
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from '@robotoer/automerge-swarm-redux';
 import thunk from 'redux-thunk';
 
 const logger: Middleware = store => next => action => {

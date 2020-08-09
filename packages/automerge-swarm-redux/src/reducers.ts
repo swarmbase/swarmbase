@@ -1,6 +1,5 @@
 import { Doc } from "automerge";
-import { AutomergeSwarm } from "automerge-swarm";
-import { AutomergeSwarmDocument } from "automerge-swarm";
+import { AutomergeSwarm, AutomergeSwarmDocument } from "@robotoer/automerge-swarm";
 import { AutomergeSwarmActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE, CLOSE_DOCUMENT, PEER_CONNECT, PEER_DISCONNECT } from "./actions";
 
 

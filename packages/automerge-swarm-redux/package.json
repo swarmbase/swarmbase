@@ -1,5 +1,5 @@
 {
-  "name": "automerge-swarm-redux",
+  "name": "@robotoer/automerge-swarm-redux",
   "description": "Redux bindings for automerge-swarm",
   "version": "1.0.1",
   "scripts": {
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "automerge": "^0.14.1",
-    "automerge-swarm": "^1.0.1"
-  }
+    "@robotoer/automerge-swarm": "^1.0.1"
+  },
+  "gitHead": "580b29a1422cc1071ae0731f3dbc5a8f7a70c5a7"
 }

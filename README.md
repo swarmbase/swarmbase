@@ -46,7 +46,7 @@ In the future we will support installation via NPM repositories:
 
 ```sh
 # NOT CURRENTLY SUPPORTED!
-npm install --save automerge-swarm automerge-swarm-redux
+npm install --save @robotoer/automerge-swarm @robotoer/automerge-swarm-redux
 ```
 
 Define document types (only if you're using typescript)
@@ -65,7 +65,7 @@ Setup the client store (ensure you also initialize the store)
 ```ts
 // reducers.ts
 import { combineReducers, CombinedState } from "redux";
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "automerge-swarm-redux";
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@robotoer/automerge-swarm-redux";
 
 
 export type RootState = CombinedState<{
@@ -91,8 +91,8 @@ Initialize the swarm node
 
 ```ts
 // App.tsx
-import { AutomergeSwarmConfig } from "automerge-swarm";
-import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "automerge-swarm-redux";
+import { AutomergeSwarmConfig } from "@robotoer/automerge-swarm";
+import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "@robotoer/automerge-swarm-redux";
 
 // Use the actions connected below in your application's container(s) to interact with CollabSwarm.
 function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {

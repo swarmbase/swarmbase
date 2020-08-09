@@ -1,7 +1,7 @@
 import React from 'react';
 import './App.css';
-import { AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from 'automerge-swarm';
-import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from 'automerge-swarm-redux';
+import { AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from '@robotoer/automerge-swarm';
+import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from '@robotoer/automerge-swarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { JsonEditor } from 'jsoneditor-react';
