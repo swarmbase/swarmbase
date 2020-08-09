@@ -1,7 +1,7 @@
 {
   "name": "@robotoer/automerge-swarm",
   "description": "",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
