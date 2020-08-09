@@ -1,8 +1,11 @@
 # CollabSwarm
 
+![Collaborative Editing Example](docs/collaborative-editing.gif)
+_Share react stores between multiple clients using eventually-consistent CRDTs!_
+
 Implementing collaborative real-time applications can be very difficult and error prone.
 CollabSwarm is a fully-baked real-time application data store built using CRDTs and
-distributed web technologies.
+efficient distributed pub-sub algorithms.
 
 CollabSwarm has official bindings for common webapp stores including:
 

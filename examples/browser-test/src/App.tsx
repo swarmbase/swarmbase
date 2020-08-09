@@ -4,10 +4,13 @@ import { AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from 'automerge-
 import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from 'automerge-swarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
-import { AnnouncementDocument } from './models';
+import { JsonEditor } from 'jsoneditor-react';
+import * as jsondiffpatch from 'jsondiffpatch';
+
+const jdp = jsondiffpatch.create();
 
 interface AppProps {
-  state: AutomergeSwarmState<AnnouncementDocument>;
+  state: AutomergeSwarmState<any>;
   onInitialize: (config: AutomergeSwarmConfig) => Promise<AutomergeSwarm>;
   onConnect: (addresses: string[]) => any;
   onDocumentOpen: (documentId: string) => any;
@@ -20,7 +23,7 @@ interface AppState {
   documentId: string;
 }
 
-class App extends React.Component<AppProps, AppState, AutomergeSwarmState<AnnouncementDocument>> {
+class App extends React.Component<AppProps, AppState, AutomergeSwarmState<any>> {
   constructor(public props: AppProps) {
     super(props)
 
@@ -63,19 +66,30 @@ class App extends React.Component<AppProps, AppState, AutomergeSwarmState<Announ
           <input type="text" value={this.state.documentId} onChange={(e) => this.setState({ documentId: e.currentTarget.value })} />
           <button onClick={() => this.props.onDocumentOpen(this.state.documentId)}>Open</button>
         </div>
-        {Object.entries(this.props.state.documents).map(([documentPath, documentState]) => <React.Fragment key={documentPath}>
+        {/* {Object.entries(this.props.state.documents).map(([documentPath, documentState]: [string, any]) => <React.Fragment key={documentPath}> */}
+        {Object.entries(this.props.state.documents).map(([documentPath, documentState]: [string, any]) => <React.Fragment key={JSON.stringify(documentState.document)}>
           <h3>{documentPath}</h3>
-          <pre>
-            {JSON.stringify(documentState.document, null, 2)}
-          </pre>
+          <JsonEditor
+            value={JSON.parse(JSON.stringify(documentState.document))}
+            onChange={(currentDoc: any) => {
+              try {
+                const delta = jdp.diff(documentState.document, currentDoc);
+                if (delta) {
+                  console.log(`Applying json patch to '${documentPath}':`, delta);
+                  this.props.onDocumentChange(documentPath, doc => {
+                    try {
+                      jdp.patch(doc, delta);
+                    } catch(ex) {
+                      console.warn(ex);
+                    }
+                  });
+                }
+              } catch(ex) {
+                console.warn(ex);
+                return;
+              }
+            }}/>
           <div>
-            <button onClick={() => {
-              const r = Math.random().toString(36).substring(7);
-              console.log(`Setting the message field of document '${documentPath}' to:`, r);
-              this.props.onDocumentChange(documentPath, currentDoc => {
-                currentDoc.message = r;
-              });
-            }}>Update Document</button>
             <button onClick={() => {
               this.props.onDocumentClose(documentPath);
             }}>Close Document</button>
@@ -86,13 +100,13 @@ class App extends React.Component<AppProps, AppState, AutomergeSwarmState<Announ
   }
 }
 
-function mapStateToProps(state: AutomergeSwarmState<AnnouncementDocument>) {
+function mapStateToProps(state: AutomergeSwarmState<any>) {
   return { state };
 }
 
-function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<AnnouncementDocument>, unknown, AutomergeSwarmActions>) {
+function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<any>, unknown, AutomergeSwarmActions>) {
   return {
-    onInitialize: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<AnnouncementDocument, AutomergeSwarmState<AnnouncementDocument>>(config)),
+    onInitialize: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<any, AutomergeSwarmState<any>>(config)),
     onConnect: (addresses: string[]) => dispatch(connectAsync(addresses)),
     onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync(documentId)),
     onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync(documentId)),
