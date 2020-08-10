@@ -4,7 +4,7 @@ services:
     build:
       context: ./
       dockerfile: ./Dockerfile
-    image: automerge-swarm:latest
+    image: collabswarm-automerge:latest
     environment:
       - "PORT=3000"
       - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
@@ -13,10 +13,10 @@ services:
     ports:
       - 3001:3000
     volumes:
-      - ./packages/automgerge-swarm/bin:/app/packages/automerge-swarm/bin
-      - ./packages/automgerge-swarm/src:/app/packages/automerge-swarm/src
-      - ./packages/automgerge-swarm/types:/app/packages/automerge-swarm/types
-      - ./packages/automgerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
+      - ./packages/automgerge-swarm/bin:/app/packages/collabswarm-automerge/bin
+      - ./packages/automgerge-swarm/src:/app/packages/collabswarm-automerge/src
+      - ./packages/automgerge-swarm/types:/app/packages/collabswarm-automerge/types
+      - ./packages/automgerge-swarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/browser-test/public:/app/examples/browser-test/public
       - ./examples/browser-test/src:/app/examples/browser-test/src
       - ./client-config.env:/app/examples/browser-test/.env
@@ -31,7 +31,7 @@ services:
     build:
       context: ./
       dockerfile: ./Dockerfile
-    image: automerge-swarm:latest
+    image: collabswarm-automerge:latest
     environment:
       - "PORT=3000"
       - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
@@ -40,10 +40,10 @@ services:
     ports:
       - 3000:3000
     volumes:
-      - ./packages/automerge-swarm/bin:/app/packages/automerge-swarm/bin
-      - ./packages/automerge-swarm/src:/app/packages/automerge-swarm/src
-      - ./packages/automerge-swarm/types:/app/packages/automerge-swarm/types
-      - ./packages/automerge-swarm-redux/src:/app/packages/automerge-swarm-redux/src
+      - ./packages/collabswarm-automerge/bin:/app/packages/collabswarm-automerge/bin
+      - ./packages/collabswarm-automerge/src:/app/packages/collabswarm-automerge/src
+      - ./packages/collabswarm-automerge/types:/app/packages/collabswarm-automerge/types
+      - ./packages/collabswarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/wiki-swarm/public:/app/examples/wiki-swarm/public
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
       - ./client-config.env:/app/examples/wiki-swarm/.env
@@ -58,7 +58,7 @@ services:
     build:
       context: ./
       dockerfile: ./Dockerfile
-    image: automerge-swarm:latest
+    image: collabswarm-automerge:latest
     environment:
       - "CLIENT_CONFIG_FILE=/app/client-config.env"
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
@@ -68,14 +68,14 @@ services:
       - 4002:4002
       - 4003:4003
     volumes:
-      - ./packages/automerge-swarm/bin:/app/packages/automerge-swarm/bin
-      - ./packages/automerge-swarm/src:/app/packages/automerge-swarm/src
-      - ./packages/automerge-swarm/types:/app/packages/automerge-swarm/types
+      - ./packages/collabswarm-automerge/bin:/app/packages/collabswarm-automerge/bin
+      - ./packages/collabswarm-automerge/src:/app/packages/collabswarm-automerge/src
+      - ./packages/collabswarm-automerge/types:/app/packages/collabswarm-automerge/types
       - ./client-config.env:/app/client-config.env
   star-signal:
     build:
       context: ./
       dockerfile: ./Dockerfile.webrtc-star-signal
-    image: automerge-swarm-signal:latest
+    image: collabswarm-automerge-signal:latest
     ports:
       - 9090:9090

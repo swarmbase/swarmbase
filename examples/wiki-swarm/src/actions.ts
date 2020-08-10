@@ -1,5 +1,5 @@
 import { Action } from "redux";
-import { AutomergeSwarmActions } from "@robotoer/automerge-swarm-redux";
+import { AutomergeSwarmActions } from "@robotoer/collabswarm-redux";
 
 
 export const SEARCH = 'WIKI_SWARM_SEARCH';

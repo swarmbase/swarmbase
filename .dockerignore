@@ -3,8 +3,8 @@ Dockerfile.node
 Dockerfile.webrtc-star-signal
 Dockerfile
 node_modules/
-packages/automerge-swarm/node_modules
-packages/automerge-swarm-redux/node_modules
+packages/collabswarm-automerge/node_modules
+packages/collabswarm-redux/node_modules
 examples/browser-test/node_modules
 examples/wiki-swarm/node_modules
 .git/

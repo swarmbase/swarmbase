@@ -9,7 +9,7 @@ efficient distributed pub-sub algorithms.
 
 CollabSwarm has official bindings for common webapp stores including:
 
-* Redux (automerge-swarm-redux)
+* Redux (collabswarm-redux)
 * More to come soon...
 
 CollabSwarm has official bindings for the following CRDTs:
@@ -19,34 +19,34 @@ CollabSwarm has official bindings for the following CRDTs:
 
 ## Getting Started (Redux Bindings)
 
-Install `automerge-swarm` and its redux bindings:
+Install `collabswarm-automerge` and its redux bindings:
 
 ```sh
-# Clone the automerge-swarm library somewhere
-git clone https://github.com/robotoer/automerge-swarm
+# Clone the collabswarm-automerge library somewhere
+git clone https://github.com/robotoer/collabswarm-automerge
 
 # Install package deps and link local dependencies
-(cd automerge-swarm && npm install && npx lerna bootstrap --force-local)
+(cd collabswarm-automerge && npm install && npx lerna bootstrap --force-local)
 
-# Build packages/automerge-swarm/dist
-(cd automerge-swarm/packages/automerge-swarm && npm run tsc)
+# Build packages/collabswarm-automerge/dist
+(cd collabswarm-automerge/packages/collabswarm-automerge && npm run tsc)
 
-# Build packages/automerge-swarm-redux/dist
-(cd automerge-swarm/packages/automerge-swarm-redux && npm run tsc)
+# Build packages/collabswarm-redux/dist
+(cd collabswarm-automerge/packages/collabswarm-redux && npm run tsc)
 
 # Change directories to the package/application you are working on.
 
-# Installs automerge-swarm + automerge-swarm-redux as a local directory.
+# Installs collabswarm-automerge + collabswarm-redux as a local directory.
 npm install --save \
-    ./automerge-swarm/packages/automerge-swarm \      # Adjust these paths to point to the location
-    ./automerge-swarm/packages/automerge-swarm-redux  # of automerge-swarm on your machine.
+    ./collabswarm-automerge/packages/collabswarm-automerge \      # Adjust these paths to point to the location
+    ./collabswarm-automerge/packages/collabswarm-redux  # of collabswarm-automerge on your machine.
 ```
 
 In the future we will support installation via NPM repositories:
 
 ```sh
 # NOT CURRENTLY SUPPORTED!
-npm install --save @robotoer/automerge-swarm @robotoer/automerge-swarm-redux
+npm install --save @robotoer/collabswarm-automerge @robotoer/collabswarm-redux
 ```
 
 Define document types (only if you're using typescript)
@@ -65,7 +65,7 @@ Setup the client store (ensure you also initialize the store)
 ```ts
 // reducers.ts
 import { combineReducers, CombinedState } from "redux";
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@robotoer/automerge-swarm-redux";
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@robotoer/collabswarm-redux";
 
 
 export type RootState = CombinedState<{
@@ -75,7 +75,7 @@ export type RootState = CombinedState<{
 }>
 
 export const rootReducer = combineReducers({
-  // Add the automerge-swarm-redux reducer to provide access to a store of opened documents.
+  // Add the collabswarm-redux reducer to provide access to a store of opened documents.
   automergeSwarm: automergeSwarmReducer,
 
   // ...
@@ -91,8 +91,8 @@ Initialize the swarm node
 
 ```ts
 // App.tsx
-import { AutomergeSwarmConfig } from "@robotoer/automerge-swarm";
-import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "@robotoer/automerge-swarm-redux";
+import { AutomergeSwarmConfig } from "@robotoer/collabswarm-automerge";
+import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "@robotoer/collabswarm-redux";
 
 // Use the actions connected below in your application's container(s) to interact with CollabSwarm.
 function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {
@@ -109,11 +109,11 @@ function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, Automerg
 // ...
 ```
 
-While `automerge-swarm-redux` automatically updates all open documents for you in its internal store,
+While `collabswarm-redux` automatically updates all open documents for you in its internal store,
 if necessary the following actions are dispatched and can be used in your own reducers:
 
 ```ts
-// packages/automerge-swarm-redux/src/actions.ts
+// packages/collabswarm-redux/src/actions.ts
 
 export type AutomergeSwarmActions =
   InitializeAction |
@@ -171,17 +171,17 @@ protocols/services.
 Lerna is used to link multiple npm packages together and ensure that dependency versions match
 between packages.
 
-To build automerge-swarm (plus its packages):
+To build collabswarm-automerge (plus its packages):
 
 ```
 npm install
 npx lerna bootstrap --force-local
 
-cd packages/automerge-swarm
+cd packages/collabswarm-automerge
 npm run tsc
 cd ../..
 
-cd packages/automerge-swarm-redux
+cd packages/collabswarm-redux
 npm run tsc
 cd ../..
 ```
