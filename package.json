@@ -1,7 +1,7 @@
 {
   "name": "@robotoer/collabswarm-redux",
   "description": "Redux bindings for collabswarm-automerge",
-  "version": "1.0.2",
+  "version": "0.0.1",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
@@ -10,6 +10,7 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
@@ -20,7 +21,7 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
-    "@robotoer/collabswarm-automerge": "^1.0.2",
+    "@robotoer/collabswarm-automerge": "0.0.1",
     "automerge": "^0.14.1"
   },
   "gitHead": "18c801734abe4799ab73fcddf8db871981c4e5f1",
