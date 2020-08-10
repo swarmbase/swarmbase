@@ -1,0 +1,6 @@
+[submodule "packages/collabswarm-automerge"]
+	path = packages/collabswarm-automerge
+	url = git@github.com:robotoer/collabswarm-automerge
+[submodule "packages/collabswarm-redux"]
+	path = packages/collabswarm-redux
+	url = git@github.com:robotoer/collabswarm-redux
