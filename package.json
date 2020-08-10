@@ -1,7 +1,7 @@
 {
   "name": "@robotoer/collabswarm-automerge",
   "description": "",
-  "version": "1.0.2",
+  "version": "0.0.1",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
@@ -13,6 +13,7 @@
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "files": ["dist"],
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
