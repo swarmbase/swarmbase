@@ -22,29 +22,6 @@ CollabSwarm has official bindings for the following CRDTs:
 Install `collabswarm-automerge` and its redux bindings:
 
 ```sh
-# Clone the collabswarm-automerge library somewhere
-git clone https://github.com/robotoer/collabswarm-automerge
-
-# Install package deps and link local dependencies
-(cd collabswarm-automerge && npm install && npx lerna bootstrap --force-local)
-
-# Build packages/collabswarm-automerge/dist
-(cd collabswarm-automerge/packages/collabswarm-automerge && npm run tsc)
-
-# Build packages/collabswarm-redux/dist
-(cd collabswarm-automerge/packages/collabswarm-redux && npm run tsc)
-
-# Change directories to the package/application you are working on.
-
-# Installs collabswarm-automerge + collabswarm-redux as a local directory.
-npm install --save \
-    ./collabswarm-automerge/packages/collabswarm-automerge \      # Adjust these paths to point to the location
-    ./collabswarm-automerge/packages/collabswarm-redux  # of collabswarm-automerge on your machine.
-```
-
-In the future we will support installation via NPM repositories:
-
-```sh
 # NOT CURRENTLY SUPPORTED!
 npm install --save @robotoer/collabswarm-automerge @robotoer/collabswarm-redux
 ```
