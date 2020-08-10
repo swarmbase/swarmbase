@@ -3,7 +3,7 @@
     "packages/*",
     "examples/*"
   ],
-  "version": "1.0.2",
+  "version": "0.0.1",
   "command": {
     "publish": {
       "registry": "https://npm.pkg.github.com"
