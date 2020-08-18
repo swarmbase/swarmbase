@@ -1,4 +1,4 @@
-# `automerge-db`/`collab-swarm`/`automerge-swarm`/`y.js-swarm`
+# `collabswarm`
 
 A fully decentralized (eventually) json document store backed by CRDTs.
 
@@ -22,9 +22,6 @@ A fully decentralized (eventually) json document store backed by CRDTs.
     - Can only be encryption if there isn't a way to have access-control work on pubsub/ipfs
   - Dedicated node
     - Also includes private bootstrapping nodes with swarm key
-- On-premise offerings
-  - Run your own node?
-  - Node could be proprietary software? Not in the spirit of IPFS... Also not hard to replicate missing behavior.
 
 ## Future
 
@@ -43,18 +40,6 @@ A fully decentralized (eventually) json document store backed by CRDTs.
     - Distributed heartbeat with latest messages
     - Have existing swarm listen for peer joining and have one or many nodes send their full document hash list
   - Fetch missing updates when updates are received. Union resulting hashes.
-- How do you handle security?
-  - IPFS/libp2p layers. Research needed. Looks like a "swarm-key" can be used that will protect the network:
-    <https://discuss.ipfs.io/t/can-i-make-a-private-ipfs-network-of-public-external-ips-this-would-require-my-own-gateway-as-well/5509>
-  - Protecting the pub-sub layer. Research needed.
-  - Permissions within pub-sub? Can this be done with
-- Security types:
-  - Encryption
-    - <https://blog.textile.io/the-5-steps-to-end-to-end-encrypted-photo-storage-and-sharing/>
-    - <https://blog.textile.io/introducing-textiles-threads-protocol/>
-  - Access Control
-    - <https://github.com/ipfs/notes/issues/376>
-    - <https://discuss.ipfs.io/t/can-i-make-a-private-ipfs-network-of-public-external-ips-this-would-require-my-own-gateway-as-well/5509>
 
 ## TODO
 
