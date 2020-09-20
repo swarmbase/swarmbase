@@ -25,7 +25,7 @@ Install `collabswarm-automerge` and its redux bindings:
 
 ```sh
 # NOT CURRENTLY SUPPORTED!
-npm install --save @robotoer/collabswarm-automerge @robotoer/collabswarm-redux
+npm install --save @collabswarm/collabswarm-automerge @collabswarm/collabswarm-redux
 ```
 
 Define document types (only if you're using typescript)
@@ -44,7 +44,7 @@ Setup the client store (ensure you also initialize the store)
 ```ts
 // reducers.ts
 import { combineReducers, CombinedState } from "redux";
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@robotoer/collabswarm-redux";
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@collabswarm/collabswarm-redux";
 
 
 export type RootState = CombinedState<{
@@ -70,8 +70,8 @@ Initialize the swarm node
 
 ```ts
 // App.tsx
-import { AutomergeSwarmConfig } from "@robotoer/collabswarm-automerge";
-import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "@robotoer/collabswarm-redux";
+import { AutomergeSwarmConfig } from "@collabswarm/collabswarm-automerge";
+import { initializeAsync, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync } from "@collabswarm/collabswarm-redux";
 
 // Use the actions connected below in your application's container(s) to interact with CollabSwarm.
 function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {

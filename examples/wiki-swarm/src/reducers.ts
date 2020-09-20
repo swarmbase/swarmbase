@@ -1,5 +1,5 @@
 import { combineReducers, CombinedState } from "redux";
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@robotoer/collabswarm-redux";
+import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@collabswarm/collabswarm-redux";
 import { WikiSwarmArticle } from "./models";
 import { WikiSwarmActions, SEARCH } from "./actions";
 import { EditorState } from "draft-js";

@@ -1,5 +1,5 @@
 {
-  "name": "@robotoer/browser-test",
+  "name": "@collabswarm/browser-test",
   "private": true,
   "dependencies": {
     "@testing-library/jest-dom": "^4.2.4",
@@ -11,8 +11,8 @@
     "@types/react": "^16.9.38",
     "@types/react-dom": "^16.9.8",
     "@types/react-redux": "^7.1.9",
-    "@robotoer/collabswarm-automerge": "0.0.1",
-    "@robotoer/collabswarm-redux": "0.0.1",
+    "@collabswarm/collabswarm-automerge": "0.0.1",
+    "@collabswarm/collabswarm-redux": "0.0.1",
     "jsondiffpatch": "^0.4.1",
     "jsoneditor": "^9.0.3",
     "jsoneditor-react": "^3.0.0",
