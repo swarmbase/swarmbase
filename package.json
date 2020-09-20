@@ -1,7 +1,7 @@
 {
   "name": "@collabswarm/collabswarm-automerge",
   "description": "",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
