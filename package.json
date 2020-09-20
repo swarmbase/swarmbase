@@ -1,7 +1,7 @@
 {
   "name": "@collabswarm/collabswarm-redux",
   "description": "Redux bindings for collabswarm-automerge",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
@@ -23,7 +23,7 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
-    "@collabswarm/collabswarm-automerge": "0.0.1",
+    "@collabswarm/collabswarm-automerge": "^0.1.0",
     "automerge": "^0.14.1"
   },
   "gitHead": "18c801734abe4799ab73fcddf8db871981c4e5f1"
