@@ -30,7 +30,7 @@
     "ipfs": "^0.47.0",
     "it-pipe": "^1.1.0"
   },
-  "gitHead": "18c801734abe4799ab73fcddf8db871981c4e5f1",
+  "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
   }
