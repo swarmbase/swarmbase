@@ -2,6 +2,8 @@
   "name": "@collabswarm/browser-test",
   "private": true,
   "dependencies": {
+    "@collabswarm/collabswarm-automerge": "^0.1.0",
+    "@collabswarm/collabswarm-redux": "^0.1.0",
     "@testing-library/jest-dom": "^4.2.4",
     "@testing-library/react": "^9.5.0",
     "@testing-library/user-event": "^7.2.1",
@@ -11,8 +13,6 @@
     "@types/react": "^16.9.38",
     "@types/react-dom": "^16.9.8",
     "@types/react-redux": "^7.1.9",
-    "@collabswarm/collabswarm-automerge": "0.0.1",
-    "@collabswarm/collabswarm-redux": "0.0.1",
     "jsondiffpatch": "^0.4.1",
     "jsoneditor": "^9.0.3",
     "jsoneditor-react": "^3.0.0",
@@ -47,5 +47,6 @@
   },
   "devDependencies": {
     "libp2p-webrtc-star": "^0.18.5"
-  }
+  },
+  "version": "0.1.0"
 }
