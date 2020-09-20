@@ -10,7 +10,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
