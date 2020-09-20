@@ -1,5 +1,5 @@
 {
-  "name": "@robotoer/collabswarm-redux",
+  "name": "@collabswarm/collabswarm-redux",
   "description": "Redux bindings for collabswarm-automerge",
   "version": "0.0.1",
   "scripts": {
@@ -21,7 +21,7 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
-    "@robotoer/collabswarm-automerge": "0.0.1",
+    "@collabswarm/collabswarm-automerge": "0.0.1",
     "automerge": "^0.14.1"
   },
   "gitHead": "18c801734abe4799ab73fcddf8db871981c4e5f1",

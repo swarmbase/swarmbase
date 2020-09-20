@@ -2,7 +2,7 @@ import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
 import { AutomergeSwarmState } from "./reducers";
 import { Doc } from "automerge";
-import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from "@robotoer/collabswarm-automerge";
+import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm-automerge";
 
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.

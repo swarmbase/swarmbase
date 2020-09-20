@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.peerDisconnect = exports.PEER_DISCONNECT = exports.peerConnect = exports.PEER_CONNECT = exports.changeDocument = exports.CHANGE_DOCUMENT = exports.changeDocumentAsync = exports.syncDocument = exports.SYNC_DOCUMENT = exports.closeDocument = exports.CLOSE_DOCUMENT = exports.closeDocumentAsync = exports.openDocument = exports.OPEN_DOCUMENT = exports.openDocumentAsync = exports.connect = exports.CONNECT = exports.connectAsync = exports.initialize = exports.INITIALIZE = exports.initializeAsync = void 0;
-const collabswarm_automerge_1 = require("@robotoer/collabswarm-automerge");
+const collabswarm_automerge_1 = require("@collabswarm/collabswarm-automerge");
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 function initializeAsync(config = collabswarm_automerge_1.DEFAULT_CONFIG, selectAutomergeSwarmState = s => s) {
     return (dispatch, getState) => __awaiter(this, void 0, void 0, function* () {

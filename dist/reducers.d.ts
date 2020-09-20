@@ -1,5 +1,5 @@
 import { Doc } from "automerge";
-import { AutomergeSwarm, AutomergeSwarmDocument } from "@robotoer/collabswarm-automerge";
+import { AutomergeSwarm, AutomergeSwarmDocument } from "@collabswarm/collabswarm-automerge";
 import { AutomergeSwarmActions } from "./actions";
 export interface AutomergeSwarmState<T> {
     node: AutomergeSwarm;

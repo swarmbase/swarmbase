@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.automergeSwarmReducer = exports.initialState = void 0;
-const collabswarm_automerge_1 = require("@robotoer/collabswarm-automerge");
+const collabswarm_automerge_1 = require("@collabswarm/collabswarm-automerge");
 const actions_1 = require("./actions");
 exports.initialState = {
     node: new collabswarm_automerge_1.AutomergeSwarm(),

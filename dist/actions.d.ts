@@ -2,7 +2,7 @@ import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
 import { AutomergeSwarmState } from "./reducers";
 import { Doc } from "automerge";
-import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig } from "@robotoer/collabswarm-automerge";
+import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig } from "@collabswarm/collabswarm-automerge";
 export declare function initializeAsync<T = any, S = AutomergeSwarmState<any>>(config?: AutomergeSwarmConfig, selectAutomergeSwarmState?: (rootState: S) => AutomergeSwarmState<T>): ThunkAction<Promise<AutomergeSwarm>, S, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction>;
 export declare const INITIALIZE = "AUTOMERGE_SWARM_INITIALIZE";
 export interface InitializeAction extends Action<typeof INITIALIZE> {
