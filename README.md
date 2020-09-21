@@ -24,7 +24,6 @@ CollabSwarm has official bindings for the following CRDTs:
 Install `collabswarm-automerge` and its redux bindings:
 
 ```sh
-# NOT CURRENTLY SUPPORTED!
 npm install --save @collabswarm/collabswarm-automerge @collabswarm/collabswarm-redux
 ```
 
@@ -173,3 +172,12 @@ docker-compose up
 ```
 
 The browser-test can also be uncommented and run as well.
+
+### Publishing
+
+TODO: Improve this
+
+```sh
+# Make sure you have authenticated with npm first.
+npx lerna publish --skip-git
+```
