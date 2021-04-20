@@ -12,7 +12,19 @@ export const DEFAULT_CONFIG: AutomergeSwarmConfig = {
         Swarm: []
       },
       Bootstrap: [],
-    }
+    },
+    // libp2p: {
+    //   config: {
+    //     transport: {
+    //       // This is added for local demo!
+    //       // In a production environment the default filter should be used
+    //       // where only DNS + WSS addresses will be dialed by websockets in the browser.
+    //       [transportKey]: {
+    //         filter: filters.all
+    //       }
+    //     }
+    //   }
+    // }
   },
 
   pubsubDocumentPrefix: '/document/',
