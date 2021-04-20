@@ -13,19 +13,21 @@ services:
     ports:
       - 3001:3000
     volumes:
-      - ./packages/automgerge-swarm/bin:/app/packages/collabswarm-automerge/bin
-      - ./packages/automgerge-swarm/src:/app/packages/collabswarm-automerge/src
-      - ./packages/automgerge-swarm/types:/app/packages/collabswarm-automerge/types
-      - ./packages/automgerge-swarm-redux/src:/app/packages/collabswarm-redux/src
+      - ./packages/collabswarm-automerge/bin:/app/packages/collabswarm-automerge/bin
+      - ./packages/collabswarm-automerge/src:/app/packages/collabswarm-automerge/src
+      - ./packages/collabswarm-automerge/types:/app/packages/collabswarm-automerge/types
+      - ./packages/collabswarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/browser-test/public:/app/examples/browser-test/public
       - ./examples/browser-test/src:/app/examples/browser-test/src
-      - ./client-config.env:/app/examples/browser-test/.env
+      - ./client-config.env:/app/.env
     stdin_open: true
-    working_dir: /app/examples/browser-test
+    # working_dir: /app/examples/browser-test
     command:
       - /app/wait-for-file.sh
       - .env
-      - npm
+      - yarn
+      - workspace
+      - "@collabswarm/browser-test"
       - start
   wiki-swarm:
     build:
@@ -46,13 +48,15 @@ services:
       - ./packages/collabswarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/wiki-swarm/public:/app/examples/wiki-swarm/public
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
-      - ./client-config.env:/app/examples/wiki-swarm/.env
+      - ./client-config.env:/app/.env
     stdin_open: true
-    working_dir: /app/examples/wiki-swarm
+    # working_dir: /app/examples/wiki-swarm
     command:
       - /app/wait-for-file.sh
       - .env
-      - npm
+      - yarn
+      - workspace
+      - "@collabswarm/wiki-swarm"
       - start
   node:
     build:
