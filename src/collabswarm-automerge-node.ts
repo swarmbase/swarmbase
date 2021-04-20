@@ -65,7 +65,7 @@ export class AutomergeSwarmNode {
         console.log(`Wrote ${clientConfigFile}:`, clientConfig);
       }
     })
-    
+
     // Open a pubsub channel (set by some config) for controlling this swarm of listeners.
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage: any) => {
@@ -90,10 +90,10 @@ export class AutomergeSwarmNode {
                 }
               }
             });
-      
+
             // Listen to the file.
             docRef.open();
-      
+
             // Pin all of the files that were received.
             for (const cid of Object.keys(message.changes)) {
               if (!this._seenCids.has(cid)) {

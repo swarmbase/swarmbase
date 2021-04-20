@@ -7,6 +7,7 @@
     "downlevelIteration": true,
     "strict": true,
     "declaration": true,
+    "types": ["node"],
     "typeRoots": ["types", "node_modules/@types"],
     "esModuleInterop": true,
     "skipLibCheck": true,

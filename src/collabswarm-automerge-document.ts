@@ -112,7 +112,7 @@ export class AutomergeSwarmDocument<T = any> {
       this.sync(message);
     });
 
-    // TODO: Make the messages on this specific to a document.
+    // Make the messages on this specific to a document.
     await this.swarm.ipfsNode.libp2p.handle('/collabswarm-automerge/doc-load/1.0.0', ({ stream }: any) => {
       console.log('received /collabswarm-automerge/doc-load/1.0.0 dial');
       const loadMessage = {
@@ -135,9 +135,7 @@ export class AutomergeSwarmDocument<T = any> {
       );
     });
 
-    // TODO ===================================================================
     // Load initial document from peers.
-    // /TODO ==================================================================
     return await this.load();
   }
 
