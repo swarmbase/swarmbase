@@ -154,17 +154,9 @@ To build collabswarm-automerge (plus its packages):
 ```
 npm install
 npx lerna bootstrap --force-local
-
-cd packages/collabswarm-automerge
-npm run tsc
-cd ../..
-
-cd packages/collabswarm-redux
-npm run tsc
-cd ../..
 ```
 
-There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default:
+There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default (will need for examples):
 
 ```sh
 docker-compose build

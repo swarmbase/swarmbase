@@ -1,3 +1,6 @@
 {
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "plantuml.render": "PlantUMLServer",
+    "plantuml.server": "https://www.plantuml.com/plantuml"
+
 }
