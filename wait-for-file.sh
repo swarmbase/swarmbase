@@ -10,4 +10,6 @@ until [ -s "${file}" ]; do
   sleep 1
 done
 
+export $(cat "${file}" | sed 's/#.*//g' | sed 's/\r//g' | xargs)
+
 exec "${@}"

@@ -1,6 +1,6 @@
 FROM node:14-alpine AS builder
 
-RUN apk update && apk add python make gcc g++
+RUN apk update && apk add python make gcc g++ gettext
 
 # Setup Lerna
 RUN mkdir -p /app
