@@ -2,14 +2,11 @@ import { combineReducers, CombinedState } from "redux";
 import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@collabswarm/collabswarm-redux";
 import { WikiSwarmArticle } from "./models";
 import { WikiSwarmActions, SEARCH } from "./actions";
-import { EditorState } from "draft-js";
 
 export interface WikiAppState {
-  editorState: EditorState;
 }
 
 export const wikiAppInitialState: WikiAppState = {
-  editorState: EditorState.createEmpty(),
 };
 
 export function wikiAppReducer(state: WikiAppState = wikiAppInitialState, action: any): WikiAppState {

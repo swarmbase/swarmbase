@@ -2,15 +2,6 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { Doc } from 'automerge';
-import Editor from 'draft-js-plugins-editor';
-import createLinkifyPlugin from 'draft-js-linkify-plugin';
-import createMarkdownShortcutsPlugin from 'draft-js-markdown-shortcuts-plugin';
-import createImagePlugin from 'draft-js-image-plugin';
-import createVideoPlugin from 'draft-js-video-plugin';
-import createInlineToolbarPlugin from 'draft-js-inline-toolbar-plugin';
-import createSideToolbarPlugin from 'draft-js-side-toolbar-plugin';
-import createUndoPlugin from 'draft-js-undo-plugin';
-import { EditorState, convertFromRaw, convertToRaw, ContentState } from 'draft-js';
 import { AutomergeSwarm, AutomergeSwarmConfig, AutomergeSwarmDocument, DEFAULT_CONFIG } from '@collabswarm/collabswarm-automerge';
 import { AutomergeSwarmActions, changeDocumentAsync, openDocumentAsync, closeDocumentAsync, initializeAsync } from '@collabswarm/collabswarm-redux';
 import { WikiSwarmArticle } from '../models';
@@ -18,23 +9,8 @@ import { RootState, selectAutomergeSwarmState } from '../reducers';
 import moment from 'moment';
 import { RouteComponentProps } from 'react-router-dom';
 import Spinner from 'react-bootstrap/Spinner';
-
-const linkifyPlugin = createLinkifyPlugin();
-const markdownShortcutsPlugin = createMarkdownShortcutsPlugin();
-const imagePlugin = createImagePlugin();
-const videoPlugin = createVideoPlugin();
-const inlineToolbarPlugin = createInlineToolbarPlugin();
-const sideToolbarPlugin = createSideToolbarPlugin();
-const undoPlugin = createUndoPlugin();
-const plugins = [
-  linkifyPlugin,
-  markdownShortcutsPlugin,
-  imagePlugin,
-  videoPlugin,
-  inlineToolbarPlugin,
-  sideToolbarPlugin,
-  undoPlugin,
-];
+import { SlateInput } from './SlateInput';
+import { initialValue } from './Slate';
 
 interface MatchParams {
   documentId: string;
@@ -50,24 +26,16 @@ interface WikiArticleProps extends RouteComponentProps<MatchParams> {
 }
 
 interface WikiArticleState {
-  editorState: EditorState;
 }
 
 class WikiArticle extends React.Component<WikiArticleProps, WikiArticleState, RootState> {
-  private readonly _editorRef: React.RefObject<Editor>
-
   constructor(public props: WikiArticleProps) {
     super(props);
-    this._editorRef = React.createRef<Editor>();
-
-    this.state = {
-      editorState: EditorState.createEmpty()
-    };
   }
 
   componentDidMount() {
     // Load this article upon component mount.
-    if (this.props.onInitialize && this.props.onDocumentOpen && this.props.match.params.documentId) {
+    if (this.props.onDocumentOpen && this.props.match.params.documentId) {
       console.log('Loading article at:', this.props.match.params.documentId);
       console.log('Env:', process.env);
       const config = process.env.REACT_APP_CLIENT_CONFIG ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG) : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -94,23 +62,13 @@ class WikiArticle extends React.Component<WikiArticleProps, WikiArticleState, Ro
       if (!this.props.document.content) {
         console.warn('this.props.document.content is empty!', this.props.document);
       }
-      const newContentState = this.props.document.content
-        ? convertFromRaw(this.props.document.content)
-        : ContentState.createFromText('');
-      const newEditorState = EditorState.acceptSelection(
-        EditorState.createWithContent(newContentState),
-        this.state.editorState.getSelection()
-      );
       return <div className="m-3">
         <div>TODO: Title goes here</div>
         <div>
-          <Editor
-            editorState={newEditorState}
-            onChange={(editorState: EditorState) => {
-              // We need to continue updating the local state in order
-              // to get the latest selection position
-              this.setState({ editorState });
-            
+          <SlateInput
+            value={this.props.document.content || initialValue}
+            placeholder="Enter run notes here..."
+            onChange={content => {
               // Your Redux action
               this.props.onDocumentChange(this.props.match.params.documentId, currentDocument => {
                 currentDocument.updatedOn = moment().format();
@@ -121,12 +79,10 @@ class WikiArticle extends React.Component<WikiArticleProps, WikiArticleState, Ro
                 if (!currentDocument.createdBy && currentDocument.updatedBy) {
                   currentDocument.createdBy = currentDocument.updatedBy;
                 }
-                currentDocument.content = convertToRaw(editorState.getCurrentContent());
-                console.log('Updating editor content:', currentDocument.content.blocks.map(x => x.text).join(' '));
+                currentDocument.content = content;
+                // console.log('Updating editor content:', currentDocument.content.blocks.map(x => x.text).join(' '));
               });
             }}
-            ref={this._editorRef}
-            plugins={plugins}
           />
         </div>
       </div>
