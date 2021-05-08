@@ -165,6 +165,10 @@ docker-compose up
 
 The browser-test can also be uncommented and run as well.
 
+
+Docker may need to be rebuilt, and local files replaced, to reflect changes. This can be done by:
+`docker-compose rm && docker-compose up --build`
+
 ### Publishing
 
 TODO: Improve this
