@@ -4,7 +4,7 @@ import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import { Collabswarm } from "./collabswarm";
 import { readUint8Iterable, shuffleArray } from "./utils";
 import { CRDTProvider } from "./collabswarm-provider";
-import { CRDTSyncMessage } from "./collabswarm-message";
+import { CRDTSyncMessage, CRDTChangeBlock } from "./collabswarm-message";
 
 
 export type CollabswarmDocumentChangeHandler<DocType> = (current: DocType, hashes: string[]) => void;
@@ -27,11 +27,25 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     return (this.swarm.ipfsNode as any).libp2p;
   }
 
+  // TODO: Figure out how to:
+  //       - Store/Sync Readers ACL
+  //       - Store/Sync Writers ACL
+  //       - Update Readers ACL - Might need some new "public" APIs
+  //       - Update Writers ACL - Might need some new "public" APIs
   constructor(
     public readonly swarm: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>,
     public readonly documentPath: string,
     private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
   ) { }
+
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/rest_parameters
+  public addReaders() {}
+  public removeReaders() {}
+  public getReaders() {}
+
+  public addWriters() {}
+  public removeWriters() {}
+  public getWriters() {}
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   public async load(): Promise<boolean> {
@@ -61,6 +75,7 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     // TODO: Close connection upon receipt of data.
     if (stream) {
       console.log('Opening stream for /collabswarm-automerge/doc-load/1.0.0', stream);
+      pipe
       await pipe(
         stream,
         async source => {
@@ -83,9 +98,47 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     }
   }
 
+  private async _sign(toEncode: ChangesType, keyPair?: CryptoKeyPair): Promise<ArrayBuffer> {
+    // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
+    let encoder = new TextEncoder();
+    let encoded = encoder.encode(toEncode.toString());
+    let privateKey;
+    if (keyPair) {
+      privateKey = keyPair.privateKey;
+    } else {
+      privateKey = this.swarm.config.identity.privateKey;
+    }
+    let signature = await window.crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      privateKey,
+      encoded
+    )
+    return signature;
+  }
+
+  private async signChangeBlock(changes: Change[], keyPair?: CryptoKeyPair): Promise<AutomergeChangeBlock> {
+    // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
+    let encoder = new TextEncoder();
+    let signature = await this._sign(changes, keyPair)
+    return {
+      changes,
+      signature,
+    };
+  }
+
+  private getVerifiedChanges(changes: CRDTChangeBlock<ChangesType>  | null | undefined): ChangesType | undefined {
+    // TODO:
+    // - Loop through list of possible writers and try verifying signature with each public key.
+    // - Return the changes from the change block.
+    return (changes && changes.changes) || undefined;
+
+    // Make sure to log a warning if a change block _fails_ verification.
+  }
+
   public async pin() {
     // Apply local change w/ automerge.
     const changes = this._provider.getHistory(this.document);
+    const changeBlock = this.signChangeBlock(changes);
 
     // Store changes in ipfs.
     const newFileResult = await this.swarm.ipfsNode.add(this._provider.serializeChanges(changes));
@@ -94,10 +147,13 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
 
     // Send new message.
     const updateMessage = this._provider.newMessage(this.documentPath);
+    // TODO:
+    // let signature = await this._sign()
+    // const updateMessage: AutomergeSwarmSyncMessage = { documentId: this.documentPath, changes: { }, signature: signature };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
-    updateMessage.changes[hash] = changes;
+    updateMessage.changes[hash] = changeBlock;
 
     if (!this.swarm.config) {
       throw 'Can not pin a file when the node has not been initialized'!;
@@ -174,9 +230,10 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     const newDocumentHashes: string[] = [];
     const missingDocumentHashes: string[] = [];
     for (const [sentHash, sentChanges] of newChangeEntries) {
-      if (sentChanges) {
+      const changes = this.getVerifiedChanges(sentChanges);
+      if (changes) {
         // Apply the changes that were sent directly.
-        newDocument = this._provider.remoteChange(newDocument, sentChanges);
+        newDocument = this._provider.remoteChange(newDocument, changes);
         newDocumentHashes.push(sentHash);
       } else {
         missingDocumentHashes.push(sentHash);
@@ -195,8 +252,9 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
       // Fetch missing hashes using IPFS.
       this.getFile(missingHash)
         .then(missingChanges => {
-          if (missingChanges) {
-            this._document = this._provider.remoteChange(this._document, missingChanges);
+          const changes = this.getVerifiedChanges(missingChanges);
+          if (changes) {
+            this._document = this._provider.remoteChange(this._document, changes);
             this._hashes.add(missingHash);
             this._fireRemoteUpdateHandlers([missingHash]);
           } else {
@@ -240,9 +298,11 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     const [newDocument, changes] = this._provider.localChange(this.document, message || "", changeFn);
     // Apply local change w/ automerge.
     this._document = newDocument;
+    const changeBlock = this.signChangeBlock(changes);
+    console.log("Signed change block: %o", changeBlock);
 
     // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(this._provider.serializeChanges(changes));
+    const newFileResult = await this.swarm.ipfsNode.add(this._provider.serializeChanges(changeBlock));
     const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
 
@@ -251,7 +311,7 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
-    updateMessage.changes[hash] = changes;
+    updateMessage.changes[hash] = changeBlock;
     await this.swarm.ipfsNode.pubsub.publish(this.documentPath, this._provider.serializeMessage(updateMessage));
 
     // Fire change handlers.

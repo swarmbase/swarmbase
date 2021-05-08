@@ -155,7 +155,7 @@ To build collabswarm-automerge (plus its packages):
 yarn install
 ```
 
-There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default:
+There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default (will need for examples):
 
 ```sh
 docker-compose build
@@ -163,6 +163,10 @@ docker-compose up
 ```
 
 The browser-test can also be uncommented and run as well.
+
+
+Docker may need to be rebuilt, and local files replaced, to reflect changes. This can be done by:
+`docker-compose rm && docker-compose up --build`
 
 ### Publishing
 

@@ -2,7 +2,6 @@ import { Doc, Change, init, change, getChanges, applyChanges, getHistory } from 
 
 import { Collabswarm, CollabswarmDocument, CollabswarmDocumentChangeHandler, CRDTProvider, CRDTSyncMessage } from "@collabswarm/collabswarm";
 
-
 export type AutomergeSwarmDocumentChangeHandler<T = any> = CollabswarmDocumentChangeHandler<Doc<T>>;
 
 export type AutomergeSwarm<T = any> = Collabswarm<Doc<T>, Change[], (doc: T) => void, AutomergeSwarmSyncMessage>;

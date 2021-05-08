@@ -43,8 +43,30 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
     return this._config;
   }
 
+  private _generateKey(): Promise<CryptoKeyPair> {
+    // https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey
+    let keyPair = window.crypto.subtle.generateKey(
+      {
+        name: "RSA-OAEP",
+        modulusLength: 4096,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256"
+      },
+      true,
+      ["encrypt", "decrypt"]
+    );
+    return keyPair;
+  }
+
   public async initialize(config: CollabswarmConfig = DEFAULT_CONFIG) {
     this._config = config;
+
+    // Handle identity
+    // try to import https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/importKey
+    // TODO: importKey()
+    // if nothing passed, make a new key and story in config
+    const identity = await this._generateKey()
+    this._config.identity = identity;
 
     // Setup IPFS node.
     this._ipfsNode = await IPFS.create(config.ipfs);

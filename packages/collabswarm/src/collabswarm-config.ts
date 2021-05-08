@@ -10,7 +10,7 @@ export const DEFAULT_CONFIG: CollabswarmConfig = {
     config: {
       Addresses: {
         Swarm: []
-      },
+      }, 
       Bootstrap: [],
     },
     // libp2p: {
@@ -28,12 +28,15 @@ export const DEFAULT_CONFIG: CollabswarmConfig = {
   },
 
   pubsubDocumentPrefix: '/document/',
-  pubsubDocumentPublishPath: '/documents'
+  pubsubDocumentPublishPath: '/documents',
+  identity: new CryptoKeyPair
 };
 
+// TODO: Add user identity here (CryptoKey: https://developer.mozilla.org/en-US/docs/Web/API/CryptoKey)
 export interface CollabswarmConfig {
   ipfs: any;
   
   pubsubDocumentPrefix: string;
   pubsubDocumentPublishPath: string;
+  identity: CryptoKeyPair;
 }

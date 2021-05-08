@@ -1,44 +1,66 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# Getting Started
 
-## Available Scripts
+prereqs: docker compose, docker desktop (if mac)
 
-In the project directory, you can run:
 
-### `npm start`
+Launch these containers:
+```
+docker-compose up node star-signal browser-test
+```
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Open a browser to `http://localhost:3001/`
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+You should see a 'Node Address' with something like 'Node Addresses:
+/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star/p2p/{id}'
 
-### `npm test`
+If you do not see that, there may be something wrong with the docker file. 
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Next, try opening another browser tab using Incognito or a different browser.
+You should show a different node adress, and each should connect to the other.
 
-### `npm run build`
+Example:
+  Browser 1:
+    Node Addresses:
+      /ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star/p2p/QmbbmZhpebBowNMztaphCBk7omfWvoW4zdi2gFfqPjFdDJ
+    Connected Peers:
+      QmZ8MUuxfNSegfCN5yquAWRS56Exr9omkcwxGaRHtYtxnW
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+  Browser 2:
+    Node Addresses:
+      /ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star/p2p/QmZ8MUuxfNSegfCN5yquAWRS56Exr9omkcwxGaRHtYtxnW
+    Connected Peers:
+      QmbbmZhpebBowNMztaphCBk7omfWvoW4zdi2gFfqPjFdDJ
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+Then open a document in one, and the same document in the other. Both parties should be able to see edits by either party. 
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## What is happening
 
-### `npm run eject`
+Local node info from the web-rtc-star package is saved to an env file. This is then loaded as the config for the AutoSwarm object.
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### Initial loading of document
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Requestor has read access:
+<!-- https://www.plantuml.com/plantuml -->
+```plantuml
+@startuml
+actor on_read_acl
+actor owner
+control control
+on_read_acl -> owner: Load Request
+owner --> control: id on readACL?
+control --> owner: true
+owner --> on_read_acl: message
+@enduml
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+Requestor does not have load access:
+```plantuml
+@startuml
+actor not_on_read_acl
+actor owner
+control control
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+not_on_read_acl -> owner: Load Request
+owner --> control: id on readACL?
+control --> owner: false
+@enduml```
