@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@collabswarm/collabswarm-automerge": "^0.1.0",
-    "automerge": "^0.14.1"
+    "automerge": "^0.14.2"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
