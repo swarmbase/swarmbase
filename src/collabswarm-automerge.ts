@@ -1,22 +1,35 @@
 import IPFS from "ipfs";
+import Libp2p from "libp2p";
 import { AutomergeSwarmDocument } from "./collabswarm-automerge-document";
 import { AutomergeSwarmConfig, DEFAULT_CONFIG } from "./collabswarm-automerge-config";
+import { IDResult } from "ipfs-core-types/src/root";
 
 export type AutomergeSwarmPeersHandler = (address: string, connection: any) => void;
 
 export class AutomergeSwarm {
   protected _config: AutomergeSwarmConfig | null = null;
-  private _ipfsNode: any;
-  private _ipfsInfo: any;
+  private _ipfsNode: IPFS.IPFS | undefined;
+  private _ipfsInfo: IDResult | undefined;
   private _peerAddrs: string[] = [];
   private _peerConnectHandlers: Map<string, AutomergeSwarmPeersHandler> = new Map<string, AutomergeSwarmPeersHandler>();
   private _peerDisconnectHandlers: Map<string, AutomergeSwarmPeersHandler> = new Map<string, AutomergeSwarmPeersHandler>();
 
-  public get ipfsNode(): any {
-    return this._ipfsNode;
+  public get libp2p(): Libp2p {
+    return (this.ipfsNode as any).libp2p;
   }
-  public get ipfsInfo(): any {
-    return this._ipfsInfo;
+  public get ipfsNode(): IPFS.IPFS {
+    if (this._ipfsNode) {
+      return this._ipfsNode;
+    }
+
+    throw new Error("IPFS node not initialized yet!");
+  }
+  public get ipfsInfo(): IDResult {
+    if (this._ipfsInfo) {
+      return this._ipfsInfo;
+    }
+
+    throw new Error("IPFS node not initialized yet!");
   }
   public get peerAddrs(): string[] {
     return this._peerAddrs;
@@ -30,14 +43,14 @@ export class AutomergeSwarm {
 
     // Setup IPFS node.
     this._ipfsNode = await IPFS.create(config.ipfs);
-    this._ipfsNode.libp2p.connectionManager.on('peer:connect', (connection: any) => {
+    this.libp2p.connectionManager.on('peer:connect', connection => {
       const peerAddress = connection.remotePeer.toB58String();
       this._peerAddrs.push(peerAddress);
       for (const [handlerId, handler] of this._peerConnectHandlers) {
         handler(peerAddress, connection);
       }
     });
-    this._ipfsNode.libp2p.connectionManager.on('peer:disconnect', (connection: any) => {
+    this.libp2p.connectionManager.on('peer:disconnect', connection => {
       const peerAddress = connection.remotePeer.toB58String();
       const peerIndex = this._peerAddrs.indexOf(peerAddress);
       if (peerIndex > 0) {
@@ -62,7 +75,7 @@ export class AutomergeSwarm {
     // Connect to bootstrapping node(s).
     const connectionPromises: Promise<any>[] = [];
     for (const address of addresses) {
-      connectionPromises.push(this._ipfsNode.swarm.connect(address));
+      connectionPromises.push(this.ipfsNode.swarm.connect(address));
     }
     await Promise.all(connectionPromises);
   }

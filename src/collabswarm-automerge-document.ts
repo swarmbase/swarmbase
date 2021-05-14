@@ -1,5 +1,6 @@
-import IPFS from "ipfs";
 import pipe from "it-pipe";
+import Libp2p from "libp2p";
+import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import { Doc, init, Change, applyChanges, change, getChanges, getHistory } from "automerge";
 import { AutomergeSwarm } from "./collabswarm-automerge";
 import { shuffleArray } from "./utils";
@@ -15,8 +16,14 @@ export class AutomergeSwarmDocument<T = any> {
 
   private _hashes = new Set<string>();
 
+  private _pubsubHandler: MessageHandlerFn | undefined;
+
   private _remoteHandlers: { [id: string]: AutomergeSwarmDocumentChangeHandler } = {};
   private _localHandlers: { [id: string]: AutomergeSwarmDocumentChangeHandler } = {};
+
+  public get libp2p(): Libp2p {
+    return (this.swarm.ipfsNode as any).libp2p;
+  }
 
   constructor(
     public readonly swarm: AutomergeSwarm,
@@ -36,24 +43,24 @@ export class AutomergeSwarmDocument<T = any> {
     const shuffledPeers = [...peers];
     shuffleArray(shuffledPeers);
 
-    let stream: any;
-    for (const peer of shuffledPeers) {
-      try {
-        console.log('Selected peer addresses:', peer.addr.toString());
-        const docLoadConnection = await this.swarm.ipfsNode.libp2p.dialProtocol(peer.addr.toString(), ['/collabswarm-automerge/doc-load/1.0.0']);
-        stream = docLoadConnection.stream;
-        break;
-      } catch (err) {
-        console.warn('Failed to load document from:', peer.addr.toString(), err);
+    const stream = await (async () => {
+      for (const peer of shuffledPeers) {
+        try {
+          console.log('Selected peer addresses:', peer.addr.toString());
+          const docLoadConnection = await this.libp2p.dialProtocol(peer.addr.toString(), ['/collabswarm-automerge/doc-load/1.0.0']);
+          return docLoadConnection.stream;
+        } catch (err) {
+          console.warn('Failed to load document from:', peer.addr.toString(), err);
+        }
       }
-    }
+    })()
 
     // TODO: Close connection upon receipt of data.
     if (stream) {
       console.log('Opening stream for /collabswarm-automerge/doc-load/1.0.0', stream);
       await pipe(
         stream,
-        async (source: any) => {
+        async source => {
           let rawMessage = "";
 
           // For each chunk of data
@@ -85,10 +92,8 @@ export class AutomergeSwarmDocument<T = any> {
     const changes = getHistory(this.document).map(state => state.change);
 
     // Store changes in ipfs.
-    const newFileResult = this.swarm.ipfsNode.add(JSON.stringify(changes));
-    let newFile: any = null;
-    for await (newFile of newFileResult) { }
-    const hash = newFile.cid.toString() as string;
+    const newFileResult = await this.swarm.ipfsNode.add(JSON.stringify(changes));
+    const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
 
     // Send new message.
@@ -101,19 +106,19 @@ export class AutomergeSwarmDocument<T = any> {
     if (!this.swarm.config) {
       throw 'Can not pin a file when the node has not been initialized'!;
     }
-    this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
+    this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, this.serializeMessage(updateMessage));
   }
 
   public async open(): Promise<boolean> {
     // Open pubsub connection.
-    // await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this.sync.bind(this));
-    await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, (rawMessage: any) => {
+    this._pubsubHandler = rawMessage => {
       const message = JSON.parse(rawMessage.data.toString()) as AutomergeSwarmSyncMessage;
       this.sync(message);
-    });
+    }
+    await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this._pubsubHandler);
 
     // Make the messages on this specific to a document.
-    await this.swarm.ipfsNode.libp2p.handle('/collabswarm-automerge/doc-load/1.0.0', ({ stream }: any) => {
+    this.libp2p.handle('/collabswarm-automerge/doc-load/1.0.0', ({ stream }) => {
       console.log('received /collabswarm-automerge/doc-load/1.0.0 dial');
       const loadMessage = {
         documentId: this.documentPath,
@@ -140,23 +145,32 @@ export class AutomergeSwarmDocument<T = any> {
   }
 
   public async close() {
-    await this.swarm.ipfsNode.pubsub.unsubscribe(this.documentPath);
+    if (this._pubsubHandler) {
+      await this.swarm.ipfsNode.pubsub.unsubscribe(this.documentPath, this._pubsubHandler);
+    }
   }
 
-  public async getFile(hash: string) {
-    for await (const file of this.swarm.ipfsNode.get(hash)) {
-      if (file.content) {
-        const blocks = [] as any[];
-        for await (const block of file.content) {
-          blocks.push(block);
-        }
-        const content = IPFS.Buffer.concat(blocks);
-        // TODO(r.chu): Should this store multiple changes per file?
-        return JSON.parse(content) as Change[];
+  public async getFile(hash: string): Promise<Change[]> {
+    let length = 0;
+    const chunks = [] as Uint8Array[];
+    for await (const chunk of this.swarm.ipfsNode.files.read(hash)) {
+      if (chunk) {
+        chunks.push(chunk);
+        length += chunk.length;
       }
     }
 
-    return null;
+    let index = 0;
+    const assembled = new Uint8Array(length);
+    for (const chunk of chunks) {
+      assembled.set(chunk, index);
+      index += chunk.length;
+    }
+
+    const decoder = new TextDecoder();
+
+    // TODO(r.chu): Should this store multiple changes per file?
+    return JSON.parse(decoder.decode(assembled));
   }
 
   private _fireRemoteUpdateHandlers(hashes: string[]) {
@@ -242,6 +256,16 @@ export class AutomergeSwarmDocument<T = any> {
     }
   }
 
+  public serializeMessage(message: AutomergeSwarmSyncMessage): Uint8Array {
+    const encoder = new TextEncoder();
+    return encoder.encode(JSON.stringify(message));
+  }
+
+  public deserializeMessage(message: Uint8Array): AutomergeSwarmSyncMessage {
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(message));
+  }
+
   public async change(changeFn: (doc: T) => void, message?: string) {
     // Apply local change w/ automerge.
     const newDocument = message ? change(this.document, message, changeFn) : change(this.document, changeFn);
@@ -249,10 +273,8 @@ export class AutomergeSwarmDocument<T = any> {
     this._document = newDocument;
 
     // Store changes in ipfs.
-    const newFileResult = this.swarm.ipfsNode.add(JSON.stringify(changes));
-    let newFile: any = null;
-    for await (newFile of newFileResult) { }
-    const hash = newFile.cid.toString() as string;
+    const newFileResult = await this.swarm.ipfsNode.add(JSON.stringify(changes));
+    const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
 
     // Send new message.
@@ -261,7 +283,7 @@ export class AutomergeSwarmDocument<T = any> {
       updateMessage.changes[oldHash] = null;
     }
     updateMessage.changes[hash] = changes;
-    await this.swarm.ipfsNode.pubsub.publish(this.documentPath, IPFS.Buffer.from(JSON.stringify(updateMessage)));
+    await this.swarm.ipfsNode.pubsub.publish(this.documentPath, this.serializeMessage(updateMessage));
 
     // Fire change handlers.
     this._fireLocalUpdateHandlers([hash]);
