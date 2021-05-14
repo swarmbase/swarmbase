@@ -6,7 +6,7 @@ RUN apk update && apk add python make gcc g++
 USER root
 RUN mkdir -p /app
 WORKDIR /app
-RUN npm install libp2p-webrtc-star@0.21.2
+RUN npm install libp2p-webrtc-star@0.22.3
 
 FROM node:14-alpine
 

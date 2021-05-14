@@ -146,22 +146,13 @@ protocols/services.
 
 ## Local Development
 
-Lerna is used to link multiple npm packages together and ensure that dependency versions match
-between packages.
+Yarn workspaces are used to link multiple npm packages together and ensure that dependency 
+versions match between packages.
 
 To build collabswarm-automerge (plus its packages):
 
 ```
-npm install
-npx lerna bootstrap --force-local
-
-cd packages/collabswarm-automerge
-npm run tsc
-cd ../..
-
-cd packages/collabswarm-redux
-npm run tsc
-cd ../..
+yarn install
 ```
 
 There is also a docker-compose.yaml file provided that runs the wiki-swarm example by default:
@@ -179,5 +170,5 @@ TODO: Improve this
 
 ```sh
 # Make sure you have authenticated with npm first.
-npx lerna publish --skip-git
+yarn npm publish
 ```
