@@ -46,7 +46,7 @@ export class AutomergeSwarm {
     this.libp2p.connectionManager.on('peer:connect', connection => {
       const peerAddress = connection.remotePeer.toB58String();
       this._peerAddrs.push(peerAddress);
-      for (const [handlerId, handler] of this._peerConnectHandlers) {
+      for (const [, handler] of this._peerConnectHandlers) {
         handler(peerAddress, connection);
       }
     });
@@ -56,7 +56,7 @@ export class AutomergeSwarm {
       if (peerIndex > 0) {
         this._peerAddrs.splice(peerIndex, 1);
       }
-      for (const [handlerId, handler] of this._peerDisconnectHandlers) {
+      for (const [, handler] of this._peerDisconnectHandlers) {
         handler(peerAddress, connection);
       }
     });

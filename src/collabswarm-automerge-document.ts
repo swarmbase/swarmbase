@@ -1,10 +1,9 @@
 import pipe from "it-pipe";
 import Libp2p from "libp2p";
-import BufferList from "bl";
 import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import { Doc, init, Change, applyChanges, change, getChanges, getHistory } from "automerge";
 import { AutomergeSwarm } from "./collabswarm-automerge";
-import { shuffleArray } from "./utils";
+import { deserializeChanges, deserializeMessage, readUint8Iterable, serializeChanges, serializeMessage, shuffleArray } from "./utils";
 import { AutomergeSwarmDocumentChangeHandler } from "./collabswarm-automerge-change-handlers";
 import { AutomergeSwarmSyncMessage } from "./collabswarm-automerge-messages";
 
@@ -62,8 +61,8 @@ export class AutomergeSwarmDocument<T = any> {
       await pipe(
         stream,
         async source => {
-          const assembled = await this.readUint8Iterable(source);
-          const message = this.deserializeMessage(assembled);
+          const assembled = await readUint8Iterable(source);
+          const message = deserializeMessage(assembled);
           console.log('received /collabswarm-automerge/doc-load/1.0.0 response:', assembled, message);
 
           if (message.documentId === this.documentPath) {
@@ -86,7 +85,7 @@ export class AutomergeSwarmDocument<T = any> {
     const changes = getHistory(this.document).map(state => state.change);
 
     // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(this.serializeChanges(changes));
+    const newFileResult = await this.swarm.ipfsNode.add(serializeChanges(changes));
     const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
 
@@ -100,13 +99,13 @@ export class AutomergeSwarmDocument<T = any> {
     if (!this.swarm.config) {
       throw 'Can not pin a file when the node has not been initialized'!;
     }
-    this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, this.serializeMessage(updateMessage));
+    this.swarm.ipfsNode.pubsub.publish(this.swarm.config.pubsubDocumentPublishPath, serializeMessage(updateMessage));
   }
 
   public async open(): Promise<boolean> {
     // Open pubsub connection.
     this._pubsubHandler = rawMessage => {
-      const message = this.deserializeMessage(rawMessage.data);
+      const message = deserializeMessage(rawMessage.data);
       this.sync(message);
     }
     await this.swarm.ipfsNode.pubsub.subscribe(this.documentPath, this._pubsubHandler);
@@ -122,13 +121,13 @@ export class AutomergeSwarmDocument<T = any> {
         loadMessage.changes[hash] = null;
       }
 
-      const assembled = this.serializeMessage(loadMessage);
+      const assembled = serializeMessage(loadMessage);
       console.log('sending /collabswarm-automerge/doc-load/1.0.0 response:', assembled, loadMessage);
 
       // Immediately send the connecting peer either the automerge.save'd document or a list of
       // hashes with the changes that are cached locally.
       pipe(
-        [this.serializeMessage(loadMessage)],
+        [serializeMessage(loadMessage)],
         // [JSON.stringify(loadMessage)],
         stream,
         async (source: any) =>  {
@@ -148,46 +147,11 @@ export class AutomergeSwarmDocument<T = any> {
     }
   }
 
-  // HACK:
-  public isBufferList(input: Uint8Array | BufferList): boolean {
-    return !!Object.getOwnPropertySymbols(input).find((s) => {
-      return String(s) === "Symbol(BufferList)";
-    });
-  }
-
-  public async readUint8Iterable(iterable: AsyncIterable<Uint8Array | BufferList>): Promise<Uint8Array> {
-    let length = 0;
-    const chunks = [] as (Uint8Array | BufferList)[];
-    for await (const chunk of iterable) {
-      if (chunk) {
-        chunks.push(chunk);
-        length += chunk.length;
-      }
-    }
-
-    let index = 0;
-    const assembled = new Uint8Array(length);
-    for (const chunk of chunks) {
-      if (this.isBufferList(chunk)) {
-        const bufferList = chunk as BufferList;
-        for (let i = 0; i < bufferList.length; i++) {
-          assembled.set([bufferList.readUInt8(i)], index + i);
-        }
-      } else {
-        const arr = chunk as Uint8Array;
-        assembled.set(arr, index);
-      }
-      index += chunk.length;
-    }
-
-    return assembled
-  }
-
   public async getFile(hash: string): Promise<Change[]> {
-    const assembled = await this.readUint8Iterable(this.swarm.ipfsNode.files.read(`/ipfs/${hash}`));
+    const assembled = await readUint8Iterable(this.swarm.ipfsNode.files.read(`/ipfs/${hash}`));
     const decoder = new TextDecoder();
 
-    return this.deserializeChanges(decoder.decode(assembled));
+    return deserializeChanges(decoder.decode(assembled));
   }
 
   private _fireRemoteUpdateHandlers(hashes: string[]) {
@@ -273,30 +237,6 @@ export class AutomergeSwarmDocument<T = any> {
     }
   }
 
-  public serializeMessage(message: AutomergeSwarmSyncMessage): Uint8Array {
-    const encoder = new TextEncoder();
-    return encoder.encode(JSON.stringify(message));
-  }
-
-  public deserializeMessage(message: Uint8Array): AutomergeSwarmSyncMessage {
-    const decoder = new TextDecoder();
-    const rawMessage = decoder.decode(message);
-    try {
-      return JSON.parse(rawMessage);
-    } catch (err) {
-      console.error("Failed to parse message:", rawMessage, message);
-      throw err;
-    }
-  }
-
-  public serializeChanges(changes: Change[]): string {
-    return JSON.stringify(changes);
-  }
-
-  public deserializeChanges(changes: string): Change[] {
-    return JSON.parse(changes);
-  }
-
   public async change(changeFn: (doc: T) => void, message?: string) {
     // Apply local change w/ automerge.
     const newDocument = message ? change(this.document, message, changeFn) : change(this.document, changeFn);
@@ -304,7 +244,7 @@ export class AutomergeSwarmDocument<T = any> {
     this._document = newDocument;
 
     // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(this.serializeChanges(changes));
+    const newFileResult = await this.swarm.ipfsNode.add(serializeChanges(changes));
     const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
 
@@ -314,7 +254,7 @@ export class AutomergeSwarmDocument<T = any> {
       updateMessage.changes[oldHash] = null;
     }
     updateMessage.changes[hash] = changes;
-    await this.swarm.ipfsNode.pubsub.publish(this.documentPath, this.serializeMessage(updateMessage));
+    await this.swarm.ipfsNode.pubsub.publish(this.documentPath, serializeMessage(updateMessage));
 
     // Fire change handlers.
     this._fireLocalUpdateHandlers([hash]);
