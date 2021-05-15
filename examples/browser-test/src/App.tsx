@@ -44,7 +44,15 @@ class App extends React.Component<AppProps, AppState, AutomergeSwarmState<any>> 
   }
 
   render() {
-    const ipfsInfo = this.props.state.node ? this.props.state.node.ipfsInfo : null;
+    const ipfsInfo = (() => {
+      try {
+        return this.props.state.node ? this.props.state.node.ipfsInfo : null;
+      } catch(ex) {
+        // No-op.
+        console.warn("Failed to read ipfs info:", ex);
+      }
+      return null;
+    })();
 
     return (
       <div>

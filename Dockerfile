@@ -42,6 +42,7 @@ COPY examples/wiki-swarm/. /app/examples/wiki-swarm/
 
 COPY wait-for-file.sh /app/wait-for-file.sh
 RUN chmod +x /app/wait-for-file.sh
+RUN chmod +x /usr/local/bin/collabswarm-automerge-d
 
 WORKDIR /app
 CMD collabswarm-automerge-d
