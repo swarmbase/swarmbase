@@ -1,18 +1,17 @@
 import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
-import { AutomergeSwarmState } from "./reducers";
-import { Doc } from "automerge";
-import { AutomergeSwarmDocument, AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm-automerge";
+import { CollabswarmState } from "./reducers";
+import { Collabswarm, CollabswarmDocument, CRDTSyncMessage, CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
 
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 
-export function initializeAsync<T=any, S=AutomergeSwarmState<any>>(
-  config: AutomergeSwarmConfig = DEFAULT_CONFIG,
-  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<AutomergeSwarm>, S, unknown, InitializeAction | PeerConnectAction | PeerDisconnectAction> {
+export function initializeAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+  config: CollabswarmConfig = DEFAULT_CONFIG,
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any,
+): ThunkAction<Promise<Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>>, RootStateType, unknown, InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> | PeerConnectAction | PeerDisconnectAction> {
   return async (dispatch, getState) => {
-    const { node } = selectAutomergeSwarmState(getState());
+    const { node } = selectCollabswarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
       dispatch(peerConnect(address));
     });
@@ -26,21 +25,23 @@ export function initializeAsync<T=any, S=AutomergeSwarmState<any>>(
   };
 }
 
-export const INITIALIZE = 'AUTOMERGE_SWARM_INITIALIZE';
-export interface InitializeAction extends Action<typeof INITIALIZE> {
-  node: AutomergeSwarm
+export const INITIALIZE = 'COLLABSWARM_INITIALIZE';
+export interface InitializeAction<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> extends Action<typeof INITIALIZE> {
+  node: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>
 }
-export function initialize(node: AutomergeSwarm): InitializeAction {
+export function initialize<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
+  node: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>
+): InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> {
   return { type: INITIALIZE, node };
 }
 
 
-export function connectAsync<T=any, S=AutomergeSwarmState<any>>(
+export function connectAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
   addresses: string[],
-  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<void>, S, unknown, ConnectAction> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+): ThunkAction<Promise<void>, RootStateType, unknown, ConnectAction> {
   return async (dispatch, getState) => {
-    const { node } = selectAutomergeSwarmState(getState());
+    const { node } = selectCollabswarmState(getState());
     if (!node) {
       console.warn('Node not initialized yet! Unable to connect to:', addresses);
       return;
@@ -52,7 +53,7 @@ export function connectAsync<T=any, S=AutomergeSwarmState<any>>(
   };
 }
 
-export const CONNECT = 'AUTOMERGE_SWARM_CONNECT';
+export const CONNECT = 'COLLABSWARM_CONNECT';
 export interface ConnectAction extends Action<typeof CONNECT> {
   addresses: string[]
 }
@@ -61,12 +62,12 @@ export function connect(addresses: string[]): ConnectAction {
 }
 
 
-export function openDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+export function openDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
   documentId: string,
-  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<AutomergeSwarmDocument | null>, S, unknown, OpenDocumentAction | SyncDocumentAction> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+): ThunkAction<Promise<CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType> | null>, RootStateType, unknown, OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> | SyncDocumentAction<DocType>> {
   return async (dispatch, getState) => {
-    const { node } = selectAutomergeSwarmState(getState());
+    const { node } = selectCollabswarmState(getState());
     if (!node) {
       console.warn('Node not initialized yet! Unable to open document:', documentId);
       return null;
@@ -92,22 +93,22 @@ export function openDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
   };
 }
 
-export const OPEN_DOCUMENT = 'AUTOMERGE_SWARM_OPEN_DOCUMENT';
-export interface OpenDocumentAction extends Action<typeof OPEN_DOCUMENT> {
+export const OPEN_DOCUMENT = 'COLLABSWARM_OPEN_DOCUMENT';
+export interface OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> extends Action<typeof OPEN_DOCUMENT> {
   documentId: string;
-  documentRef: AutomergeSwarmDocument;
+  documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>;
 }
-export function openDocument(documentId: string, documentRef: AutomergeSwarmDocument): OpenDocumentAction {
+export function openDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(documentId: string, documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>): OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> {
   return { type: OPEN_DOCUMENT, documentId, documentRef };
 }
 
 
-export function closeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+export function closeDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
   documentId: string,
-  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<void>, S, unknown, CloseDocumentAction | SyncDocumentAction> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+): ThunkAction<Promise<void>, RootStateType, unknown, CloseDocumentAction | SyncDocumentAction<DocType>> {
   return async (dispatch, getState) => {
-    const { documents } = selectAutomergeSwarmState(getState());
+    const { documents } = selectCollabswarmState(getState());
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
       documentRef.unsubscribe(documentId);
@@ -119,7 +120,7 @@ export function closeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
   };
 }
 
-export const CLOSE_DOCUMENT = 'AUTOMERGE_SWARM_CLOSE_DOCUMENT';
+export const CLOSE_DOCUMENT = 'COLLABSWARM_CLOSE_DOCUMENT';
 export interface CloseDocumentAction extends Action<typeof CLOSE_DOCUMENT> {
   documentId: string;
 }
@@ -128,24 +129,24 @@ export function closeDocument(documentId: string): CloseDocumentAction {
 }
 
 
-export const SYNC_DOCUMENT = 'AUTOMERGE_SWARM_SYNC_DOCUMENT';
-export interface SyncDocumentAction extends Action<typeof SYNC_DOCUMENT> {
+export const SYNC_DOCUMENT = 'COLLABSWARM_SYNC_DOCUMENT';
+export interface SyncDocumentAction<DocType> extends Action<typeof SYNC_DOCUMENT> {
   documentId: string;
-  document: Doc<any>;
+  document: DocType;
 }
-export function syncDocument(documentId: string, document: Doc<any>): SyncDocumentAction {
+export function syncDocument<DocType>(documentId: string, document: DocType): SyncDocumentAction<DocType> {
   return { type: SYNC_DOCUMENT, documentId, document };
 }
 
 
-export function changeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
+export function changeDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
   documentId: string,
-  changeFn: (current: T) => void,
+  changeFn: ChangeFnType,
   message?: string,
-  selectAutomergeSwarmState: (rootState: S) => AutomergeSwarmState<T> = s => s as any
-): ThunkAction<Promise<Doc<T>>, S, unknown, ChangeDocumentAction> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+): ThunkAction<Promise<DocType>, RootStateType, unknown, ChangeDocumentAction<DocType>> {
   return async (dispatch, getState) => {
-    const { documents } = selectAutomergeSwarmState(getState());
+    const { documents } = selectCollabswarmState(getState());
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
       const changePromise = documentRef.change(changeFn, message);
@@ -158,17 +159,17 @@ export function changeDocumentAsync<T=any, S=AutomergeSwarmState<any>>(
   };
 }
 
-export const CHANGE_DOCUMENT = 'AUTOMERGE_SWARM_CHANGE_DOCUMENT';
-export interface ChangeDocumentAction extends Action<typeof CHANGE_DOCUMENT> {
+export const CHANGE_DOCUMENT = 'COLLABSWARM_CHANGE_DOCUMENT';
+export interface ChangeDocumentAction<DocType> extends Action<typeof CHANGE_DOCUMENT> {
   documentId: string;
-  document: Doc<any>;
+  document: DocType;
 }
-export function changeDocument<T>(documentId: string, document: Doc<T>): ChangeDocumentAction {
+export function changeDocument<DocType>(documentId: string, document: DocType): ChangeDocumentAction<DocType> {
   return { type: CHANGE_DOCUMENT, documentId, document };
 }
 
 
-export const PEER_CONNECT = 'AUTOMERGE_SWARM_PEER_CONNECT';
+export const PEER_CONNECT = 'COLLABSWARM_PEER_CONNECT';
 export interface PeerConnectAction extends Action<typeof PEER_CONNECT> {
   peerAddress: string;
 }
@@ -177,7 +178,7 @@ export function peerConnect(peerAddress: string): PeerConnectAction {
 }
 
 
-export const PEER_DISCONNECT = 'AUTOMERGE_SWARM_PEER_DISCONNECT';
+export const PEER_DISCONNECT = 'COLLABSWARM_PEER_DISCONNECT';
 export interface PeerDisconnectAction extends Action<typeof PEER_DISCONNECT> {
   peerAddress: string;
 }
@@ -186,12 +187,12 @@ export function peerDisconnect(peerAddress: string): PeerDisconnectAction {
 }
 
 
-export type AutomergeSwarmActions =
-  InitializeAction |
+export type CollabswarmActions<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> =
+  InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> |
   ConnectAction |
-  OpenDocumentAction |
+  OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> |
   CloseDocumentAction |
-  SyncDocumentAction |
-  ChangeDocumentAction |
+  SyncDocumentAction<DocType> |
+  ChangeDocumentAction<DocType> |
   PeerConnectAction |
   PeerDisconnectAction;

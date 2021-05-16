@@ -7,11 +7,12 @@
     "downlevelIteration": true,
     "strict": true,
     "declaration": true,
-    "typeRoots": ["types"],
+    "typeRoots": ["types", "node_modules/@types"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "composite": true
   },
   "exclude": [
     "node_modules",
@@ -21,5 +22,10 @@
     "src",
     "types",
     "bin"
+  ],
+  "references": [
+    {
+      "path": "../collabswarm",
+    }
   ]
 }

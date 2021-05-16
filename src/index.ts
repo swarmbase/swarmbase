@@ -28,13 +28,13 @@ import {
   ChangeDocumentAction,
   changeDocument,
 
-  AutomergeSwarmActions
+  CollabswarmActions
 } from "./actions";
 import {
-  AutomergeSwarmState,
-  AutomergeSwarmDocumentState,
+  CollabswarmState,
+  CollabswarmDocumentState,
   initialState,
-  automergeSwarmReducer
+  collabswarmReducer
 } from "./reducers";
 
 export {
@@ -69,13 +69,13 @@ export {
   ChangeDocumentAction,
   changeDocument,
 
-  AutomergeSwarmActions,
+  CollabswarmActions,
 
 
   // Reducer
 
-  AutomergeSwarmState,
-  AutomergeSwarmDocumentState,
+  CollabswarmState,
+  CollabswarmDocumentState,
   initialState,
-  automergeSwarmReducer
+  collabswarmReducer
 };
