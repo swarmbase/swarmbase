@@ -7,8 +7,10 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from '@collabswarm/collabswarm-redux';
+import { collabswarmReducer } from '@collabswarm/collabswarm-redux';
+import { AutomergeProvider } from '@collabswarm/collabswarm-automerge';
 import thunk from 'redux-thunk';
+import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
 
 const logger: Middleware = store => next => action => {
   console.log('dispatching', action);
@@ -17,7 +19,10 @@ const logger: Middleware = store => next => action => {
   return result;
 }
 
-const store = createStore<AutomergeSwarmState<any>, AutomergeSwarmActions, unknown, unknown>(automergeSwarmReducer, applyMiddleware(thunk, logger));
+const store = createStore<AutomergeSwarmState<any>, AutomergeSwarmActions<any>, unknown, unknown>(
+  collabswarmReducer(new AutomergeProvider()),
+  applyMiddleware(thunk, logger),
+);
 
 ReactDOM.render(
   <Provider store={store}>

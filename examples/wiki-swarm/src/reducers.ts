@@ -1,7 +1,9 @@
 import { combineReducers, CombinedState } from "redux";
-import { automergeSwarmReducer, AutomergeSwarmState, AutomergeSwarmActions } from "@collabswarm/collabswarm-redux";
 import { WikiSwarmArticle } from "./models";
 import { WikiSwarmActions, SEARCH } from "./actions";
+import { AutomergeSwarmActions, AutomergeSwarmState } from "./utils";
+import { collabswarmReducer } from "@collabswarm/collabswarm-redux";
+import { AutomergeProvider } from "@collabswarm/collabswarm-automerge";
 
 export interface WikiAppState {
 }
@@ -28,7 +30,8 @@ export type RootState = CombinedState<{
 }>
 
 export const rootReducer: (state: RootState | undefined, action: WikiSwarmActions) => RootState = combineReducers({
-  automergeSwarm: automergeSwarmReducer as (state: AutomergeSwarmState<WikiSwarmArticle> | undefined, action: AutomergeSwarmActions) => AutomergeSwarmState<WikiSwarmArticle>,
+  // automergeSwarm: collabswarmReducer(new AutomergeProvider<WikiSwarmArticle>()),
+  automergeSwarm: collabswarmReducer(new AutomergeProvider()) as (state: AutomergeSwarmState<WikiSwarmArticle> | undefined, action: AutomergeSwarmActions) => AutomergeSwarmState<WikiSwarmArticle>,
   wikiApp: wikiAppReducer,
 });
 

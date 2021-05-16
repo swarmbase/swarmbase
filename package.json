@@ -1,7 +1,10 @@
 {
   "private": true,
   "workspaces": [
+    "packages/collabswarm",
     "packages/collabswarm-automerge",
+    "packages/collabswarm-yjs",
+    "packages/collabswarm-react",
     "packages/collabswarm-redux",
     "examples/browser-test",
     "examples/wiki-swarm"

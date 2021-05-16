@@ -22,5 +22,16 @@
   },
   "include": [
     "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/collabswarm"
+    },
+    {
+      "path": "../../packages/collabswarm-automerge"
+    },
+    {
+      "path": "../../packages/collabswarm-redux"
+    }
   ]
 }

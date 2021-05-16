@@ -2,8 +2,9 @@
   "name": "@collabswarm/wiki-swarm",
   "private": true,
   "dependencies": {
-    "@collabswarm/collabswarm-automerge": "0.1.0",
-    "@collabswarm/collabswarm-redux": "0.1.0",
+    "@collabswarm/collabswarm": "^0.1.0",
+    "@collabswarm/collabswarm-automerge": "^0.1.0",
+    "@collabswarm/collabswarm-redux": "^0.1.0",
     "@testing-library/jest-dom": "^5.11.10",
     "@testing-library/react": "^11.2.6",
     "@testing-library/user-event": "^13.1.5",

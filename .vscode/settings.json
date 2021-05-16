@@ -1,3 +1,4 @@
 {
+    "npm.packageManager": "yarn",
     "editor.tabSize": 2
 }

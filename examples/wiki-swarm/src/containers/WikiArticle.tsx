@@ -2,15 +2,17 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { Doc } from 'automerge';
-import { AutomergeSwarm, AutomergeSwarmConfig, AutomergeSwarmDocument, DEFAULT_CONFIG } from '@collabswarm/collabswarm-automerge';
-import { AutomergeSwarmActions, changeDocumentAsync, openDocumentAsync, closeDocumentAsync, initializeAsync } from '@collabswarm/collabswarm-redux';
+import { CollabswarmConfig, DEFAULT_CONFIG } from '@collabswarm/collabswarm';
+import { AutomergeSwarm, AutomergeSwarmDocument } from '@collabswarm/collabswarm-automerge';
+import { changeDocumentAsync, openDocumentAsync, closeDocumentAsync, initializeAsync } from '@collabswarm/collabswarm-redux';
 import { WikiSwarmArticle } from '../models';
 import { RootState, selectAutomergeSwarmState } from '../reducers';
 import moment from 'moment';
 import { RouteComponentProps } from 'react-router-dom';
 import Spinner from 'react-bootstrap/Spinner';
-import { SlateInput } from './SlateInput';
-import { initialValue } from './Slate';
+import { SlateInput } from '../components/SlateInput';
+import { initialValue } from '../components/Slate';
+import { AutomergeSwarmActions } from '../utils';
 
 interface MatchParams {
   documentId: string;
@@ -19,7 +21,7 @@ interface MatchParams {
 interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   document: WikiSwarmArticle | null;
 
-  onInitialize: (config: AutomergeSwarmConfig) => Promise<AutomergeSwarm>;
+  onInitialize: (config: CollabswarmConfig) => Promise<AutomergeSwarm>;
   onDocumentOpen: (documentPath: string) => Promise<AutomergeSwarmDocument<WikiSwarmArticle> | null>;
   onDocumentClose: (documentPath: string) => Promise<void>;
   onDocumentChange: (documentPath: string, changeFn: (current: WikiSwarmArticle) => void, message?: string) => Promise<Doc<WikiSwarmArticle>>;
@@ -102,9 +104,9 @@ function mapStateToProps(state: RootState, ownProps: WikiArticleProps) {
   };
 }
 
-function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions>) {
+function mapDispatchToProps(dispatch: ThunkDispatch<RootState, unknown, AutomergeSwarmActions<WikiSwarmArticle>>) {
   return {
-    onInitialize: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<WikiSwarmArticle, RootState>(config, selectAutomergeSwarmState)),
+    onInitialize: (config: CollabswarmConfig) => dispatch(initializeAsync(config, selectAutomergeSwarmState)),
     onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync(documentId, selectAutomergeSwarmState)),
     onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync(documentId, selectAutomergeSwarmState)),
     onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync(documentId, changeFn, message, selectAutomergeSwarmState)),

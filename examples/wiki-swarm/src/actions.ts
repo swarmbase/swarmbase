@@ -1,5 +1,6 @@
 import { Action } from "redux";
-import { AutomergeSwarmActions } from "@collabswarm/collabswarm-redux";
+import { WikiSwarmArticle } from "./models";
+import { AutomergeSwarmActions } from "./utils";
 
 
 export const SEARCH = 'WIKI_SWARM_SEARCH';
@@ -14,5 +15,5 @@ export function search(query: string): SearchAction {
 }
 
 export type WikiSwarmActions =
-  AutomergeSwarmActions |
+  AutomergeSwarmActions<WikiSwarmArticle> |
   SearchAction;

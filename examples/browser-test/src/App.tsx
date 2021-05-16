@@ -1,17 +1,20 @@
 import React from 'react';
 import './App.css';
-import { AutomergeSwarm, AutomergeSwarmConfig, DEFAULT_CONFIG } from '@collabswarm/collabswarm-automerge';
-import { AutomergeSwarmState, connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, AutomergeSwarmActions, initializeAsync } from '@collabswarm/collabswarm-redux';
+import { AutomergeSwarm, AutomergeSwarmSyncMessage } from '@collabswarm/collabswarm-automerge';
+import { connectAsync, openDocumentAsync, closeDocumentAsync, changeDocumentAsync, initializeAsync } from '@collabswarm/collabswarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { JsonEditor } from 'jsoneditor-react';
 import * as jsondiffpatch from 'jsondiffpatch';
+import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
+import { CollabswarmConfig, DEFAULT_CONFIG } from '@collabswarm/collabswarm';
+import { Doc, Change } from 'automerge';
 
 const jdp = jsondiffpatch.create();
 
 interface AppProps {
-  state: AutomergeSwarmState<any>;
-  onInitialize: (config: AutomergeSwarmConfig) => Promise<AutomergeSwarm>;
+  state: AutomergeSwarmState;
+  onInitialize: (config: CollabswarmConfig) => Promise<AutomergeSwarm>;
   onConnect: (addresses: string[]) => any;
   onDocumentOpen: (documentId: string) => any;
   onDocumentClose: (documentId: string) => any;
@@ -114,11 +117,11 @@ function mapStateToProps(state: AutomergeSwarmState<any>) {
 
 function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<any>, unknown, AutomergeSwarmActions>) {
   return {
-    onInitialize: (config: AutomergeSwarmConfig) => dispatch(initializeAsync<any, AutomergeSwarmState<any>>(config)),
-    onConnect: (addresses: string[]) => dispatch(connectAsync(addresses)),
-    onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync(documentId)),
-    onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync(documentId)),
-    onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync(documentId, changeFn, message)),
+    onInitialize: (config: CollabswarmConfig) => dispatch(initializeAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(config)),
+    onConnect: (addresses: string[]) => dispatch(connectAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(addresses)),
+    onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
+    onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
+    onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId, changeFn, message)),
   };
 }
 
