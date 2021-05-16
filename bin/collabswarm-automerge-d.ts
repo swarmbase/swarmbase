@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { AutomergeSwarmNode } from '../src';
+import { CollabswarmNode } from '@collabswarm/collabswarm';
+import { AutomergeProvider } from '../src';
 
 console.log('Creating a new swarm node...');
-const swarmNode = new AutomergeSwarmNode();
+const swarmNode = new CollabswarmNode(new AutomergeProvider);
 console.log('Starting node...');
 swarmNode.start();
