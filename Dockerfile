@@ -1,6 +1,6 @@
 FROM node:14-alpine AS builder
 
-RUN apk update && apk add python make gcc g++ gettext
+RUN apk update && apk add python make gcc g++ gettext dos2unix
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -55,6 +55,7 @@ COPY examples/wiki-swarm/. /app/examples/wiki-swarm/
 
 COPY wait-for-file.sh /app/wait-for-file.sh
 RUN chmod +x /app/wait-for-file.sh
+RUN dos2unix /app/wait-for-file.sh
 
 WORKDIR /app
 CMD collabswarm-automerge-d

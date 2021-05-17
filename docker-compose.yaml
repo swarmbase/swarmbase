@@ -23,9 +23,15 @@ services:
     stdin_open: true
     # working_dir: /app/examples/browser-test
     command:
-      - sh
-      - -c
-      - "ls /; /wait-for-file.sh .env yarn workspace @collabswarm/browser-test start"
+      # - sh
+      # - -c
+      # - "ls /app; /app/wait-for-file.sh .env yarn workspace @collabswarm/browser-test start"
+      - /app/wait-for-file.sh
+      - .env
+      - yarn
+      - workspace
+      - "@collabswarm/browser-test"
+      - start
   wiki-swarm:
     build:
       context: ./
@@ -49,9 +55,12 @@ services:
     stdin_open: true
     # working_dir: /app/examples/wiki-swarm
     command:
-      - sh
-      - -c
-      - "ls /; /wait-for-file.sh .env yarn workspace @collabswarm/wiki-swarm start"
+      - /app/wait-for-file.sh
+      - .env
+      - yarn
+      - workspace
+      - "@collabswarm/wiki-swarm"
+      - start
   node:
     build:
       context: ./
