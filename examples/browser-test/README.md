@@ -16,7 +16,7 @@ You should see a 'Node Address' with something like 'Node Addresses:
 If you do not see that, there may be something wrong with the docker file. 
 
 Next, try opening another browser tab using Incognito or a different browser.
-You should show a different node adress, and each should connect to the other.
+You should show a different node address, and each should connect to the other.
 
 Example:
   Browser 1:

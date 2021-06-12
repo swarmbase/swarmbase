@@ -3,13 +3,14 @@ import Libp2p from "libp2p";
 import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import { Collabswarm } from "./collabswarm";
 import { readUint8Iterable, shuffleArray } from "./utils";
-import { CRDTProvider } from "./collabswarm-provider";
+import { CRDTProvider } from "./crdt-provider";
 import { CRDTSyncMessage, CRDTChangeBlock } from "./collabswarm-message";
+import { AuthProvider } from "./auth-provider";
 
 
 export type CollabswarmDocumentChangeHandler<DocType> = (current: DocType, hashes: string[]) => void;
 
-export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
+export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, PrivateKey, PublicKey, DocumentKey=string> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._provider.newDocument();
   get document(): DocType {
@@ -36,16 +37,17 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     public readonly swarm: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>,
     public readonly documentPath: string,
     private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+    private readonly _authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   ) { }
 
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/rest_parameters
-  public addReaders() {}
-  public removeReaders() {}
-  public getReaders() {}
+  // public addReader(peerId: string) {}
+  // public removeReaders() {}
+  // public getReaders() {}
 
-  public addWriters() {}
-  public removeWriters() {}
-  public getWriters() {}
+  // public addWriters() {}
+  // public removeWriters() {}
+  // public getWriters() {}
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   public async load(): Promise<boolean> {
@@ -98,47 +100,56 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     }
   }
 
-  private async _sign(toEncode: ChangesType, keyPair?: CryptoKeyPair): Promise<ArrayBuffer> {
-    // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
-    let encoder = new TextEncoder();
-    let encoded = encoder.encode(toEncode.toString());
-    let privateKey;
-    if (keyPair) {
-      privateKey = keyPair.privateKey;
-    } else {
-      privateKey = this.swarm.config.identity.privateKey;
-    }
-    let signature = await window.crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      privateKey,
-      encoded
-    )
-    return signature;
-  }
+  // private async _sign(toEncode: ChangesType, keyPair?: CryptoKeyPair): Promise<ArrayBuffer> {
+  //   // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
+  //   let encoder = new TextEncoder();
+  //   let encoded = encoder.encode(toEncode.toString());
+  //   let privateKey;
+  //   if (keyPair) {
+  //     privateKey = keyPair.privateKey;
+  //   } else {
+  //     privateKey = this.swarm.config.identity.privateKey;
+  //   }
+  //   let signature = await window.crypto.subtle.sign(
+  //     "RSASSA-PKCS1-v1_5",
+  //     privateKey,
+  //     encoded
+  //   )
+  //   return signature;
+  // }
 
-  private async signChangeBlock(changes: Change[], keyPair?: CryptoKeyPair): Promise<AutomergeChangeBlock> {
-    // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
-    let encoder = new TextEncoder();
-    let signature = await this._sign(changes, keyPair)
-    return {
-      changes,
-      signature,
-    };
-  }
+  // private async signChangeBlock(changes: Change[], keyPair?: CryptoKeyPair): Promise<AutomergeChangeBlock> {
+  //   // TODO: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
+  //   let encoder = new TextEncoder();
+  //   let signature = await this._sign(changes, keyPair)
+  //   return {
+  //     changes,
+  //     signature,
+  //   };
+  // }
 
-  private getVerifiedChanges(changes: CRDTChangeBlock<ChangesType>  | null | undefined): ChangesType | undefined {
-    // TODO:
-    // - Loop through list of possible writers and try verifying signature with each public key.
-    // - Return the changes from the change block.
-    return (changes && changes.changes) || undefined;
+  // private getVerifiedChanges(changes: CRDTChangeBlock<ChangesType>  | null | undefined): ChangesType | undefined {
+  //   // TODO:
+  //   // - Loop through list of possible writers and try verifying signature with each public key.
+  //   // - Return the changes from the change block.
+  //   return (changes && changes.changes) || undefined;
 
-    // Make sure to log a warning if a change block _fails_ verification.
-  }
-
+  //   // Make sure to log a warning if a change block _fails_ verification.
+  // }
+  
+  // Provide document to IPFS node
   public async pin() {
     // Apply local change w/ automerge.
     const changes = this._provider.getHistory(this.document);
-    const changeBlock = this.signChangeBlock(changes);
+
+    // Serialize
+    const serializedChanges = this._provider.serializeChanges(changes);
+
+    // Sign
+    const signature = this._authProvider.sign(serializedChanges, "");
+
+    // Encrypt
+    const changeBlock = this._authProvider.signChanges(changes);
 
     // Store changes in ipfs.
     const newFileResult = await this.swarm.ipfsNode.add(this._provider.serializeChanges(changes));
@@ -202,8 +213,10 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     }
   }
 
-  public async getFile(hash: string): Promise<ChangesType> {
+  public async getFile(hash: string): Promise<CRDTChangeBlock<ChangesType>> {
     const assembled = await readUint8Iterable(this.swarm.ipfsNode.files.read(`/ipfs/${hash}`));
+
+    this._authProvider.
     const decoder = new TextDecoder();
 
     return this._provider.deserializeChanges(decoder.decode(assembled));
@@ -230,11 +243,14 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     const newDocumentHashes: string[] = [];
     const missingDocumentHashes: string[] = [];
     for (const [sentHash, sentChanges] of newChangeEntries) {
-      const changes = this.getVerifiedChanges(sentChanges);
-      if (changes) {
-        // Apply the changes that were sent directly.
-        newDocument = this._provider.remoteChange(newDocument, changes);
-        newDocumentHashes.push(sentHash);
+      if (sentChanges) {
+        if (this._authProvider.verifyChanges(sentChanges)) {
+          // Apply the changes that were sent directly.
+          newDocument = this._provider.remoteChange(newDocument, sentChanges.changes);
+          newDocumentHashes.push(sentHash);
+        } else {
+          console.warn(`Found unverified change block: ${sentHash}`, sentChanges);
+        }
       } else {
         missingDocumentHashes.push(sentHash);
       }
@@ -251,12 +267,13 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     for (const missingHash of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
       this.getFile(missingHash)
-        .then(missingChanges => {
-          const changes = this.getVerifiedChanges(missingChanges);
-          if (changes) {
-            this._document = this._provider.remoteChange(this._document, changes);
-            this._hashes.add(missingHash);
-            this._fireRemoteUpdateHandlers([missingHash]);
+        .then(missingChanges => {  // async/await implementation could not be confirmed error free
+          if (missingChanges) {
+            if (this._authProvider.verifyChanges(missingChanges)) {
+              this._document = this._provider.remoteChange(this._document, missingChanges);
+              this._hashes.add(missingHash);
+              this._fireRemoteUpdateHandlers([missingHash]);
+            }
           } else {
             console.error(`'/ipfs/${missingHash}' returned nothing`, missingChanges);
           }

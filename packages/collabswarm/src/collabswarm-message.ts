@@ -1,5 +1,5 @@
 export interface CRDTChangeBlock<ChangesType> {
-  signature?: ArrayBuffer;
+  signature?: string;
   changes: ChangesType;
 }
 

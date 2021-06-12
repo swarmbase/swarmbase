@@ -11,6 +11,7 @@ efficient distributed pub-sub algorithms.
 
 CollabSwarm has official bindings for common webapp stores including:
 
+collabswarm
 * Redux (collabswarm-redux)
 * More to come soon...
 
