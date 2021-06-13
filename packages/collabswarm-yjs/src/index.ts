@@ -1,4 +1,4 @@
-import { YjsSwarm, YjsSwarmDocument, YjsSwarmSyncMessage, YjsSwarmDocumentChangeHandler, YjsProvider } from "./collabswarm-yjs";
+import { YjsSwarm, YjsSwarmDocument, YjsSwarmSyncMessage, YjsSwarmDocumentChangeHandler, YjsProvider, YjsJSONSerializer } from "./collabswarm-yjs";
 
 export {
   YjsSwarm,
@@ -6,4 +6,5 @@ export {
   YjsSwarmDocument,
   YjsSwarmSyncMessage,
   YjsProvider,
+  YjsJSONSerializer,
 };

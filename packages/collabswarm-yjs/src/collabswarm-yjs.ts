@@ -1,4 +1,4 @@
-import { Collabswarm, CollabswarmDocument, CollabswarmDocumentChangeHandler, CRDTProvider, CRDTSyncMessage } from "@collabswarm/collabswarm";
+import { Collabswarm, CollabswarmDocument, CollabswarmDocumentChangeHandler, CRDTProvider, CRDTSyncMessage, JSONSerializer } from "@collabswarm/collabswarm";
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from "yjs";
 
 
@@ -30,28 +30,10 @@ export class YjsProvider implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => 
     // TODO: This doesn't return a new reference.
     return document;
   }
-  serializeChanges(changes: Uint8Array): string {
-    return JSON.stringify(changes);
-  }
-  deserializeChanges(changes: string): Uint8Array {
-    return JSON.parse(changes);
-  }
-  serializeMessage(message: YjsSwarmSyncMessage): Uint8Array {
-    const encoder = new TextEncoder();
-    return encoder.encode(JSON.stringify(message));
-  }
-  deserializeMessage(message: Uint8Array): YjsSwarmSyncMessage {
-    const decoder = new TextDecoder();
-    const rawMessage = decoder.decode(message);
-    try {
-      return JSON.parse(rawMessage);
-    } catch (err) {
-      console.error("Failed to parse message:", rawMessage, message);
-      throw err;
-    }
-  }
   getHistory(document: Doc): Uint8Array {
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
     return encodeStateAsUpdateV2(document);
   }
 }
+
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array, YjsSwarmSyncMessage> {}

@@ -1,10 +1,12 @@
 import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import * as fs from 'fs';
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
-import { CRDTSyncMessage } from "./collabswarm-message";
+import { CRDTSyncMessage } from "./crdt-sync-message";
 import { Collabswarm } from "./collabswarm";
 import { CollabswarmDocument } from "./collabswarm-document";
-import { CRDTProvider } from "./collabswarm-provider";
+import { CRDTProvider } from "./crdt-provider";
+import { MessageSerializer } from "./message-serializer";
+import { ChangesSerializer } from "./changes-serializer";
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -31,7 +33,7 @@ export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
 };
 
 export class CollabswarmNode<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
-  private _swarm = new Collabswarm(this.provider);
+  private _swarm = new Collabswarm(this.provider, this.changesSerializer, this.messageSerializer);
   public get swarm(): Collabswarm<DocType, ChangesType, ChangeFnType, MessageType> {
     return this._swarm;
   }
@@ -43,6 +45,8 @@ export class CollabswarmNode<DocType, ChangesType, ChangeFnType, MessageType ext
 
   constructor(
     public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+    public readonly changesSerializer: ChangesSerializer<ChangesType>,
+    public readonly messageSerializer: MessageSerializer<MessageType>,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
   ) {}
 
@@ -77,7 +81,7 @@ export class CollabswarmNode<DocType, ChangesType, ChangeFnType, MessageType ext
         const senderNodeId = rawMessage.from;
 
         if (thisNodeId !== senderNodeId) {
-          const message = this.provider.deserializeMessage(rawMessage.data);
+          const message = this.messageSerializer.deserializeMessage(rawMessage.data);
           console.log('Received Document Publish message:', rawMessage);
           const docRef = this.swarm.doc(message.documentId);
 

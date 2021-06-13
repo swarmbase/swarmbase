@@ -8,7 +8,7 @@ import * as serviceWorker from './serviceWorker';
 import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
 import { collabswarmReducer } from '@collabswarm/collabswarm-redux';
-import { AutomergeProvider } from '@collabswarm/collabswarm-automerge';
+import { AutomergeJSONSerializer, AutomergeProvider } from '@collabswarm/collabswarm-automerge';
 import thunk from 'redux-thunk';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
 
@@ -20,7 +20,7 @@ const logger: Middleware = store => next => action => {
 }
 
 const store = createStore<AutomergeSwarmState<any>, AutomergeSwarmActions<any>, unknown, unknown>(
-  collabswarmReducer(new AutomergeProvider()),
+  collabswarmReducer(new AutomergeProvider(), new AutomergeJSONSerializer(), new AutomergeJSONSerializer()),
   applyMiddleware(thunk, logger),
 );
 
