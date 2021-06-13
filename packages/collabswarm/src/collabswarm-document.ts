@@ -5,11 +5,13 @@ import { Collabswarm } from "./collabswarm";
 import { readUint8Iterable, shuffleArray } from "./utils";
 import { CRDTProvider } from "./collabswarm-provider";
 import { CRDTSyncMessage } from "./collabswarm-message";
+import { AuthProvider } from "./auth-provider";  //
 
 
 export type CollabswarmDocumentChangeHandler<DocType> = (current: DocType, hashes: string[]) => void;
 
-export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
+export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>,
+PrivateKey, PublicKey> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._provider.newDocument();
   get document(): DocType {
@@ -31,6 +33,7 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     public readonly swarm: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>,
     public readonly documentPath: string,
     private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+    private readonly _authProvider: AuthProvider<PrivateKey, PublicKey>,
   ) { }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
