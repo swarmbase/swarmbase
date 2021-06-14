@@ -59,3 +59,10 @@ stop
 [[plantuml](
 http://www.plantuml.com/plantuml/uml/RSz1hi8m30JGlK_XPNA5_iMl11S9wRGrf4aLkw1oUY8g5aWixMTBCxrQgBOjYKmiWKzpo1FuNEAs81lJsubaPFUeOk0G8rJ_FTkCp6w7UkfYHMWMZ-zokIBQ7tMAAY79yuV8bB-NJ6wjSWy6lc7txGOvrdqrSiCdpG582fUB9-H1HY9IAolrRMezNW00
   )]
+
+
+References:
+  https://jameshfisher.com/2017/11/02/web-cryptography-api-symmetric-encryption/
+  https://www.tutorialsteacher.com/typescript/typescript-generic-class
+  https://www.typescriptlang.org/docs/handbook/2/generics.html
+  https://developer.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays 
