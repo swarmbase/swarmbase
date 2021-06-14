@@ -1,5 +1,5 @@
 import { CollabswarmActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE, CLOSE_DOCUMENT, PEER_CONNECT, PEER_DISCONNECT } from "./actions";
-import { Collabswarm, CollabswarmDocument, CRDTProvider, CRDTSyncMessage } from "@collabswarm/collabswarm";
+import { ChangesSerializer, Collabswarm, CollabswarmDocument, CRDTProvider, CRDTSyncMessage, MessageSerializer } from "@collabswarm/collabswarm";
 
 
 // user id should be the same as peer id.
@@ -19,9 +19,11 @@ export interface CollabswarmState<DocType, ChangesType, ChangeFnType, MessageTyp
 
 export function initialState<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+  changesSerializer: ChangesSerializer<ChangesType>,
+  messageSerializer: MessageSerializer<MessageType>,
 ): CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> {
   return {
-    node: new Collabswarm(provider),
+    node: new Collabswarm(provider, changesSerializer, messageSerializer),
     documents: {},
     peers: []
   };
@@ -30,9 +32,11 @@ export function initialState<DocType, ChangesType, ChangeFnType, MessageType ext
 // export function automergeSwarmReducer<T>(state: AutomergeSwarmState<T> = initialState, action: AutomergeSwarmActions): AutomergeSwarmState<T> {
 export function collabswarmReducer<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+  changesSerializer: ChangesSerializer<ChangesType>,
+  messageSerializer: MessageSerializer<MessageType>,
 ) {
   return (
-    state: CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = initialState(provider),
+    state: CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = initialState(provider, changesSerializer, messageSerializer),
     action: CollabswarmActions<DocType, ChangesType, ChangeFnType, MessageType>,
   ): CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> => {
     switch (action.type) {

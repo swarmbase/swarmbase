@@ -1,10 +1,12 @@
 import IPFS from "ipfs";
 import Libp2p from "libp2p";
-import { CRDTProvider } from "./collabswarm-provider";
-import { CRDTSyncMessage } from "./collabswarm-message";
+import { CRDTProvider } from "./crdt-provider";
+import { CRDTSyncMessage } from "./crdt-sync-message";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
 import { IDResult } from "ipfs-core-types/src/root";
 import { CollabswarmDocument } from "./collabswarm-document";
+import { MessageSerializer } from "./message-serializer";
+import { ChangesSerializer } from "./changes-serializer";
 
 export type CollabswarmPeersHandler = (address: string, connection: any) => void;
 
@@ -12,7 +14,9 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
   protected _config: CollabswarmConfig | null = null;
   constructor(
     private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
-  ) {}
+    private readonly _changesSerializer: ChangesSerializer<ChangesType>,
+    private readonly _messageSerializer: MessageSerializer<MessageType>,
+    ) {}
   private _ipfsNode: IPFS.IPFS | undefined;
   private _ipfsInfo: IDResult | undefined;
   private _peerAddrs: string[] = [];
@@ -88,7 +92,7 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
   // Open
   doc<T = any>(documentPath: string): CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType> | null {
     // Return new document reference.
-    return new CollabswarmDocument(this, documentPath, this._provider);
+    return new CollabswarmDocument(this, documentPath, this._provider, this._changesSerializer, this._messageSerializer);
   }
 
   subscribeToPeerConnect(handlerId: string, handler: CollabswarmPeersHandler) {

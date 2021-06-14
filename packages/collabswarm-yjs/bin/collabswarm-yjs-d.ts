@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import { CollabswarmNode } from '@collabswarm/collabswarm';
-import { YjsProvider } from '../src';
+import { YjsJSONSerializer, YjsProvider } from '../src';
 
 console.log('Creating a new swarm node...');
-const swarmNode = new CollabswarmNode(new YjsProvider);
+const crdt = new YjsProvider();
+const serializer = new YjsJSONSerializer();
+const swarmNode = new CollabswarmNode(crdt, serializer, serializer);
 console.log('Starting node...');
 swarmNode.start();

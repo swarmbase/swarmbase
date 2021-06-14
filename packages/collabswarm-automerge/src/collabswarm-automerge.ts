@@ -1,6 +1,6 @@
 import { Doc, Change, init, change, getChanges, applyChanges, getHistory } from "automerge";
 
-import { Collabswarm, CollabswarmDocument, CollabswarmDocumentChangeHandler, CRDTProvider, CRDTSyncMessage } from "@collabswarm/collabswarm";
+import { Collabswarm, CollabswarmDocument, CollabswarmDocumentChangeHandler, CRDTProvider, CRDTSyncMessage, JSONSerializer } from "@collabswarm/collabswarm";
 
 
 export type AutomergeSwarmDocumentChangeHandler<T = any> = CollabswarmDocumentChangeHandler<Doc<T>>;
@@ -26,27 +26,9 @@ export class AutomergeProvider<T = any> implements CRDTProvider<Doc<T>, Change[]
   remoteChange(document: Doc<T>, changes: Change[]): Doc<T> {
     return applyChanges(document, changes);
   }
-  serializeChanges(changes: Change[]): string {
-    return JSON.stringify(changes);
-  }
-  deserializeChanges(changes: string): Change[] {
-    return JSON.parse(changes);
-  }
-  serializeMessage(message: AutomergeSwarmSyncMessage): Uint8Array {
-    const encoder = new TextEncoder();
-    return encoder.encode(JSON.stringify(message));
-  }
-  deserializeMessage(message: Uint8Array): AutomergeSwarmSyncMessage {
-    const decoder = new TextDecoder();
-    const rawMessage = decoder.decode(message);
-    try {
-      return JSON.parse(rawMessage);
-    } catch (err) {
-      console.error("Failed to parse message:", rawMessage, message);
-      throw err;
-    }
-  }
   getHistory(document: Doc<T>): Change[] {
     return getHistory(document).map(state => state.change);
   }
 }
+
+export class AutomergeJSONSerializer extends JSONSerializer<Change[], AutomergeSwarmSyncMessage> {};

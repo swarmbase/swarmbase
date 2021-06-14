@@ -1,4 +1,4 @@
-import { AutomergeSwarm, AutomergeSwarmDocument, AutomergeSwarmSyncMessage, AutomergeSwarmDocumentChangeHandler, AutomergeProvider } from "./collabswarm-automerge";
+import { AutomergeSwarm, AutomergeSwarmDocument, AutomergeSwarmSyncMessage, AutomergeSwarmDocumentChangeHandler, AutomergeProvider, AutomergeJSONSerializer } from "./collabswarm-automerge";
 
 export {
   AutomergeSwarm,
@@ -6,4 +6,5 @@ export {
   AutomergeSwarmDocument,
   AutomergeSwarmSyncMessage,
   AutomergeProvider,
+  AutomergeJSONSerializer,
 };

@@ -1,9 +1,12 @@
 import { Collabswarm, CollabswarmPeersHandler } from "./collabswarm";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
 import { CollabswarmDocument, CollabswarmDocumentChangeHandler } from "./collabswarm-document";
-import { CRDTSyncMessage } from "./collabswarm-message";
+import { CRDTSyncMessage } from "./crdt-sync-message";
 import { CollabswarmNode, DEFAULT_NODE_CONFIG } from "./collabswarm-node";
-import { CRDTProvider } from "./collabswarm-provider";
+import { CRDTProvider } from "./crdt-provider";
+import { MessageSerializer } from "./message-serializer";
+import { ChangesSerializer } from "./changes-serializer";
+import { JSONSerializer } from "./json-serializer";
 
 export {
   Collabswarm,
@@ -14,6 +17,9 @@ export {
   CollabswarmNode,
   CRDTSyncMessage,
   CRDTProvider,
+  ChangesSerializer,
+  MessageSerializer,
+  JSONSerializer,
   DEFAULT_CONFIG,
   DEFAULT_NODE_CONFIG,
 };
