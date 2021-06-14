@@ -1,11 +1,14 @@
 {
   "private": true,
+  "name": "collabswarm",
+  "description": "yarn workspace root",
   "workspaces": [
     "packages/collabswarm",
     "packages/collabswarm-automerge",
     "packages/collabswarm-yjs",
     "packages/collabswarm-react",
     "packages/collabswarm-redux",
+    "packages/collabswarm-subtlecrypto",
     "examples/browser-test",
     "examples/wiki-swarm"
   ]

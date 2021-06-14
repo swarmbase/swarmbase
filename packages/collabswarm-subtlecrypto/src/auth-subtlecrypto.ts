@@ -5,8 +5,8 @@
 const concatTypedArray = require('concat-typed-array');
 let subtle = window.crypto.subtle;
 let getRandomValues = window.crypto.getRandomValues;
+import { AuthProvider } from "@collabswarm/collabswarm";
 import { resourceLimits } from "worker_threads";
-import { AuthProvider } from "./auth-provider";
 
 const CRYPTO_ALGORITHM = 'AES-GCM';
 
