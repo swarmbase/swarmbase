@@ -35,6 +35,8 @@ export class CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType
     private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     private readonly _messageSerializer: MessageSerializer<MessageType>,
+    private _read_ACL: {},
+    private _write_ACL: {}
   ) { }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it

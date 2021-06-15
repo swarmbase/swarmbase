@@ -70,11 +70,15 @@ References:
 
 #Subtle Crypo Algos
 
+# Key type
+
+https://developer.mozilla.org/en-US/docs/Web/API/CryptoKey
+
 ## encrypt
 
 https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
 
-### symmetric
+### Algos for symmetric
 
   All symmetric algos require shared data used to encrypt and decrypt. All use underlying cipher AES (Advanced Encryption Standard):
   * CTR
@@ -90,3 +94,9 @@ AesGcmParams
     * 96 bits long ... from a random number generator
     * does not have to be secret, just unique: so it is OK, for example, to transmit it in the clear alongside the encrypted message
   * tagLength is optional and defaults to 128; bits of the authentication tag 
+
+## sign
+
+### Algos for public-key
+
+Three of these algorithms — RSASSA-PKCS1-v1_5, RSA-PSS, and ECDSA — are public-key
