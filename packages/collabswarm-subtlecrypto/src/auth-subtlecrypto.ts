@@ -4,17 +4,18 @@ import { AuthProvider } from "@collabswarm/collabswarm";
 subtle.key: CryptoKey = https://developer.mozilla.org/en-US/docs/Web/API/CryptoKey
 */
 
-export class SubtleCrypto<PrivateKey, PublicKey, DocumentKey> implements AuthProvider<PrivateKey, PublicKey, DocumentKey> {
-  sign(data: Uint8Array, privateKey: PrivateKey): Promise<Uint8Array> {
+export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  sign(data: Uint8Array, privateKey: CryptoKey): Promise<Uint8Array> {
     throw new Error("Method not implemented.");
   }
-  verify(data: Uint8Array, publicKey: PublicKey, signature: string): Promise<boolean> {
+  // data does not include the signature
+  verify(data: Uint8Array, publicKey: CryptoKey, signature: string): Promise<boolean> {
     throw new Error("Method not implemented.");
   }
-  decrypt(data: Uint8Array, documentKey: DocumentKey): Promise<Uint8Array> {
+  decrypt(data: Uint8Array, documentKey: CryptoKey): Promise<Uint8Array> {
     throw new Error("Method not implemented.");
   }
-  public async encrypt(data: Uint8Array, signature: Uint8Array, documentKey: DocumentKey): Promise<Uint8Array> {
+  public async encrypt(data: Uint8Array, documentKey: CryptoKey): Promise<Uint8Array> {
     throw new Error("Method not implemented.");
   }
 }
