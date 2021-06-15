@@ -21,8 +21,7 @@
   ],
   "include": [
     "src",
-    "types",
-    "bin"
+    "types"
   ],
   "references": [{
     "path": "../collabswarm"

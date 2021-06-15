@@ -8,9 +8,6 @@
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
   },
-  "bin": {
-    "collabswarm-subtlecrypto-d": "dist/bin/collabswarm-subtlecrypto-d.js"
-  },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "files": [
