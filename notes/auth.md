@@ -66,3 +66,27 @@ References:
   https://www.tutorialsteacher.com/typescript/typescript-generic-class
   https://www.typescriptlang.org/docs/handbook/2/generics.html
   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays 
+
+
+#Subtle Crypo Algos
+
+## encrypt
+
+https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
+
+### symmetric
+
+  All symmetric algos require shared data used to encrypt and decrypt. All use underlying cipher AES (Advanced Encryption Standard):
+  * CTR
+  * CBC
+  * GCM
+
+> GCM does provide built-in authentication, and for this reason it's often recommended over the other two ... GCM is an "authenticated" mode, which means that it includes checks that the ciphertext has not been modified by an attacker
+
+AesGcmParams
+  * name: "AES-GCM"
+  * iv: BufferSource
+    * unique for every encryption operation carried out with a given key
+    * 96 bits long ... from a random number generator
+    * does not have to be secret, just unique: so it is OK, for example, to transmit it in the clear alongside the encrypted message
+  * tagLength is optional and defaults to 128; bits of the authentication tag 
