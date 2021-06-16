@@ -5,7 +5,7 @@ const json_serializer = new JSONSerializer<any, any>();
 
 const test_object = { key: "val" };
 const test_object_serialized = '{"key":"val"}';
-let test_string = "Hello";
+const test_string = "Hello";
 let test_string_as_u8_array = Uint8Array.from([72, 101, 108, 108, 111]);
 
 test("serialize json object to string", () => {
