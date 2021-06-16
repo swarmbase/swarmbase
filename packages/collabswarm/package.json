@@ -5,7 +5,7 @@
   "scripts": {
     "tsc": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run tsc",
-    "test": "jest json-serializer.test.ts",
+    "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
   },
   "main": "dist/src/index.js",
