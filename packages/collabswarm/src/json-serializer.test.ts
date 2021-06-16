@@ -6,7 +6,7 @@ const json_serializer = new JSONSerializer<any, any>();
 const test_object = { key: "val" };
 const test_object_serialized = '{"key":"val"}';
 const test_string = "Hello";
-let test_string_as_u8_array = Uint8Array.from([72, 101, 108, 108, 111]);
+const test_string_as_u8_array = Uint8Array.from([72, 101, 108, 108, 111]);
 
 test("serialize json object to string", () => {
   expect(json_serializer.serialize(test_object)).toMatch(
