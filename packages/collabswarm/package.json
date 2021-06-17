@@ -34,9 +34,9 @@
   "publishConfig": {
     "access": "public"
   },
-	"jest": {
-		"verbose": true,
-		"preset": "ts-jest",
+  "jest": {
+    "verbose": true,
+    "preset": "ts-jest",
     "testEnvironment": "node",
     "transform": {
       "node_modules/variables/.+\\.(j|t)sx?$": "ts-jest"
