@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 import { JSONSerializer } from "./json-serializer";
 
-let json_serializer = new JSONSerializer();
+const json_serializer = new JSONSerializer();
 
 describe("test serialize methods", () => {
   test.each([
