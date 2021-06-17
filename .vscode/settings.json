@@ -1,8 +1,5 @@
 {
-    "npm.packageManager": "yarn",
-    "editor.tabSize": 2,
-    "cSpell.words": [
-        "ciphertext",
-        "collabswarm"
-    ]
+  "npm.packageManager": "yarn",
+  "editor.tabSize": 2,
+  "editor.formatOnSave": true
 }
