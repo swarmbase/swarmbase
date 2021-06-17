@@ -16,12 +16,12 @@ beforeAll(async () => {
   );
   documentKey = await crypto.subtle.generateKey(
     {
-        name: "AES-GCM",
-        length: 256,
+      name: "AES-GCM",
+      length: 256,
     },
     true,
     ["encrypt", "decrypt"]
-  )
+  );
 });
 
 // try keys generated with different algos
@@ -35,12 +35,14 @@ describe("sign and verify", () => {
   });
 });
 
-describe('encrypt and decrypt', () => {
-  test.each([
-    [new Uint8Array([11, 12, 250]), documentKey]
-  ])('encrypt and decrypt', async (data, documentKey) => {
-    const res = await auth.encrypt(data, documentKey);
-		expect(await auth.decrypt(res.ciphertext, documentKey, res.iv))
-		.toMatch(data);
-	})
-})
+describe("encrypt and decrypt", () => {
+  test.each([[new Uint8Array([11, 12, 250]), documentKey]])(
+    "encrypt and decrypt",
+    async (data, documentKey) => {
+      const res = await auth.encrypt(data, documentKey);
+      expect(await auth.decrypt(res.ciphertext, documentKey, res.iv)).toMatch(
+        data
+      );
+    }
+  );
+});
