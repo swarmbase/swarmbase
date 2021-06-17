@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, test } from "@jest/globals";
 import { SubtleCrypto } from "./auth-subtlecrypto";
-import { setup_keys } from "./auth-subtlecrypto.testsetup"
+import { setup_keys } from "./auth-subtlecrypto.testsetup";
 
 const auth = new SubtleCrypto();
 
 beforeAll(() => {
-	return setup_keys()
-})
+  return setup_keys();
+});
 // try keys generated with different algos
 describe("sign and verify", () => {
   test.only.each([
@@ -19,7 +19,7 @@ describe("sign and verify", () => {
 });
 
 describe("encrypt and decrypt", async () => {
-	const documentKey = await crypto.subtle.generateKey(
+  const documentKey = await crypto.subtle.generateKey(
     {
       name: "AES-GCM",
       length: 256,
