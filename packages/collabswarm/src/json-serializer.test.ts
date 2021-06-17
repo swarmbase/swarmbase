@@ -1,12 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { JSONSerializer } from './json-serializer';
 
-const json_serializer = new JSONSerializer<any, any>();
-
-const test_object = { key: "val" };
-const test_object_serialized = '{"key":"val"}';
-const test_string = "Hello";
-const test_string_as_u8_array = Uint8Array.from([72, 101, 108, 108, 111]);
+let json_serializer = new JSONSerializer();
 
 describe('test serialize methods', () => {
   test.each([
@@ -16,26 +11,27 @@ describe('test serialize methods', () => {
     expect(json_serializer.serialize(example))
     .toMatch(expected);
   })
-  // TODO (e:r)
   test.each([
     ['{"key":"val"}', { "key": "val" }],
-    ['{123:234,345:567}', {123:234, 345: 567}]
-  ])('deserialize string to json object', () =>{
-    expect(json_serializer.deserialize(test_object_serialized))
-    .toMatchObject(test_object);
+    ['{"123":234,"345":567}', {123:234, 345: 567}]
+  ])('deserialize string to json object', (example, expected) =>{
+    expect(json_serializer.deserialize(example))
+    .toMatchObject(expected);
   })
 })
 
 describe('test encode methods', () => {
   test.each([
-    [test_string, test_string_as_u8_array]
-  ])
-  ('encode string to Uint8Array', () =>{
-  expect(json_serializer.encode(test_string))
-    .toStrictEqual(test_string_as_u8_array);
-})
+    ["Hello", Uint8Array.from([72, 101, 108, 108, 111])]
+  ])('encode string to Uint8Array', (example, expected) =>{
+  expect(json_serializer.encode(example))
+    .toStrictEqual(expected);
+	})
 
-test('decode Uint8Array to string', () =>{
-  expect(json_serializer.decode(test_string_as_u8_array))
-    .toMatch(test_string);
-})})
+	test.each([
+		[Uint8Array.from([72, 101, 108, 108, 111]), "Hello"]
+	])('decode Uint8Array to string', (example, expected) =>{
+		expect(json_serializer.decode(example))
+			.toMatch(expected);
+	})
+})
