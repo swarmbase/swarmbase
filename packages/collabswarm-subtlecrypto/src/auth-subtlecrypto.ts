@@ -17,7 +17,7 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
   // TODO (e:Robert) should we call it CRDTChangeBlock? esp since sig is optional
   public async sign(data: Uint8Array, privateKey: CryptoKey): Promise<Uint8Array> {
     return new Uint8Array(
-      await window.crypto.subtle.sign(
+      await crypto.subtle.sign(
         {
           name: "ECDSA",
           hash: {name: "SHA-384"},
@@ -31,7 +31,7 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
   // Given a signature and data (from a CRDTChangeBlock),
   // return a Promise that fulfills with true if the signature is valid, false otherwise
   public async verify(data: Uint8Array, publicKey: CryptoKey, signature: Uint8Array): Promise<boolean> {
-    return await window.crypto.subtle.verify(
+    return await crypto.subtle.verify(
       {
         name: "ECDSA",
         hash: {name: "SHA-384"},
@@ -60,7 +60,7 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
     try {
       // @Robert is this more clear separated out into a `let plainTextBuffer = `...?
       return new Uint8Array(
-        await window.crypto.subtle.decrypt(
+        await crypto.subtle.decrypt(
           {
             name: "AES-GCM",
             iv: nonce
@@ -79,8 +79,8 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(data: Uint8Array, documentKey: CryptoKey): 
       Promise <Record<string, Uint8Array>> {
-    let iv = window.crypto.getRandomValues(new Uint8Array(this._nonce_bits));
-    let ciphertext = await window.crypto.subtle.encrypt(
+    let iv = crypto.getRandomValues(new Uint8Array(this._nonce_bits));
+    let ciphertext = await crypto.subtle.encrypt(
       {
         name: "AES-GCM",
         iv: iv
