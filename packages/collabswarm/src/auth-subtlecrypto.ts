@@ -1,4 +1,4 @@
-import { AuthProvider } from "@collabswarm/collabswarm";
+import { AuthProvider } from "./auth-provider";
 
 export class SubtleCrypto
   implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
