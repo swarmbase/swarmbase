@@ -1,4 +1,4 @@
-import { SubtleCrypto } from "./collabswarm-subtlecryto";
+import { SubtleCrypto } from "./auth-subtlecrypto";
 
 export {
   SubtleCrypto

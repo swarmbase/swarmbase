@@ -1,7 +1,5 @@
 // Restrict access to those on ACL
 
-import internal from "stream";
-
 export interface AuthProvider<PrivateKey, PublicKey, DocumentKey=string> {
   _nonce_bits: number;
   sign(data: Uint8Array, privateKey: PrivateKey): Promise<Uint8Array>;
