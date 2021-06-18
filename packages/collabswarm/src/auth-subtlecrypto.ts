@@ -15,7 +15,6 @@ export class SubtleCrypto
 
   // Given encrypted changes and a private key,
   // return a signature for use in a CRDTChangeBlock
-  // TODO (e:Robert) should we call it CRDTChangeBlock? esp since sig is optional
   public async sign(
     data: Uint8Array,
     privateKey: CryptoKey
@@ -59,7 +58,6 @@ export class SubtleCrypto
    *
    * @param data - encrypted data as uint_8 array, not including nonce
    * @param documentKey - symmetric key associated and stored with document
-   * TODO (e:Robert) - documentKey should become documentKeys since it will change?
    * @param none - the starting value used for the cryptographic function
    *   for the AES-GCM algorithm is is also called an initialized vector
    * @returns a Promise that fulfills with an array if the key and nonce are valid or throws an error
