@@ -37,6 +37,20 @@ const publicKeyData2 = {
   y: "KhgG-mU2-mNbhgdK9_8nEMwPa2_bWWl_zlqY6Q4xuXYMOjhSLGydbFIDSAGBaNaJ",
   crv: "P-384",
 };
+const docKeyData1 = {
+  key_ops: ["encrypt", "decrypt"],
+  ext: true,
+  kty: "oct",
+  k: "LMP1XEE0zwpmZF0XXwFg5MYr_o5ZVpJ7vyVRyPXLC1o",
+  alg: "A256GCM",
+};
+const docKeyData2 = {
+  key_ops: ["encrypt", "decrypt"],
+  ext: true,
+  kty: "oct",
+  k: "3TX-u2qZ6XAdIXL31LYVdUnspykU6J4DbQtYssWswKs",
+  alg: "A256GCM",
+};
 
 async function importKey(
   keyData: JsonWebKey,
@@ -57,9 +71,9 @@ async function importKey(
   return key;
 }
 
-// try keys generated with different algos
+// TODO try keys generated with different algos
 describe("sign and verify", () => {
-  test.only.each([
+  test.each([
     [
       new Uint8Array([11, 12, 250]),
       privateKeyData1,
@@ -129,22 +143,39 @@ describe("sign and verify", () => {
   );
 });
 
-// describe("encrypt and decrypt", async () => {
-//   const documentKey = await crypto.subtle.generateKey(
-//     {
-//       name: "AES-GCM",
-//       length: 256,
-//     },
-//     true,
-//     ["encrypt", "decrypt"]
-//   );
-//   test.each([[new Uint8Array([11, 12, 250]), documentKey]])(
-//     "encrypt and decrypt",
-//     async (data, documentKey) => {
-//       const res = await auth.encrypt(data, documentKey);
-//       expect(await auth.decrypt(res.ciphertext, documentKey, res.iv)).toMatch(
-//         data
-//       );
-//     }
-//   );
-// });
+describe("encrypt and decrypt", async () => {
+  test.only.each([
+    [
+      new Uint8Array([43, 99, 250, 83]), 
+      docKeyData1,
+      true,
+      false,
+      false
+    ]
+  ])(
+    "encrypt and decrypt",
+    async (
+      data: Uint8Array,
+      documentKeyData: JsonWebKey,
+      success: boolean,
+      expectedEncryptCrashed: boolean,
+      expectedDecryptCrashed: boolean
+      ) => {
+      const documentKey = await importKey(documentKeyData, ["decrypt"]);
+      let encryptCrashed = false;
+      let encrypted: Uint8Array | undefined;
+      let iv: Uint8Array | undefined;
+      try {
+        const res = await auth.encrypt(data, {key: documentKey, iv: new Uint8Array(0)});
+        encrypted = res.data;
+        iv = res.iv;
+      } catch {
+        encryptCrashed = true;
+      }
+      const res = await auth.encrypt(data, documentKey, nonce); // HERE
+      expect(await auth.decrypt(res.ciphertext, documentKey, res.iv)).toMatch(
+        data
+      );
+    }
+  );
+});

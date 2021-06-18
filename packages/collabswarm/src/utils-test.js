@@ -32,8 +32,37 @@ async function importHmacKey(keyData, format = "jwk", hash = "SHA-512") {
   return key;
 }
 
+async function importSymmetricKey(keyData, format = "jwk", hash = "SHA-512") {
+  const key = await webcrypto.subtle.importKey(
+    format,
+    keyData,
+    "AES-GCM",
+    true,
+    ["encrypt", "decrypt"]
+  );
+
+  return key;
+}
+
+async function generateAndExportSymmetricKey() {
+  const documentKey = await webcrypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  return await webcrypto.subtle.exportKey("jwk", documentKey);
+}
+
 (async function main() {
-  const [privateKey, publicKey] = await generateAndExportHmacKey();
-  console.log(JSON.stringify(privateKey));
-  console.log(JSON.stringify(publicKey));
+  // Pair
+  // const [privateKey, publicKey] = await generateAndExportHmacKey();
+  // console.log(JSON.stringify(privateKey));
+  // console.log(JSON.stringify(publicKey));
+
+  // Symmetric
+  const documentKey = await generateAndExportSymmetricKey();
+  console.log(JSON.stringify(documentKey));
 })();

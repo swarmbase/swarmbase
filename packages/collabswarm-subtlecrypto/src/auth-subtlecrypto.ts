@@ -10,7 +10,7 @@ export type SubtleCryptoEncryptionResult = {
   iv: Uint8Array
 };
 
-export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, SubtleCryptoDocumentKey> {
+export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -71,17 +71,17 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, SubtleCr
    * Expects that nonce has been separated out from data
    * 
    * @param data - encrypted data as uint_8 array, not including nonce
-   * @param documentKey - symmetric key associated and stored with document
+   * @param key - symmetric key associated and stored with document
    * @param none - the starting value used for the cryptographic function
    *   for the AES-GCM algorithm is is also called an initialized vector
    * @returns a Promise that fulfills with an array if the key and nonce are valid or throws an error
    */
-  public async decrypt(data: Uint8Array, {key: documentKey, iv}: SubtleCryptoDocumentKey, nonce: Uint8Array): Promise<Uint8Array> {
+  public async decrypt(data: Uint8Array, {key: key, iv}: SubtleCryptoDocumentKey, nonce: Uint8Array): Promise<Uint8Array> {
     try {
       return new Uint8Array(
         await crypto.subtle.decrypt(
           this.encryptionAlgorithm(iv),
-          documentKey,
+          key,
           data,
         ),
       );
@@ -95,17 +95,18 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, SubtleCr
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(
     data: Uint8Array,
-    {key: documentKey, iv}: SubtleCryptoDocumentKey,
+    key: CryptoKey,
   ): Promise <SubtleCryptoEncryptionResult> {
-    const actualIV = iv || crypto.getRandomValues(new Uint8Array(this.nonceBits));
+
+    const iv = crypto.getRandomValues(new Uint8Array(this.nonceBits));
     const ciphertext = await crypto.subtle.encrypt(
-      this.encryptionAlgorithm(actualIV),
-      documentKey,
+      this.encryptionAlgorithm(iv),
+      key,
       data,
     );
     return {
       data: new Uint8Array(ciphertext),
-      iv: actualIV,
+      iv: iv,
     }
   }
 }

@@ -23,7 +23,7 @@ export class SubtleCrypto
      *
      * @param nonceBits - 96 bits length is recommended in docs; though example uses only 12
      */
-    public readonly nonceBits = 96,
+    public readonly _nonceBits = 96,
 
     /**
      *
@@ -117,18 +117,16 @@ export class SubtleCrypto
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(
     data: Uint8Array,
-    { key: documentKey, iv }: SubtleCryptoDocumentKey
+    { key: documentKey, iv = crypto.getRandomValues(new Uint8Array(this._nonceBits))}: SubtleCryptoDocumentKey
   ): Promise<SubtleCryptoEncryptionResult> {
-    const actualIV =
-      iv || crypto.getRandomValues(new Uint8Array(this.nonceBits));
     const ciphertext = await crypto.subtle.encrypt(
-      this.encryptionAlgorithm(actualIV),
+      this.encryptionAlgorithm(iv),
       documentKey,
       data
     );
     return {
       data: new Uint8Array(ciphertext),
-      iv: actualIV,
+      iv: iv,
     };
   }
 }
