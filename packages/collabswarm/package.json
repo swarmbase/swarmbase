@@ -18,17 +18,17 @@
   "license": "ISC",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.1.7",
-    "@types/node": "^15.12.2",
-    "eslint": "^7.9.0",
+    "@types/node": "^15.12.3",
+    "eslint": "^7.28.0",
     "jest": "^27.0.4",
     "ts-jest": "^27.0.3",
-    "ts-node": "^9.1.1",
-    "typedoc": "^0.20.37",
+    "ts-node": "^10.0.0",
+    "typedoc": "^0.21.0",
     "typedoc-neo-theme": "^1.1.1",
-    "typescript": "^4.3.2"
+    "typescript": "^4.3.4"
   },
   "dependencies": {
-    "ipfs": "^0.55.1",
+    "ipfs": "^0.55.4",
     "it-pipe": "^1.1.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
