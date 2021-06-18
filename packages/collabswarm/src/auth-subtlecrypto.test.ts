@@ -145,13 +145,7 @@ describe("sign and verify", () => {
 
 describe("encrypt and decrypt", async () => {
   test.only.each([
-    [
-      new Uint8Array([43, 99, 250, 83]), 
-      docKeyData1,
-      true,
-      false,
-      false
-    ]
+    [new Uint8Array([43, 99, 250, 83]), docKeyData1, true, false, false],
   ])(
     "encrypt and decrypt",
     async (
@@ -160,13 +154,16 @@ describe("encrypt and decrypt", async () => {
       success: boolean,
       expectedEncryptCrashed: boolean,
       expectedDecryptCrashed: boolean
-      ) => {
+    ) => {
       const documentKey = await importKey(documentKeyData, ["decrypt"]);
       let encryptCrashed = false;
       let encrypted: Uint8Array | undefined;
       let iv: Uint8Array | undefined;
       try {
-        const res = await auth.encrypt(data, {key: documentKey, iv: new Uint8Array(0)});
+        const res = await auth.encrypt(data, {
+          key: documentKey,
+          iv: new Uint8Array(0),
+        });
         encrypted = res.data;
         iv = res.iv;
       } catch {

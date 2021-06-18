@@ -1,16 +1,17 @@
 import { AuthProvider } from "@collabswarm/collabswarm";
 
 export type SubtleCryptoDocumentKey = {
-  key: CryptoKey,
-  iv: Uint8Array,
+  key: CryptoKey;
+  iv: Uint8Array;
 };
 
 export type SubtleCryptoEncryptionResult = {
-  data: Uint8Array,
-  iv: Uint8Array
+  data: Uint8Array;
+  iv: Uint8Array;
 };
 
-export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+export class SubtleCrypto
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -18,72 +19,88 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
      *
      * @remarks
      * This is not Node’s Crypto API; that API is not expected to be as performant.
-     * 
+     *
      * @param nonceBits - 96 bits length is recommended in docs; though example uses only 12
      */
     public readonly nonceBits = 96,
 
     /**
-     * 
+     *
      */
-    public readonly signingAlgorithm: AlgorithmIdentifier | RsaPssParams | EcdsaParams | AesCmacParams = {
+    public readonly signingAlgorithm:
+      | AlgorithmIdentifier
+      | RsaPssParams
+      | EcdsaParams
+      | AesCmacParams = {
       name: "ECDSA",
-      hash: {name: "SHA-384"},
+      hash: { name: "SHA-384" },
     },
 
     /**
-     * 
+     *
      */
-    public readonly encryptionAlgorithm: (iv: Uint8Array) => AlgorithmIdentifier | AesCmacParams | RsaOaepParams | AesCtrParams | AesCbcParams | AesGcmParams | AesCfbParams = (iv: Uint8Array) => ({
+    public readonly encryptionAlgorithm: (
+      iv: Uint8Array
+    ) =>
+      | AlgorithmIdentifier
+      | AesCmacParams
+      | RsaOaepParams
+      | AesCtrParams
+      | AesCbcParams
+      | AesGcmParams
+      | AesCfbParams = (iv: Uint8Array) => ({
       name: "AES-GCM",
-      iv
-    }),
+      iv,
+    })
   ) {}
 
-  // Given encrypted changes and a private key, 
+  // Given encrypted changes and a private key,
   // return a signature for use in a CRDTChangeBlock
-  public async sign(data: Uint8Array, privateKey: CryptoKey): Promise<Uint8Array> {
+  public async sign(
+    data: Uint8Array,
+    privateKey: CryptoKey
+  ): Promise<Uint8Array> {
     return new Uint8Array(
-      await crypto.subtle.sign(
-        this.signingAlgorithm,
-        privateKey,
-        data
-      )
+      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data)
     );
   }
 
   // Given a signature and data (from a CRDTChangeBlock),
   // return a Promise that fulfills with true if the signature is valid, false otherwise
-  public async verify(data: Uint8Array, publicKey: CryptoKey, signature: Uint8Array): Promise<boolean> {
+  public async verify(
+    data: Uint8Array,
+    publicKey: CryptoKey,
+    signature: Uint8Array
+  ): Promise<boolean> {
     return await crypto.subtle.verify(
       this.signingAlgorithm,
       publicKey,
       signature,
-      data,
+      data
     );
   }
 
   /**
    * Given encrypted data, key and a nonce,
    * return the decrypted data or throw an error
-   * 
+   *
    * @remarks
    * Expects that nonce has been separated out from data
-   * 
+   *
    * @param data - encrypted data as uint_8 array, not including nonce
    * @param key - symmetric key associated and stored with document
    * @param none - the starting value used for the cryptographic function
    *   for the AES-GCM algorithm is is also called an initialized vector
    * @returns a Promise that fulfills with an array if the key and nonce are valid or throws an error
    */
-  public async decrypt(data: Uint8Array, {key: key, iv}: SubtleCryptoDocumentKey, nonce: Uint8Array): Promise<Uint8Array> {
+  public async decrypt(
+    data: Uint8Array,
+    { key: key, iv }: SubtleCryptoDocumentKey,
+    nonce: Uint8Array
+  ): Promise<Uint8Array> {
     try {
       return new Uint8Array(
-        await crypto.subtle.decrypt(
-          this.encryptionAlgorithm(iv),
-          key,
-          data,
-        ),
+        await crypto.subtle.decrypt(this.encryptionAlgorithm(iv), key, data)
       );
     } catch (err) {
       console.error("Failed to decrypt data:", err);
@@ -95,18 +112,17 @@ export class SubtleCrypto implements AuthProvider<CryptoKey, CryptoKey, CryptoKe
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(
     data: Uint8Array,
-    key: CryptoKey,
-  ): Promise <SubtleCryptoEncryptionResult> {
-
+    key: CryptoKey
+  ): Promise<SubtleCryptoEncryptionResult> {
     const iv = crypto.getRandomValues(new Uint8Array(this.nonceBits));
     const ciphertext = await crypto.subtle.encrypt(
       this.encryptionAlgorithm(iv),
       key,
-      data,
+      data
     );
     return {
       data: new Uint8Array(ciphertext),
       iv: iv,
-    }
+    };
   }
 }

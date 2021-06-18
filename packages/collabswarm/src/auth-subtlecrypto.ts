@@ -11,8 +11,7 @@ export type SubtleCryptoEncryptionResult = {
 };
 
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, SubtleCryptoDocumentKey>
-{
+  implements AuthProvider<CryptoKey, CryptoKey, SubtleCryptoDocumentKey> {
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -117,7 +116,10 @@ export class SubtleCrypto
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(
     data: Uint8Array,
-    { key: documentKey, iv = crypto.getRandomValues(new Uint8Array(this._nonceBits))}: SubtleCryptoDocumentKey
+    {
+      key: documentKey,
+      iv = crypto.getRandomValues(new Uint8Array(this._nonceBits)),
+    }: SubtleCryptoDocumentKey
   ): Promise<SubtleCryptoEncryptionResult> {
     const ciphertext = await crypto.subtle.encrypt(
       this.encryptionAlgorithm(iv),

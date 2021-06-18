@@ -2,7 +2,8 @@ import { ChangesSerializer } from "./changes-serializer";
 import { CRDTChangeBlock } from "./crdt-change-block";
 import { MessageSerializer } from "./message-serializer";
 
-export class JSONSerializer<ChangesType, MessageType> implements ChangesSerializer<ChangesType>, MessageSerializer<MessageType> {
+export class JSONSerializer<ChangesType, MessageType>
+  implements ChangesSerializer<ChangesType>, MessageSerializer<MessageType> {
   serialize(message: any): string {
     return JSON.stringify(message);
   }
