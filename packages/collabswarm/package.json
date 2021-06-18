@@ -17,6 +17,7 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
+    "@peculiar/webcrypto": "^1.1.7",
     "@types/node": "^15.12.2",
     "eslint": "^7.9.0",
     "jest": "^27.0.4",
@@ -35,6 +36,9 @@
     "access": "public"
   },
   "jest": {
+    "setupFiles": [
+      "./jest.setup.js"
+    ],
     "verbose": true,
     "preset": "ts-jest",
     "testEnvironment": "node",
