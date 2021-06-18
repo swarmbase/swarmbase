@@ -1,17 +1,59 @@
 import { AuthProvider } from "./auth-provider";
 
+export type SubtleCryptoDocumentKey = {
+  key: CryptoKey;
+  iv: Uint8Array;
+};
+
+export type SubtleCryptoEncryptionResult = {
+  data: Uint8Array;
+  iv: Uint8Array;
+};
+
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
-  /**
-   * Uses the Web Crypto API for performant implementation.
-   * @see https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto
-   *
-   * @remarks
-   * This is not Node’s Crypto API; that API is not expected to be as performant.
-   *
-   * @param _nonce_bits - 96 bits length is recommended in docs; though example uses only 12
-   */
-  _nonce_bits = 96; // TODO (e: Robert) or we can just force it, but then it's hidden if change algo
+  implements AuthProvider<CryptoKey, CryptoKey, SubtleCryptoDocumentKey>
+{
+  constructor(
+    /**
+     * Uses the Web Crypto API for performant implementation.
+     * @see https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto
+     *
+     * @remarks
+     * This is not Node’s Crypto API; that API is not expected to be as performant.
+     *
+     * @param nonceBits - 96 bits length is recommended in docs; though example uses only 12
+     */
+    public readonly nonceBits = 96,
+
+    /**
+     *
+     */
+    public readonly signingAlgorithm:
+      | AlgorithmIdentifier
+      | RsaPssParams
+      | EcdsaParams
+      | AesCmacParams = {
+      name: "ECDSA",
+      hash: { name: "SHA-384" },
+    },
+
+    /**
+     *
+     */
+    public readonly encryptionAlgorithm: (
+      iv: Uint8Array
+    ) =>
+      | AlgorithmIdentifier
+      | AesCmacParams
+      | RsaOaepParams
+      | AesCtrParams
+      | AesCbcParams
+      | AesGcmParams
+      | AesCfbParams = (iv: Uint8Array) => ({
+      name: "AES-GCM",
+      iv,
+    })
+  ) {}
 
   // Given encrypted changes and a private key,
   // return a signature for use in a CRDTChangeBlock
@@ -20,14 +62,7 @@ export class SubtleCrypto
     privateKey: CryptoKey
   ): Promise<Uint8Array> {
     return new Uint8Array(
-      await crypto.subtle.sign(
-        {
-          name: "ECDSA",
-          hash: { name: "SHA-384" },
-        },
-        privateKey,
-        data
-      )
+      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data)
     );
   }
 
@@ -39,10 +74,7 @@ export class SubtleCrypto
     signature: Uint8Array
   ): Promise<boolean> {
     return await crypto.subtle.verify(
-      {
-        name: "ECDSA",
-        hash: { name: "SHA-384" },
-      },
+      this.signingAlgorithm,
       publicKey,
       signature,
       data
@@ -64,17 +96,13 @@ export class SubtleCrypto
    */
   public async decrypt(
     data: Uint8Array,
-    documentKey: CryptoKey,
+    { key: documentKey, iv }: SubtleCryptoDocumentKey,
     nonce: Uint8Array
   ): Promise<Uint8Array> {
     try {
-      // @Robert is this more clear separated out into a `let plainTextBuffer = `...?
       return new Uint8Array(
         await crypto.subtle.decrypt(
-          {
-            name: "AES-GCM",
-            iv: nonce,
-          },
+          this.encryptionAlgorithm(iv),
           documentKey,
           data
         )
@@ -89,20 +117,18 @@ export class SubtleCrypto
   // expect another function combines ciphertext + iv into CRDTChangeBlock
   public async encrypt(
     data: Uint8Array,
-    documentKey: CryptoKey
-  ): Promise<Record<string, Uint8Array>> {
-    let iv = crypto.getRandomValues(new Uint8Array(this._nonce_bits));
-    let ciphertext = await crypto.subtle.encrypt(
-      {
-        name: "AES-GCM",
-        iv: iv,
-      },
+    { key: documentKey, iv }: SubtleCryptoDocumentKey
+  ): Promise<SubtleCryptoEncryptionResult> {
+    const actualIV =
+      iv || crypto.getRandomValues(new Uint8Array(this.nonceBits));
+    const ciphertext = await crypto.subtle.encrypt(
+      this.encryptionAlgorithm(actualIV),
       documentKey,
       data
     );
     return {
-      ciphertext: new Uint8Array(ciphertext),
-      iv: iv,
+      data: new Uint8Array(ciphertext),
+      iv: actualIV,
     };
   }
 }
