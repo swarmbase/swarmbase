@@ -4,12 +4,7 @@ import { MessageSerializer } from "./message-serializer";
 
 export class JSONSerializer<ChangesType, MessageType> implements ChangesSerializer<ChangesType>, MessageSerializer<MessageType> {
   serialize(message: any): string {
-    try {
-      return JSON.stringify(message);
-    } catch (err) {
-      console.error("Failed to stringify message:", message, err);
-      throw err;
-    }
+    return JSON.stringify(message);
   }
   deserialize(message: string): any {
     try {

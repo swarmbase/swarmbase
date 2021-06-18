@@ -1,35 +1,29 @@
-import { describe, expect, test } from "@jest/globals";
-import { JSONSerializer } from "./json-serializer";
+import { expect, test } from '@jest/globals';
+import { JSONSerializer } from './json-serializer';
 
-const json_serializer = new JSONSerializer();
+const json_serializer = new JSONSerializer<any, any>();
 
-describe("test serialize methods", () => {
-  test.each([
-    [{ key: "val" }, '{"key":"val"}'],
-    [{ 123: 234, 345: 567 }, '{"123":234,"345":567}'],
-  ])(`serialize object to string`, (example, expected) => {
-    expect(json_serializer.serialize(example)).toMatch(expected);
-  });
-  test.each([
-    ['{"key":"val"}', { key: "val" }],
-    ['{"123":234,"345":567}', { 123: 234, 345: 567 }],
-  ])("deserialize string to json object", (example, expected) => {
-    expect(json_serializer.deserialize(example)).toMatchObject(expected);
-  });
-});
+let test_object = { "key": "val" };
+let test_object_serialized = '{"key":"val"}';
+let test_string = "Hello";
+let test_string_as_u8_array = Uint8Array.from([72,101,108,108,111]);
 
-describe("test encode methods", () => {
-  test.each([["Hello", Uint8Array.from([72, 101, 108, 108, 111])]])(
-    "encode string to Uint8Array",
-    (example, expected) => {
-      expect(json_serializer.encode(example)).toStrictEqual(expected);
-    }
-  );
+test('serialize json object to string', () =>{
+  expect(json_serializer.serialize(test_object))
+    .toMatch(test_object_serialized);
+})
 
-  test.each([[Uint8Array.from([72, 101, 108, 108, 111]), "Hello"]])(
-    "decode Uint8Array to string",
-    (example, expected) => {
-      expect(json_serializer.decode(example)).toMatch(expected);
-    }
-  );
-});
+test('deserialize string to json object', () =>{
+  expect(json_serializer.deserialize(test_object_serialized))
+    .toMatchObject(test_object);
+})
+
+test('encode string to Uint8Array', () =>{
+  expect(json_serializer.encode(test_string))
+    .toStrictEqual(test_string_as_u8_array);
+})
+
+test('decode Uint8Array to string', () =>{
+  expect(json_serializer.decode(test_string_as_u8_array))
+    .toMatch(test_string);
+})

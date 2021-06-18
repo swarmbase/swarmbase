@@ -1,4 +1,3 @@
-import { AuthProvider } from "./auth-provider";
 import { Collabswarm, CollabswarmPeersHandler } from "./collabswarm";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
 import { CollabswarmDocument, CollabswarmDocumentChangeHandler } from "./collabswarm-document";
@@ -10,7 +9,6 @@ import { ChangesSerializer } from "./changes-serializer";
 import { JSONSerializer } from "./json-serializer";
 
 export {
-  AuthProvider,
   Collabswarm,
   CollabswarmPeersHandler,
   CollabswarmConfig,
