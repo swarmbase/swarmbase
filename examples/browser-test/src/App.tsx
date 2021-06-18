@@ -8,7 +8,7 @@ import { JsonEditor } from 'jsoneditor-react';
 import * as jsondiffpatch from 'jsondiffpatch';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
 import { CollabswarmConfig, DEFAULT_CONFIG } from '@collabswarm/collabswarm';
-import { Doc, Change } from 'automerge';
+import { Doc, BinaryChange } from 'automerge';
 
 const jdp = jsondiffpatch.create();
 
@@ -117,11 +117,11 @@ function mapStateToProps(state: AutomergeSwarmState<any>) {
 
 function mapDispatchToProps(dispatch: ThunkDispatch<AutomergeSwarmState<any>, unknown, AutomergeSwarmActions>) {
   return {
-    onInitialize: (config: CollabswarmConfig) => dispatch(initializeAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(config)),
-    onConnect: (addresses: string[]) => dispatch(connectAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(addresses)),
-    onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
-    onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
-    onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync<Doc<any>, Change[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId, changeFn, message)),
+    onInitialize: (config: CollabswarmConfig) => dispatch(initializeAsync<Doc<any>, BinaryChange[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(config)),
+    onConnect: (addresses: string[]) => dispatch(connectAsync<Doc<any>, BinaryChange[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(addresses)),
+    onDocumentOpen: (documentId: string) => dispatch(openDocumentAsync<Doc<any>, BinaryChange[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
+    onDocumentClose: (documentId: string) => dispatch(closeDocumentAsync<Doc<any>, BinaryChange[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId)),
+    onDocumentChange: (documentId: string, changeFn: (current: any) => void, message?: string) => dispatch(changeDocumentAsync<Doc<any>, BinaryChange[], (doc: Doc<any>) => void, AutomergeSwarmSyncMessage>(documentId, changeFn, message)),
   };
 }
 
