@@ -7,7 +7,7 @@ import { AutomergeSwarm, AutomergeSwarmDocument } from '@collabswarm/collabswarm
 import { changeDocumentAsync, openDocumentAsync, closeDocumentAsync, initializeAsync } from '@collabswarm/collabswarm-redux';
 import { WikiSwarmArticle } from '../models';
 import { RootState, selectAutomergeSwarmState } from '../reducers';
-import moment from 'moment';
+import dayjs from 'dayjs';
 import { RouteComponentProps } from 'react-router-dom';
 import Spinner from 'react-bootstrap/Spinner';
 import { SlateInput } from '../components/SlateInput';
@@ -73,7 +73,7 @@ class WikiArticle extends React.Component<WikiArticleProps, WikiArticleState, Ro
             onChange={content => {
               // Your Redux action
               this.props.onDocumentChange(this.props.match.params.documentId, currentDocument => {
-                currentDocument.updatedOn = moment().format();
+                currentDocument.updatedOn = dayjs().format();
                 // currentDocument.updatedBy = ???
                 if (!currentDocument.createdOn && currentDocument.updatedOn) {
                   currentDocument.createdOn = currentDocument.updatedOn;
