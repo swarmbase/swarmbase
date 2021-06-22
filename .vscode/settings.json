@@ -1,20 +1,4 @@
 {
     "npm.packageManager": "yarn",
-<<<<<<< Updated upstream
     "editor.tabSize": 2
-=======
-    "editor.tabSize": 2,
-    "cSpell.words": [
-        "ciphertext",
-        "collabswarm",
-        "crdt",
-        "ipfs",
-        "libp",
-        "p",
-        "pss",
-        "tsc",
-        "websockets",
-        "wss"
-    ]
->>>>>>> Stashed changes
 }
