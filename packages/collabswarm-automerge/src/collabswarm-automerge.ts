@@ -5,7 +5,8 @@ import {
   change,
   getChanges,
   applyChanges,
-  getHistory,
+  BinaryChange,
+  getAllChanges,
 } from "automerge";
 
 import {
@@ -23,25 +24,26 @@ export type AutomergeSwarmDocumentChangeHandler<
 
 export type AutomergeSwarm<T = any> = Collabswarm<
   Doc<T>,
-  Change[],
+  BinaryChange[],
   (doc: T) => void,
   AutomergeSwarmSyncMessage
 >;
 
 export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
   Doc<T>,
-  Change[],
+  BinaryChange[],
   (doc: T) => void,
   AutomergeSwarmSyncMessage
 >;
 
-export interface AutomergeSwarmSyncMessage extends CRDTSyncMessage<Change[]> {}
+export interface AutomergeSwarmSyncMessage
+  extends CRDTSyncMessage<BinaryChange[]> {}
 
 export class AutomergeProvider<T = any>
   implements
     CRDTProvider<
       Doc<T>,
-      Change[],
+      BinaryChange[],
       (doc: T) => void,
       AutomergeSwarmSyncMessage
     > {
@@ -55,22 +57,23 @@ export class AutomergeProvider<T = any>
     document: Doc<T>,
     message: string,
     changeFn: (doc: T) => void
-  ): [Doc<T>, Change[]] {
+  ): [Doc<T>, BinaryChange[]] {
     const newDocument = message
       ? change(document, message, changeFn)
       : change(document, changeFn);
     const changes = getChanges(document, newDocument);
     return [newDocument, changes];
   }
-  remoteChange(document: Doc<T>, changes: Change[]): Doc<T> {
-    return applyChanges(document, changes);
+  remoteChange(document: Doc<T>, changes: BinaryChange[]): Doc<T> {
+    const [newDoc, patch] = applyChanges(document, changes);
+    return newDoc;
   }
-  getHistory(document: Doc<T>): Change[] {
-    return getHistory(document).map((state) => state.change);
+  getHistory(document: Doc<T>): BinaryChange[] {
+    return getAllChanges(document);
   }
 }
 
 export class AutomergeJSONSerializer extends JSONSerializer<
-  Change[],
+  BinaryChange[],
   AutomergeSwarmSyncMessage
 > {}

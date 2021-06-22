@@ -17,7 +17,7 @@ import { JsonEditor } from "jsoneditor-react";
 import * as jsondiffpatch from "jsondiffpatch";
 import { AutomergeSwarmActions, AutomergeSwarmState } from "./utils";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
-import { Doc, Change } from "automerge";
+import { Doc, BinaryChange } from "automerge";
 
 const jdp = jsondiffpatch.create();
 
@@ -194,7 +194,7 @@ function mapDispatchToProps(
       dispatch(
         initializeAsync<
           Doc<any>,
-          Change[],
+          BinaryChange[],
           (doc: Doc<any>) => void,
           AutomergeSwarmSyncMessage
         >(config)
@@ -203,7 +203,7 @@ function mapDispatchToProps(
       dispatch(
         connectAsync<
           Doc<any>,
-          Change[],
+          BinaryChange[],
           (doc: Doc<any>) => void,
           AutomergeSwarmSyncMessage
         >(addresses)
@@ -212,7 +212,7 @@ function mapDispatchToProps(
       dispatch(
         openDocumentAsync<
           Doc<any>,
-          Change[],
+          BinaryChange[],
           (doc: Doc<any>) => void,
           AutomergeSwarmSyncMessage
         >(documentId)
@@ -221,7 +221,7 @@ function mapDispatchToProps(
       dispatch(
         closeDocumentAsync<
           Doc<any>,
-          Change[],
+          BinaryChange[],
           (doc: Doc<any>) => void,
           AutomergeSwarmSyncMessage
         >(documentId)
@@ -234,7 +234,7 @@ function mapDispatchToProps(
       dispatch(
         changeDocumentAsync<
           Doc<any>,
-          Change[],
+          BinaryChange[],
           (doc: Doc<any>) => void,
           AutomergeSwarmSyncMessage
         >(documentId, changeFn, message)
