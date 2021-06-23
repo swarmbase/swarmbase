@@ -9,22 +9,12 @@ import { AuthProvider } from "./auth-provider";
  */
 export type SubtleCryptoEncryptionResult = {
   data: Uint8Array;
-  nonce:
-    | Int8Array
-    | Int16Array
-    | Int32Array
-    | Uint8Array
-    | Uint16Array
-    | Uint32Array
-    | Uint8ClampedArray
-    | Float32Array
-    | Float64Array
-    | DataView
-    | ArrayBuffer;
+  nonce: Uint8Array;
 };
 
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
+{
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -163,7 +153,7 @@ export class SubtleCrypto
     );
     return {
       data: new Uint8Array(ciphertext),
-      nonce: algorithmParams.iv,
+      nonce: algorithmParams.iv as Uint8Array, // TODO (eric) check typecasting alternatives
     };
   }
 }

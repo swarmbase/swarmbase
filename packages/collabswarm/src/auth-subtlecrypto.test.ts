@@ -143,15 +143,18 @@ describe("sign and verify", () => {
   );
 });
 
+/**
+ * Check working by encrypting and decrypting the same data.
+ * Use static keys.
+ */
 describe("encrypt and decrypt", async () => {
   test.only.each([
-    [new Uint8Array([43, 99, 250, 83]), docKeyData1, true, false, false],
+    [new Uint8Array([43, 99, 250, 83]), docKeyData1, false, false],
   ])(
     "encrypt and decrypt",
     async (
       data: Uint8Array,
       documentKeyData: JsonWebKey,
-      success: boolean,
       expectedEncryptCrashed: boolean,
       expectedDecryptCrashed: boolean
     ) => {
@@ -161,21 +164,28 @@ describe("encrypt and decrypt", async () => {
       ]);
       let encryptCrashed = false;
       let encrypted: Uint8Array | undefined;
-      let iv: Uint8Array | undefined;
+      let nonce: Uint8Array;
       try {
-        const res = await auth.encrypt(data, {
-          key: documentKey,
-          iv: new Uint8Array(0),
-        });
+        const res = await auth.encrypt(data, documentKey);
         encrypted = res.data;
-        iv = res.iv;
+        nonce = res.nonce;
       } catch {
         encryptCrashed = true;
       }
-      const res = await auth.encrypt(data, documentKey, nonce); // HERE
-      expect(await auth.decrypt(res.ciphertext, documentKey, res.iv)).toMatch(
-        data
-      );
+      expect(encryptCrashed).toBe(expectedEncryptCrashed);
+      if (encrypted !== undefined) {
+        let decryptCrashed = false;
+        let decrypted: Uint8Array | undefined;
+        try {
+          decrypted = await auth.decrypt(encrypted, documentKey, nonce); // TODO (eric) "nonce is used before assignment"
+        } catch {
+          decryptCrashed = true;
+        }
+        expect(decryptCrashed).toBe(expectedDecryptCrashed);
+        if (decrypted !== undefined) {
+          expect(decrypted).toBe(data);
+        }
+      }
     }
   );
 });
