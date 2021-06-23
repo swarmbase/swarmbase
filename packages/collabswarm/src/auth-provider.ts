@@ -19,6 +19,6 @@ export interface AuthProvider<PrivateKey, PublicKey, DocumentKey = string> {
   decrypt(
     data: Uint8Array,
     documentKey: DocumentKey,
-    iv?: Uint8Array
+    nonce?: Uint8Array
   ): Promise<Uint8Array>;
 }

@@ -56,15 +56,16 @@ export class SubtleCrypto
      * Currently, only supports AesGcmParams.
      * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
      */
- async _encryptionAlgorithmParams(): 
-  Promise<AesGcmParams>
+ _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams
  {
   switch (this._encryptionAlgorithmName)
   {
      case "AES-GCM":
+       let iv_value = crypto.getRandomValues(new Uint8Array(this._nonceBits));
+       if (nonce) iv_value = nonce;
        return {
         name: this._encryptionAlgorithmName,
-        iv: crypto.getRandomValues(new Uint8Array(this._nonceBits))
+        iv: iv_value
        }
      default: 
       throw "Encrpytion is only supported with AesGcmParams currently"!;
@@ -98,39 +99,37 @@ export class SubtleCrypto
   }
 
   /**
-   * Given encrypted data, key and a nonce,
+   * Given encrypted data, the nonce used for encryption, and a document key
    * return the decrypted data or throw an error
    *
    * @remarks
-   * Expects that nonce has been separated out from data
+   * Recommend getting parameters from SubtleCryptoEncryptionResult.
    *
-   * @param data - encrypted data as uint_8 array, not including nonce
-   * @param documentKey - symmetric key associated and stored with document
-   * @param none - the starting value used for the cryptographic function
-   *   for the AES-GCM algorithm is is also called an initialized vector
+   * @param data - encrypted data, not including nonce
+   * @param documentKey - symmetric key associated with document
+   * @param nonce - unique value used during encryption
+   * 
    * @returns a Promise that fulfills with an array if the key and nonce are valid or throws an error
    */
-  // public async decrypt(
-  //   data: Uint8Array,
-  //   { key: documentKey, iv }: CryptoKey,
-  //   nonce: Uint8Array
-  // ): Promise<Uint8Array> {
-  //   try {
-  //     return new Uint8Array(
-  //       await crypto.subtle.decrypt(
-  //         this.encryptionAlgorithm(iv),
-  //         documentKey,
-  //         data
-  //       )
-  //     );
-  //   } catch (err) {
-  //     console.error("Failed to decrypt data:", err);
-  //     throw err;
-  //   }
-  // }
+  public async decrypt(
+    data: Uint8Array,
+    documentKey: CryptoKey,
+    nonce: Uint8Array
+  ): Promise<Uint8Array> {
+    try {
+      return new Uint8Array(
+        await crypto.subtle.decrypt(
+          this._encryptionAlgorithmParams(nonce),
+          documentKey,
+          data
+        )
+      );
+    } catch (err) {
+      console.error("Failed to decrypt data:", err);
+      throw err;
+    }
+  }
 
-  // returned iv must be used to decrypt
-  // expect another function combines ciphertext + iv into CRDTChangeBlock
   /**
    * Given data to encrypt and a key object,
    * return the decrypted data or throw an error
@@ -147,7 +146,7 @@ export class SubtleCrypto
     data: Uint8Array,
     documentKey:  CryptoKey,
   ): Promise<SubtleCryptoEncryptionResult> {
-    const algorithmParams = await this._encryptionAlgorithmParams();
+    const algorithmParams = this._encryptionAlgorithmParams();
     const ciphertext = await crypto.subtle.encrypt(
       algorithmParams,
       documentKey,
