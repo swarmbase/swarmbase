@@ -9,7 +9,18 @@ import { AuthProvider } from "./auth-provider";
  */
 export type SubtleCryptoEncryptionResult = {
   data: Uint8Array;
-  nonce: Int8Array | Int16Array | Int32Array | Uint8Array | Uint16Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array | DataView | ArrayBuffer;
+  nonce:
+    | Int8Array
+    | Int16Array
+    | Int32Array
+    | Uint8Array
+    | Uint16Array
+    | Uint32Array
+    | Uint8ClampedArray
+    | Float32Array
+    | Float64Array
+    | DataView
+    | ArrayBuffer;
 };
 
 export class SubtleCrypto
@@ -40,36 +51,33 @@ export class SubtleCrypto
 
     /**
      * Can be any symmetric algorithm: "AES-GCM" | "AES-CTR" | "AES-CBC"
-     * 
+     *
      * @remarks
      * "RSA-OAEP" is not supported at this time because it is a key pair.
      */
-    public readonly _encryptionAlgorithmName: string = "AES-GCM",
- ) {}  // TODO (eric) 1. constructor syntax?
+    public readonly _encryptionAlgorithmName: string = "AES-GCM"
+  ) {} // TODO (eric) 1. constructor syntax?
 
-     /**
-     * An internal function used to generate a new initialized vector / counter for each encryption.
-     * 
-     * @returns a parameter object to be used directly in the encrypt function.
-     * 
-     * @remarks
-     * Currently, only supports AesGcmParams.
-     * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
-     */
- async _encryptionAlgorithmParams(): 
-  Promise<AesGcmParams>
- {
-  switch (this._encryptionAlgorithmName)
-  {
-     case "AES-GCM":
-       return {
-        name: this._encryptionAlgorithmName,
-        iv: crypto.getRandomValues(new Uint8Array(this._nonceBits))
-       }
-     default: 
-      throw "Encrpytion is only supported with AesGcmParams currently"!;
+  /**
+   * An internal function used to generate a new initialized vector / counter for each encryption.
+   *
+   * @returns a parameter object to be used directly in the encrypt function.
+   *
+   * @remarks
+   * Currently, only supports AesGcmParams.
+   * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
+   */
+  async _encryptionAlgorithmParams(): Promise<AesGcmParams> {
+    switch (this._encryptionAlgorithmName) {
+      case "AES-GCM":
+        return {
+          name: this._encryptionAlgorithmName,
+          iv: crypto.getRandomValues(new Uint8Array(this._nonceBits)),
+        };
+      default:
+        throw "Encrpytion is only supported with AesGcmParams currently"!;
+    }
   }
- }
 
   // Given encrypted changes and a private key,
   // return a signature for use in a CRDTChangeBlock
@@ -136,16 +144,16 @@ export class SubtleCrypto
    * return the decrypted data or throw an error
    *
    * @remarks
-   * 
+   *
    *
    * @param data - data to be encrypted
    * @param key - symmetric key associated and stored with document
-   * 
+   *
    * @returns a Promise that fulfills with a SubtleCryptoEncryptionResult or throws an error
    */
   public async encrypt(
     data: Uint8Array,
-    documentKey:  CryptoKey,
+    documentKey: CryptoKey
   ): Promise<SubtleCryptoEncryptionResult> {
     const algorithmParams = await this._encryptionAlgorithmParams();
     const ciphertext = await crypto.subtle.encrypt(
