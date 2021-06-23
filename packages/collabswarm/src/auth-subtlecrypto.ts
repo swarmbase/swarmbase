@@ -24,7 +24,8 @@ export type SubtleCryptoEncryptionResult = {
 };
 
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
+{
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -58,28 +59,27 @@ export class SubtleCrypto
     public readonly _encryptionAlgorithmName: string = "AES-GCM"
   ) {} // TODO (eric) 1. constructor syntax?
 
-     /**
-     * An internal function used to generate a new initialized vector / counter for each encryption.
-     * 
-     * @returns a parameter object to be used directly in the encrypt function.
-     * 
-     * @remarks
-     * Currently, only supports AesGcmParams.
-     * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
-     */
- _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams
- {
-  switch (this._encryptionAlgorithmName)
-  {
-     case "AES-GCM":
-       let iv_value = crypto.getRandomValues(new Uint8Array(this._nonceBits));
-       if (nonce) iv_value = nonce;
-       return {
-        name: this._encryptionAlgorithmName,
-        iv: iv_value
-       }
-     default: 
-      throw "Encrpytion is only supported with AesGcmParams currently"!;
+  /**
+   * An internal function used to generate a new initialized vector / counter for each encryption.
+   *
+   * @returns a parameter object to be used directly in the encrypt function.
+   *
+   * @remarks
+   * Currently, only supports AesGcmParams.
+   * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
+   */
+  _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams {
+    switch (this._encryptionAlgorithmName) {
+      case "AES-GCM":
+        let iv_value = crypto.getRandomValues(new Uint8Array(this._nonceBits));
+        if (nonce) iv_value = nonce;
+        return {
+          name: this._encryptionAlgorithmName,
+          iv: iv_value,
+        };
+      default:
+        throw "Encrpytion is only supported with AesGcmParams currently"!;
+    }
   }
 
   // Given encrypted changes and a private key,
@@ -118,7 +118,7 @@ export class SubtleCrypto
    * @param data - encrypted data, not including nonce
    * @param documentKey - symmetric key associated with document
    * @param nonce - unique value used during encryption
-   * 
+   *
    * @returns a Promise that fulfills with an array if the key and nonce are valid or throws an error
    */
   public async decrypt(
