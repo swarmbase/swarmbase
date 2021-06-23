@@ -145,7 +145,13 @@ describe("sign and verify", () => {
 
 describe("encrypt and decrypt", async () => {
   test.only.each([
-    [new Uint8Array([43, 99, 250, 83]), docKeyData1, true, false, false],
+    [
+      new Uint8Array([43, 99, 250, 83]), 
+      docKeyData1, 
+      true, 
+      false, 
+      false,
+    ],
   ])(
     "encrypt and decrypt",
     async (
@@ -155,7 +161,7 @@ describe("encrypt and decrypt", async () => {
       expectedEncryptCrashed: boolean,
       expectedDecryptCrashed: boolean
     ) => {
-      const documentKey = await importKey(documentKeyData, ["decrypt"]);
+      const documentKey = await importKey(documentKeyData, ["encrypt", "decrypt"]);
       let encryptCrashed = false;
       let encrypted: Uint8Array | undefined;
       let iv: Uint8Array | undefined;
