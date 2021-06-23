@@ -24,8 +24,7 @@ export type SubtleCryptoEncryptionResult = {
 };
 
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
-{
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
