@@ -2,7 +2,7 @@
 
 export type EncryptionResult = {
   data: Uint8Array;
-  iv?: Uint8Array;
+  nonce?: Uint8Array;
 };
 
 export interface AuthProvider<PrivateKey, PublicKey, DocumentKey = string> {
