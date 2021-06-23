@@ -146,10 +146,13 @@ describe("sign and verify", () => {
 /**
  * Check working by encrypting and decrypting the same data.
  * Use static keys.
+ * Confirm type expectations.
  */
 describe("encrypt and decrypt", async () => {
   test.only.each([
     [new Uint8Array([43, 99, 250, 83]), docKeyData1, false, false],
+    [new Uint8Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, false, false],
+    [new Uint16Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, true, true],
   ])(
     "encrypt and decrypt",
     async (
