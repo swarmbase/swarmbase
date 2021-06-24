@@ -1,6 +1,6 @@
 import BufferList from "bl";
 
-export function shuffleArray<T=any>(array: T[]) {
+export function shuffleArray<T = any>(array: T[]) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
@@ -14,7 +14,9 @@ export function isBufferList(input: Uint8Array | BufferList): boolean {
   });
 }
 
-export async function readUint8Iterable(iterable: AsyncIterable<Uint8Array | BufferList>): Promise<Uint8Array> {
+export async function readUint8Iterable(
+  iterable: AsyncIterable<Uint8Array | BufferList>
+): Promise<Uint8Array> {
   let length = 0;
   const chunks = [] as (Uint8Array | BufferList)[];
   for await (const chunk of iterable) {
@@ -39,5 +41,62 @@ export async function readUint8Iterable(iterable: AsyncIterable<Uint8Array | Buf
     index += chunk.length;
   }
 
-  return assembled
+  return assembled;
+}
+
+// CryptoKey utils
+
+export async function generateAndExportHmacKey() {
+  const key = await crypto.subtle.generateKey(
+    {
+      name: "ECDSA",
+      namedCurve: "P-384",
+    },
+    true,
+    ["sign", "verify"]
+  );
+  return [
+    await crypto.subtle.exportKey("jwk", key.privateKey),
+    await crypto.subtle.exportKey("jwk", key.publicKey),
+  ];
+}
+
+export async function importHmacKey(
+  keyData: Uint8Array,
+  format = "jwk",
+  hash = "SHA-512"
+) {
+  const key = await crypto.subtle.importKey(
+    format,
+    keyData,
+    {
+      name: "HMAC",
+      hash,
+    },
+    true,
+    ["sign", "verify"]
+  );
+
+  return key;
+}
+
+export async function importSymmetricKey(keyData: Uint8Array, format = "jwk") {
+  const key = await crypto.subtle.importKey(format, keyData, "AES-GCM", true, [
+    "encrypt",
+    "decrypt",
+  ]);
+
+  return key;
+}
+
+export async function generateAndExportSymmetricKey() {
+  const documentKey = await crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  return await crypto.subtle.exportKey("jwk", documentKey);
 }

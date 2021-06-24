@@ -17,6 +17,7 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
+    "@peculiar/webcrypto": "^1.1.7",
     "@types/node": "^15.12.3",
     "eslint": "^7.28.0",
     "jest": "^27.0.4",
@@ -33,5 +34,28 @@
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
+  },
+  "jest": {
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "transform": {
+      "^.+\\.tsx?$": "ts-jest"
+    },
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json",
+      "node",
+      "ts-jest"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ]
   }
 }

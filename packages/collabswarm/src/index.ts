@@ -1,6 +1,9 @@
 import { Collabswarm, CollabswarmPeersHandler } from "./collabswarm";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
-import { CollabswarmDocument, CollabswarmDocumentChangeHandler } from "./collabswarm-document";
+import {
+  CollabswarmDocument,
+  CollabswarmDocumentChangeHandler,
+} from "./collabswarm-document";
 import { CRDTSyncMessage } from "./crdt-sync-message";
 import { CollabswarmNode, DEFAULT_NODE_CONFIG } from "./collabswarm-node";
 import { CRDTProvider } from "./crdt-provider";
