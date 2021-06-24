@@ -1,6 +1,5 @@
 import { it, beforeAll, describe, expect, test } from "@jest/globals";
 import { SubtleCrypto } from "./auth-subtlecrypto";
-const { webcrypto } = require("crypto");
 
 const auth = new SubtleCrypto();
 
@@ -59,11 +58,17 @@ const docKeyData2 = {
  */
 async function importKey(
   keyData: JsonWebKey,
-  usage: KeyUsage = ["sign", "verify"],
+  usage: KeyUsage[],
   algorithmName = "ECDSA",
   format = "jwk"
 ) {
-  let algorithm: { name: string } | EcKeyImportParams;
+  let algorithm:
+    | AlgorithmIdentifier
+    | RsaHashedImportParams
+    | EcKeyImportParams
+    | HmacImportParams
+    | DhImportKeyParams
+    | AesKeyAlgorithm;
   switch (algorithmName) {
     case "ECDSA": {
       algorithm = {
@@ -82,7 +87,7 @@ async function importKey(
       throw "Error in key import. Is algorithm type supported?"!;
     }
   }
-  const key = await webcrypto.subtle.importKey(
+  const key = await crypto.subtle.importKey(
     format,
     keyData,
     algorithm,
@@ -92,7 +97,6 @@ async function importKey(
   return key;
 }
 
-// TODO try keys generated with different algos
 describe("sign and verify", () => {
   test.each([
     [
@@ -103,30 +107,30 @@ describe("sign and verify", () => {
       false,
       false,
     ],
-    // [
-    //   new Uint8Array([11, 44, 250]),
-    //   privateKeyData1,
-    //   publicKeyData2,
-    //   false,
-    //   false,
-    //   false,
-    // ],
-    // [
-    //   new Uint8Array([11, 44, 250]),
-    //   publicKeyData1,
-    //   publicKeyData1,
-    //   false,
-    //   true,
-    //   false,
-    // ],
-    // [
-    //   new Uint8Array([11, 44, 250]),
-    //   privateKeyData1,
-    //   privateKeyData1,
-    //   false,
-    //   false,
-    //   true,
-    // ],
+    [
+      new Uint8Array([11, 44, 250]),
+      privateKeyData1,
+      publicKeyData2,
+      false,
+      false,
+      false,
+    ],
+    [
+      new Uint8Array([11, 44, 250]),
+      publicKeyData1,
+      publicKeyData1,
+      false,
+      true,
+      false,
+    ],
+    [
+      new Uint8Array([11, 44, 250]),
+      privateKeyData1,
+      privateKeyData1,
+      false,
+      false,
+      true,
+    ],
   ])(
     `sign and verify`,
     async (
@@ -146,7 +150,7 @@ describe("sign and verify", () => {
       } catch {
         signCrashed = true;
       }
-      expect(signCrashed).toBe(expectedSignCrashed);
+      expect(signCrashed).toStrictEqual(expectedSignCrashed);
       if (sig !== undefined) {
         let verifyCrashed = false;
         let result: boolean | undefined;
@@ -155,14 +159,36 @@ describe("sign and verify", () => {
         } catch {
           verifyCrashed = true;
         }
-        expect(verifyCrashed).toBe(expectedVerifyCrashed);
+        expect(verifyCrashed).toStrictEqual(expectedVerifyCrashed);
         if (result !== undefined) {
-          expect(result).toBe(success);
+          expect(result).toStrictEqual(success);
         }
       }
     }
   );
 });
+
+async function tryEncrypt(
+  data: Uint8Array,
+  documentKey: CryptoKey
+): Promise<{
+  data?: Uint8Array;
+  nonce?: Uint8Array;
+  crashed: boolean;
+}> {
+  try {
+    const res = await auth.encrypt(data, documentKey);
+    return {
+      data: res.data,
+      nonce: res.nonce,
+      crashed: true,
+    };
+  } catch {
+    return {
+      crashed: false,
+    };
+  }
+}
 
 /**
  * Check working by encrypting and decrypting the same data.
@@ -173,7 +199,6 @@ describe("encrypt and decrypt", () => {
   test.each([
     [new Uint8Array([43, 99, 250, 83]), docKeyData1, false, false],
     [new Uint8Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, false, false],
-    [new Uint16Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, true, true],
   ])(
     "encrypt and decrypt",
     async (
@@ -187,28 +212,23 @@ describe("encrypt and decrypt", () => {
         ["encrypt", "decrypt"],
         "AES-GCM"
       );
-      let encryptCrashed = false;
-      let encrypted: Uint8Array | undefined;
-      let nonce: Uint8Array | undefined;
-      try {
-        const res = await auth.encrypt(data, documentKey);
-        encrypted = res.data;
-        nonce = res.nonce;
-      } catch {
-        encryptCrashed = true;
-      }
-      expect(encryptCrashed).toBe(expectedEncryptCrashed);
+      const {
+        data: encrypted,
+        nonce: nonce,
+        crashed: encryptCrashed,
+      } = await tryEncrypt(data, documentKey);
+      expect(encryptCrashed).toStrictEqual(expectedEncryptCrashed);
       if (encrypted !== undefined && nonce !== undefined) {
         let decryptCrashed = false;
         let decrypted: Uint8Array | undefined;
         try {
-          decrypted = await auth.decrypt(encrypted, documentKey, nonce); // TODO (eric) "nonce is used before assignment"
+          decrypted = await auth.decrypt(encrypted, documentKey, nonce);
         } catch {
           decryptCrashed = true;
         }
-        expect(decryptCrashed).toBe(expectedDecryptCrashed);
+        expect(decryptCrashed).toStrictEqual(expectedDecryptCrashed);
         if (decrypted !== undefined) {
-          expect(decrypted).toBe(data);
+          expect(decrypted).toStrictEqual(data);
         }
       }
     }

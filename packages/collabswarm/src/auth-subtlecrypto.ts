@@ -13,7 +13,8 @@ export type SubtleCryptoEncryptionResult = {
 };
 
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
+{
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -45,7 +46,7 @@ export class SubtleCrypto
      * "RSA-OAEP" is not supported at this time because it is a key pair.
      */
     public readonly _encryptionAlgorithmName: string = "AES-GCM"
-  ) {} // TODO (eric) 1. constructor syntax?
+  ) {}
 
   /**
    * An internal function used to generate a new initialized vector / counter for each encryption.
@@ -66,7 +67,7 @@ export class SubtleCrypto
           iv: iv_value,
         };
       default:
-        throw "Encrpytion is only supported with AesGcmParams currently"!;
+        throw "Encryption is only supported with AesGcmParams currently"!;
     }
   }
 
@@ -152,7 +153,9 @@ export class SubtleCrypto
     );
     return {
       data: new Uint8Array(ciphertext),
-      nonce: algorithmParams.iv as Uint8Array, // TODO (eric) check typecasting alternatives
+      // TODO: Replace this with a generic way to extract/get nonce for generic
+      //       subtle crypto algorithm
+      nonce: algorithmParams.iv as Uint8Array,
     };
   }
 }
