@@ -12,8 +12,14 @@ export type SubtleCryptoEncryptionResult = {
   nonce: Uint8Array;
 };
 
+/**
+ * SubtleCrypto implements `AuthProvider` using WebCrypto's Subtle API.
+ *
+ * The base keytype is `CryptoKey`.
+ */
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
+{
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -22,12 +28,14 @@ export class SubtleCrypto
      * @remarks
      * This is not Node’s Crypto API; that API is not expected to be as performant.
      *
-     * @param nonceBits - 96 bits length is recommended in docs; though example uses only 12
+     * @remarks 96 bits length is recommended in docs; though example uses only 12
      */
     public readonly _nonceBits = 96,
 
     /**
+     * The type of algorithm used for signature and verification keys.
      *
+     * @remarks https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign
      */
     public readonly signingAlgorithm:
       | AlgorithmIdentifier
@@ -39,16 +47,21 @@ export class SubtleCrypto
     },
 
     /**
-     * Can be any symmetric algorithm: "AES-GCM" | "AES-CTR" | "AES-CBC"
+     * The encryption algorithm to use for encrypt/decrypt.
      *
      * @remarks
      * "RSA-OAEP" is not supported at this time because it is a key pair.
      */
-    public readonly _encryptionAlgorithmName: string = "AES-GCM"
+    public readonly _encryptionAlgorithmName:
+      | "AES-GCM"
+      | "AES-CTR"
+      | "AES-CBC" = "AES-GCM"
   ) {}
 
   /**
    * An internal function used to generate a new initialized vector / counter for each encryption.
+   *
+   * @param nonce - unique value generated during encryption and used during decryption
    *
    * @returns a parameter object to be used directly in the encrypt function.
    *
@@ -70,8 +83,13 @@ export class SubtleCrypto
     }
   }
 
-  // Given encrypted changes and a private key,
-  // return a signature for use in a CRDTChangeBlock
+  /**
+   * Given encrypted changes and a private key, returns a signature.
+   *
+   * @param data encrypted data to be signed
+   * @param privateKey - part of key pair used to sign and verify
+   * @returns signature for use in a CRDTChangeBlock
+   */
   public async sign(
     data: Uint8Array,
     privateKey: CryptoKey
@@ -81,8 +99,14 @@ export class SubtleCrypto
     );
   }
 
-  // Given a signature and data (from a CRDTChangeBlock),
-  // return a Promise that fulfills with true if the signature is valid, false otherwise
+  /**
+   * Given a signature and data (from a CRDTChangeBlock), a Promise that fulfills with true if the signature is valid, false otherwise
+   *
+   * @param data data that was signed
+   * @param publicKey part of key pair used to sign and verify
+   * @param signature signature to verify
+   * @returns a Promise that fulfills with true if the signature is valid, false otherwise
+   */
   public async verify(
     data: Uint8Array,
     publicKey: CryptoKey,
@@ -132,12 +156,8 @@ export class SubtleCrypto
    * Given data to encrypt and a key object,
    * return the decrypted data or throw an error
    *
-   * @remarks
-   *
-   *
    * @param data - data to be encrypted
-   * @param key - symmetric key associated and stored with document
-   *
+   * @param documentKey - symmetric key associated and stored with document
    * @returns a Promise that fulfills with a SubtleCryptoEncryptionResult or throws an error
    */
   public async encrypt(
