@@ -3,7 +3,7 @@
 [![Gitter](https://badges.gitter.im/collabswarm-dev/community.svg)](https://gitter.im/collabswarm-dev/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 ![Collaborative Editing Example](docs/collaborative-editing.gif)
-_Share react stores between multiple clients (works on both browsers and servers) using eventually-consistent CRDTs!_
+_Share redux stores between multiple clients (works on both browsers and servers) using eventually-consistent CRDTs!_
 
 Implementing collaborative real-time applications can be very difficult and error prone.
 CollabSwarm is a fully-baked real-time application data store built using CRDTs and
