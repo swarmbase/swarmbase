@@ -114,7 +114,10 @@ See the provided [examples](examples) for full examples.
 
 ## CRDTs
 
-CRDTs provide a simple way to 
+CRDTs provide a simple way to allow multiple clients to make changes simultaneously without risking a "split-brain" state
+where clients do not share the same state eventually. In short, CRDTs provide collabswarm documents with the property of
+eventual-consistency. Collabswarm supports a swappable CRDT implementation meaning that you have control over the merging
+semantics/performance of your collabswarm documents while relying on a robust and performant networking layer.
 
 ### CRDT Performance
 
