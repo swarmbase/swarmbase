@@ -1,10 +1,10 @@
 /**
  * A Swarm is for opening documents
  * and it allows you to store your configuration in a single line when you use it as a library
- * 
+ *
  * Conceptually a "swarm" is a connected group of nodes
  * Not all collabswarm nodes will be connected to each other
- * 
+ *
  * basic config
  *   what the swarm name is
  *   at least one address to join
@@ -39,10 +39,10 @@ export class Collabswarm<
   protected _config: CollabswarmConfig | null = null;
   constructor(
     private readonly _crdtProvider: CRDTProvider<
-    DocType,
-    ChangesType,
-    ChangeFnType,
-    MessageType
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      MessageType
     >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     private readonly _messageSerializer: MessageSerializer<MessageType>,
@@ -59,8 +59,10 @@ export class Collabswarm<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
-    new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<
+    string,
+    CollabswarmPeersHandler
+  > = new Map<string, CollabswarmPeersHandler>();
 
   public get libp2p(): Libp2p {
     return (this.ipfsNode as any).libp2p;
@@ -145,7 +147,7 @@ export class Collabswarm<
       this,
       documentPath,
       this._crdtProvider,
-      this._changesSerializer,  // TODO (eric) squiggly here
+      this._changesSerializer, // TODO (eric) squiggly here
       this._messageSerializer,
       this._authProvider
     );
