@@ -8,17 +8,52 @@ import { CRDTSyncMessage } from "./crdt-sync-message";
 import { ChangesSerializer } from "./changes-serializer";
 import { MessageSerializer } from "./message-serializer";
 
+/**
+ * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
+ * 
+ * Subscribe functions that match this type signature to track local-change/remote-change events.
+ */
 export type CollabswarmDocumentChangeHandler<DocType> = (
   current: DocType,
   hashes: string[]
 ) => void;
 
+/**
+ * A collabswarm "document" represents a single CRDT document.
+ * 
+ * A new collabswarm document undergoes the following process when it is first opened:
+ * - Connect to the document pubsub topic
+ * - Send a load-document request to any peer (and keep trying with different peers if one fails) (`.load()`)
+ * - Use load-document response from peer (if any) to update existing document with any new hashes (`.sync()`)
+ * 
+ * A new local change (made on the current computer) causes the following:
+ * - The delta between the current document and the new document is calculated
+ * - A sync message is constructed and sent to all peers on the document pubsub topic (`.change(...)`)
+ * 
+ * A new remote change (made on a peer's computer) causes the following:
+ * - New change hashes are used to update exising document with any new changes (`.sync()`)
+ * 
+ * Any edits made to the document should go through its corresponding CollabswarmDocument's
+ * `.change(...)` method:
+ * 
+ * @example
+ * // Open a document.
+ * const doc1 = collabswarm.doc("/my-doc1-path");
+ * 
+ * // Make a change to the CRDT document (example is written assuming the CRDT document is
+ * // an automerge doc).
+ * doc1.change(doc => {
+ *   // After the change function is completed, this updated field `field1` will be sent
+ *   // to all peers connected to the document.
+ *   doc.field1 = "new-value";
+ * });
+ */
 export class CollabswarmDocument<
   DocType,
   ChangesType,
   ChangeFnType,
   MessageType extends CRDTSyncMessage<ChangesType>
-> {
+  > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._provider.newDocument();
   get document(): DocType {
@@ -56,9 +91,16 @@ export class CollabswarmDocument<
     >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     private readonly _messageSerializer: MessageSerializer<MessageType>
-  ) {}
+  ) { }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
+  /**
+   * Load sends a new load request to any connected peer (each peer is tried one at a time). The expected
+   * response from a load request is a sync message containing all document change hashes.
+   * 
+   * Load is used to fetch any new changes that a connecting node is missing.
+   * @returns false if this is a new document (no peers exist).
+   */
   public async load(): Promise<boolean> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
@@ -91,6 +133,7 @@ export class CollabswarmDocument<
     })();
 
     // TODO: Close connection upon receipt of data.
+    // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
     if (stream) {
       console.log(
         "Opening stream for /collabswarm-automerge/doc-load/1.0.0",
@@ -146,6 +189,14 @@ export class CollabswarmDocument<
     );
   }
 
+  /**
+   * Connects to a collabswarm document. Running this method connects to the document pubsub topic
+   * and starts the document `.load()` process.
+   * 
+   * Once opened, a document can be closed with `.close()`.
+   * 
+   * @returns false if this is a new document (no peers exist).
+   */
   public async open(): Promise<boolean> {
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
@@ -194,6 +245,10 @@ export class CollabswarmDocument<
     return await this.load();
   }
 
+  /**
+   * Disconnects from this collabswarm document. Running this method disconnects from the
+   * document pubsub topic.
+   */
   public async close() {
     if (this._pubsubHandler) {
       await this.swarm.ipfsNode.pubsub.unsubscribe(
@@ -222,7 +277,13 @@ export class CollabswarmDocument<
     }
   }
 
-  // Given a list of hashes, fetch missing update messages.
+  /**
+   * Given a sync message containing a list of hashes:
+   * - Fetch new changes that are only hashes (missing change itself) from IPFS (using the hash).
+   * - Apply new changes to the existing CRDT document.
+   * 
+   * @param message A sync message to apply.
+   */
   public async sync(message: MessageType) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
@@ -310,6 +371,13 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Applies a new local change (defined by `changeFn`) to the collabswarm document and updates 
+   * all peers.
+   * 
+   * @param changeFn A function that makes changes to the current CRDT document.
+   * @param message An optional change message/description to include.
+   */
   public async change(changeFn: ChangeFnType, message?: string) {
     const [newDocument, changes] = this._provider.localChange(
       this.document,
