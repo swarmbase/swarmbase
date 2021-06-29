@@ -1,8 +1,11 @@
 {
   "files": [],
-  "references": [{
-    "path": "./packages/collabswarm-react"
-  }, {
-    "path": "./packages/collabswarm"
-  }]
+  "references": [
+    {
+      "path": "./packages/collabswarm-react"
+    },
+    {
+      "path": "./packages/collabswarm"
+    }
+  ]
 }
