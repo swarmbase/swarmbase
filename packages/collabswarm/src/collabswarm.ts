@@ -1,5 +1,18 @@
+/**
+ * A Swarm is for opening documents
+ * and it allows you to store your configuration in a single line when you use it as a library
+ * 
+ * Conceptually a "swarm" is a connected group of nodes
+ * Not all collabswarm nodes will be connected to each other
+ * 
+ * basic config
+ *   what the swarm name is
+ *   at least one address to join
+ */
+
 import IPFS from "ipfs";
 import Libp2p from "libp2p";
+import { AuthProvider } from "./auth-provider";
 import { CRDTProvider } from "./crdt-provider";
 import { CRDTSyncMessage } from "./crdt-sync-message";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
@@ -8,20 +21,46 @@ import { CollabswarmDocument } from "./collabswarm-document";
 import { MessageSerializer } from "./message-serializer";
 import { ChangesSerializer } from "./changes-serializer";
 
-export type CollabswarmPeersHandler = (address: string, connection: any) => void;
+export type CollabswarmPeersHandler = (
+  address: string,
+  connection: any
+) => void;
 
-export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
+export class Collabswarm<
+  DocType,
+  ChangesType,
+  ChangeFnType,
+  MessageType extends CRDTSyncMessage<ChangesType>,
+  PrivateKey, // TODO (eric) if it's here it's not per document?
+  PublicKey,
+  DocumentKey
+> {
+  // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
   constructor(
-    private readonly _provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+    private readonly _crdtProvider: CRDTProvider<
+    DocType,
+    ChangesType,
+    ChangeFnType,
+    MessageType
+    >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     private readonly _messageSerializer: MessageSerializer<MessageType>,
-    ) {}
+    private readonly _authProvider: AuthProvider<
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >
+  ) {}
   private _ipfsNode: IPFS.IPFS | undefined;
   private _ipfsInfo: IDResult | undefined;
   private _peerAddrs: string[] = [];
-  private _peerConnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<string, CollabswarmPeersHandler>();
-  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<string, CollabswarmPeersHandler>();
+  private _peerConnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<
+    string,
+    CollabswarmPeersHandler
+  >();
+  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
+    new Map<string, CollabswarmPeersHandler>();
 
   public get libp2p(): Libp2p {
     return (this.ipfsNode as any).libp2p;
@@ -52,14 +91,14 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
 
     // Setup IPFS node.
     this._ipfsNode = await IPFS.create(config.ipfs);
-    this.libp2p.connectionManager.on('peer:connect', connection => {
+    this.libp2p.connectionManager.on("peer:connect", (connection) => {
       const peerAddress = connection.remotePeer.toB58String();
       this._peerAddrs.push(peerAddress);
       for (const [, handler] of this._peerConnectHandlers) {
         handler(peerAddress, connection);
       }
     });
-    this.libp2p.connectionManager.on('peer:disconnect', connection => {
+    this.libp2p.connectionManager.on("peer:disconnect", (connection) => {
       const peerAddress = connection.remotePeer.toB58String();
       const peerIndex = this._peerAddrs.indexOf(peerAddress);
       if (peerIndex > 0) {
@@ -70,7 +109,7 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
       }
     });
     this._ipfsInfo = await this._ipfsNode.id();
-    console.log('IPFS node initialized:', this._ipfsInfo);
+    console.log("IPFS node initialized:", this._ipfsInfo);
   }
 
   // Initialize
@@ -90,23 +129,43 @@ export class Collabswarm<DocType, ChangesType, ChangeFnType, MessageType extends
   }
 
   // Open
-  doc<T = any>(documentPath: string): CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType> | null {
+  doc<T = any>(
+    documentPath: string
+  ): CollabswarmDocument<
+    DocType,
+    ChangesType,
+    ChangeFnType,
+    MessageType,
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  > | null {
     // Return new document reference.
-    return new CollabswarmDocument(this, documentPath, this._provider, this._changesSerializer, this._messageSerializer);
+    return new CollabswarmDocument( // TODO (eric) pass in initial DocumentKey here?
+      this,
+      documentPath,
+      this._crdtProvider,
+      this._changesSerializer,  // TODO (eric) squiggly here
+      this._messageSerializer,
+      this._authProvider
+    );
   }
 
   subscribeToPeerConnect(handlerId: string, handler: CollabswarmPeersHandler) {
     this._peerConnectHandlers.set(handlerId, handler);
   }
-  
+
   unsubscribeFromPeerConnect(handlerId: string) {
     this._peerConnectHandlers.delete(handlerId);
   }
 
-  subscribeToPeerDisconnect(handlerId: string, handler: CollabswarmPeersHandler) {
+  subscribeToPeerDisconnect(
+    handlerId: string,
+    handler: CollabswarmPeersHandler
+  ) {
     this._peerDisconnectHandlers.set(handlerId, handler);
   }
-  
+
   unsubscribeFromPeerDisconnect(handlerId: string) {
     this._peerDisconnectHandlers.delete(handlerId);
   }

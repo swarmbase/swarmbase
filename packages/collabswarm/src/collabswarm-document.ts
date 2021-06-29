@@ -1,9 +1,17 @@
+/**
+ * Document  is just for opening documents right now
+ * @remarks
+ *   A document is part of a Swarm.
+ *   Document keys are attached to a single document.
+ */
+
 import pipe from "it-pipe";
 import Libp2p from "libp2p";
 import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
 import { Collabswarm } from "./collabswarm";
 import { readUint8Iterable, shuffleArray } from "./utils";
 import { CRDTProvider } from "./crdt-provider";
+import { AuthProvider } from "./auth-provider";
 import { CRDTSyncMessage } from "./crdt-sync-message";
 import { ChangesSerializer } from "./changes-serializer";
 import { MessageSerializer } from "./message-serializer";
@@ -13,19 +21,39 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
   hashes: string[]
 ) => void;
 
+/**
+ * @param _document
+ */
 export class CollabswarmDocument<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>
+  MessageType extends CRDTSyncMessage<ChangesType>,
+  PrivateKey,
+  PublicKey,
+  DocumentKey
 > {
   // Only store/cache the full automerge document.
-  private _document: DocType = this._provider.newDocument();
+  private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
     return this._document;
   }
 
   private _hashes = new Set<string>();
+
+  /**
+   * A list of all document keys used to encrypt change messages
+   * used to decrypt change messages.
+   *
+   * @remark Since the document is created from change history, all keys are needed.
+   */
+  private _documentKeys = new Set<string>();
+
+  /**
+   * The current document key to use to encrypt change messages.
+   *
+   */
+  private _currentDocumentKey: string | undefined; // TODO (eric) where is the initial value passed in?
 
   private _pubsubHandler: MessageHandlerFn | undefined;
 
@@ -41,22 +69,58 @@ export class CollabswarmDocument<
   }
 
   constructor(
+    /** */
     public readonly swarm: Collabswarm<
       DocType,
       ChangesType,
       ChangeFnType,
-      MessageType
+      MessageType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
     >,
+    /** */
     public readonly documentPath: string,
-    private readonly _provider: CRDTProvider<
+    /** */
+    private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
       ChangeFnType,
       MessageType
     >,
+    /** */
+    private readonly _authProvider: AuthProvider<
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
+    /** */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
+    /** */
     private readonly _messageSerializer: MessageSerializer<MessageType>
   ) {}
+
+  /**
+   * Store new document key.
+   *
+   * @param documentKey: new key to use
+   *
+   * @remarks Safe to call multiple times since keys are stored in set without duplicates
+   */
+  public setDocumentKey(documentKey: DocumentKey): void {
+    this._currentDocumentKey = String(documentKey);
+    this._documentKeys.add(String(documentKey));
+  }
+
+  /**
+   * Get list of all document keys used to encrypt change messages
+   * used to decrypt change messages.
+   *
+   * @remark Since the document is created from change history, all keys are needed.
+   */
+  public getDocumentKeys(): Set<string> {
+    return this._documentKeys;
+  }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   public async load(): Promise<boolean> {
@@ -121,7 +185,7 @@ export class CollabswarmDocument<
 
   public async pin() {
     // Apply local change w/ automerge.
-    const changes = this._provider.getHistory(this.document);
+    const changes = this._crdtProvider.getHistory(this.document);
 
     // Store changes in ipfs.
     const newFileResult = await this.swarm.ipfsNode.add(
@@ -131,7 +195,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._provider.newMessage(this.documentPath);
+    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
@@ -164,7 +228,7 @@ export class CollabswarmDocument<
       "/collabswarm-automerge/doc-load/1.0.0",
       ({ stream }) => {
         console.log("received /collabswarm-automerge/doc-load/1.0.0 dial");
-        const loadMessage = this._provider.newMessage(this.documentPath);
+        const loadMessage = this._crdtProvider.newMessage(this.documentPath);
         for (const hash of this._hashes) {
           loadMessage.changes[hash] = null;
         }
@@ -236,7 +300,7 @@ export class CollabswarmDocument<
     for (const [sentHash, sentChanges] of newChangeEntries) {
       if (sentChanges) {
         // Apply the changes that were sent directly.
-        newDocument = this._provider.remoteChange(newDocument, sentChanges);
+        newDocument = this._crdtProvider.remoteChange(newDocument, sentChanges);
         newDocumentHashes.push(sentHash);
       } else {
         missingDocumentHashes.push(sentHash);
@@ -256,7 +320,7 @@ export class CollabswarmDocument<
       this.getFile(missingHash)
         .then((missingChanges) => {
           if (missingChanges) {
-            this._document = this._provider.remoteChange(
+            this._document = this._crdtProvider.remoteChange(
               this._document,
               missingChanges
             );
@@ -311,7 +375,7 @@ export class CollabswarmDocument<
   }
 
   public async change(changeFn: ChangeFnType, message?: string) {
-    const [newDocument, changes] = this._provider.localChange(
+    const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
       message || "",
       changeFn
@@ -327,7 +391,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._provider.newMessage(this.documentPath);
+    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
