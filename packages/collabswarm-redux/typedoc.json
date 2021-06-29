@@ -1,9 +1,13 @@
 {
   "entryPoints": ["src/index.ts"],
   "readme": "README.md",
-  "out": "../../docs/collabswarm",
+  "out": "../../docs/collabswarm-redux",
   "theme": "../../node_modules/typedoc-neo-theme/bin/default",
   "links": [
+    {
+      "label": "@collabswarm/collabswarm",
+      "url": "/collabswarm/collabswarm"
+    },
     {
       "label": "@collabswarm/collabswarm-automerge",
       "url": "/collabswarm/collabswarm-automerge"
@@ -11,10 +15,6 @@
     {
       "label": "@collabswarm/collabswarm-react",
       "url": "/collabswarm/collabswarm-react"
-    },
-    {
-      "label": "@collabswarm/collabswarm-redux",
-      "url": "/collabswarm/collabswarm-redux"
     },
     {
       "label": "@collabswarm/collabswarm-yjs",

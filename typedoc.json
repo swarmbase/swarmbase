@@ -1,0 +1,9 @@
+{
+  "entryPoints": [
+    "packages/collabswarm-react/src/index.ts",
+    "packages/collabswarm/src/index.ts"
+  ],
+  "readme": "README.md",
+  "out": "docs/test",
+  "theme": "./node_modules/typedoc-neo-theme/bin/default"
+}
