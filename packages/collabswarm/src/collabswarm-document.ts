@@ -47,6 +47,10 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
  *   // to all peers connected to the document.
  *   doc.field1 = "new-value";
  * });
+ * @tparam DocType The CRDT document type
+ * @tparam ChangesType A block of CRDT change(s)
+ * @tparam ChangeFnType A function for applying changes to a document
+ * @tparam MessageType The sync message that gets sent when changes are made to a document
  */
 export class CollabswarmDocument<
   DocType,
