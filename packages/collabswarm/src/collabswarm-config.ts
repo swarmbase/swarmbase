@@ -1,4 +1,4 @@
-import { Options } from "ipfs-core";
+import { Options } from 'ipfs-core';
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -35,8 +35,8 @@ export const DEFAULT_CONFIG: CollabswarmConfig = {
     // }
   },
 
-  pubsubDocumentPrefix: "/document/",
-  pubsubDocumentPublishPath: "/documents",
+  pubsubDocumentPrefix: '/document/',
+  pubsubDocumentPublishPath: '/documents',
 };
 
 /**
@@ -68,7 +68,7 @@ export interface CollabswarmConfig {
  */
 export function addBootstrapAddr(
   clientConfig: CollabswarmConfig,
-  address: string
+  address: string,
 ): CollabswarmConfig {
   return {
     ...clientConfig,
@@ -97,7 +97,7 @@ export function addBootstrapAddr(
  */
 export function addSwarmAddr(
   clientConfig: CollabswarmConfig,
-  address: string
+  address: string,
 ): CollabswarmConfig {
   return {
     ...clientConfig,
