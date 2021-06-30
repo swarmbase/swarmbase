@@ -21,11 +21,41 @@ import { CollabswarmDocument } from "./collabswarm-document";
 import { MessageSerializer } from "./message-serializer";
 import { ChangesSerializer } from "./changes-serializer";
 
+/**
+ * Handler type for peer-connect and peer-disconnect events.
+ *
+ * Subscribe functions that match this type signature to track peer-connection/peer-disconnection events.
+ */
 export type CollabswarmPeersHandler = (
   address: string,
   connection: any
 ) => void;
 
+/**
+ * The collabswarm object is the main entry point for the collabswarm library.
+ *
+ * @example
+ * import { Collabswarm } from '@collabswarm/collabswarm';
+ * import { AutomergeJSONSerializer, AutomergeProvider } from '@collabswarm/collabswarm-automerge';
+ *
+ * // Create the necessary providers and pass them to the collabswarm constructor.
+ * const crdt = new AutomergeProvider();
+ * const serializer = new AutomergeJSONSerializer();
+ * const collabswarm = new Collabswarm(crdt, serializer, serializer);
+ *
+ * // Set the config for your collabswarm object and startup an IPFS node.
+ * await collabswarm.initialize(config);
+ *
+ * // Connect to a swarm (an address of any member of the swarm works here).
+ * await collabswarm.connect(["/some/libp2p/peer/address"]);
+ *
+ * // Open a document.
+ * const doc1 = collabswarm.doc("/my-doc1-path");
+ * @tparam DocType The CRDT document type
+ * @tparam ChangesType A block of CRDT change(s)
+ * @tparam ChangeFnType A function for applying changes to a document
+ * @tparam MessageType The sync message that gets sent when changes are made to a document
+ */
 export class Collabswarm<
   DocType,
   ChangesType,
@@ -35,8 +65,6 @@ export class Collabswarm<
   PublicKey,
   DocumentKey
 > {
-  // configs for the swarm, thus passing its config to all documents opened in a swarm
-  protected _config: CollabswarmConfig | null = null;
   constructor(
     private readonly _crdtProvider: CRDTProvider<
       DocType,
@@ -52,6 +80,9 @@ export class Collabswarm<
       DocumentKey
     >
   ) {}
+
+  // configs for the swarm, thus passing its config to all documents opened in a swarm
+  protected _config: CollabswarmConfig | null = null;
   private _ipfsNode: IPFS.IPFS | undefined;
   private _ipfsInfo: IDResult | undefined;
   private _peerAddrs: string[] = [];
@@ -59,14 +90,23 @@ export class Collabswarm<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<
-    string,
-    CollabswarmPeersHandler
-  > = new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
+    new Map<string, CollabswarmPeersHandler>();
 
+  /**
+   * Gets the current libp2p node instance.
+   *
+   * Only works after `.initialize()` has been called.
+   */
   public get libp2p(): Libp2p {
     return (this.ipfsNode as any).libp2p;
   }
+
+  /**
+   * Gets the current IPFS node instance.
+   *
+   * Only works after `.initialize()` has been called.
+   */
   public get ipfsNode(): IPFS.IPFS {
     if (this._ipfsNode) {
       return this._ipfsNode;
@@ -74,6 +114,12 @@ export class Collabswarm<
 
     throw new Error("IPFS node not initialized yet!");
   }
+
+  /**
+   * Gets the current IPFS node info.
+   *
+   * Only works after `.initialize()` has been called.
+   */
   public get ipfsInfo(): IDResult {
     if (this._ipfsInfo) {
       return this._ipfsInfo;
@@ -81,13 +127,26 @@ export class Collabswarm<
 
     throw new Error("IPFS node not initialized yet!");
   }
+
+  /**
+   * Gets the current list of peers that this collabswarm node is connected to.
+   */
   public get peerAddrs(): string[] {
     return this._peerAddrs;
   }
+
+  /**
+   * Gets the current collabswarm configuration.
+   */
   public get config(): CollabswarmConfig | null {
     return this._config;
   }
 
+  /**
+   * Sets up the collabswarm node and starts its underlying IPFS/libp2p node.
+   *
+   * @param config General settings for collabswarm.
+   */
   public async initialize(config: CollabswarmConfig = DEFAULT_CONFIG) {
     this._config = config;
 
@@ -114,14 +173,15 @@ export class Collabswarm<
     console.log("IPFS node initialized:", this._ipfsInfo);
   }
 
-  // Initialize
+  /**
+   * Connects to a collabswarm swarm.
+   *
+   * An address of any peer of the desired swarm will work. Providing multiple addresses will cause
+   * each to be connected to in sequence.
+   *
+   * @param addresses Peers that should be connected to identified by their address.
+   */
   public async connect(addresses: string[]) {
-    // TODO ===================================================================
-    // Listen for sync requests on libp2p channel:
-    // https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
-    //   Respond with full document or just hashes (compare speed?)
-    // /TODO ==================================================================
-
     // Connect to bootstrapping node(s).
     const connectionPromises: Promise<any>[] = [];
     for (const address of addresses) {
@@ -130,7 +190,12 @@ export class Collabswarm<
     await Promise.all(connectionPromises);
   }
 
-  // Open
+  /**
+   * Opens a collabswarm document instance.
+   *
+   * @param documentPath Path identifying the document to open.
+   * @returns The requested collabswarm document.
+   */
   doc<T = any>(
     documentPath: string
   ): CollabswarmDocument<
@@ -147,20 +212,37 @@ export class Collabswarm<
       this,
       documentPath,
       this._crdtProvider,
-      this._changesSerializer, // TODO (eric) squiggly here
-      this._messageSerializer,
-      this._authProvider
+      this._authProvider,
+      this._changesSerializer,
+      this._messageSerializer
     );
   }
 
+  /**
+   * Adds a handler that is run every time that a peer connects.
+   *
+   * @param handlerId An identifier used to unsubscribe the provided handler later.
+   * @param handler A function that is run every time a peer connects.
+   */
   subscribeToPeerConnect(handlerId: string, handler: CollabswarmPeersHandler) {
     this._peerConnectHandlers.set(handlerId, handler);
   }
 
+  /**
+   * Removes a peer-connect handler.
+   *
+   * @param handlerId The identifier of the handler to remove.
+   */
   unsubscribeFromPeerConnect(handlerId: string) {
     this._peerConnectHandlers.delete(handlerId);
   }
 
+  /**
+   * Adds a handler that is run every time that a peer disconnects.
+   *
+   * @param handlerId An identifier used to unsubscribe the provided handler later.
+   * @param handler A function that is run every time a peer disconnects.
+   */
   subscribeToPeerDisconnect(
     handlerId: string,
     handler: CollabswarmPeersHandler
@@ -168,6 +250,11 @@ export class Collabswarm<
     this._peerDisconnectHandlers.set(handlerId, handler);
   }
 
+  /**
+   * Removes a peer-disconnect handler.
+   *
+   * @param handlerId The identifier of the handler to remove.
+   */
   unsubscribeFromPeerDisconnect(handlerId: string) {
     this._peerDisconnectHandlers.delete(handlerId);
   }
