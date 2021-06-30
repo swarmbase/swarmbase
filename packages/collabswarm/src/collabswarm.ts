@@ -90,8 +90,10 @@ export class Collabswarm<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
-    new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<
+    string,
+    CollabswarmPeersHandler
+  > = new Map<string, CollabswarmPeersHandler>();
 
   /**
    * Gets the current libp2p node instance.
