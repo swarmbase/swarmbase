@@ -10,16 +10,16 @@
  *   at least one address to join
  */
 
-import IPFS from "ipfs";
-import Libp2p from "libp2p";
-import { AuthProvider } from "./auth-provider";
-import { CRDTProvider } from "./crdt-provider";
-import { CRDTSyncMessage } from "./crdt-sync-message";
-import { CollabswarmConfig, DEFAULT_CONFIG } from "./collabswarm-config";
-import { IDResult } from "ipfs-core-types/src/root";
-import { CollabswarmDocument } from "./collabswarm-document";
-import { MessageSerializer } from "./message-serializer";
-import { ChangesSerializer } from "./changes-serializer";
+import IPFS from 'ipfs';
+import Libp2p from 'libp2p';
+import { AuthProvider } from './auth-provider';
+import { CRDTProvider } from './crdt-provider';
+import { CRDTSyncMessage } from './crdt-sync-message';
+import { CollabswarmConfig, DEFAULT_CONFIG } from './collabswarm-config';
+import { IDResult } from 'ipfs-core-types/src/root';
+import { CollabswarmDocument } from './collabswarm-document';
+import { MessageSerializer } from './message-serializer';
+import { ChangesSerializer } from './changes-serializer';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -28,7 +28,7 @@ import { ChangesSerializer } from "./changes-serializer";
  */
 export type CollabswarmPeersHandler = (
   address: string,
-  connection: any
+  connection: any,
 ) => void;
 
 /**
@@ -78,7 +78,7 @@ export class Collabswarm<
       PrivateKey,
       PublicKey,
       DocumentKey
-    >
+    >,
   ) {}
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
@@ -114,7 +114,7 @@ export class Collabswarm<
       return this._ipfsNode;
     }
 
-    throw new Error("IPFS node not initialized yet!");
+    throw new Error('IPFS node not initialized yet!');
   }
 
   /**
@@ -127,7 +127,7 @@ export class Collabswarm<
       return this._ipfsInfo;
     }
 
-    throw new Error("IPFS node not initialized yet!");
+    throw new Error('IPFS node not initialized yet!');
   }
 
   /**
@@ -154,14 +154,14 @@ export class Collabswarm<
 
     // Setup IPFS node.
     this._ipfsNode = await IPFS.create(config.ipfs);
-    this.libp2p.connectionManager.on("peer:connect", (connection) => {
+    this.libp2p.connectionManager.on('peer:connect', (connection) => {
       const peerAddress = connection.remotePeer.toB58String();
       this._peerAddrs.push(peerAddress);
       for (const [, handler] of this._peerConnectHandlers) {
         handler(peerAddress, connection);
       }
     });
-    this.libp2p.connectionManager.on("peer:disconnect", (connection) => {
+    this.libp2p.connectionManager.on('peer:disconnect', (connection) => {
       const peerAddress = connection.remotePeer.toB58String();
       const peerIndex = this._peerAddrs.indexOf(peerAddress);
       if (peerIndex > 0) {
@@ -172,7 +172,7 @@ export class Collabswarm<
       }
     });
     this._ipfsInfo = await this._ipfsNode.id();
-    console.log("IPFS node initialized:", this._ipfsInfo);
+    console.log('IPFS node initialized:', this._ipfsInfo);
   }
 
   /**
@@ -199,7 +199,7 @@ export class Collabswarm<
    * @returns The requested collabswarm document.
    */
   doc<T = any>(
-    documentPath: string
+    documentPath: string,
   ): CollabswarmDocument<
     DocType,
     ChangesType,
@@ -216,7 +216,7 @@ export class Collabswarm<
       this._crdtProvider,
       this._authProvider,
       this._changesSerializer,
-      this._messageSerializer
+      this._messageSerializer,
     );
   }
 
@@ -247,7 +247,7 @@ export class Collabswarm<
    */
   subscribeToPeerDisconnect(
     handlerId: string,
-    handler: CollabswarmPeersHandler
+    handler: CollabswarmPeersHandler,
   ) {
     this._peerDisconnectHandlers.set(handlerId, handler);
   }

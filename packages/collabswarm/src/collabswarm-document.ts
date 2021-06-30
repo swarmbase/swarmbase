@@ -5,16 +5,16 @@
  *   Document keys are attached to a single document.
  */
 
-import pipe from "it-pipe";
-import Libp2p from "libp2p";
-import { MessageHandlerFn } from "ipfs-core-types/src/pubsub";
-import { Collabswarm } from "./collabswarm";
-import { readUint8Iterable, shuffleArray } from "./utils";
-import { CRDTProvider } from "./crdt-provider";
-import { AuthProvider } from "./auth-provider";
-import { CRDTSyncMessage } from "./crdt-sync-message";
-import { ChangesSerializer } from "./changes-serializer";
-import { MessageSerializer } from "./message-serializer";
+import pipe from 'it-pipe';
+import Libp2p from 'libp2p';
+import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
+import { Collabswarm } from './collabswarm';
+import { readUint8Iterable, shuffleArray } from './utils';
+import { CRDTProvider } from './crdt-provider';
+import { AuthProvider } from './auth-provider';
+import { CRDTSyncMessage } from './crdt-sync-message';
+import { ChangesSerializer } from './changes-serializer';
+import { MessageSerializer } from './message-serializer';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -23,7 +23,7 @@ import { MessageSerializer } from "./message-serializer";
  */
 export type CollabswarmDocumentChangeHandler<DocType> = (
   current: DocType,
-  hashes: string[]
+  hashes: string[],
 ) => void;
 
 /**
@@ -138,7 +138,7 @@ export class CollabswarmDocument<
     /** */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     /** */
-    private readonly _messageSerializer: MessageSerializer<MessageType>
+    private readonly _messageSerializer: MessageSerializer<MessageType>,
   ) {}
 
   /**
@@ -186,17 +186,17 @@ export class CollabswarmDocument<
     const stream = await (async () => {
       for (const peer of shuffledPeers) {
         try {
-          console.log("Selected peer addresses:", peer.addr.toString());
+          console.log('Selected peer addresses:', peer.addr.toString());
           const docLoadConnection = await this.libp2p.dialProtocol(
             peer.addr.toString(),
-            ["/collabswarm-automerge/doc-load/1.0.0"]
+            ['/collabswarm-automerge/doc-load/1.0.0'],
           );
           return docLoadConnection.stream;
         } catch (err) {
           console.warn(
-            "Failed to load document from:",
+            'Failed to load document from:',
             peer.addr.toString(),
-            err
+            err,
           );
         }
       }
@@ -206,16 +206,16 @@ export class CollabswarmDocument<
     // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
     if (stream) {
       console.log(
-        "Opening stream for /collabswarm-automerge/doc-load/1.0.0",
-        stream
+        'Opening stream for /collabswarm-automerge/doc-load/1.0.0',
+        stream,
       );
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
         const message = this._messageSerializer.deserializeMessage(assembled);
         console.log(
-          "received /collabswarm-automerge/doc-load/1.0.0 response:",
+          'received /collabswarm-automerge/doc-load/1.0.0 response:',
           assembled,
-          message
+          message,
         );
 
         if (message.documentId === this.documentPath) {
@@ -228,7 +228,7 @@ export class CollabswarmDocument<
       return true;
     } else {
       // Assume new document
-      console.log("Failed to open document on any nodes.", this);
+      console.log('Failed to open document on any nodes.', this);
       return false;
     }
   }
@@ -239,7 +239,7 @@ export class CollabswarmDocument<
 
     // Store changes in ipfs.
     const newFileResult = await this.swarm.ipfsNode.add(
-      this._changesSerializer.serializeChanges(changes)
+      this._changesSerializer.serializeChanges(changes),
     );
     const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
@@ -252,11 +252,11 @@ export class CollabswarmDocument<
     updateMessage.changes[hash] = changes;
 
     if (!this.swarm.config) {
-      throw "Can not pin a file when the node has not been initialized"!;
+      throw 'Can not pin a file when the node has not been initialized'!;
     }
     this.swarm.ipfsNode.pubsub.publish(
       this.swarm.config.pubsubDocumentPublishPath,
-      this._messageSerializer.serializeMessage(updateMessage)
+      this._messageSerializer.serializeMessage(updateMessage),
     );
   }
 
@@ -272,20 +272,20 @@ export class CollabswarmDocument<
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
       const message = this._messageSerializer.deserializeMessage(
-        rawMessage.data
+        rawMessage.data,
       );
       this.sync(message);
     };
     await this.swarm.ipfsNode.pubsub.subscribe(
       this.documentPath,
-      this._pubsubHandler
+      this._pubsubHandler,
     );
 
     // Make the messages on this specific to a document.
     this.libp2p.handle(
-      "/collabswarm-automerge/doc-load/1.0.0",
+      '/collabswarm-automerge/doc-load/1.0.0',
       ({ stream }) => {
-        console.log("received /collabswarm-automerge/doc-load/1.0.0 dial");
+        console.log('received /collabswarm-automerge/doc-load/1.0.0 dial');
         const loadMessage = this._crdtProvider.newMessage(this.documentPath);
         for (const hash of this._hashes) {
           loadMessage.changes[hash] = null;
@@ -293,9 +293,9 @@ export class CollabswarmDocument<
 
         const assembled = this._messageSerializer.serializeMessage(loadMessage);
         console.log(
-          "sending /collabswarm-automerge/doc-load/1.0.0 response:",
+          'sending /collabswarm-automerge/doc-load/1.0.0 response:',
           assembled,
-          loadMessage
+          loadMessage,
         );
 
         // Immediately send the connecting peer either the automerge.save'd document or a list of
@@ -307,9 +307,9 @@ export class CollabswarmDocument<
             // Ignores responses.
             for await (const _ of source) {
             }
-          }
+          },
         );
-      }
+      },
     );
 
     // Load initial document from peers.
@@ -324,14 +324,14 @@ export class CollabswarmDocument<
     if (this._pubsubHandler) {
       await this.swarm.ipfsNode.pubsub.unsubscribe(
         this.documentPath,
-        this._pubsubHandler
+        this._pubsubHandler,
       );
     }
   }
 
   public async getFile(hash: string): Promise<ChangesType> {
     const assembled = await readUint8Iterable(
-      this.swarm.ipfsNode.files.read(`/ipfs/${hash}`)
+      this.swarm.ipfsNode.files.read(`/ipfs/${hash}`),
     );
 
     return this._changesSerializer.deserializeChanges(assembled);
@@ -358,7 +358,7 @@ export class CollabswarmDocument<
   public async sync(message: MessageType) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
-      ([sentHash]) => sentHash && !this._hashes.has(sentHash)
+      ([sentHash]) => sentHash && !this._hashes.has(sentHash),
     );
 
     // First apply changes that were sent directly.
@@ -390,22 +390,22 @@ export class CollabswarmDocument<
           if (missingChanges) {
             this._document = this._crdtProvider.remoteChange(
               this._document,
-              missingChanges
+              missingChanges,
             );
             this._hashes.add(missingHash);
             this._fireRemoteUpdateHandlers([missingHash]);
           } else {
             console.error(
               `'/ipfs/${missingHash}' returned nothing`,
-              missingChanges
+              missingChanges,
             );
           }
         })
         .catch((err) => {
           console.error(
-            "Failed to fetch missing change from ipfs:",
+            'Failed to fetch missing change from ipfs:',
             missingHash,
-            err
+            err,
           );
         });
     }
@@ -414,19 +414,19 @@ export class CollabswarmDocument<
   public subscribe(
     id: string,
     handler: CollabswarmDocumentChangeHandler<DocType>,
-    originFilter: "all" | "remote" | "local" = "all"
+    originFilter: 'all' | 'remote' | 'local' = 'all',
   ) {
     switch (originFilter) {
-      case "all": {
+      case 'all': {
         this._remoteHandlers[id] = handler;
         this._localHandlers[id] = handler;
         break;
       }
-      case "remote": {
+      case 'remote': {
         this._remoteHandlers[id] = handler;
         break;
       }
-      case "local": {
+      case 'local': {
         this._localHandlers[id] = handler;
         break;
       }
@@ -452,15 +452,15 @@ export class CollabswarmDocument<
   public async change(changeFn: ChangeFnType, message?: string) {
     const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
-      message || "",
-      changeFn
+      message || '',
+      changeFn,
     );
     // Apply local change w/ automerge.
     this._document = newDocument;
 
     // Store changes in ipfs.
     const newFileResult = await this.swarm.ipfsNode.add(
-      this._changesSerializer.serializeChanges(changes)
+      this._changesSerializer.serializeChanges(changes),
     );
     const hash = newFileResult.cid.toString();
     this._hashes.add(hash);
@@ -473,7 +473,7 @@ export class CollabswarmDocument<
     updateMessage.changes[hash] = changes;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
-      this._messageSerializer.serializeMessage(updateMessage)
+      this._messageSerializer.serializeMessage(updateMessage),
     );
 
     // Fire change handlers.

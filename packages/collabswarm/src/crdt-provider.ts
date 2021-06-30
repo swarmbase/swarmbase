@@ -2,7 +2,7 @@
  * The crdt provider provides an implementation of a set of methods for interacting with crdts generally
  */
 
-import { CRDTSyncMessage } from "./crdt-sync-message";
+import { CRDTSyncMessage } from './crdt-sync-message';
 
 /**
  * CRDTProvider is an interface with a set of methods for manipulating CRDT documents.
@@ -42,7 +42,7 @@ export interface CRDTProvider<
   localChange(
     document: DocType,
     message: string,
-    changeFn: ChangeFnType
+    changeFn: ChangeFnType,
   ): [DocType, ChangesType];
 
   /**
