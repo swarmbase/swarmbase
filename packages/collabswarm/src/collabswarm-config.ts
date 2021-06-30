@@ -1,8 +1,8 @@
-import { Options } from "ipfs-core";
+import { Options } from 'ipfs-core';
 
 /**
  * Default collabswarm config to use if none is provided.
- * 
+ *
  * Note: This default configuration does not contain any other bootstrap nodes
  *       so upon startup this node will be in a swarm of one.
  */
@@ -12,12 +12,12 @@ export const DEFAULT_CONFIG: CollabswarmConfig = {
       enabled: true, // enable circuit relay dialer and listener
       // TODO: Is this necessary for browser nodes? I don't think they can actually function as a relay...
       hop: {
-        enabled: true // enable circuit relay HOP (make this node a relay)
-      }
+        enabled: true, // enable circuit relay HOP (make this node a relay)
+      },
     },
     config: {
       Addresses: {
-        Swarm: []
+        Swarm: [],
       },
       Bootstrap: [],
     },
@@ -36,7 +36,7 @@ export const DEFAULT_CONFIG: CollabswarmConfig = {
   },
 
   pubsubDocumentPrefix: '/document/',
-  pubsubDocumentPublishPath: '/documents'
+  pubsubDocumentPublishPath: '/documents',
 };
 
 /**
@@ -61,19 +61,28 @@ export interface CollabswarmConfig {
 
 /**
  * Creates a new collabswarm config with an added `.ipfs.config.Bootstrap` entry.
- * 
+ *
  * @param clientConfig The config object to start with.
  * @param address Entry to add to `.ipfs.config.Bootstrap`.
  * @returns A new collabswarm config with the added bootstrap address.
  */
-export function addBootstrapAddr(clientConfig: CollabswarmConfig, address: string): CollabswarmConfig {
+export function addBootstrapAddr(
+  clientConfig: CollabswarmConfig,
+  address: string,
+): CollabswarmConfig {
   return {
     ...clientConfig,
     ipfs: {
       ...(clientConfig.ipfs || {}),
       config: {
         ...((clientConfig.ipfs && clientConfig.ipfs.config) || {}),
-        Bootstrap: [...((clientConfig.ipfs && clientConfig.ipfs.config && clientConfig.ipfs.config.Bootstrap) || []), address],
+        Bootstrap: [
+          ...((clientConfig.ipfs &&
+            clientConfig.ipfs.config &&
+            clientConfig.ipfs.config.Bootstrap) ||
+            []),
+          address,
+        ],
       },
     },
   };
@@ -81,12 +90,15 @@ export function addBootstrapAddr(clientConfig: CollabswarmConfig, address: strin
 
 /**
  * Creates a new collabswarm config with an added `.ipfs.config.Addresses.Swarm` entry.
- * 
+ *
  * @param clientConfig The config object to start with.
  * @param address Entry to add to `.ipfs.config.Addresses.Swarm`.
  * @returns A new collabswarm config with the added swarm address.
  */
-export function addSwarmAddr(clientConfig: CollabswarmConfig, address: string): CollabswarmConfig {
+export function addSwarmAddr(
+  clientConfig: CollabswarmConfig,
+  address: string,
+): CollabswarmConfig {
   return {
     ...clientConfig,
     ipfs: {
@@ -94,8 +106,18 @@ export function addSwarmAddr(clientConfig: CollabswarmConfig, address: string): 
       config: {
         ...((clientConfig.ipfs && clientConfig.ipfs.config) || {}),
         Addresses: {
-          ...((clientConfig.ipfs && clientConfig.ipfs.config && clientConfig.ipfs.config.Addresses) || {}),
-          Swarm: [...((clientConfig.ipfs && clientConfig.ipfs.config && clientConfig.ipfs.config.Addresses && clientConfig.ipfs.config.Addresses.Swarm) || []), address],
+          ...((clientConfig.ipfs &&
+            clientConfig.ipfs.config &&
+            clientConfig.ipfs.config.Addresses) ||
+            {}),
+          Swarm: [
+            ...((clientConfig.ipfs &&
+              clientConfig.ipfs.config &&
+              clientConfig.ipfs.config.Addresses &&
+              clientConfig.ipfs.config.Addresses.Swarm) ||
+              []),
+            address,
+          ],
         },
       },
     },
