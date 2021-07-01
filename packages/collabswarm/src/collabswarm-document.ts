@@ -16,6 +16,7 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { MessageSerializer } from './message-serializer';
 import { documentLoadV1 } from './wire-protocols';
+import { KeySerializer } from './key-serializer';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -77,29 +78,31 @@ export class CollabswarmDocument<
     return this._document;
   }
 
+  // Set of already-merged change blocks.
   private _hashes = new Set<string>();
 
-  /**
-   * A list of all document keys used to encrypt change messages
-   * used to decrypt change messages.
-   *
-   * @remark Since the document is created from change history, all keys are needed.
-   */
   // TODO: consider using List instead of set to allow for historical order key testing
   // TODO: consider changing string to CryptoKey
-  private _documentKeys = new Set<string>();
+  // List of document encryption keys. Lower index numbers mean more recent.
+  // Since the document is created from change history, all keys are needed.
+  private _documentKeys: DocumentKey[] = [];
 
-  /**
-   * The current document key to use to encrypt change messages.
-   *
-   */
-  private _currentDocumentKey: string | undefined; // TODO (eric) where is the initial value passed in?
+  // Document readers ACL. TODO: This should be a secure CRDT.
+  private _readers = new Set<string>();
 
+  // Document writers ACL. TODO: This should be a secure CRDT.
+  private _writers = new Set<string>();
+
+  // Handler for listening for sync messages on the document topic. Is `undefined` until
+  // the document is `.open()`-ed.
   private _pubsubHandler: MessageHandlerFn | undefined;
 
+  // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
     [id: string]: CollabswarmDocumentChangeHandler<DocType>;
   } = {};
+
+  // Handlers registered by users of `CollabswarmDocument` that fire on local changes.
   private _localHandlers: {
     [id: string]: CollabswarmDocumentChangeHandler<DocType>;
   } = {};
@@ -109,7 +112,9 @@ export class CollabswarmDocument<
   }
 
   constructor(
-    /** */
+    /**
+     * Collabswarm swarm that this document belongs to.
+     */
     public readonly swarm: Collabswarm<
       DocType,
       ChangesType,
@@ -118,47 +123,45 @@ export class CollabswarmDocument<
       PublicKey,
       DocumentKey
     >,
-    /** */
+
+    /**
+     * Path of the document.
+     */
     public readonly documentPath: string,
-    /** */
+
+    /**
+     * CRDTProvider handles reading/writing CRDT document data and metadata.
+     */
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
       ChangeFnType
     >,
-    /** */
+
+    /**
+     * AuthProvider handles signing/verification and encryption/decryption.
+     */
     private readonly _authProvider: AuthProvider<
       PrivateKey,
       PublicKey,
       DocumentKey
     >,
-    /** */
+
+    /**
+     * ChangesSerializer is responsible for serializing/deserializing CRDTChangeBlocks.
+     */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
-    /** */
+
+    /**
+     * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
+     */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
+
+    /**
+     * KeySerializer is responsible for serializing/deserializing document encryption/decryption keys.
+     */
+    private readonly _documentKeySerializer: KeySerializer<DocumentKey>,
   ) { }
-
-  /**
-   * Store new document key.
-   *
-   * @param documentKey: new key to use
-   *
-   * @remarks Safe to call multiple times since keys are stored in set without duplicates
-   */
-  public setDocumentKey(documentKey: DocumentKey): void {
-    this._currentDocumentKey = String(documentKey);
-    this._documentKeys.add(String(documentKey));
-  }
-
-  /**
-   * Get list of all document keys used to encrypt change messages
-   * used to decrypt change messages.
-   *
-   * @remark Since the document is created from change history, all keys are needed.
-   */
-  public getDocumentKeys(): Set<string> {
-    return this._documentKeys;
-  }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   /**
@@ -211,7 +214,7 @@ export class CollabswarmDocument<
       );
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
-        const message = this._messageSerializer.deserializeMessage(assembled);
+        const message = this._messageSerializer.deserializeMessage(assembled, this._documentKeySerializer);
         console.log(
           `received ${documentLoadV1} response:`,
           assembled,
@@ -245,7 +248,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType> = {
+    const updateMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
       documentId: this.documentPath,
       changes: {},
     };
@@ -259,7 +262,7 @@ export class CollabswarmDocument<
     }
     this.swarm.ipfsNode.pubsub.publish(
       this.swarm.config.pubsubDocumentPublishPath,
-      this._messageSerializer.serializeMessage(updateMessage),
+      this._messageSerializer.serializeMessage(updateMessage, this._documentKeySerializer),
     );
   }
 
@@ -276,6 +279,7 @@ export class CollabswarmDocument<
     this._pubsubHandler = (rawMessage) => {
       const message = this._messageSerializer.deserializeMessage(
         rawMessage.data,
+        this._documentKeySerializer,
       );
       this.sync(message);
     };
@@ -289,15 +293,17 @@ export class CollabswarmDocument<
       documentLoadV1,
       ({ stream }) => {
         console.log(`received ${documentLoadV1} dial`);
-        const loadMessage: CRDTSyncMessage<ChangesType> = {
+        // TODO: Verify that this user is a reader.
+        const loadMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
           documentId: this.documentPath,
           changes: {},
+          // Since this is a load request, send document keys
         };
         for (const hash of this._hashes) {
           loadMessage.changes[hash] = null;
         }
 
-        const assembled = this._messageSerializer.serializeMessage(loadMessage);
+        const assembled = this._messageSerializer.serializeMessage(loadMessage, this._documentKeySerializer);
         console.log(
           `sending ${documentLoadV1} response:`,
           assembled,
@@ -307,7 +313,7 @@ export class CollabswarmDocument<
         // Immediately send the connecting peer either the automerge.save'd document or a list of
         // hashes with the changes that are cached locally.
         pipe(
-          [this._messageSerializer.serializeMessage(loadMessage)],
+          [this._messageSerializer.serializeMessage(loadMessage, this._documentKeySerializer)],
           stream,
           async (source: any) => {
             // Ignores responses.
@@ -361,7 +367,7 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: CRDTSyncMessage<ChangesType>) {
+  public async sync(message: CRDTSyncMessage<ChangesType, DocumentKey>) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
       ([sentHash]) => sentHash && !this._hashes.has(sentHash),
@@ -472,7 +478,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType> = {
+    const updateMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
       documentId: this.documentPath,
       changes: {},
     };
@@ -482,7 +488,7 @@ export class CollabswarmDocument<
     updateMessage.changes[hash] = changes;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
-      this._messageSerializer.serializeMessage(updateMessage),
+      this._messageSerializer.serializeMessage(updateMessage, this._documentKeySerializer),
     );
 
     // Fire change handlers.

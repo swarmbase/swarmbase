@@ -1,6 +1,7 @@
 import { ChangesSerializer } from "./changes-serializer";
 import { CRDTChangeBlock } from "./crdt-change-block";
 import { CRDTSyncMessage } from "./crdt-sync-message";
+import { KeySerializer } from "./key-serializer";
 import { MessageSerializer } from "./message-serializer";
 
 export class JSONSerializer<ChangesType>
@@ -38,10 +39,10 @@ export class JSONSerializer<ChangesType>
   deserializeChangeBlock(changes: string): CRDTChangeBlock<ChangesType> {
     return this.deserialize(changes);
   }
-  serializeMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
+  serializeMessage<DocumentKey>(message: CRDTSyncMessage<ChangesType, DocumentKey>): Uint8Array {
     return this.encode(this.serialize(message));
   }
-  deserializeMessage(message: Uint8Array): CRDTSyncMessage<ChangesType> {
+  deserializeMessage<DocumentKey>(message: Uint8Array): CRDTSyncMessage<ChangesType, DocumentKey> {
     return this.deserialize(this.decode(message));
   }
 }

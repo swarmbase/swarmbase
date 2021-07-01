@@ -19,6 +19,7 @@ import { IDResult } from 'ipfs-core-types/src/root';
 import { CollabswarmDocument } from './collabswarm-document';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
+import { KeySerializer } from './key-serializer';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -75,6 +76,7 @@ export class Collabswarm<
       PublicKey,
       DocumentKey
     >,
+    private readonly _documentKeySerializer: KeySerializer<DocumentKey>,
   ) { }
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
@@ -212,6 +214,7 @@ export class Collabswarm<
       this._authProvider,
       this._changesSerializer,
       this._messageSerializer,
+      this._documentKeySerializer,
     );
   }
 

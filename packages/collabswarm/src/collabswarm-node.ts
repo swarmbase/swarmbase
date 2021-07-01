@@ -6,13 +6,13 @@ import {
   CollabswarmConfig,
   DEFAULT_CONFIG,
 } from './collabswarm-config';
-import { CRDTSyncMessage } from './crdt-sync-message';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
 import { CRDTProvider } from './crdt-provider';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { AuthProvider } from './auth-provider';
+import { KeySerializer } from './key-serializer';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -51,6 +51,7 @@ export class CollabswarmNode<
     this.changesSerializer,
     this.messageSerializer,
     this.authProvider,
+    this.documentKeySerializer,
   );
   public get swarm(): Collabswarm<
     DocType,
@@ -84,6 +85,7 @@ export class CollabswarmNode<
       PublicKey,
       DocumentKey
     >,
+    public readonly documentKeySerializer: KeySerializer<DocumentKey>,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
   ) { }
 
@@ -130,6 +132,7 @@ export class CollabswarmNode<
         if (thisNodeId !== senderNodeId) {
           const message = this.messageSerializer.deserializeMessage(
             rawMessage.data,
+            this.documentKeySerializer,
           );
           console.log('Received Document Publish message:', rawMessage);
           const docRef = this.swarm.doc(message.documentId);
