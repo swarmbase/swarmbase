@@ -15,6 +15,7 @@ import { AuthProvider } from './auth-provider';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { MessageSerializer } from './message-serializer';
+import { documentLoadV1 } from './wire-protocols';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -58,7 +59,6 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
  * @tparam DocType The CRDT document type
  * @tparam ChangesType A block of CRDT change(s)
  * @tparam ChangeFnType A function for applying changes to a document
- * @tparam MessageType The sync message that gets sent when changes are made to a document
  * @tparam PrivateKey The type of secret key used to identify a user (for writing)
  * @tparam PublicKey The type of key used to identify a user publicly
  * @tparam DocumentKey The type of key used to encrypt/decrypt document changes
@@ -67,11 +67,10 @@ export class CollabswarmDocument<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>,
   PrivateKey,
   PublicKey,
   DocumentKey
-> {
+  > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -115,7 +114,6 @@ export class CollabswarmDocument<
       DocType,
       ChangesType,
       ChangeFnType,
-      MessageType,
       PrivateKey,
       PublicKey,
       DocumentKey
@@ -126,8 +124,7 @@ export class CollabswarmDocument<
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
-      ChangeFnType,
-      MessageType
+      ChangeFnType
     >,
     /** */
     private readonly _authProvider: AuthProvider<
@@ -138,8 +135,8 @@ export class CollabswarmDocument<
     /** */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
     /** */
-    private readonly _messageSerializer: MessageSerializer<MessageType>,
-  ) {}
+    private readonly _messageSerializer: MessageSerializer<ChangesType>,
+  ) { }
 
   /**
    * Store new document key.
@@ -171,6 +168,9 @@ export class CollabswarmDocument<
    * Load is used to fetch any new changes that a connecting node is missing.
    * @returns false if this is a new document (no peers exist).
    */
+  // Key exchange happens during:
+  // - Load messages.
+  // - ACL updates via /collabswarm/key-update/1.0.0 protocol
   public async load(): Promise<boolean> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
@@ -189,7 +189,7 @@ export class CollabswarmDocument<
           console.log('Selected peer addresses:', peer.addr.toString());
           const docLoadConnection = await this.libp2p.dialProtocol(
             peer.addr.toString(),
-            ['/collabswarm-automerge/doc-load/1.0.0'],
+            [documentLoadV1],
           );
           return docLoadConnection.stream;
         } catch (err) {
@@ -206,14 +206,14 @@ export class CollabswarmDocument<
     // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
     if (stream) {
       console.log(
-        'Opening stream for /collabswarm-automerge/doc-load/1.0.0',
+        `Opening stream for ${documentLoadV1}`,
         stream,
       );
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
         const message = this._messageSerializer.deserializeMessage(assembled);
         console.log(
-          'received /collabswarm-automerge/doc-load/1.0.0 response:',
+          `received ${documentLoadV1} response:`,
           assembled,
           message,
         );
@@ -245,7 +245,10 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+    };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
@@ -283,17 +286,20 @@ export class CollabswarmDocument<
 
     // Make the messages on this specific to a document.
     this.libp2p.handle(
-      '/collabswarm-automerge/doc-load/1.0.0',
+      documentLoadV1,
       ({ stream }) => {
-        console.log('received /collabswarm-automerge/doc-load/1.0.0 dial');
-        const loadMessage = this._crdtProvider.newMessage(this.documentPath);
+        console.log(`received ${documentLoadV1} dial`);
+        const loadMessage: CRDTSyncMessage<ChangesType> = {
+          documentId: this.documentPath,
+          changes: {},
+        };
         for (const hash of this._hashes) {
           loadMessage.changes[hash] = null;
         }
 
         const assembled = this._messageSerializer.serializeMessage(loadMessage);
         console.log(
-          'sending /collabswarm-automerge/doc-load/1.0.0 response:',
+          `sending ${documentLoadV1} response:`,
           assembled,
           loadMessage,
         );
@@ -355,7 +361,7 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: MessageType) {
+  public async sync(message: CRDTSyncMessage<ChangesType>) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
       ([sentHash]) => sentHash && !this._hashes.has(sentHash),
@@ -466,7 +472,10 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+    };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }

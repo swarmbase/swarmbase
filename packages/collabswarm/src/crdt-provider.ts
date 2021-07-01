@@ -16,20 +16,11 @@ export interface CRDTProvider<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>
-> {
+  > {
   /**
    * Create a new empty (contains the equivalent of `{}`) CRDT document.
    */
   newDocument(): DocType;
-
-  /**
-   * Create a new CRDTSyncMessage from the provided document ID. Implementations
-   * should return an implementation-specific sub-interface of CRDTSyncMessage.
-   *
-   * @param documentId ID of the document new sync message is related to.
-   */
-  newMessage(documentId: string): MessageType;
 
   /**
    * Apply locally made changes to provided CRDT document as defined by `changeFn`.

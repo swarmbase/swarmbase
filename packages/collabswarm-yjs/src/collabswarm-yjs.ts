@@ -4,18 +4,13 @@ import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from "yjs";
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
 
-export type YjsSwarm = Collabswarm<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
+// export type YjsSwarm = Collabswarm<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
 
-export type YjsSwarmDocument = CollabswarmDocument<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
+// export type YjsSwarmDocument = CollabswarmDocument<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
 
-export interface YjsSwarmSyncMessage extends CRDTSyncMessage<Uint8Array> {}
-
-export class YjsProvider implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage> {
+export class YjsProvider implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void> {
   newDocument(): Doc {
     return new Doc();
-  }
-  newMessage(documentId: string): YjsSwarmSyncMessage {
-    return { documentId, changes: { } };
   }
   localChange(document: Doc, message: string, changeFn: (doc: Doc) => void): [Doc, Uint8Array] {
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
@@ -36,4 +31,4 @@ export class YjsProvider implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => 
   }
 }
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array, YjsSwarmSyncMessage> {}
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array> { }

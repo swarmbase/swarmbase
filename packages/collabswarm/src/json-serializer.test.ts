@@ -1,7 +1,7 @@
 import { expect, test } from "@jest/globals";
 import { JSONSerializer } from "./json-serializer";
 
-const json_serializer = new JSONSerializer<any, any>();
+const json_serializer = new JSONSerializer<any>();
 
 let test_object = { key: "val" };
 let test_object_serialized = '{"key":"val"}';

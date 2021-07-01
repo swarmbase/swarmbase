@@ -20,38 +20,31 @@ import {
 
 export type AutomergeSwarmDocumentChangeHandler<
   T = any
-> = CollabswarmDocumentChangeHandler<Doc<T>>;
+  > = CollabswarmDocumentChangeHandler<Doc<T>>;
 
-export type AutomergeSwarm<T = any> = Collabswarm<
-  Doc<T>,
-  BinaryChange[],
-  (doc: T) => void,
-  AutomergeSwarmSyncMessage
->;
+// export type AutomergeSwarm<T = any> = Collabswarm<
+//   Doc<T>,
+//   BinaryChange[],
+//   (doc: T) => void,
+//   AutomergeSwarmSyncMessage
+// >;
 
-export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
-  Doc<T>,
-  BinaryChange[],
-  (doc: T) => void,
-  AutomergeSwarmSyncMessage
->;
-
-export interface AutomergeSwarmSyncMessage
-  extends CRDTSyncMessage<BinaryChange[]> {}
+// export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
+//   Doc<T>,
+//   BinaryChange[],
+//   (doc: T) => void,
+//   AutomergeSwarmSyncMessage
+// >;
 
 export class AutomergeProvider<T = any>
   implements
-    CRDTProvider<
-      Doc<T>,
-      BinaryChange[],
-      (doc: T) => void,
-      AutomergeSwarmSyncMessage
-    > {
+  CRDTProvider<
+  Doc<T>,
+  BinaryChange[],
+  (doc: T) => void
+  > {
   newDocument(): Doc<T> {
     return init();
-  }
-  newMessage(documentId: string): AutomergeSwarmSyncMessage {
-    return { documentId, changes: {} };
   }
   localChange(
     document: Doc<T>,
@@ -73,7 +66,4 @@ export class AutomergeProvider<T = any>
   }
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<
-  BinaryChange[],
-  AutomergeSwarmSyncMessage
-> {}
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> { }

@@ -12,6 +12,7 @@ import { CollabswarmDocument } from './collabswarm-document';
 import { CRDTProvider } from './crdt-provider';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
+import { AuthProvider } from './auth-provider';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -41,25 +42,30 @@ export class CollabswarmNode<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>
-> {
+  PrivateKey,
+  PublicKey,
+  DocumentKey
+  > {
   private _swarm = new Collabswarm(
     this.provider,
     this.changesSerializer,
     this.messageSerializer,
+    this.authProvider,
   );
   public get swarm(): Collabswarm<
     DocType,
     ChangesType,
     ChangeFnType,
-    MessageType
+    PrivateKey,
+    PublicKey,
+    DocumentKey
   > {
     return this._swarm;
   }
 
   private readonly _subscriptions = new Map<
     string,
-    CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>
+    CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
   >();
   private readonly _seenCids = new Set<string>();
 
@@ -69,13 +75,17 @@ export class CollabswarmNode<
     public readonly provider: CRDTProvider<
       DocType,
       ChangesType,
-      ChangeFnType,
-      MessageType
+      ChangeFnType
     >,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
-    public readonly messageSerializer: MessageSerializer<MessageType>,
+    public readonly messageSerializer: MessageSerializer<ChangesType>,
+    public readonly authProvider: AuthProvider<
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
-  ) {}
+  ) { }
 
   // Start
   public async start() {

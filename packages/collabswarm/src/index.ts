@@ -10,8 +10,12 @@ import { CRDTProvider } from "./crdt-provider";
 import { MessageSerializer } from "./message-serializer";
 import { ChangesSerializer } from "./changes-serializer";
 import { JSONSerializer } from "./json-serializer";
+import { AuthProvider } from "./auth-provider";
+import { SubtleCrypto } from "./auth-subtlecrypto";
 
 export {
+  AuthProvider,
+  SubtleCrypto,
   Collabswarm,
   CollabswarmPeersHandler,
   CollabswarmConfig,

@@ -14,7 +14,6 @@ import IPFS from 'ipfs';
 import Libp2p from 'libp2p';
 import { AuthProvider } from './auth-provider';
 import { CRDTProvider } from './crdt-provider';
-import { CRDTSyncMessage } from './crdt-sync-message';
 import { CollabswarmConfig, DEFAULT_CONFIG } from './collabswarm-config';
 import { IDResult } from 'ipfs-core-types/src/root';
 import { CollabswarmDocument } from './collabswarm-document';
@@ -54,32 +53,29 @@ export type CollabswarmPeersHandler = (
  * @tparam DocType The CRDT document type
  * @tparam ChangesType A block of CRDT change(s)
  * @tparam ChangeFnType A function for applying changes to a document
- * @tparam MessageType The sync message that gets sent when changes are made to a document
  */
 export class Collabswarm<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>,
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
   DocumentKey
-> {
+  > {
   constructor(
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
-      ChangeFnType,
-      MessageType
+      ChangeFnType
     >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
-    private readonly _messageSerializer: MessageSerializer<MessageType>,
+    private readonly _messageSerializer: MessageSerializer<ChangesType>,
     private readonly _authProvider: AuthProvider<
       PrivateKey,
       PublicKey,
       DocumentKey
     >,
-  ) {}
+  ) { }
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
@@ -204,7 +200,6 @@ export class Collabswarm<
     DocType,
     ChangesType,
     ChangeFnType,
-    MessageType,
     PrivateKey,
     PublicKey,
     DocumentKey
