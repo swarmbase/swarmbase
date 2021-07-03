@@ -20,7 +20,6 @@ import {
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
 
-// export type YjsSwarm = Collabswarm<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
 
 // export type YjsSwarmDocument = CollabswarmDocument<Doc, Uint8Array, (doc: Doc) => void, YjsSwarmSyncMessage>;
 
