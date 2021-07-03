@@ -1,10 +1,6 @@
 import React from "react";
 import "./App.css";
 import {
-  AutomergeSwarm,
-  AutomergeSwarmSyncMessage,
-} from "@collabswarm/collabswarm-automerge";
-import {
   connectAsync,
   openDocumentAsync,
   closeDocumentAsync,
@@ -16,8 +12,25 @@ import { ThunkDispatch } from "redux-thunk";
 import { JsonEditor } from "jsoneditor-react";
 import * as jsondiffpatch from "jsondiffpatch";
 import { AutomergeSwarmActions, AutomergeSwarmState } from "./utils";
-import { CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
+import { Collabswarm, CollabswarmConfig, CollabswarmDocument, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
 import { Doc, BinaryChange } from "automerge";
+
+export type AutomergeSwarm<T = any> = Collabswarm<
+  Doc<T>,
+  BinaryChange[],
+  (doc: T) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
+>;
+export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
+  Doc<T>,
+  BinaryChange[],
+  (doc: T) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
+>;
 
 const jdp = jsondiffpatch.create();
 
@@ -195,8 +208,10 @@ function mapDispatchToProps(
         initializeAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
         >(config)
       ),
     onConnect: (addresses: string[]) =>
@@ -204,8 +219,10 @@ function mapDispatchToProps(
         connectAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
         >(addresses)
       ),
     onDocumentOpen: (documentId: string) =>
@@ -213,8 +230,10 @@ function mapDispatchToProps(
         openDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
         >(documentId)
       ),
     onDocumentClose: (documentId: string) =>
@@ -222,8 +241,10 @@ function mapDispatchToProps(
         closeDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
         >(documentId)
       ),
     onDocumentChange: (
@@ -235,8 +256,10 @@ function mapDispatchToProps(
         changeDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
         >(documentId, changeFn, message)
       ),
   };

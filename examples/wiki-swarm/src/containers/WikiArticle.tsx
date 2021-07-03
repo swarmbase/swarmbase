@@ -4,10 +4,6 @@ import { ThunkDispatch } from "redux-thunk";
 import { Doc } from "automerge";
 import { CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
 import {
-  AutomergeSwarm,
-  AutomergeSwarmDocument,
-} from "@collabswarm/collabswarm-automerge";
-import {
   changeDocumentAsync,
   openDocumentAsync,
   closeDocumentAsync,
@@ -20,7 +16,7 @@ import { RouteComponentProps } from "react-router-dom";
 import Spinner from "react-bootstrap/Spinner";
 import { SlateInput } from "../components/SlateInput";
 import { initialValue } from "../components/Slate";
-import { AutomergeSwarmActions } from "../utils";
+import { AutomergeSwarm, AutomergeSwarmActions, AutomergeSwarmDocument } from "../utils";
 
 interface MatchParams {
   documentId: string;
@@ -41,7 +37,7 @@ interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   ) => Promise<Doc<WikiSwarmArticle>>;
 }
 
-interface WikiArticleState {}
+interface WikiArticleState { }
 
 class WikiArticle extends React.Component<
   WikiArticleProps,

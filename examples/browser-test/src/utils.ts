@@ -1,4 +1,3 @@
-import { AutomergeSwarmSyncMessage } from "@collabswarm/collabswarm-automerge";
 import {
   CollabswarmActions,
   CollabswarmState,
@@ -9,11 +8,15 @@ export type AutomergeSwarmState<T = any> = CollabswarmState<
   Doc<T>,
   BinaryChange[],
   (doc: T) => void,
-  AutomergeSwarmSyncMessage
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
 >;
 export type AutomergeSwarmActions<T = any> = CollabswarmActions<
   Doc<T>,
   BinaryChange[],
   (doc: T) => void,
-  AutomergeSwarmSyncMessage
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
 >;
