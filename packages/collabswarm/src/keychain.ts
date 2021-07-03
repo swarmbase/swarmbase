@@ -28,9 +28,9 @@ export interface Keychain<KeychainChange, DocumentKey> {
   merge(change: KeychainChange): void;
 
   /**
-   * Gets the current document encryption keys in the keychain.
+   * Gets the all document encryption keys in the keychain.
    * 
-   * @return current document encryption keys.
+   * @return all document encryption keys.
    */
   keys(): Promise<DocumentKey[]>;
 }
