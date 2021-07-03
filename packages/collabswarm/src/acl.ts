@@ -2,7 +2,7 @@
  * An ACL keeps track of a list of user's public keys and produces changes that
  * can be sent to other swarm peers.
  * 
- * @tparam ChangesType Type of a change record.
+ * @tparam ChangesType A block of CRDT change(s).
  * @tparam PublicKey Type of a user's public key.
  */
 export interface ACL<ChangesType, PublicKey> {
@@ -10,7 +10,7 @@ export interface ACL<ChangesType, PublicKey> {
    * Add a new user to the ACL.
    *
    * @param publicKey User's public key.
-   * @return A change record for the addition to the ACL.
+   * @return A block of change(s) for the addition to the ACL.
    */
   add(publicKey: PublicKey): Promise<ChangesType>;
 
@@ -18,23 +18,23 @@ export interface ACL<ChangesType, PublicKey> {
    * Remove a user from the ACL.
    * 
    * @param publicKey User's public key.
-   * @return A change record for the removal from the ACL.
+   * @return A block of change(s) for the removal from the ACL.
    */
   remove(publicKey: PublicKey): Promise<ChangesType>;
 
   /**
-   * Gets a change record describing the current state of the ACL.
+   * Gets a block of change(s) describing the current state of the ACL.
    * 
-   * @return A change record describing the whole ACL.
+   * @return A block of change(s) describing the whole ACL.
    */
   current(): ChangesType;
 
   /**
-   * Applies a change record to the ACL.
+   * Applies a block of change(s) to the ACL.
    * 
-   * @param change A change record to apply.
+   * @param changes A block of change(s) to apply.
    */
-  merge(change: ChangesType): void;
+  merge(changes: ChangesType): void;
 
   /**
    * Checks to see if the specified user is in the ACL already.

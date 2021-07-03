@@ -3,7 +3,7 @@ import { ACL } from './acl';
 /**
  * Factory for ACL objects.
  * 
- * @tparam ChangesType Type of a change record.
+ * @tparam ChangesType A block of CRDT change(s).
  * @tparam PublicKey Type of a user's public key.
  */
 export interface ACLProvider<ChangesType, PublicKey> {
