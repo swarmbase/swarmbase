@@ -12,7 +12,8 @@ import { CRDTProvider } from './crdt-provider';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { AuthProvider } from './auth-provider';
-import { KeySerializer } from './key-serializer';
+import { ACLProvider } from './acl-provider';
+import { KeychainProvider } from './keychain-provider';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -51,7 +52,8 @@ export class CollabswarmNode<
     this.changesSerializer,
     this.messageSerializer,
     this.authProvider,
-    this.documentKeySerializer,
+    this.aclProvider,
+    this.keychainProvider,
   );
   public get swarm(): Collabswarm<
     DocType,
@@ -85,7 +87,8 @@ export class CollabswarmNode<
       PublicKey,
       DocumentKey
     >,
-    public readonly documentKeySerializer: KeySerializer<DocumentKey>,
+    private readonly aclProvider: ACLProvider<ChangesType, PublicKey>,
+    private readonly keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
   ) { }
 
@@ -132,7 +135,6 @@ export class CollabswarmNode<
         if (thisNodeId !== senderNodeId) {
           const message = this.messageSerializer.deserializeMessage(
             rawMessage.data,
-            this.documentKeySerializer,
           );
           console.log('Received Document Publish message:', rawMessage);
           const docRef = this.swarm.doc(message.documentId);

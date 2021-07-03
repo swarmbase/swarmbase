@@ -1,15 +1,22 @@
-import { ChangesSerializer, Collabswarm, CRDTProvider, CRDTSyncMessage, MessageSerializer } from "@collabswarm/collabswarm";
+import { ACLProvider, AuthProvider, ChangesSerializer, Collabswarm, CRDTProvider, CRDTSyncMessage, KeychainProvider, MessageSerializer } from "@collabswarm/collabswarm";
 import { useEffect, useState } from "react";
 
-export function useCollabswarm<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
-  provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+export function useCollabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>(
+  provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<MessageType>,
+  messageSerializer: MessageSerializer<ChangesType>,
+  authProvider: AuthProvider<
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >,
+  aclProvider: ACLProvider<ChangesType, PublicKey>,
+  keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
 ) {
-  const [collabswarm, setCollabswarm] = useState<Collabswarm<DocType, ChangesType, ChangeFnType, MessageType> | undefined>();
+  const [collabswarm, setCollabswarm] = useState<Collabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> | undefined>();
 
   useEffect(() => {
-    setCollabswarm(new Collabswarm(provider, changesSerializer, messageSerializer));
+    setCollabswarm(new Collabswarm(provider, changesSerializer, messageSerializer, authProvider, aclProvider, keychainProvider));
   });
 
   return collabswarm;

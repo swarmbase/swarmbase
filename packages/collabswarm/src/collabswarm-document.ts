@@ -16,7 +16,8 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { MessageSerializer } from './message-serializer';
 import { documentLoadV1 } from './wire-protocols';
-import { KeySerializer } from './key-serializer';
+import { ACLProvider } from './acl-provider';
+import { KeychainProvider } from './keychain-provider';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -78,20 +79,20 @@ export class CollabswarmDocument<
     return this._document;
   }
 
-  // Set of already-merged change blocks.
-  private _hashes = new Set<string>();
+  // Document readers ACL.
+  private _readers = this._aclProvider.initialize();
+
+  // Document writers ACL.
+  private _writers = this._aclProvider.initialize();
 
   // TODO: consider using List instead of set to allow for historical order key testing
   // TODO: consider changing string to CryptoKey
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
-  private _documentKeys: DocumentKey[] = [];
+  private _keychain = this._keychainProvider.initialize();
 
-  // Document readers ACL. TODO: This should be a secure CRDT.
-  private _readers = new Set<string>();
-
-  // Document writers ACL. TODO: This should be a secure CRDT.
-  private _writers = new Set<string>();
+  // Set of already-merged change blocks.
+  private _hashes = new Set<string>();
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
@@ -148,6 +149,16 @@ export class CollabswarmDocument<
     >,
 
     /**
+     * ACLProvider handles read/write ACL operations.
+     */
+    private readonly _aclProvider: ACLProvider<ChangesType, PublicKey>,
+
+    /**
+     * KeychainProvider handles read/write ACL operations.
+     */
+    private readonly _keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+
+    /**
      * ChangesSerializer is responsible for serializing/deserializing CRDTChangeBlocks.
      */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
@@ -156,11 +167,6 @@ export class CollabswarmDocument<
      * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
-
-    /**
-     * KeySerializer is responsible for serializing/deserializing document encryption/decryption keys.
-     */
-    private readonly _documentKeySerializer: KeySerializer<DocumentKey>,
   ) { }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -214,7 +220,7 @@ export class CollabswarmDocument<
       );
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
-        const message = this._messageSerializer.deserializeMessage(assembled, this._documentKeySerializer);
+        const message = this._messageSerializer.deserializeMessage(assembled);
         console.log(
           `received ${documentLoadV1} response:`,
           assembled,
@@ -248,7 +254,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
       documentId: this.documentPath,
       changes: {},
     };
@@ -262,7 +268,7 @@ export class CollabswarmDocument<
     }
     this.swarm.ipfsNode.pubsub.publish(
       this.swarm.config.pubsubDocumentPublishPath,
-      this._messageSerializer.serializeMessage(updateMessage, this._documentKeySerializer),
+      this._messageSerializer.serializeMessage(updateMessage),
     );
   }
 
@@ -279,7 +285,6 @@ export class CollabswarmDocument<
     this._pubsubHandler = (rawMessage) => {
       const message = this._messageSerializer.deserializeMessage(
         rawMessage.data,
-        this._documentKeySerializer,
       );
       this.sync(message);
     };
@@ -294,16 +299,18 @@ export class CollabswarmDocument<
       ({ stream }) => {
         console.log(`received ${documentLoadV1} dial`);
         // TODO: Verify that this user is a reader.
-        const loadMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
+        // this._aclProvider.check(...);
+        const loadMessage: CRDTSyncMessage<ChangesType> = {
           documentId: this.documentPath,
           changes: {},
-          // Since this is a load request, send document keys
+          // Since this is a load request, send document keys.
+          keychainChanges: this._keychain.history(),
         };
         for (const hash of this._hashes) {
           loadMessage.changes[hash] = null;
         }
 
-        const assembled = this._messageSerializer.serializeMessage(loadMessage, this._documentKeySerializer);
+        const assembled = this._messageSerializer.serializeMessage(loadMessage);
         console.log(
           `sending ${documentLoadV1} response:`,
           assembled,
@@ -313,7 +320,7 @@ export class CollabswarmDocument<
         // Immediately send the connecting peer either the automerge.save'd document or a list of
         // hashes with the changes that are cached locally.
         pipe(
-          [this._messageSerializer.serializeMessage(loadMessage, this._documentKeySerializer)],
+          [this._messageSerializer.serializeMessage(loadMessage)],
           stream,
           async (source: any) => {
             // Ignores responses.
@@ -367,7 +374,20 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: CRDTSyncMessage<ChangesType, DocumentKey>) {
+  public async sync(message: CRDTSyncMessage<ChangesType>) {
+    // Apply new ACL changes.
+    if (message.readersChanges) {
+      this._readers.merge(message.readersChanges);
+    }
+    if (message.writersChanges) {
+      this._writers.merge(message.writersChanges);
+    }
+
+    // Update/replace list of document keys (if provided).
+    if (message.keychainChanges) {
+      this._keychain.merge(message.keychainChanges);
+    }
+
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
       ([sentHash]) => sentHash && !this._hashes.has(sentHash),
@@ -478,7 +498,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType, DocumentKey> = {
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
       documentId: this.documentPath,
       changes: {},
     };
@@ -488,7 +508,7 @@ export class CollabswarmDocument<
     updateMessage.changes[hash] = changes;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
-      this._messageSerializer.serializeMessage(updateMessage, this._documentKeySerializer),
+      this._messageSerializer.serializeMessage(updateMessage),
     );
 
     // Fire change handlers.

@@ -19,7 +19,8 @@ import { IDResult } from 'ipfs-core-types/src/root';
 import { CollabswarmDocument } from './collabswarm-document';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
-import { KeySerializer } from './key-serializer';
+import { ACLProvider } from './acl-provider';
+import { KeychainProvider } from './keychain-provider';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -76,7 +77,8 @@ export class Collabswarm<
       PublicKey,
       DocumentKey
     >,
-    private readonly _documentKeySerializer: KeySerializer<DocumentKey>,
+    private readonly _aclProvider: ACLProvider<ChangesType, PublicKey>,
+    private readonly _keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
   ) { }
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
@@ -196,7 +198,7 @@ export class Collabswarm<
    * @param documentPath Path identifying the document to open.
    * @returns The requested collabswarm document.
    */
-  doc<T = any>(
+  doc(
     documentPath: string,
   ): CollabswarmDocument<
     DocType,
@@ -212,9 +214,10 @@ export class Collabswarm<
       documentPath,
       this._crdtProvider,
       this._authProvider,
+      this._aclProvider,
+      this._keychainProvider,
       this._changesSerializer,
       this._messageSerializer,
-      this._documentKeySerializer,
     );
   }
 

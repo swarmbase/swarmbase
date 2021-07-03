@@ -1,15 +1,15 @@
 import { Action } from "redux";
 import { ThunkAction } from "redux-thunk";
 import { CollabswarmState } from "./reducers";
-import { Collabswarm, CollabswarmDocument, CRDTSyncMessage, CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
+import { Collabswarm, CollabswarmDocument, CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
 
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
 
-export function initializeAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+export function initializeAsync<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>(
   config: CollabswarmConfig = DEFAULT_CONFIG,
-  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any,
-): ThunkAction<Promise<Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>>, RootStateType, unknown, InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> | PeerConnectAction | PeerDisconnectAction> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = s => s as any,
+): ThunkAction<Promise<Collabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>, RootStateType, unknown, InitializeAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> | PeerConnectAction | PeerDisconnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
@@ -26,19 +26,19 @@ export function initializeAsync<DocType, ChangesType, ChangeFnType, MessageType 
 }
 
 export const INITIALIZE = 'COLLABSWARM_INITIALIZE';
-export interface InitializeAction<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> extends Action<typeof INITIALIZE> {
-  node: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>
+export interface InitializeAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> extends Action<typeof INITIALIZE> {
+  node: Collabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
 }
-export function initialize<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
-  node: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>
-): InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> {
+export function initialize<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>(
+  node: Collabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
+): InitializeAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
   return { type: INITIALIZE, node };
 }
 
 
-export function connectAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+export function connectAsync<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>(
   addresses: string[],
-  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = s => s as any
 ): ThunkAction<Promise<void>, RootStateType, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
@@ -62,10 +62,10 @@ export function connect(addresses: string[]): ConnectAction {
 }
 
 
-export function openDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+export function openDocumentAsync<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>(
   documentId: string,
-  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
-): ThunkAction<Promise<CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType> | null>, RootStateType, unknown, OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> | SyncDocumentAction<DocType>> {
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = s => s as any
+): ThunkAction<Promise<CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> | null>, RootStateType, unknown, OpenDocumentAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> | SyncDocumentAction<DocType>> {
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
     if (!node) {
@@ -94,18 +94,18 @@ export function openDocumentAsync<DocType, ChangesType, ChangeFnType, MessageTyp
 }
 
 export const OPEN_DOCUMENT = 'COLLABSWARM_OPEN_DOCUMENT';
-export interface OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> extends Action<typeof OPEN_DOCUMENT> {
+export interface OpenDocumentAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> extends Action<typeof OPEN_DOCUMENT> {
   documentId: string;
-  documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>;
+  documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>;
 }
-export function openDocument<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(documentId: string, documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>): OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> {
+export function openDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>(documentId: string, documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>): OpenDocumentAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
   return { type: OPEN_DOCUMENT, documentId, documentRef };
 }
 
 
-export function closeDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+export function closeDocumentAsync<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>(
   documentId: string,
-  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = s => s as any
 ): ThunkAction<Promise<void>, RootStateType, unknown, CloseDocumentAction | SyncDocumentAction<DocType>> {
   return async (dispatch, getState) => {
     const { documents } = selectCollabswarmState(getState());
@@ -139,11 +139,11 @@ export function syncDocument<DocType>(documentId: string, document: DocType): Sy
 }
 
 
-export function changeDocumentAsync<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType>>(
+export function changeDocumentAsync<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey, RootStateType = CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>>(
   documentId: string,
   changeFn: ChangeFnType,
   message?: string,
-  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = s => s as any
+  selectCollabswarmState: (rootState: RootStateType) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = s => s as any
 ): ThunkAction<Promise<DocType>, RootStateType, unknown, ChangeDocumentAction<DocType>> {
   return async (dispatch, getState) => {
     const { documents } = selectCollabswarmState(getState());
@@ -187,10 +187,10 @@ export function peerDisconnect(peerAddress: string): PeerDisconnectAction {
 }
 
 
-export type CollabswarmActions<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> =
-  InitializeAction<DocType, ChangesType, ChangeFnType, MessageType> |
+export type CollabswarmActions<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> =
+  InitializeAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> |
   ConnectAction |
-  OpenDocumentAction<DocType, ChangesType, ChangeFnType, MessageType> |
+  OpenDocumentAction<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> |
   CloseDocumentAction |
   SyncDocumentAction<DocType> |
   ChangeDocumentAction<DocType> |

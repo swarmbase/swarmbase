@@ -1,44 +1,58 @@
 import { CollabswarmActions, CONNECT, OPEN_DOCUMENT, SYNC_DOCUMENT, CHANGE_DOCUMENT, INITIALIZE, CLOSE_DOCUMENT, PEER_CONNECT, PEER_DISCONNECT } from "./actions";
-import { ChangesSerializer, Collabswarm, CollabswarmDocument, CRDTProvider, CRDTSyncMessage, MessageSerializer } from "@collabswarm/collabswarm";
+import { ACLProvider, AuthProvider, ChangesSerializer, Collabswarm, CollabswarmDocument, CRDTProvider, CRDTSyncMessage, KeychainProvider, MessageSerializer } from "@collabswarm/collabswarm";
 
 
 // user id should be the same as peer id.
 
-export interface CollabswarmDocumentState<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
-  documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>
+export interface CollabswarmDocumentState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
+  documentRef: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
   document: DocType;
 
   // TODO: Add peers list.
 }
 
-export interface CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>> {
-  node: Collabswarm<DocType, ChangesType, ChangeFnType, MessageType>;
-  documents: {[documentPath: string]: CollabswarmDocumentState<DocType, ChangesType, ChangeFnType, MessageType>};
+export interface CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
+  node: Collabswarm<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>;
+  documents: { [documentPath: string]: CollabswarmDocumentState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> };
   peers: string[];
 }
 
-export function initialState<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
-  provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+export function initialState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>(
+  provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<MessageType>,
-): CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> {
+  messageSerializer: MessageSerializer<ChangesType>,
+  authProvider: AuthProvider<
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >,
+  aclProvider: ACLProvider<ChangesType, PublicKey>,
+  keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+): CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
   return {
-    node: new Collabswarm(provider, changesSerializer, messageSerializer),
+    node: new Collabswarm(provider, changesSerializer, messageSerializer, authProvider, aclProvider, keychainProvider),
     documents: {},
     peers: []
   };
 }
 
 // export function automergeSwarmReducer<T>(state: AutomergeSwarmState<T> = initialState, action: AutomergeSwarmActions): AutomergeSwarmState<T> {
-export function collabswarmReducer<DocType, ChangesType, ChangeFnType, MessageType extends CRDTSyncMessage<ChangesType>>(
-  provider: CRDTProvider<DocType, ChangesType, ChangeFnType, MessageType>,
+export function collabswarmReducer<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>(
+  provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<MessageType>,
+  messageSerializer: MessageSerializer<ChangesType>,
+  authProvider: AuthProvider<
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >,
+  aclProvider: ACLProvider<ChangesType, PublicKey>,
+  keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
 ) {
   return (
-    state: CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> = initialState(provider, changesSerializer, messageSerializer),
-    action: CollabswarmActions<DocType, ChangesType, ChangeFnType, MessageType>,
-  ): CollabswarmState<DocType, ChangesType, ChangeFnType, MessageType> => {
+    state: CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = initialState(provider, changesSerializer, messageSerializer, authProvider, aclProvider, keychainProvider),
+    action: CollabswarmActions<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
+  ): CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> => {
     switch (action.type) {
       // Initialization
       case INITIALIZE: {

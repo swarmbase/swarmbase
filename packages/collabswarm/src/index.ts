@@ -14,8 +14,14 @@ import { AuthProvider } from "./auth-provider";
 import { SubtleCrypto } from "./auth-subtlecrypto";
 import { KeySerializer } from "./key-serializer";
 import { CryptoKeySerializer } from "./crypto-key-serializer";
+import { ACLProvider } from "./acl-provider";
+import { KeychainProvider } from "./keychain-provider";
+import { ACL } from "./acl";
+import { Keychain } from "./keychain";
 
 export {
+  ACL,
+  ACLProvider,
   AuthProvider,
   SubtleCrypto,
   Collabswarm,
@@ -29,6 +35,8 @@ export {
   CryptoKeySerializer,
   ChangesSerializer,
   KeySerializer,
+  Keychain,
+  KeychainProvider,
   MessageSerializer,
   JSONSerializer,
   DEFAULT_CONFIG,
