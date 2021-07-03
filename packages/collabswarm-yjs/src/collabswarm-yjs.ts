@@ -20,7 +20,6 @@ import {
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
 
-
 export class YjsProvider
   implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void> {
   newDocument(): Doc {
