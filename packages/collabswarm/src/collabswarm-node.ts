@@ -46,7 +46,7 @@ export class CollabswarmNode<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   private _swarm = new Collabswarm(
     this.provider,
     this.changesSerializer,
@@ -68,18 +68,21 @@ export class CollabswarmNode<
 
   private readonly _subscriptions = new Map<
     string,
-    CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
+    CollabswarmDocument<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >
   >();
   private readonly _seenCids = new Set<string>();
 
   private _docPublishHandler: MessageHandlerFn | null = null;
 
   constructor(
-    public readonly provider: CRDTProvider<
-      DocType,
-      ChangesType,
-      ChangeFnType
-    >,
+    public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
     public readonly messageSerializer: MessageSerializer<ChangesType>,
     public readonly authProvider: AuthProvider<
@@ -88,9 +91,12 @@ export class CollabswarmNode<
       DocumentKey
     >,
     private readonly aclProvider: ACLProvider<ChangesType, PublicKey>,
-    private readonly keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+    private readonly keychainProvider: KeychainProvider<
+      ChangesType,
+      DocumentKey
+    >,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
-  ) { }
+  ) {}
 
   // Start
   public async start() {

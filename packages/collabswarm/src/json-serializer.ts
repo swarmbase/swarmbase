@@ -1,7 +1,7 @@
-import { ChangesSerializer } from "./changes-serializer";
-import { CRDTChangeBlock } from "./crdt-change-block";
-import { CRDTSyncMessage } from "./crdt-sync-message";
-import { MessageSerializer } from "./message-serializer";
+import { ChangesSerializer } from './changes-serializer';
+import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTSyncMessage } from './crdt-sync-message';
+import { MessageSerializer } from './message-serializer';
 
 export class JSONSerializer<ChangesType>
   implements ChangesSerializer<ChangesType>, MessageSerializer<ChangesType> {
@@ -12,7 +12,7 @@ export class JSONSerializer<ChangesType>
     try {
       return JSON.parse(message);
     } catch (err) {
-      console.error("Failed to parse message:", message, err);
+      console.error('Failed to parse message:', message, err);
       throw err;
     }
   }

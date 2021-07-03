@@ -27,4 +27,4 @@ export type CRDTSyncMessage<ChangesType> = {
    * key update (due to the removal of an ACL reader).
    */
   keychainChanges?: ChangesType;
-}
+};

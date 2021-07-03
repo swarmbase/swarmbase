@@ -7,7 +7,7 @@ import {
   BinaryChange,
   getAllChanges,
   from,
-} from "automerge";
+} from 'automerge';
 
 import {
   ACL,
@@ -17,26 +17,21 @@ import {
   JSONSerializer,
   Keychain,
   KeychainProvider,
-} from "@collabswarm/collabswarm";
+} from '@collabswarm/collabswarm';
 
 export type AutomergeSwarmDocumentChangeHandler<
   T = any
-  > = CollabswarmDocumentChangeHandler<Doc<T>>;
+> = CollabswarmDocumentChangeHandler<Doc<T>>;
 
 export class AutomergeProvider<T = any>
-  implements
-  CRDTProvider<
-  Doc<T>,
-  BinaryChange[],
-  (doc: T) => void
-  > {
+  implements CRDTProvider<Doc<T>, BinaryChange[], (doc: T) => void> {
   newDocument(): Doc<T> {
     return init();
   }
   localChange(
     document: Doc<T>,
     message: string,
-    changeFn: (doc: T) => void
+    changeFn: (doc: T) => void,
   ): [Doc<T>, BinaryChange[]] {
     const newDocument = message
       ? change(document, message, changeFn)
@@ -54,7 +49,7 @@ export class AutomergeProvider<T = any>
 }
 
 export async function hashKey(publicKey: CryptoKey): Promise<string> {
-  const buf = await crypto.subtle.exportKey("raw", publicKey);
+  const buf = await crypto.subtle.exportKey('raw', publicKey);
   let binary = '';
   let bytes = new Uint8Array(buf);
   for (let i = 0; i < bytes.byteLength; i++) {
@@ -69,9 +64,9 @@ export async function unhashKey(publicKey: string): Promise<CryptoKey> {
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  return await crypto.subtle.importKey("raw", bytes, "AES-GCM", true, [
-    "encrypt",
-    "decrypt",
+  return await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, [
+    'encrypt',
+    'decrypt',
   ]);
 }
 
@@ -86,7 +81,7 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
 
   async add(publicKey: CryptoKey): Promise<BinaryChange[]> {
     const hash = await hashKey(publicKey);
-    const aclNew = change(this._acl, doc => {
+    const aclNew = change(this._acl, (doc) => {
       if (!doc.users) {
         doc.users = {};
       }
@@ -98,7 +93,7 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   }
   async remove(publicKey: CryptoKey): Promise<BinaryChange[]> {
     const hash = await hashKey(publicKey);
-    const aclNew = change(this._acl, doc => {
+    const aclNew = change(this._acl, (doc) => {
       if (!doc.users) {
         doc.users = {};
       } else {
@@ -120,11 +115,12 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   }
   async check(publicKey: CryptoKey): Promise<boolean> {
     const hash = await hashKey(publicKey);
-    return this._acl.users && (this._acl.users[hash] !== undefined);
+    return this._acl.users && this._acl.users[hash] !== undefined;
   }
 }
 
-export class AutomergeACLProvider implements ACLProvider<BinaryChange[], CryptoKey> {
+export class AutomergeACLProvider
+  implements ACLProvider<BinaryChange[], CryptoKey> {
   initialize(): AutomergeACL {
     return new AutomergeACL();
   }
@@ -144,7 +140,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   async add(key: CryptoKey): Promise<BinaryChange[]> {
     const hash = await hashKey(key);
     this._keyCache.set(hash, key);
-    const keychainNew = change(this._keychain, doc => {
+    const keychainNew = change(this._keychain, (doc) => {
       if (!doc.keys) {
         doc.keys = [];
       }
@@ -166,23 +162,26 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
       return [];
     }
 
-    return await Promise.all(this._keychain.keys.map(async hash => {
-      let key: CryptoKey | undefined = undefined;
-      if (this._keyCache.has(hash)) {
-        key = this._keyCache.get(hash);
-      }
-      if (!key) {
-        key = await unhashKey(hash);
-      }
-      return key;
-    }));
+    return await Promise.all(
+      this._keychain.keys.map(async (hash) => {
+        let key: CryptoKey | undefined = undefined;
+        if (this._keyCache.has(hash)) {
+          key = this._keyCache.get(hash);
+        }
+        if (!key) {
+          key = await unhashKey(hash);
+        }
+        return key;
+      }),
+    );
   }
 }
 
-export class AutomergeKeychainProvider implements KeychainProvider<BinaryChange[], CryptoKey> {
+export class AutomergeKeychainProvider
+  implements KeychainProvider<BinaryChange[], CryptoKey> {
   initialize(): AutomergeKeychain {
     return new AutomergeKeychain();
   }
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> { }
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}

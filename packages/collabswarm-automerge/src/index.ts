@@ -1,4 +1,12 @@
-import { AutomergeSwarmDocumentChangeHandler, AutomergeProvider, AutomergeJSONSerializer, AutomergeACLProvider, AutomergeKeychainProvider, AutomergeACL, AutomergeKeychain } from "./collabswarm-automerge";
+import {
+  AutomergeSwarmDocumentChangeHandler,
+  AutomergeProvider,
+  AutomergeJSONSerializer,
+  AutomergeACLProvider,
+  AutomergeKeychainProvider,
+  AutomergeACL,
+  AutomergeKeychain,
+} from './collabswarm-automerge';
 
 export {
   AutomergeACL,

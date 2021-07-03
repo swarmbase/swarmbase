@@ -12,11 +12,7 @@ import { CRDTSyncMessage } from './crdt-sync-message';
  * @tparam ChangeFnType A function for applying changes to a document
  * @tparam MessageType The sync message that gets sent when changes are made to a document
  */
-export interface CRDTProvider<
-  DocType,
-  ChangesType,
-  ChangeFnType,
-  > {
+export interface CRDTProvider<DocType, ChangesType, ChangeFnType> {
   /**
    * Create a new empty (contains the equivalent of `{}`) CRDT document.
    */

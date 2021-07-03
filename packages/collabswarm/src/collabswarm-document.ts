@@ -72,7 +72,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -156,7 +156,10 @@ export class CollabswarmDocument<
     /**
      * KeychainProvider handles read/write ACL operations.
      */
-    private readonly _keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+    private readonly _keychainProvider: KeychainProvider<
+      ChangesType,
+      DocumentKey
+    >,
 
     /**
      * ChangesSerializer is responsible for serializing/deserializing CRDTChangeBlocks.
@@ -167,7 +170,7 @@ export class CollabswarmDocument<
      * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
-  ) { }
+  ) {}
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   /**
@@ -214,18 +217,11 @@ export class CollabswarmDocument<
     // TODO: Close connection upon receipt of data.
     // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
     if (stream) {
-      console.log(
-        `Opening stream for ${documentLoadV1}`,
-        stream,
-      );
+      console.log(`Opening stream for ${documentLoadV1}`, stream);
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
         const message = this._messageSerializer.deserializeMessage(assembled);
-        console.log(
-          `received ${documentLoadV1} response:`,
-          assembled,
-          message,
-        );
+        console.log(`received ${documentLoadV1} response:`, assembled, message);
 
         if (message.documentId === this.documentPath) {
           await this.sync(message);
@@ -294,42 +290,39 @@ export class CollabswarmDocument<
     );
 
     // Make the messages on this specific to a document.
-    this.libp2p.handle(
-      documentLoadV1,
-      ({ stream }) => {
-        console.log(`received ${documentLoadV1} dial`);
-        // TODO: Verify that this user is a reader.
-        // this._aclProvider.check(...);
-        const loadMessage: CRDTSyncMessage<ChangesType> = {
-          documentId: this.documentPath,
-          changes: {},
-          // Since this is a load request, send document keys.
-          keychainChanges: this._keychain.history(),
-        };
-        for (const hash of this._hashes) {
-          loadMessage.changes[hash] = null;
-        }
+    this.libp2p.handle(documentLoadV1, ({ stream }) => {
+      console.log(`received ${documentLoadV1} dial`);
+      // TODO: Verify that this user is a reader.
+      // this._aclProvider.check(...);
+      const loadMessage: CRDTSyncMessage<ChangesType> = {
+        documentId: this.documentPath,
+        changes: {},
+        // Since this is a load request, send document keys.
+        keychainChanges: this._keychain.history(),
+      };
+      for (const hash of this._hashes) {
+        loadMessage.changes[hash] = null;
+      }
 
-        const assembled = this._messageSerializer.serializeMessage(loadMessage);
-        console.log(
-          `sending ${documentLoadV1} response:`,
-          assembled,
-          loadMessage,
-        );
+      const assembled = this._messageSerializer.serializeMessage(loadMessage);
+      console.log(
+        `sending ${documentLoadV1} response:`,
+        assembled,
+        loadMessage,
+      );
 
-        // Immediately send the connecting peer either the automerge.save'd document or a list of
-        // hashes with the changes that are cached locally.
-        pipe(
-          [this._messageSerializer.serializeMessage(loadMessage)],
-          stream,
-          async (source: any) => {
-            // Ignores responses.
-            for await (const _ of source) {
-            }
-          },
-        );
-      },
-    );
+      // Immediately send the connecting peer either the automerge.save'd document or a list of
+      // hashes with the changes that are cached locally.
+      pipe(
+        [this._messageSerializer.serializeMessage(loadMessage)],
+        stream,
+        async (source: any) => {
+          // Ignores responses.
+          for await (const _ of source) {
+          }
+        },
+      );
+    });
 
     // Load initial document from peers.
     return await this.load(); // new document would return false; then a key is needed
