@@ -1,8 +1,8 @@
 import {
   CollabswarmActions,
   CollabswarmState,
-} from "@collabswarm/collabswarm-redux";
-import { Doc, BinaryChange } from "automerge";
+} from '@collabswarm/collabswarm-redux';
+import { Doc, BinaryChange } from 'automerge';
 
 export type AutomergeSwarmState<T = any> = CollabswarmState<
   Doc<T>,
