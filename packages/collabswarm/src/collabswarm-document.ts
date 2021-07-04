@@ -15,6 +15,9 @@ import { AuthProvider } from './auth-provider';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { MessageSerializer } from './message-serializer';
+import { documentLoadV1 } from './wire-protocols';
+import { ACLProvider } from './acl-provider';
+import { KeychainProvider } from './keychain-provider';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -58,7 +61,6 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
  * @tparam DocType The CRDT document type
  * @tparam ChangesType A block of CRDT change(s)
  * @tparam ChangeFnType A function for applying changes to a document
- * @tparam MessageType The sync message that gets sent when changes are made to a document
  * @tparam PrivateKey The type of secret key used to identify a user (for writing)
  * @tparam PublicKey The type of key used to identify a user publicly
  * @tparam DocumentKey The type of key used to encrypt/decrypt document changes
@@ -67,7 +69,6 @@ export class CollabswarmDocument<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>,
   PrivateKey,
   PublicKey,
   DocumentKey
@@ -78,29 +79,31 @@ export class CollabswarmDocument<
     return this._document;
   }
 
-  private _hashes = new Set<string>();
+  // Document readers ACL.
+  private _readers = this._aclProvider.initialize();
 
-  /**
-   * A list of all document keys used to encrypt change messages
-   * used to decrypt change messages.
-   *
-   * @remark Since the document is created from change history, all keys are needed.
-   */
+  // Document writers ACL.
+  private _writers = this._aclProvider.initialize();
+
   // TODO: consider using List instead of set to allow for historical order key testing
   // TODO: consider changing string to CryptoKey
-  private _documentKeys = new Set<string>();
+  // List of document encryption keys. Lower index numbers mean more recent.
+  // Since the document is created from change history, all keys are needed.
+  private _keychain = this._keychainProvider.initialize();
 
-  /**
-   * The current document key to use to encrypt change messages.
-   *
-   */
-  private _currentDocumentKey: string | undefined; // TODO (eric) where is the initial value passed in?
+  // Set of already-merged change blocks.
+  private _hashes = new Set<string>();
 
+  // Handler for listening for sync messages on the document topic. Is `undefined` until
+  // the document is `.open()`-ed.
   private _pubsubHandler: MessageHandlerFn | undefined;
 
+  // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
     [id: string]: CollabswarmDocumentChangeHandler<DocType>;
   } = {};
+
+  // Handlers registered by users of `CollabswarmDocument` that fire on local changes.
   private _localHandlers: {
     [id: string]: CollabswarmDocumentChangeHandler<DocType>;
   } = {};
@@ -110,58 +113,64 @@ export class CollabswarmDocument<
   }
 
   constructor(
-    /** */
+    /**
+     * Collabswarm swarm that this document belongs to.
+     */
     public readonly swarm: Collabswarm<
       DocType,
       ChangesType,
       ChangeFnType,
-      MessageType,
       PrivateKey,
       PublicKey,
       DocumentKey
     >,
-    /** */
+
+    /**
+     * Path of the document.
+     */
     public readonly documentPath: string,
-    /** */
+
+    /**
+     * CRDTProvider handles reading/writing CRDT document data and metadata.
+     */
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
-      ChangeFnType,
-      MessageType
+      ChangeFnType
     >,
-    /** */
+
+    /**
+     * AuthProvider handles signing/verification and encryption/decryption.
+     */
     private readonly _authProvider: AuthProvider<
       PrivateKey,
       PublicKey,
       DocumentKey
     >,
-    /** */
+
+    /**
+     * ACLProvider handles read/write ACL operations.
+     */
+    private readonly _aclProvider: ACLProvider<ChangesType, PublicKey>,
+
+    /**
+     * KeychainProvider handles read/write ACL operations.
+     */
+    private readonly _keychainProvider: KeychainProvider<
+      ChangesType,
+      DocumentKey
+    >,
+
+    /**
+     * ChangesSerializer is responsible for serializing/deserializing CRDTChangeBlocks.
+     */
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
-    /** */
-    private readonly _messageSerializer: MessageSerializer<MessageType>,
+
+    /**
+     * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
+     */
+    private readonly _messageSerializer: MessageSerializer<ChangesType>,
   ) {}
-
-  /**
-   * Store new document key.
-   *
-   * @param documentKey: new key to use
-   *
-   * @remarks Safe to call multiple times since keys are stored in set without duplicates
-   */
-  public setDocumentKey(documentKey: DocumentKey): void {
-    this._currentDocumentKey = String(documentKey);
-    this._documentKeys.add(String(documentKey));
-  }
-
-  /**
-   * Get list of all document keys used to encrypt change messages
-   * used to decrypt change messages.
-   *
-   * @remark Since the document is created from change history, all keys are needed.
-   */
-  public getDocumentKeys(): Set<string> {
-    return this._documentKeys;
-  }
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   /**
@@ -171,6 +180,9 @@ export class CollabswarmDocument<
    * Load is used to fetch any new changes that a connecting node is missing.
    * @returns false if this is a new document (no peers exist).
    */
+  // Key exchange happens during:
+  // - Load messages.
+  // - ACL updates via /collabswarm/key-update/1.0.0 protocol
   public async load(): Promise<boolean> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
@@ -189,7 +201,7 @@ export class CollabswarmDocument<
           console.log('Selected peer addresses:', peer.addr.toString());
           const docLoadConnection = await this.libp2p.dialProtocol(
             peer.addr.toString(),
-            ['/collabswarm-automerge/doc-load/1.0.0'],
+            [documentLoadV1],
           );
           return docLoadConnection.stream;
         } catch (err) {
@@ -205,18 +217,11 @@ export class CollabswarmDocument<
     // TODO: Close connection upon receipt of data.
     // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
     if (stream) {
-      console.log(
-        'Opening stream for /collabswarm-automerge/doc-load/1.0.0',
-        stream,
-      );
+      console.log(`Opening stream for ${documentLoadV1}`, stream);
       await pipe(stream, async (source) => {
         const assembled = await readUint8Iterable(source);
         const message = this._messageSerializer.deserializeMessage(assembled);
-        console.log(
-          'received /collabswarm-automerge/doc-load/1.0.0 response:',
-          assembled,
-          message,
-        );
+        console.log(`received ${documentLoadV1} response:`, assembled, message);
 
         if (message.documentId === this.documentPath) {
           await this.sync(message);
@@ -245,7 +250,10 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+    };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }
@@ -282,35 +290,39 @@ export class CollabswarmDocument<
     );
 
     // Make the messages on this specific to a document.
-    this.libp2p.handle(
-      '/collabswarm-automerge/doc-load/1.0.0',
-      ({ stream }) => {
-        console.log('received /collabswarm-automerge/doc-load/1.0.0 dial');
-        const loadMessage = this._crdtProvider.newMessage(this.documentPath);
-        for (const hash of this._hashes) {
-          loadMessage.changes[hash] = null;
-        }
+    this.libp2p.handle(documentLoadV1, ({ stream }) => {
+      console.log(`received ${documentLoadV1} dial`);
+      // TODO: Verify that this user is a reader.
+      // this._aclProvider.check(...);
+      const loadMessage: CRDTSyncMessage<ChangesType> = {
+        documentId: this.documentPath,
+        changes: {},
+        // Since this is a load request, send document keys.
+        keychainChanges: this._keychain.history(),
+      };
+      for (const hash of this._hashes) {
+        loadMessage.changes[hash] = null;
+      }
 
-        const assembled = this._messageSerializer.serializeMessage(loadMessage);
-        console.log(
-          'sending /collabswarm-automerge/doc-load/1.0.0 response:',
-          assembled,
-          loadMessage,
-        );
+      const assembled = this._messageSerializer.serializeMessage(loadMessage);
+      console.log(
+        `sending ${documentLoadV1} response:`,
+        assembled,
+        loadMessage,
+      );
 
-        // Immediately send the connecting peer either the automerge.save'd document or a list of
-        // hashes with the changes that are cached locally.
-        pipe(
-          [this._messageSerializer.serializeMessage(loadMessage)],
-          stream,
-          async (source: any) => {
-            // Ignores responses.
-            for await (const _ of source) {
-            }
-          },
-        );
-      },
-    );
+      // Immediately send the connecting peer either the automerge.save'd document or a list of
+      // hashes with the changes that are cached locally.
+      pipe(
+        [this._messageSerializer.serializeMessage(loadMessage)],
+        stream,
+        async (source: any) => {
+          // Ignores responses.
+          for await (const _ of source) {
+          }
+        },
+      );
+    });
 
     // Load initial document from peers.
     return await this.load(); // new document would return false; then a key is needed
@@ -355,7 +367,20 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: MessageType) {
+  public async sync(message: CRDTSyncMessage<ChangesType>) {
+    // Apply new ACL changes.
+    if (message.readersChanges) {
+      this._readers.merge(message.readersChanges);
+    }
+    if (message.writersChanges) {
+      this._writers.merge(message.writersChanges);
+    }
+
+    // Update/replace list of document keys (if provided).
+    if (message.keychainChanges) {
+      this._keychain.merge(message.keychainChanges);
+    }
+
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(message.changes).filter(
       ([sentHash]) => sentHash && !this._hashes.has(sentHash),
@@ -466,7 +491,10 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._crdtProvider.newMessage(this.documentPath);
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+    };
     for (const oldHash of this._hashes) {
       updateMessage.changes[oldHash] = null;
     }

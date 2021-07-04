@@ -2,7 +2,7 @@
  * CRDTSyncMessage is the message sent over both IPFS pubsub topics and in response to
  * load document requests.
  */
-export interface CRDTSyncMessage<ChangesType> {
+export type CRDTSyncMessage<ChangesType> = {
   /**
    * ID of a collabswarm document.
    */
@@ -17,4 +17,14 @@ export interface CRDTSyncMessage<ChangesType> {
    * implementation.
    */
   changes: { [hash: string]: ChangesType | null };
-}
+
+  readersChanges?: ChangesType;
+
+  writersChanges?: ChangesType;
+
+  /**
+   * Optional document keys list. Only populated while loading and receiving a document
+   * key update (due to the removal of an ACL reader).
+   */
+  keychainChanges?: ChangesType;
+};
