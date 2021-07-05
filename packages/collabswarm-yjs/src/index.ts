@@ -1,10 +1,19 @@
-import { YjsSwarm, YjsSwarmDocument, YjsSwarmSyncMessage, YjsSwarmDocumentChangeHandler, YjsProvider, YjsJSONSerializer } from "./collabswarm-yjs";
+import {
+  YjsSwarmDocumentChangeHandler,
+  YjsProvider,
+  YjsJSONSerializer,
+  YjsACL,
+  YjsACLProvider,
+  YjsKeychain,
+  YjsKeychainProvider,
+} from './collabswarm-yjs';
 
 export {
-  YjsSwarm,
   YjsSwarmDocumentChangeHandler,
-  YjsSwarmDocument,
-  YjsSwarmSyncMessage,
   YjsProvider,
+  YjsACL,
+  YjsACLProvider,
+  YjsKeychain,
+  YjsKeychainProvider,
   YjsJSONSerializer,
 };
