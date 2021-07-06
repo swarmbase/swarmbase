@@ -419,6 +419,7 @@ export class CollabswarmDocument<
    * @param originFilter Determines what kinds of change events trigger the handler.
    *     'remote' indicates that the change was received from a remote peer.
    *     'local' indicates that the change was received from the local document.
+   *     'all' indicates that all changes should be handled.
    */
   public subscribe(
     id: string,
