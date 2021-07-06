@@ -72,7 +72,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-> {
+  > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -170,7 +170,31 @@ export class CollabswarmDocument<
      * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
-  ) {}
+  ) { }
+
+  // Helpers ------------------------------------------------------------------
+
+  private async _getFile(hash: string): Promise<ChangesType> {
+    const assembled = await readUint8Iterable(
+      this.swarm.ipfsNode.files.read(`/ipfs/${hash}`),
+    );
+
+    return this._changesSerializer.deserializeChanges(assembled);
+  }
+
+  private _fireRemoteUpdateHandlers(hashes: string[]) {
+    for (const handler of Object.values(this._remoteHandlers)) {
+      handler(this.document, hashes);
+    }
+  }
+  private _fireLocalUpdateHandlers(hashes: string[]) {
+    for (const handler of Object.values(this._localHandlers)) {
+      handler(this.document, hashes);
+    }
+  }
+
+
+  // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
   /**
@@ -236,36 +260,6 @@ export class CollabswarmDocument<
       console.log('Failed to open document on any nodes.', this);
       return false;
     }
-  }
-
-  public async pin() {
-    // Apply local change w/ automerge.
-    const changes = this._crdtProvider.getHistory(this.document);
-
-    // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(
-      this._changesSerializer.serializeChanges(changes),
-    );
-    const hash = newFileResult.cid.toString();
-    this._hashes.add(hash);
-
-    // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType> = {
-      documentId: this.documentPath,
-      changes: {},
-    };
-    for (const oldHash of this._hashes) {
-      updateMessage.changes[oldHash] = null;
-    }
-    updateMessage.changes[hash] = changes;
-
-    if (!this.swarm.config) {
-      throw 'Can not pin a file when the node has not been initialized'!;
-    }
-    this.swarm.ipfsNode.pubsub.publish(
-      this.swarm.config.pubsubDocumentPublishPath,
-      this._messageSerializer.serializeMessage(updateMessage),
-    );
   }
 
   /**
@@ -341,25 +335,6 @@ export class CollabswarmDocument<
     }
   }
 
-  public async getFile(hash: string): Promise<ChangesType> {
-    const assembled = await readUint8Iterable(
-      this.swarm.ipfsNode.files.read(`/ipfs/${hash}`),
-    );
-
-    return this._changesSerializer.deserializeChanges(assembled);
-  }
-
-  private _fireRemoteUpdateHandlers(hashes: string[]) {
-    for (const handler of Object.values(this._remoteHandlers)) {
-      handler(this.document, hashes);
-    }
-  }
-  private _fireLocalUpdateHandlers(hashes: string[]) {
-    for (const handler of Object.values(this._localHandlers)) {
-      handler(this.document, hashes);
-    }
-  }
-
   /**
    * Given a sync message containing a list of hashes:
    * - Fetch new changes that are only hashes (missing change itself) from IPFS (using the hash).
@@ -410,7 +385,7 @@ export class CollabswarmDocument<
     // Then apply missing hashes by fetching them via IPFS.
     for (const missingHash of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
-      this.getFile(missingHash)
+      this._getFile(missingHash)
         .then((missingChanges) => {
           if (missingChanges) {
             this._document = this._crdtProvider.remoteChange(
@@ -436,6 +411,16 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Subscribes a change handler to the document. Use this method to receive real-time
+   * updates to the document.
+   * 
+   * @param id A unique id for this handler. Used to unsubscribe this handler.
+   * @param handler A function that is called when a change is received.
+   * @param originFilter Determines what kinds of change events trigger the handler.
+   *     'remote' indicates that the change was received from a remote peer.
+   *     'local' indicates that the change was received from the local document.
+   */
   public subscribe(
     id: string,
     handler: CollabswarmDocumentChangeHandler<DocType>,
@@ -458,6 +443,11 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Unsubscribes a change handler from the document.
+   * 
+   * @param id The id of the handler to unsubscribe.
+   */
   public unsubscribe(id: string) {
     if (this._remoteHandlers[id]) {
       delete this._remoteHandlers[id];
@@ -506,5 +496,35 @@ export class CollabswarmDocument<
 
     // Fire change handlers.
     this._fireLocalUpdateHandlers([hash]);
+  }
+
+  public async pin() {
+    // Apply local change w/ automerge.
+    const changes = this._crdtProvider.getHistory(this.document);
+
+    // Store changes in ipfs.
+    const newFileResult = await this.swarm.ipfsNode.add(
+      this._changesSerializer.serializeChanges(changes),
+    );
+    const hash = newFileResult.cid.toString();
+    this._hashes.add(hash);
+
+    // Send new message.
+    const updateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+    };
+    for (const oldHash of this._hashes) {
+      updateMessage.changes[oldHash] = null;
+    }
+    updateMessage.changes[hash] = changes;
+
+    if (!this.swarm.config) {
+      throw 'Can not pin a file when the node has not been initialized'!;
+    }
+    this.swarm.ipfsNode.pubsub.publish(
+      this.swarm.config.pubsubDocumentPublishPath,
+      this._messageSerializer.serializeMessage(updateMessage),
+    );
   }
 }
