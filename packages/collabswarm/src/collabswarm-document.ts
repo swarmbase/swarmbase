@@ -72,7 +72,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -170,7 +170,7 @@ export class CollabswarmDocument<
      * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
-  ) { }
+  ) {}
 
   // Helpers ------------------------------------------------------------------
 
@@ -192,7 +192,6 @@ export class CollabswarmDocument<
       handler(this.document, hashes);
     }
   }
-
 
   // API Methods --------------------------------------------------------------
 
@@ -414,7 +413,7 @@ export class CollabswarmDocument<
   /**
    * Subscribes a change handler to the document. Use this method to receive real-time
    * updates to the document.
-   * 
+   *
    * @param id A unique id for this handler. Used to unsubscribe this handler.
    * @param handler A function that is called when a change is received.
    * @param originFilter Determines what kinds of change events trigger the handler.
@@ -445,7 +444,7 @@ export class CollabswarmDocument<
 
   /**
    * Unsubscribes a change handler from the document.
-   * 
+   *
    * @param id The id of the handler to unsubscribe.
    */
   public unsubscribe(id: string) {
