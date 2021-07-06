@@ -1,23 +1,41 @@
-import React from "react";
-import "./App.css";
-import {
-  AutomergeSwarm,
-  AutomergeSwarmSyncMessage,
-} from "@collabswarm/collabswarm-automerge";
+import React from 'react';
+import './App.css';
 import {
   connectAsync,
   openDocumentAsync,
   closeDocumentAsync,
   changeDocumentAsync,
   initializeAsync,
-} from "@collabswarm/collabswarm-redux";
-import { connect } from "react-redux";
-import { ThunkDispatch } from "redux-thunk";
-import { JsonEditor } from "jsoneditor-react";
-import * as jsondiffpatch from "jsondiffpatch";
-import { AutomergeSwarmActions, AutomergeSwarmState } from "./utils";
-import { CollabswarmConfig, DEFAULT_CONFIG } from "@collabswarm/collabswarm";
-import { Doc, BinaryChange } from "automerge";
+} from '@collabswarm/collabswarm-redux';
+import { connect } from 'react-redux';
+import { ThunkDispatch } from 'redux-thunk';
+import { JsonEditor } from 'jsoneditor-react';
+import * as jsondiffpatch from 'jsondiffpatch';
+import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
+import {
+  Collabswarm,
+  CollabswarmConfig,
+  CollabswarmDocument,
+  DEFAULT_CONFIG,
+} from '@collabswarm/collabswarm';
+import { Doc, BinaryChange } from 'automerge';
+
+export type AutomergeSwarm<T = any> = Collabswarm<
+  Doc<T>,
+  BinaryChange[],
+  (doc: T) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
+>;
+export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
+  Doc<T>,
+  BinaryChange[],
+  (doc: T) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
+>;
 
 const jdp = jsondiffpatch.create();
 
@@ -30,7 +48,7 @@ interface AppProps {
   onDocumentChange: (
     documentId: string,
     changeFn: (current: any) => void,
-    message?: string
+    message?: string,
   ) => any;
 }
 
@@ -48,8 +66,8 @@ class App extends React.Component<
     super(props);
 
     this.state = {
-      connectionAddress: "",
-      documentId: "",
+      connectionAddress: '',
+      documentId: '',
     };
   }
 
@@ -60,7 +78,7 @@ class App extends React.Component<
         : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
       if (process.env.REACT_APP_SIGNALING_SERVER) {
         config.ipfs.config.Addresses.Swarm.push(
-          process.env.REACT_APP_SIGNALING_SERVER
+          process.env.REACT_APP_SIGNALING_SERVER,
         );
       }
       this.props.onInitialize(config);
@@ -73,7 +91,7 @@ class App extends React.Component<
         return this.props.state.node ? this.props.state.node.ipfsInfo : null;
       } catch (ex) {
         // No-op.
-        console.warn("Failed to read ipfs info:", ex);
+        console.warn('Failed to read ipfs info:', ex);
       }
       return null;
     })();
@@ -145,7 +163,7 @@ class App extends React.Component<
                     if (delta) {
                       console.log(
                         `Applying json patch to '${documentPath}':`,
-                        delta
+                        delta,
                       );
                       this.props.onDocumentChange(documentPath, (doc) => {
                         try {
@@ -171,7 +189,7 @@ class App extends React.Component<
                 </button>
               </div>
             </React.Fragment>
-          )
+          ),
         )}
       </div>
     );
@@ -187,7 +205,7 @@ function mapDispatchToProps(
     AutomergeSwarmState<any>,
     unknown,
     AutomergeSwarmActions
-  >
+  >,
 ) {
   return {
     onInitialize: (config: CollabswarmConfig) =>
@@ -195,49 +213,59 @@ function mapDispatchToProps(
         initializeAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
-        >(config)
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
+        >(config),
       ),
     onConnect: (addresses: string[]) =>
       dispatch(
         connectAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
-        >(addresses)
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
+        >(addresses),
       ),
     onDocumentOpen: (documentId: string) =>
       dispatch(
         openDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
-        >(documentId)
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
+        >(documentId),
       ),
     onDocumentClose: (documentId: string) =>
       dispatch(
         closeDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
-        >(documentId)
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
+        >(documentId),
       ),
     onDocumentChange: (
       documentId: string,
       changeFn: (current: any) => void,
-      message?: string
+      message?: string,
     ) =>
       dispatch(
         changeDocumentAsync<
           Doc<any>,
           BinaryChange[],
-          (doc: Doc<any>) => void,
-          AutomergeSwarmSyncMessage
-        >(documentId, changeFn, message)
+          (doc: any) => void,
+          CryptoKey,
+          CryptoKey,
+          CryptoKey
+        >(documentId, changeFn, message),
       ),
   };
 }
