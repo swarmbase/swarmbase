@@ -6,12 +6,14 @@ import {
   CollabswarmConfig,
   DEFAULT_CONFIG,
 } from './collabswarm-config';
-import { CRDTSyncMessage } from './crdt-sync-message';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
 import { CRDTProvider } from './crdt-provider';
 import { MessageSerializer } from './message-serializer';
 import { ChangesSerializer } from './changes-serializer';
+import { AuthProvider } from './auth-provider';
+import { ACLProvider } from './acl-provider';
+import { KeychainProvider } from './keychain-provider';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -41,39 +43,58 @@ export class CollabswarmNode<
   DocType,
   ChangesType,
   ChangeFnType,
-  MessageType extends CRDTSyncMessage<ChangesType>
+  PrivateKey,
+  PublicKey,
+  DocumentKey
 > {
   private _swarm = new Collabswarm(
     this.provider,
     this.changesSerializer,
     this.messageSerializer,
+    this.authProvider,
+    this.aclProvider,
+    this.keychainProvider,
   );
   public get swarm(): Collabswarm<
     DocType,
     ChangesType,
     ChangeFnType,
-    MessageType
+    PrivateKey,
+    PublicKey,
+    DocumentKey
   > {
     return this._swarm;
   }
 
   private readonly _subscriptions = new Map<
     string,
-    CollabswarmDocument<DocType, ChangesType, ChangeFnType, MessageType>
+    CollabswarmDocument<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >
   >();
   private readonly _seenCids = new Set<string>();
 
   private _docPublishHandler: MessageHandlerFn | null = null;
 
   constructor(
-    public readonly provider: CRDTProvider<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      MessageType
-    >,
+    public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
-    public readonly messageSerializer: MessageSerializer<MessageType>,
+    public readonly messageSerializer: MessageSerializer<ChangesType>,
+    public readonly authProvider: AuthProvider<
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
+    private readonly aclProvider: ACLProvider<ChangesType, PublicKey>,
+    private readonly keychainProvider: KeychainProvider<
+      ChangesType,
+      DocumentKey
+    >,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
   ) {}
 
