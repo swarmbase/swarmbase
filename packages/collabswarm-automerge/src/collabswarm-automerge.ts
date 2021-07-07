@@ -21,7 +21,7 @@ import {
 
 export type AutomergeSwarmDocumentChangeHandler<
   T = any
-> = CollabswarmDocumentChangeHandler<Doc<T>>;
+  > = CollabswarmDocumentChangeHandler<Doc<T>>;
 
 export class AutomergeProvider<T = any>
   implements CRDTProvider<Doc<T>, BinaryChange[], (doc: T) => void> {
@@ -48,7 +48,7 @@ export class AutomergeProvider<T = any>
   }
 }
 
-export async function hashKey(publicKey: CryptoKey): Promise<string> {
+export async function serializeKey(publicKey: CryptoKey): Promise<string> {
   const buf = await crypto.subtle.exportKey('raw', publicKey);
   let binary = '';
   let bytes = new Uint8Array(buf);
@@ -58,7 +58,7 @@ export async function hashKey(publicKey: CryptoKey): Promise<string> {
   return window.btoa(binary);
 }
 
-export async function unhashKey(publicKey: string): Promise<CryptoKey> {
+export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
   let binaryString = window.atob(publicKey);
   let bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
@@ -80,7 +80,7 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   });
 
   async add(publicKey: CryptoKey): Promise<BinaryChange[]> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     const aclNew = change(this._acl, (doc) => {
       if (!doc.users) {
         doc.users = {};
@@ -92,7 +92,7 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
     return aclChanges;
   }
   async remove(publicKey: CryptoKey): Promise<BinaryChange[]> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     const aclNew = change(this._acl, (doc) => {
       if (!doc.users) {
         doc.users = {};
@@ -114,8 +114,12 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
     this._acl = doc;
   }
   async check(publicKey: CryptoKey): Promise<boolean> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     return this._acl.users && this._acl.users[hash] !== undefined;
+  }
+  async users(): Promise<CryptoKey[]> {
+    // TODO: Cache deserialized keys to make this faster.
+    return Promise.all(Object.keys(this._acl.users).map(deserializeKey));
   }
 }
 
@@ -138,7 +142,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   });
 
   async add(key: CryptoKey): Promise<BinaryChange[]> {
-    const hash = await hashKey(key);
+    const hash = await serializeKey(key);
     this._keyCache.set(hash, key);
     const keychainNew = change(this._keychain, (doc) => {
       if (!doc.keys) {
@@ -169,7 +173,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
           key = this._keyCache.get(hash);
         }
         if (!key) {
-          key = await unhashKey(hash);
+          key = await deserializeKey(hash);
         }
         return key;
       }),
@@ -184,4 +188,4 @@ export class AutomergeKeychainProvider
   }
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> { }

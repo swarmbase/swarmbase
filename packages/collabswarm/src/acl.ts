@@ -43,4 +43,9 @@ export interface ACL<ChangesType, PublicKey> {
    * @return true if the user is in the ACL.
    */
   check(publicKey: PublicKey): Promise<boolean>;
+
+  /**
+   * Returns the list of users in the ACL.
+   */
+  users(): Promise<PublicKey[]>;
 }

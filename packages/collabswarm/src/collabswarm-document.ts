@@ -14,11 +14,13 @@ import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
-import { MessageSerializer } from './message-serializer';
+import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentLoadV1 } from './wire-protocols';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
+import { LoadMessageSerializer } from './load-request-serializer';
+import { CRDTLoadRequest } from './crdt-load-request';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -73,7 +75,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-> {
+  > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -113,6 +115,10 @@ export class CollabswarmDocument<
     return (this.swarm.ipfsNode as any).libp2p;
   }
 
+  public get protocolLoadV1() {
+    return `${documentLoadV1}/${this.documentPath}`;
+  }
+
   constructor(
     /**
      * Collabswarm swarm that this document belongs to.
@@ -130,6 +136,11 @@ export class CollabswarmDocument<
      * Path of the document.
      */
     public readonly documentPath: string,
+
+    /**
+     * Private key identifying the current user.
+     */
+    private readonly _userKey: PrivateKey,
 
     /**
      * CRDTProvider handles reading/writing CRDT document data and metadata.
@@ -168,10 +179,15 @@ export class CollabswarmDocument<
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
 
     /**
-     * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
+     * SyncMessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
-    private readonly _messageSerializer: MessageSerializer<ChangesType>,
-  ) {}
+    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+
+    /**
+     * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
+     */
+    private readonly _loadMessageSerializer: LoadMessageSerializer,
+  ) { }
 
   // Helpers ------------------------------------------------------------------
 
@@ -357,7 +373,7 @@ export class CollabswarmDocument<
           console.log('Selected peer addresses:', peer.addr.toString());
           const docLoadConnection = await this.libp2p.dialProtocol(
             peer.addr.toString(),
-            [documentLoadV1],
+            [this.protocolLoadV1],
           );
           return docLoadConnection.stream;
         } catch (err) {
@@ -370,22 +386,42 @@ export class CollabswarmDocument<
       }
     })();
 
-    // TODO: Close connection upon receipt of data.
     // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
+    // TODO: Close connection upon receipt of data.
     if (stream) {
-      console.log(`Opening stream for ${documentLoadV1}`, stream);
-      await pipe(stream, async (source) => {
-        const assembled = await readUint8Iterable(source);
-        const message = this._messageSerializer.deserializeMessage(assembled);
-        console.log(`received ${documentLoadV1} response:`, assembled, message);
+      console.log(`Opening stream for ${this.protocolLoadV1}`, stream);
 
-        if (message.documentId === this.documentPath) {
-          await this.sync(message);
-        }
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      const signatureBytes = await this._authProvider.sign(
+        encoder.encode(this.documentPath),
+        this._userKey,
+      );
+      const signature = btoa(decoder.decode(signatureBytes));
 
-        // Return an ACK.
-        return [];
-      });
+      // Construct a load request.
+      const loadRequest: CRDTLoadRequest = {
+        documentId: this.documentPath,
+        signature,
+      };
+
+      // Immediately send a load request.
+      await pipe(
+        [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
+        stream,
+        async (source: any) => {
+          const assembled = await readUint8Iterable(source);
+          const message = this._syncMessageSerializer.deserializeSyncMessage(assembled);
+          console.log(`received ${this.protocolLoadV1} response:`, assembled, message);
+
+          if (message.documentId === this.documentPath) {
+            await this.sync(message);
+          }
+
+          // Return an ACK.
+          return [];
+        },
+      );
       return true;
     } else {
       // Assume new document
@@ -405,7 +441,7 @@ export class CollabswarmDocument<
   public async open(): Promise<boolean> {
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
-      const message = this._messageSerializer.deserializeMessage(
+      const message = this._syncMessageSerializer.deserializeSyncMessage(
         rawMessage.data,
       );
       this.sync(message);
@@ -415,36 +451,55 @@ export class CollabswarmDocument<
       this._pubsubHandler,
     );
 
-    // Make the messages on this specific to a document.
-    this.libp2p.handle(documentLoadV1, ({ stream }) => {
-      console.log(`received ${documentLoadV1} dial`);
-      // TODO: Verify that this user is a reader.
-      // this._aclProvider.check(...);
+    // For now we support multiple protocols, one per document path.
+    // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
+    //       right document. This should be more efficient.
+    this.libp2p.handle(this.protocolLoadV1, ({ stream }) => {
+      console.log(`received ${this.protocolLoadV1} dial`);
+      pipe(stream, async (source) => {
+        const assembledRequest = await readUint8Iterable(source);
+        const message = this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+        console.log(`received ${this.protocolLoadV1} response:`, assembledRequest, message);
 
-      // TODO: Wait for the dialer to send a load request _before_ sending a load response.
+        if (message.documentId === this.documentPath) {
+          console.warn(`Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`);
+          return [];
+        }
 
-      // Since this is a load request, send document keys.
-      const loadMessage = this._createSyncMessage();
-      loadMessage.keychainChanges = this._keychain.history();
-
-      const assembled = this._messageSerializer.serializeMessage(loadMessage);
-      console.log(
-        `sending ${documentLoadV1} response:`,
-        assembled,
-        loadMessage,
-      );
-
-      // Immediately send the connecting peer either the automerge.save'd document or a list of
-      // hashes with the changes that are cached locally.
-      pipe(
-        [this._messageSerializer.serializeMessage(loadMessage)],
-        stream,
-        async (source: any) => {
-          // Ignores responses.
-          for await (const _ of source) {
+        // Verify that this user is a reader.
+        let requestor: PublicKey | undefined;
+        for (const reader of await this._readers.users()) {
+          const encoder = new TextEncoder();
+          // TODO: Is this secure? Do we need a salt added to the signed payload?
+          if (await this._authProvider.verify(
+            encoder.encode(message.documentId),
+            reader,
+            encoder.encode(atob(message.signature)),
+          )) {
+            requestor = reader;
+            break;
           }
-        },
-      );
+        }
+
+        if (!requestor) {
+          console.warn(`Detected an unauthorized load request for ${message.documentId}`);
+          return [];
+        }
+
+        // Since this is a load request, send document keys.
+        const loadMessage = this._createSyncMessage();
+        loadMessage.keychainChanges = this._keychain.history();
+
+        const assembled = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+        console.log(
+          `sending ${this.protocolLoadV1} response:`,
+          assembled,
+          loadMessage,
+        );
+
+        // Return a sync message.
+        return [this._syncMessageSerializer.serializeSyncMessage(loadMessage)];
+      });
     });
 
     // Load initial document from peers.
@@ -582,7 +637,7 @@ export class CollabswarmDocument<
     updateMessage.changes[hash] = changes;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
-      this._messageSerializer.serializeMessage(updateMessage),
+      this._syncMessageSerializer.serializeSyncMessage(updateMessage),
     );
 
     // Fire change handlers.
@@ -609,7 +664,7 @@ export class CollabswarmDocument<
     }
     this.swarm.ipfsNode.pubsub.publish(
       this.swarm.config.pubsubDocumentPublishPath,
-      this._messageSerializer.serializeMessage(updateMessage),
+      this._syncMessageSerializer.serializeSyncMessage(updateMessage),
     );
   }
 }

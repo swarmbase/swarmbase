@@ -17,10 +17,11 @@ import { CRDTProvider } from './crdt-provider';
 import { CollabswarmConfig, DEFAULT_CONFIG } from './collabswarm-config';
 import { IDResult } from 'ipfs-core-types/src/root';
 import { CollabswarmDocument } from './collabswarm-document';
-import { MessageSerializer } from './message-serializer';
+import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
+import { LoadMessageSerializer } from './load-request-serializer';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -63,15 +64,17 @@ export class Collabswarm<
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
   DocumentKey
-> {
+  > {
   constructor(
+    private readonly _userKey: PrivateKey,
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
       ChangeFnType
     >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
-    private readonly _messageSerializer: MessageSerializer<ChangesType>,
+    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    private readonly _loadMessageSerializer: LoadMessageSerializer,
     private readonly _authProvider: AuthProvider<
       PrivateKey,
       PublicKey,
@@ -82,7 +85,7 @@ export class Collabswarm<
       ChangesType,
       DocumentKey
     >,
-  ) {}
+  ) { }
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
@@ -215,12 +218,14 @@ export class Collabswarm<
     return new CollabswarmDocument( // TODO (eric) pass in initial DocumentKey here?
       this,
       documentPath,
+      this._userKey,
       this._crdtProvider,
       this._authProvider,
       this._aclProvider,
       this._keychainProvider,
       this._changesSerializer,
-      this._messageSerializer,
+      this._syncMessageSerializer,
+      this._loadMessageSerializer,
     );
   }
 

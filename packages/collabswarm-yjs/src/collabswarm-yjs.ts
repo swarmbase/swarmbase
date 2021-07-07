@@ -50,7 +50,7 @@ export class YjsProvider
   }
 }
 
-export async function hashKey(publicKey: CryptoKey): Promise<string> {
+export async function serializeKey(publicKey: CryptoKey): Promise<string> {
   const buf = await crypto.subtle.exportKey('raw', publicKey);
   let binary = '';
   let bytes = new Uint8Array(buf);
@@ -60,7 +60,7 @@ export async function hashKey(publicKey: CryptoKey): Promise<string> {
   return window.btoa(binary);
 }
 
-export async function unhashKey(publicKey: string): Promise<CryptoKey> {
+export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
   let binaryString = window.atob(publicKey);
   let bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
@@ -82,14 +82,14 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   private readonly _acl = new Doc();
 
   async add(publicKey: CryptoKey): Promise<Uint8Array> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     this._acl.getMap('users').set(hash, true);
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
     const aclChanges = encodeStateAsUpdateV2(this._acl);
     return aclChanges;
   }
   async remove(publicKey: CryptoKey): Promise<Uint8Array> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     if (this._acl.getMap('users').has(hash)) {
       this._acl.getMap('users').delete(hash);
     }
@@ -104,8 +104,12 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
     applyUpdateV2(this._acl, change);
   }
   async check(publicKey: CryptoKey): Promise<boolean> {
-    const hash = await hashKey(publicKey);
+    const hash = await serializeKey(publicKey);
     return this._acl.getMap('users').has(hash);
+  }
+  users(): Promise<CryptoKey[]> {
+    // TODO: Cache deserialized keys to make this faster.
+    return Promise.all([...this._acl.getMap('users').keys()].map(deserializeKey));
   }
 }
 
@@ -115,7 +119,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   private readonly _keychain = new Doc();
 
   async add(key: CryptoKey): Promise<Uint8Array> {
-    const hash = await hashKey(key);
+    const hash = await serializeKey(key);
     this._keyCache.set(hash, key);
     this._keychain.getArray<string>('keys').push([hash]);
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
@@ -140,7 +144,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
             key = this._keyCache.get(hash);
           }
           if (!key) {
-            key = await unhashKey(hash);
+            key = await deserializeKey(hash);
           }
           return key;
         })(),
@@ -158,4 +162,4 @@ export class YjsKeychainProvider
   }
 }
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array> { }
