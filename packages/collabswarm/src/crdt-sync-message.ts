@@ -1,7 +1,7 @@
 /**
  * CRDTSyncMessage is the message sent over both IPFS pubsub topics and in response to
  * load document requests.
- * 
+ *
  * @tparam ChangesType Type of a block of change(s).
  */
 export type CRDTSyncMessage<ChangesType> = {
@@ -35,7 +35,7 @@ export type CRDTSyncMessage<ChangesType> = {
   /**
    * Optional document keys list. Only populated while loading and receiving a document
    * key update (due to the removal of an ACL reader).
-   * 
+   *
    * NOTE: Keychain changes should only ever be sent over encrypted libp2p streams (not
    * IPFS pubsub).
    */

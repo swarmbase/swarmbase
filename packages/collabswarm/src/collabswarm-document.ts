@@ -73,7 +73,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -171,7 +171,7 @@ export class CollabswarmDocument<
      * MessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
     private readonly _messageSerializer: MessageSerializer<ChangesType>,
-  ) { }
+  ) {}
 
   // Helpers ------------------------------------------------------------------
 
@@ -213,7 +213,9 @@ export class CollabswarmDocument<
     return message;
   }
 
-  private async _syncDocumentChanges(changes: { [hash: string]: ChangesType | null }) {
+  private async _syncDocumentChanges(changes: {
+    [hash: string]: ChangesType | null;
+  }) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(changes).filter(
       ([sentHash]) => sentHash && !this._hashes.has(sentHash),
@@ -269,7 +271,11 @@ export class CollabswarmDocument<
     }
   }
 
-  private async _syncACLChanges(changes: { [hash: string]: ChangesType | null }, acl: ACL<ChangesType, PublicKey>, hashes: Set<string>) {
+  private async _syncACLChanges(
+    changes: { [hash: string]: ChangesType | null },
+    acl: ACL<ChangesType, PublicKey>,
+    hashes: Set<string>,
+  ) {
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = Object.entries(changes).filter(
       ([sentHash]) => sentHash && !hashes.has(sentHash),
@@ -470,10 +476,22 @@ export class CollabswarmDocument<
 
     // Apply new ACL changes.
     if (message.readersChanges) {
-      syncTasks.push(this._syncACLChanges(message.readersChanges, this._readers, this._readersHashes));
+      syncTasks.push(
+        this._syncACLChanges(
+          message.readersChanges,
+          this._readers,
+          this._readersHashes,
+        ),
+      );
     }
     if (message.writersChanges) {
-      syncTasks.push(this._syncACLChanges(message.writersChanges, this._writers, this._writersHashes));
+      syncTasks.push(
+        this._syncACLChanges(
+          message.writersChanges,
+          this._writers,
+          this._writersHashes,
+        ),
+      );
     }
 
     // Update/replace list of document keys (if provided).
