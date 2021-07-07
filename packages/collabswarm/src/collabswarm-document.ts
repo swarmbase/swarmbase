@@ -499,7 +499,7 @@ export class CollabswarmDocument<
   }
 
   public async pin() {
-    // Apply local change w/ automerge.
+    // Apply local change w/ CRDT provider.
     const changes = this._crdtProvider.getHistory(this.document);
 
     // Store changes in ipfs.
