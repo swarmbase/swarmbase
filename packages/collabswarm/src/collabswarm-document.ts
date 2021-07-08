@@ -71,7 +71,7 @@ export class CollabswarmDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey,
+  DocumentKey
 > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
