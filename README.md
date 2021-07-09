@@ -1,18 +1,18 @@
 # SwarmDB
 
-(name change in process; for future reference please use: https://swarmdb.dev/ which we will keep up to date even if the repo name changes)
+(name change in process; for future reference please use: https://swarmdb.dev which we will keep up to date even if the repo name changes)
 
 ## What is SwarmDB?
 
-An encrypted, eventually consistent object real-time application database with dynamic access control using the distributed web as a storage layer. Then intent is to make it easy to start with a secure, private, local database, and scale as needed in a performant manner without the requirement of adding or moving to a centrally managed database.
+An open-source, encrypted, eventually consistent object real-time application database with dynamic access control using the distributed web as a storage layer. Then intent is to make it easy to start with a secure, private, local database, and scale as needed in a performant manner without the requirement of adding or moving to a centrally managed database.
 
 Benefits of this approach:
 
 - Easy to start with a small number of locally-connected nodes
 - Can handle offline clients or limited internet connectivity
-- Reduced reliance on central web providers, and therefore also costs
+- Reduced reliance on central web providers, with expected reduced costs
 
-Several recent technologies make this possible now, including JSON CRDTs, libp2p, ipfs, and efficient distributed pub-sub algorithms. They are early and documentation and interfaces may change.
+Several recent technologies make this possible now, including JSON CRDTs, the [libp2p networking stack](https://libp2p.io/), the [Interplanetary File System](https://ipfs.io/), and efficient distributed pub-sub algorithms. They are early and documentation and interfaces may change.
 
 ## Latest Release
 
@@ -64,6 +64,8 @@ protocols/services.
 # Reference
 
 ## CRDTs
+
+Conflict-Free Replicated Data Types (CRDTs) obtain eventual consistency in a distributed system in non-adversarial scenarios. Operation-based CRDTs apply commutative operations locally to the state of each node. No consensus mechanism is required, which are usually complex and expensive.
 
 CRDTs provide a simple way to allow multiple clients to make changes simultaneously without risking a "split-brain" state
 where clients do not share the same state eventually. In short, CRDTs provide collabswarm documents with the property of
