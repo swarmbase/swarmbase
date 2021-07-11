@@ -4,10 +4,11 @@
 
 ## What is SwarmDB?
 
-An open-source, encrypted, eventually consistent object real-time application database with dynamic access control using the distributed web as a storage layer. Then intent is to make it easy to start with a secure, private, local database, and scale as needed in a performant manner without the requirement of adding or moving to a centrally managed database.
+An open-source, distributed web key-value database with dynamic access control and encryption, and strong eventual consistency. Then intent is to make it easy to build collaborative/offline first applications.
 
 Benefits of this approach:
 
+- Build collaborative/offline first applications
 - Easy to start with a small number of locally-connected nodes
 - Can handle offline clients or limited internet connectivity
 - Reduced reliance on central web providers, with expected reduced costs
