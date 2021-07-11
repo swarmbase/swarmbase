@@ -18,6 +18,7 @@ import { MessageSerializer } from './message-serializer';
 import { documentLoadV1 } from './wire-protocols';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
+import { ACL } from './acl';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -85,14 +86,14 @@ export class CollabswarmDocument<
   // Document writers ACL.
   private _writers = this._aclProvider.initialize();
 
-  // TODO: consider using List instead of set to allow for historical order key testing
-  // TODO: consider changing string to CryptoKey
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain = this._keychainProvider.initialize();
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
+  private _readersHashes = new Set<string>();
+  private _writersHashes = new Set<string>();
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
@@ -193,6 +194,138 @@ export class CollabswarmDocument<
     }
   }
 
+  private _createSyncMessage(): CRDTSyncMessage<ChangesType> {
+    const message: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      changes: {},
+      readersChanges: {},
+      writersChanges: {},
+    };
+    for (const oldHash of this._hashes) {
+      message.changes[oldHash] = null;
+    }
+    for (const oldHash of this._readersHashes) {
+      message.readersChanges[oldHash] = null;
+    }
+    for (const oldHash of this._writersHashes) {
+      message.writersChanges[oldHash] = null;
+    }
+    return message;
+  }
+
+  private async _syncDocumentChanges(changes: {
+    [hash: string]: ChangesType | null;
+  }) {
+    // Only process hashes that we haven't seen yet.
+    const newChangeEntries = Object.entries(changes).filter(
+      ([sentHash]) => sentHash && !this._hashes.has(sentHash),
+    );
+
+    // First apply changes that were sent directly.
+    let newDocument = this.document;
+    const newDocumentHashes: string[] = [];
+    const missingDocumentHashes: string[] = [];
+    for (const [sentHash, sentChanges] of newChangeEntries) {
+      if (sentChanges) {
+        // Apply the changes that were sent directly.
+        newDocument = this._crdtProvider.remoteChange(newDocument, sentChanges);
+        newDocumentHashes.push(sentHash);
+      } else {
+        missingDocumentHashes.push(sentHash);
+      }
+    }
+    if (newDocumentHashes.length) {
+      this._document = newDocument;
+      for (const newHash of newDocumentHashes) {
+        this._hashes.add(newHash);
+      }
+      this._fireRemoteUpdateHandlers(newDocumentHashes);
+    }
+
+    // Then apply missing hashes by fetching them via IPFS.
+    for (const missingHash of missingDocumentHashes) {
+      // Fetch missing hashes using IPFS.
+      this._getFile(missingHash)
+        .then((missingChanges) => {
+          if (missingChanges) {
+            this._document = this._crdtProvider.remoteChange(
+              this._document,
+              missingChanges,
+            );
+            this._hashes.add(missingHash);
+            this._fireRemoteUpdateHandlers([missingHash]);
+          } else {
+            console.error(
+              `'/ipfs/${missingHash}' returned nothing`,
+              missingChanges,
+            );
+          }
+        })
+        .catch((err) => {
+          console.error(
+            'Failed to fetch missing change from ipfs:',
+            missingHash,
+            err,
+          );
+        });
+    }
+  }
+
+  private async _syncACLChanges(
+    changes: { [hash: string]: ChangesType | null },
+    acl: ACL<ChangesType, PublicKey>,
+    hashes: Set<string>,
+  ) {
+    // Only process hashes that we haven't seen yet.
+    const newChangeEntries = Object.entries(changes).filter(
+      ([sentHash]) => sentHash && !hashes.has(sentHash),
+    );
+
+    // First apply changes that were sent directly.
+    const newDocumentHashes: string[] = [];
+    const missingDocumentHashes: string[] = [];
+    for (const [sentHash, sentChanges] of newChangeEntries) {
+      if (sentChanges) {
+        // Apply the changes that were sent directly.
+        acl.merge(sentChanges);
+        newDocumentHashes.push(sentHash);
+      } else {
+        missingDocumentHashes.push(sentHash);
+      }
+    }
+    if (newDocumentHashes.length) {
+      for (const newHash of newDocumentHashes) {
+        hashes.add(newHash);
+      }
+      this._fireRemoteUpdateHandlers(newDocumentHashes);
+    }
+
+    // Then apply missing hashes by fetching them via IPFS.
+    for (const missingHash of missingDocumentHashes) {
+      // Fetch missing hashes using IPFS.
+      this._getFile(missingHash)
+        .then((missingChanges) => {
+          if (missingChanges) {
+            acl.merge(missingChanges);
+            hashes.add(missingHash);
+            this._fireRemoteUpdateHandlers([missingHash]);
+          } else {
+            console.error(
+              `'/ipfs/${missingHash}' returned nothing`,
+              missingChanges,
+            );
+          }
+        })
+        .catch((err) => {
+          console.error(
+            'Failed to fetch missing change from ipfs:',
+            missingHash,
+            err,
+          );
+        });
+    }
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -287,15 +420,12 @@ export class CollabswarmDocument<
       console.log(`received ${documentLoadV1} dial`);
       // TODO: Verify that this user is a reader.
       // this._aclProvider.check(...);
-      const loadMessage: CRDTSyncMessage<ChangesType> = {
-        documentId: this.documentPath,
-        changes: {},
-        // Since this is a load request, send document keys.
-        keychainChanges: this._keychain.history(),
-      };
-      for (const hash of this._hashes) {
-        loadMessage.changes[hash] = null;
-      }
+
+      // TODO: Wait for the dialer to send a load request _before_ sending a load response.
+
+      // Since this is a load request, send document keys.
+      const loadMessage = this._createSyncMessage();
+      loadMessage.keychainChanges = this._keychain.history();
 
       const assembled = this._messageSerializer.serializeMessage(loadMessage);
       console.log(
@@ -342,12 +472,26 @@ export class CollabswarmDocument<
    * @param message A sync message to apply.
    */
   public async sync(message: CRDTSyncMessage<ChangesType>) {
+    const syncTasks: Promise<void>[] = [];
+
     // Apply new ACL changes.
     if (message.readersChanges) {
-      this._readers.merge(message.readersChanges);
+      syncTasks.push(
+        this._syncACLChanges(
+          message.readersChanges,
+          this._readers,
+          this._readersHashes,
+        ),
+      );
     }
     if (message.writersChanges) {
-      this._writers.merge(message.writersChanges);
+      syncTasks.push(
+        this._syncACLChanges(
+          message.writersChanges,
+          this._writers,
+          this._writersHashes,
+        ),
+      );
     }
 
     // Update/replace list of document keys (if provided).
@@ -355,59 +499,12 @@ export class CollabswarmDocument<
       this._keychain.merge(message.keychainChanges);
     }
 
-    // Only process hashes that we haven't seen yet.
-    const newChangeEntries = Object.entries(message.changes).filter(
-      ([sentHash]) => sentHash && !this._hashes.has(sentHash),
-    );
-
-    // First apply changes that were sent directly.
-    let newDocument = this.document;
-    const newDocumentHashes: string[] = [];
-    const missingDocumentHashes: string[] = [];
-    for (const [sentHash, sentChanges] of newChangeEntries) {
-      if (sentChanges) {
-        // Apply the changes that were sent directly.
-        newDocument = this._crdtProvider.remoteChange(newDocument, sentChanges);
-        newDocumentHashes.push(sentHash);
-      } else {
-        missingDocumentHashes.push(sentHash);
-      }
-    }
-    if (newDocumentHashes.length) {
-      this._document = newDocument;
-      for (const newHash of newDocumentHashes) {
-        this._hashes.add(newHash);
-      }
-      this._fireRemoteUpdateHandlers(newDocumentHashes);
+    // Sync document changes.
+    if (message.changes) {
+      syncTasks.push(this._syncDocumentChanges(message.changes));
     }
 
-    // Then apply missing hashes by fetching them via IPFS.
-    for (const missingHash of missingDocumentHashes) {
-      // Fetch missing hashes using IPFS.
-      this._getFile(missingHash)
-        .then((missingChanges) => {
-          if (missingChanges) {
-            this._document = this._crdtProvider.remoteChange(
-              this._document,
-              missingChanges,
-            );
-            this._hashes.add(missingHash);
-            this._fireRemoteUpdateHandlers([missingHash]);
-          } else {
-            console.error(
-              `'/ipfs/${missingHash}' returned nothing`,
-              missingChanges,
-            );
-          }
-        })
-        .catch((err) => {
-          console.error(
-            'Failed to fetch missing change from ipfs:',
-            missingHash,
-            err,
-          );
-        });
-    }
+    await Promise.all(syncTasks);
   }
 
   /**
@@ -481,13 +578,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType> = {
-      documentId: this.documentPath,
-      changes: {},
-    };
-    for (const oldHash of this._hashes) {
-      updateMessage.changes[oldHash] = null;
-    }
+    const updateMessage = this._createSyncMessage();
     updateMessage.changes[hash] = changes;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
@@ -510,13 +601,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage: CRDTSyncMessage<ChangesType> = {
-      documentId: this.documentPath,
-      changes: {},
-    };
-    for (const oldHash of this._hashes) {
-      updateMessage.changes[oldHash] = null;
-    }
+    const updateMessage = this._createSyncMessage();
     updateMessage.changes[hash] = changes;
 
     if (!this.swarm.config) {
