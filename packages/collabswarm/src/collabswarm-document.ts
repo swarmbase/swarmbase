@@ -75,7 +75,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -187,7 +187,7 @@ export class CollabswarmDocument<
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
-  ) { }
+  ) {}
 
   // Helpers ------------------------------------------------------------------
 
@@ -411,8 +411,14 @@ export class CollabswarmDocument<
         stream,
         async (source: any) => {
           const assembled = await readUint8Iterable(source);
-          const message = this._syncMessageSerializer.deserializeSyncMessage(assembled);
-          console.log(`received ${this.protocolLoadV1} response:`, assembled, message);
+          const message = this._syncMessageSerializer.deserializeSyncMessage(
+            assembled,
+          );
+          console.log(
+            `received ${this.protocolLoadV1} response:`,
+            assembled,
+            message,
+          );
 
           if (message.documentId === this.documentPath) {
             await this.sync(message);
@@ -458,11 +464,19 @@ export class CollabswarmDocument<
       console.log(`received ${this.protocolLoadV1} dial`);
       pipe(stream, async (source) => {
         const assembledRequest = await readUint8Iterable(source);
-        const message = this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
-        console.log(`received ${this.protocolLoadV1} response:`, assembledRequest, message);
+        const message = this._loadMessageSerializer.deserializeLoadRequest(
+          assembledRequest,
+        );
+        console.log(
+          `received ${this.protocolLoadV1} response:`,
+          assembledRequest,
+          message,
+        );
 
         if (message.documentId === this.documentPath) {
-          console.warn(`Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`);
+          console.warn(
+            `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+          );
           return [];
         }
 
@@ -471,18 +485,22 @@ export class CollabswarmDocument<
         for (const reader of await this._readers.users()) {
           const encoder = new TextEncoder();
           // TODO: Is this secure? Do we need a salt added to the signed payload?
-          if (await this._authProvider.verify(
-            encoder.encode(message.documentId),
-            reader,
-            encoder.encode(atob(message.signature)),
-          )) {
+          if (
+            await this._authProvider.verify(
+              encoder.encode(message.documentId),
+              reader,
+              encoder.encode(atob(message.signature)),
+            )
+          ) {
             requestor = reader;
             break;
           }
         }
 
         if (!requestor) {
-          console.warn(`Detected an unauthorized load request for ${message.documentId}`);
+          console.warn(
+            `Detected an unauthorized load request for ${message.documentId}`,
+          );
           return [];
         }
 
@@ -490,7 +508,9 @@ export class CollabswarmDocument<
         const loadMessage = this._createSyncMessage();
         loadMessage.keychainChanges = this._keychain.history();
 
-        const assembled = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+        const assembled = this._syncMessageSerializer.serializeSyncMessage(
+          loadMessage,
+        );
         console.log(
           `sending ${this.protocolLoadV1} response:`,
           assembled,

@@ -21,7 +21,7 @@ import {
 
 export type AutomergeSwarmDocumentChangeHandler<
   T = any
-  > = CollabswarmDocumentChangeHandler<Doc<T>>;
+> = CollabswarmDocumentChangeHandler<Doc<T>>;
 
 export class AutomergeProvider<T = any>
   implements CRDTProvider<Doc<T>, BinaryChange[], (doc: T) => void> {
@@ -188,4 +188,4 @@ export class AutomergeKeychainProvider
   }
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> { }
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}

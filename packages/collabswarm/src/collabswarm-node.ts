@@ -47,7 +47,7 @@ export class CollabswarmNode<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   private _swarm = new Collabswarm(
     this.nodeKey,
     this.provider,
@@ -101,7 +101,7 @@ export class CollabswarmNode<
       DocumentKey
     >,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
-  ) { }
+  ) {}
 
   // Start
   public async start() {

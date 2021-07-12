@@ -109,7 +109,9 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   }
   users(): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
-    return Promise.all([...this._acl.getMap('users').keys()].map(deserializeKey));
+    return Promise.all(
+      [...this._acl.getMap('users').keys()].map(deserializeKey),
+    );
   }
 }
 
@@ -162,4 +164,4 @@ export class YjsKeychainProvider
   }
 }
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> { }
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}

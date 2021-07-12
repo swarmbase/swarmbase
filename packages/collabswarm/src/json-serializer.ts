@@ -6,7 +6,10 @@ import { LoadMessageSerializer } from './load-request-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 
 export class JSONSerializer<ChangesType>
-  implements ChangesSerializer<ChangesType>, SyncMessageSerializer<ChangesType>, LoadMessageSerializer {
+  implements
+    ChangesSerializer<ChangesType>,
+    SyncMessageSerializer<ChangesType>,
+    LoadMessageSerializer {
   serialize(message: any): string {
     return JSON.stringify(message);
   }
