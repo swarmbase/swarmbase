@@ -8,6 +8,10 @@ WORKDIR /app
 # Setup package dependencies
 COPY package.json /app/package.json
 COPY yarn.lock /app/yarn.lock
+COPY .yarnrc.yml /app/.yarnrc.yml
+RUN mkdir -p /app/.yarn
+COPY .yarn/plugins /app/.yarn/plugins
+COPY .yarn/releases /app/.yarn/releases
 RUN mkdir -p /app/packages/collabswarm
 RUN mkdir -p /app/packages/collabswarm-automerge
 RUN mkdir -p /app/packages/collabswarm-yjs
@@ -36,13 +40,13 @@ RUN yarn workspace @collabswarm/collabswarm run tsc
 
 COPY packages/collabswarm-automerge/. /app/packages/collabswarm-automerge/
 RUN yarn workspace @collabswarm/collabswarm-automerge run tsc
-RUN yarn workspace @collabswarm/collabswarm-automerge link
-RUN chmod +x /usr/local/bin/collabswarm-automerge-d
+# RUN yarn workspace @collabswarm/collabswarm-automerge link -A
+# RUN chmod +x /usr/local/bin/collabswarm-automerge-d
 
 COPY packages/collabswarm-yjs/. /app/packages/collabswarm-yjs/
 RUN yarn workspace @collabswarm/collabswarm-yjs run tsc
-RUN yarn workspace @collabswarm/collabswarm-yjs link
-RUN chmod +x /usr/local/bin/collabswarm-yjs-d
+# RUN yarn workspace @collabswarm/collabswarm-yjs link -A
+# RUN chmod +x /usr/local/bin/collabswarm-yjs-d
 
 COPY packages/collabswarm-react/. /app/packages/collabswarm-react/
 RUN yarn workspace @collabswarm/collabswarm-react run tsc
@@ -58,4 +62,5 @@ RUN chmod +x /app/wait-for-file.sh
 RUN dos2unix /app/wait-for-file.sh
 
 WORKDIR /app
-CMD collabswarm-automerge-d
+# CMD collabswarm-automerge-d
+CMD yarn workspace @collabswarm/collabswarm-automerge run collabswarm-automerge-d

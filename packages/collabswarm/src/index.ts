@@ -12,8 +12,6 @@ import { ChangesSerializer } from './changes-serializer';
 import { JSONSerializer } from './json-serializer';
 import { AuthProvider } from './auth-provider';
 import { SubtleCrypto } from './auth-subtlecrypto';
-import { KeySerializer } from './key-serializer';
-import { CryptoKeySerializer } from './crypto-key-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
@@ -32,9 +30,7 @@ export {
   CollabswarmNode,
   CRDTSyncMessage,
   CRDTProvider,
-  CryptoKeySerializer,
   ChangesSerializer,
-  KeySerializer,
   Keychain,
   KeychainProvider,
   MessageSerializer,
