@@ -9,11 +9,12 @@ import {
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
 import { CRDTProvider } from './crdt-provider';
-import { MessageSerializer } from './message-serializer';
+import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { AuthProvider } from './auth-provider';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
+import { LoadMessageSerializer } from './load-request-serializer';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -48,9 +49,11 @@ export class CollabswarmNode<
   DocumentKey
 > {
   private _swarm = new Collabswarm(
+    this.nodeKey,
     this.provider,
     this.changesSerializer,
-    this.messageSerializer,
+    this.syncMessageSerializer,
+    this.loadMessageSerializer,
     this.authProvider,
     this.aclProvider,
     this.keychainProvider,
@@ -82,9 +85,11 @@ export class CollabswarmNode<
   private _docPublishHandler: MessageHandlerFn | null = null;
 
   constructor(
+    private readonly nodeKey: PrivateKey,
     public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
-    public readonly messageSerializer: MessageSerializer<ChangesType>,
+    public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    public readonly loadMessageSerializer: LoadMessageSerializer,
     public readonly authProvider: AuthProvider<
       PrivateKey,
       PublicKey,
@@ -139,7 +144,7 @@ export class CollabswarmNode<
         const senderNodeId = rawMessage.from;
 
         if (thisNodeId !== senderNodeId) {
-          const message = this.messageSerializer.deserializeMessage(
+          const message = this.syncMessageSerializer.deserializeSyncMessage(
             rawMessage.data,
           );
           console.log('Received Document Publish message:', rawMessage);

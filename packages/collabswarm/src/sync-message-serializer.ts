@@ -5,7 +5,7 @@ import { CRDTSyncMessage } from './crdt-sync-message';
  *
  * @tparam ChangesType Type describing changes made to a CRDT document. CRDT implementation dependent.
  */
-export interface MessageSerializer<ChangesType> {
-  serializeMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array;
-  deserializeMessage(message: Uint8Array): CRDTSyncMessage<ChangesType>;
+export interface SyncMessageSerializer<ChangesType> {
+  serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array;
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<ChangesType>;
 }

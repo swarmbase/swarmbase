@@ -1,10 +1,15 @@
 import { ChangesSerializer } from './changes-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTLoadRequest } from './crdt-load-request';
 import { CRDTSyncMessage } from './crdt-sync-message';
-import { MessageSerializer } from './message-serializer';
+import { LoadMessageSerializer } from './load-request-serializer';
+import { SyncMessageSerializer } from './sync-message-serializer';
 
 export class JSONSerializer<ChangesType>
-  implements ChangesSerializer<ChangesType>, MessageSerializer<ChangesType> {
+  implements
+    ChangesSerializer<ChangesType>,
+    SyncMessageSerializer<ChangesType>,
+    LoadMessageSerializer {
   serialize(message: any): string {
     return JSON.stringify(message);
   }
@@ -38,10 +43,16 @@ export class JSONSerializer<ChangesType>
   deserializeChangeBlock(changes: string): CRDTChangeBlock<ChangesType> {
     return this.deserialize(changes);
   }
-  serializeMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
+  serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
     return this.encode(this.serialize(message));
   }
-  deserializeMessage(message: Uint8Array): CRDTSyncMessage<ChangesType> {
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<ChangesType> {
+    return this.deserialize(this.decode(message));
+  }
+  serializeLoadRequest(message: CRDTLoadRequest): Uint8Array {
+    return this.encode(this.serialize(message));
+  }
+  deserializeLoadRequest(message: Uint8Array): CRDTLoadRequest {
     return this.deserialize(this.decode(message));
   }
 }
