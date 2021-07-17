@@ -4,7 +4,7 @@
 
 ## What is SwarmDB?
 
-An open-source, distributed web key-value database with dynamic access control and encryption, and strong eventual consistency. Then intent is to make it easy to build collaborative/offline first applications.
+An open-source, distributed web key-value database with dynamic access control and encryption, and strong eventual consistency, which runs in the browser using JavaScript. Then intent is to make it easy to build collaborative/offline first applications.
 
 Benefits of this approach:
 
