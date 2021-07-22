@@ -1,6 +1,6 @@
-FROM node:14-alpine AS builder
+FROM node:16-alpine AS builder
 
-RUN apk update && apk add python make gcc g++ gettext dos2unix
+RUN apk update && apk add dos2unix
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -28,7 +28,7 @@ COPY examples/browser-test/package.json /app/examples/browser-test/package.json
 COPY examples/wiki-swarm/package.json /app/examples/wiki-swarm/package.json
 RUN yarn install
 
-FROM node:14-alpine
+FROM node:16-alpine
 ENV SKIP_PREFLIGHT_CHECK=true
 RUN mkdir -p /app
 COPY --from=builder /app /app

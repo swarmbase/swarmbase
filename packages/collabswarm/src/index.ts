@@ -16,6 +16,7 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
 import { Keychain } from './keychain';
+import { LoadMessageSerializer } from './load-request-serializer';
 
 export {
   ACL,
@@ -33,7 +34,8 @@ export {
   ChangesSerializer,
   Keychain,
   KeychainProvider,
-  SyncMessageSerializer as MessageSerializer,
+  SyncMessageSerializer,
+  LoadMessageSerializer,
   JSONSerializer,
   DEFAULT_CONFIG,
   DEFAULT_NODE_CONFIG,

@@ -1710,6 +1710,7 @@ __metadata:
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@types/node": ^15.12.3
+    "@types/webcrypto": ^0.0.28
     automerge: ^1.0.1-preview.3
     eslint: ^7.28.0
     ts-node: ^10.0.0
@@ -3925,6 +3926,13 @@ __metadata:
   version: 3.0.0
   resolution: "@types/warning@npm:3.0.0"
   checksum: cb7a16aa88641beceec53ce765274c1ba3a9136e3c7c53cafd769d5063ea96f8899332ce7031c6f374bd23b5713a9a733d42c369ebdb4b62daf9b7562700848c
+  languageName: node
+  linkType: hard
+
+"@types/webcrypto@npm:^0.0.28":
+  version: 0.0.28
+  resolution: "@types/webcrypto@npm:0.0.28"
+  checksum: ea4c13588e7e637d1372ca6001d4d203fa901bc20f38e9f1d4c09d05ced9e8b51a755caffd41794ae9ec9b6ca049e2bb4657be0348e5dc1fb6a7c04b46e488ef
   languageName: node
   linkType: hard
 

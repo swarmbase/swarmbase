@@ -4,10 +4,11 @@ import {
   ChangesSerializer,
   Collabswarm,
   CRDTProvider,
-  CRDTSyncMessage,
+  SyncMessageSerializer,
   KeychainProvider,
-  MessageSerializer,
+  LoadMessageSerializer,
 } from '@collabswarm/collabswarm';
+import {  } from '@collabswarm/collabswarm/src/load-request-serializer';
 import { useEffect, useState } from 'react';
 
 export function useCollabswarm<
@@ -18,9 +19,11 @@ export function useCollabswarm<
   PublicKey,
   DocumentKey
 >(
+  privateKey: PrivateKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<ChangesType>,
+  syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+  loadMessageSerializer: LoadMessageSerializer,
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,
   keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
@@ -40,9 +43,11 @@ export function useCollabswarm<
   useEffect(() => {
     setCollabswarm(
       new Collabswarm(
+        privateKey,
         provider,
         changesSerializer,
-        messageSerializer,
+        syncMessageSerializer,
+        loadMessageSerializer,
         authProvider,
         aclProvider,
         keychainProvider,

@@ -7,19 +7,35 @@ import {
   AutomergeKeychainProvider,
 } from '../src/collabswarm-automerge';
 
+const crypto: Crypto = require('crypto').webcrypto;
+global.crypto = crypto;
+
 console.log('Creating a new swarm node...');
 const crdt = new AutomergeProvider();
 const serializer = new AutomergeJSONSerializer();
 const auth = new SubtleCrypto();
 const acl = new AutomergeACLProvider();
 const keychain = new AutomergeKeychainProvider();
-const swarmNode = new CollabswarmNode(
-  crdt,
-  serializer,
-  serializer,
-  auth,
-  acl,
-  keychain,
-);
-console.log('Starting node...');
-swarmNode.start();
+crypto.subtle
+  .generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  )
+  .then(key => {
+    const swarmNode = new CollabswarmNode(
+      key,
+      crdt,
+      serializer,
+      serializer,
+      serializer,
+      auth,
+      acl,
+      keychain,
+    );
+    console.log('Starting node...');
+    swarmNode.start();
+  });

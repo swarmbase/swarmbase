@@ -16,9 +16,9 @@ import {
   Collabswarm,
   CollabswarmDocument,
   CRDTProvider,
-  CRDTSyncMessage,
   KeychainProvider,
-  MessageSerializer,
+  LoadMessageSerializer,
+  SyncMessageSerializer,
 } from '@collabswarm/collabswarm';
 
 // user id should be the same as peer id.
@@ -81,9 +81,11 @@ export function initialState<
   PublicKey,
   DocumentKey
 >(
+  privateKey: PrivateKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<ChangesType>,
+  syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+  loadMessageSerializer: LoadMessageSerializer,
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,
   keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
@@ -97,9 +99,11 @@ export function initialState<
 > {
   return {
     node: new Collabswarm(
+      privateKey,
       provider,
       changesSerializer,
-      messageSerializer,
+      syncMessageSerializer,
+      loadMessageSerializer,
       authProvider,
       aclProvider,
       keychainProvider,
@@ -118,9 +122,11 @@ export function collabswarmReducer<
   PublicKey,
   DocumentKey
 >(
+  privateKey: PrivateKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  messageSerializer: MessageSerializer<ChangesType>,
+  syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+  loadMessageSerializer: LoadMessageSerializer,
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,
   keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
@@ -134,9 +140,11 @@ export function collabswarmReducer<
       PublicKey,
       DocumentKey
     > = initialState(
+      privateKey,
       provider,
       changesSerializer,
-      messageSerializer,
+      syncMessageSerializer,
+      loadMessageSerializer,
       authProvider,
       aclProvider,
       keychainProvider,
