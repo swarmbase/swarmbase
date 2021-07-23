@@ -9,7 +9,9 @@ export type CRDTChangeNode<ChangesType> = {
   change?: ChangesType;
 
   // `undefined` means that this node is a leaf node (equivalent to `[]`).
-  children?: { [hash: string]: CRDTChangeNode<ChangesType> } | CRDTChangeNodeDeferred;
+  children?:
+    | { [hash: string]: CRDTChangeNode<ChangesType> }
+    | CRDTChangeNodeDeferred;
 };
 
 /**

@@ -12,7 +12,11 @@ import { Collabswarm } from './collabswarm';
 import { firstTrue, readUint8Iterable, shuffleArray } from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import { CRDTChangeNode, crdtChangeNodeDeferred, CRDTSyncMessage } from './crdt-sync-message';
+import {
+  CRDTChangeNode,
+  crdtChangeNodeDeferred,
+  CRDTSyncMessage,
+} from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentLoadV1 } from './wire-protocols';
@@ -75,7 +79,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-  > {
+> {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
@@ -190,7 +194,7 @@ export class CollabswarmDocument<
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
-  ) { }
+  ) {}
 
   // Helpers ------------------------------------------------------------------
 
@@ -226,12 +230,14 @@ export class CollabswarmDocument<
     }
 
     if (remoteRoot.children === crdtChangeNodeDeferred) {
-      throw new Error("IPLD dereferencing is not supported yet!");
+      throw new Error('IPLD dereferencing is not supported yet!');
     }
 
     const results: Promise<[string, ChangesType | undefined][]>[] = [];
     for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
-      results.push(this._mergeSyncTree(hash, currentNode, localRootId, localHashes));
+      results.push(
+        this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
+      );
     }
 
     return (await Promise.all(results)).flat(1);
@@ -257,9 +263,17 @@ export class CollabswarmDocument<
     return message;
   }
 
-  private async _syncDocumentChanges(changeId: string | undefined, changes: CRDTChangeNode<ChangesType>) {
+  private async _syncDocumentChanges(
+    changeId: string | undefined,
+    changes: CRDTChangeNode<ChangesType>,
+  ) {
     // Only process hashes that we haven't seen yet.
-    const newChangeEntries = await this._mergeSyncTree(changeId, changes, this._lastSyncMessage && this._lastSyncMessage.changeId, this._hashes);
+    const newChangeEntries = await this._mergeSyncTree(
+      changeId,
+      changes,
+      this._lastSyncMessage && this._lastSyncMessage.changeId,
+      this._hashes,
+    );
 
     // First apply changes that were sent directly.
     let newDocument = this.document;
@@ -318,7 +332,12 @@ export class CollabswarmDocument<
     hashes: Set<string>,
   ) {
     // Only process hashes that we haven't seen yet.
-    const newChangeEntries = await this._mergeSyncTree(changeId, changes, this._lastSyncMessage && this._lastSyncMessage.changeId, this._hashes);
+    const newChangeEntries = await this._mergeSyncTree(
+      changeId,
+      changes,
+      this._lastSyncMessage && this._lastSyncMessage.changeId,
+      this._hashes,
+    );
 
     // First apply changes that were sent directly.
     const newDocumentHashes: string[] = [];
@@ -372,20 +391,32 @@ export class CollabswarmDocument<
     }
 
     // TODO: Is there a way to avoid this serialization step:
-    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+    const raw = this._syncMessageSerializer.serializeSyncMessage(
+      messageWithoutSignature,
+    );
 
     // TODO: Is there a way to speedup this loop?
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
-      verificationTasks.push(this._authProvider.verify(raw, writerKey, this._deserializeSignature(signature)));
+      verificationTasks.push(
+        this._authProvider.verify(
+          raw,
+          writerKey,
+          this._deserializeSignature(signature),
+        ),
+      );
     }
     return firstTrue(verificationTasks);
   }
 
-  private async _signAsWriter(message: CRDTSyncMessage<ChangesType>): Promise<string> {
+  private async _signAsWriter(
+    message: CRDTSyncMessage<ChangesType>,
+  ): Promise<string> {
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
-    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+    const raw = this._syncMessageSerializer.serializeSyncMessage(
+      messageWithoutSignature,
+    );
     const rawSignature = await this._authProvider.sign(raw, this._userKey);
     return this._serializeSignature(rawSignature);
   }
@@ -641,7 +672,9 @@ export class CollabswarmDocument<
 
     // Sync document changes.
     if (message.changes) {
-      syncTasks.push(this._syncDocumentChanges(message.changeId, message.changes));
+      syncTasks.push(
+        this._syncDocumentChanges(message.changeId, message.changes),
+      );
     }
 
     await Promise.all(syncTasks);
