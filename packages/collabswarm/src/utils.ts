@@ -1,4 +1,4 @@
-import BufferList from "bl";
+import BufferList from 'bl';
 
 export function shuffleArray<T = any>(array: T[]) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -7,15 +7,26 @@ export function shuffleArray<T = any>(array: T[]) {
   }
 }
 
+export function firstTrue(promises: Promise<boolean>[]) {
+  const newPromises = promises.map(
+    (p) =>
+      new Promise<boolean>((resolve, reject) =>
+        p.then((v) => v && resolve(true), reject),
+      ),
+  );
+  newPromises.push(Promise.all(promises).then(() => false));
+  return Promise.race(newPromises);
+}
+
 // HACK:
 export function isBufferList(input: Uint8Array | BufferList): boolean {
   return !!Object.getOwnPropertySymbols(input).find((s) => {
-    return String(s) === "Symbol(BufferList)";
+    return String(s) === 'Symbol(BufferList)';
   });
 }
 
 export async function readUint8Iterable(
-  iterable: AsyncIterable<Uint8Array | BufferList>
+  iterable: AsyncIterable<Uint8Array | BufferList>,
 ): Promise<Uint8Array> {
   let length = 0;
   const chunks = [] as (Uint8Array | BufferList)[];
@@ -49,41 +60,41 @@ export async function readUint8Iterable(
 export async function generateAndExportHmacKey() {
   const key = await crypto.subtle.generateKey(
     {
-      name: "ECDSA",
-      namedCurve: "P-384",
+      name: 'ECDSA',
+      namedCurve: 'P-384',
     },
     true,
-    ["sign", "verify"]
+    ['sign', 'verify'],
   );
   return [
-    await crypto.subtle.exportKey("jwk", key.privateKey),
-    await crypto.subtle.exportKey("jwk", key.publicKey),
+    await crypto.subtle.exportKey('jwk', key.privateKey),
+    await crypto.subtle.exportKey('jwk', key.publicKey),
   ];
 }
 
 export async function importHmacKey(
   keyData: Uint8Array,
-  format = "jwk",
-  hash = "SHA-512"
+  format = 'jwk',
+  hash = 'SHA-512',
 ) {
   const key = await crypto.subtle.importKey(
     format,
     keyData,
     {
-      name: "HMAC",
+      name: 'HMAC',
       hash,
     },
     true,
-    ["sign", "verify"]
+    ['sign', 'verify'],
   );
 
   return key;
 }
 
-export async function importSymmetricKey(keyData: Uint8Array, format = "jwk") {
-  const key = await crypto.subtle.importKey(format, keyData, "AES-GCM", true, [
-    "encrypt",
-    "decrypt",
+export async function importSymmetricKey(keyData: Uint8Array, format = 'jwk') {
+  const key = await crypto.subtle.importKey(format, keyData, 'AES-GCM', true, [
+    'encrypt',
+    'decrypt',
   ]);
 
   return key;
@@ -92,11 +103,11 @@ export async function importSymmetricKey(keyData: Uint8Array, format = "jwk") {
 export async function generateAndExportSymmetricKey() {
   const documentKey = await crypto.subtle.generateKey(
     {
-      name: "AES-GCM",
+      name: 'AES-GCM',
       length: 256,
     },
     true,
-    ["encrypt", "decrypt"]
+    ['encrypt', 'decrypt'],
   );
-  return await crypto.subtle.exportKey("jwk", documentKey);
+  return await crypto.subtle.exportKey('jwk', documentKey);
 }

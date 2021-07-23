@@ -1,4 +1,4 @@
-version: "3.7"
+version: '3.7'
 services:
   browser-test:
     build:
@@ -6,8 +6,8 @@ services:
       dockerfile: ./Dockerfile
     image: collabswarm-automerge:latest
     environment:
-      - "PORT=3000"
-      - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
+      - 'PORT=3000'
+      - 'SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -21,7 +21,6 @@ services:
       - ./examples/browser-test/src:/app/examples/browser-test/src
       - ./client-config.env:/app/.env
     stdin_open: true
-    # working_dir: /app/examples/browser-test
     command:
       # - sh
       # - -c
@@ -30,7 +29,7 @@ services:
       - .env
       - yarn
       - workspace
-      - "@collabswarm/browser-test"
+      - '@collabswarm/browser-test'
       - start
   wiki-swarm:
     build:
@@ -38,8 +37,8 @@ services:
       dockerfile: ./Dockerfile
     image: collabswarm-automerge:latest
     environment:
-      - "PORT=3000"
-      - "SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star"
+      - 'PORT=3000'
+      - 'SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -53,13 +52,12 @@ services:
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
       - ./client-config.env:/app/.env
     stdin_open: true
-    # working_dir: /app/examples/wiki-swarm
     command:
       - /app/wait-for-file.sh
       - .env
       - yarn
       - workspace
-      - "@collabswarm/wiki-swarm"
+      - '@collabswarm/wiki-swarm'
       - start
   node:
     build:
@@ -67,7 +65,7 @@ services:
       dockerfile: ./Dockerfile
     image: collabswarm-automerge:latest
     environment:
-      - "CLIENT_CONFIG_FILE=/app/client-config.env"
+      - 'CLIENT_CONFIG_FILE=/app/client-config.env'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
