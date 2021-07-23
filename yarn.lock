@@ -1686,7 +1686,7 @@ __metadata:
     "@testing-library/user-event": ^13.1.9
     "@types/jest": ^26.0.23
     "@types/jsoneditor": ^8.6.0
-    "@types/node": ^15.12.3
+    "@types/node": ^16.4.0
     "@types/react": ^17.0.11
     "@types/react-dom": ^17.0.8
     "@types/react-redux": ^7.1.16
@@ -1700,7 +1700,7 @@ __metadata:
     react-scripts: ^4.0.3
     redux: ^4.1.0
     redux-thunk: ^2.3.0
-    typescript: ^4.3.4
+    typescript: ^4.3.5
   languageName: unknown
   linkType: soft
 
@@ -1709,12 +1709,11 @@ __metadata:
   resolution: "@collabswarm/collabswarm-automerge@workspace:packages/collabswarm-automerge"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": ^15.12.3
-    "@types/webcrypto": ^0.0.28
+    "@types/node": ^16.4.0
     automerge: ^1.0.1-preview.3
-    eslint: ^7.28.0
-    ts-node: ^10.0.0
-    typescript: ^4.3.4
+    eslint: ^7.31.0
+    ts-node: ^10.1.0
+    typescript: ^4.3.5
   bin:
     collabswarm-automerge-d: dist/bin/collabswarm-automerge-d.js
   languageName: unknown
@@ -1727,11 +1726,11 @@ __metadata:
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@types/react": ^17.0.11
     automerge: ^1.0.1-preview.3
-    eslint: ^7.28.0
+    eslint: ^7.31.0
     react: ^17.0.2
     redux: ^4.1.0
     redux-thunk: ^2.3.0
-    typescript: ^4.3.4
+    typescript: ^4.3.5
   languageName: unknown
   linkType: soft
 
@@ -1741,10 +1740,10 @@ __metadata:
   dependencies:
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     automerge: ^1.0.1-preview.3
-    eslint: ^7.28.0
+    eslint: ^7.31.0
     redux: ^4.1.0
     redux-thunk: ^2.3.0
-    typescript: ^4.3.4
+    typescript: ^4.3.5
   languageName: unknown
   linkType: soft
 
@@ -1753,10 +1752,10 @@ __metadata:
   resolution: "@collabswarm/collabswarm-yjs@workspace:packages/collabswarm-yjs"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": ^15.12.3
-    eslint: ^7.28.0
-    ts-node: ^10.0.0
-    typescript: ^4.3.4
+    "@types/node": ^16.4.0
+    eslint: ^7.31.0
+    ts-node: ^10.1.0
+    typescript: ^4.3.5
     yjs: ^13.5.10
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
@@ -1768,16 +1767,16 @@ __metadata:
   resolution: "@collabswarm/collabswarm@workspace:packages/collabswarm"
   dependencies:
     "@peculiar/webcrypto": ^1.1.7
-    "@types/node": ^15.12.3
-    eslint: ^7.28.0
+    "@types/node": ^16.4.0
+    eslint: ^7.31.0
     ipfs: ^0.55.4
     it-pipe: ^1.1.0
     jest: ^27.0.4
     ts-jest: ^27.0.3
-    ts-node: ^10.0.0
+    ts-node: ^10.1.0
     typedoc: ^0.21.0
     typedoc-neo-theme: ^1.1.1
-    typescript: ^4.3.4
+    typescript: ^4.3.5
   languageName: unknown
   linkType: soft
 
@@ -1794,7 +1793,7 @@ __metadata:
     "@testing-library/react": ^11.2.7
     "@testing-library/user-event": ^13.1.9
     "@types/jest": ^26.0.23
-    "@types/node": ^15.12.3
+    "@types/node": ^16.4.0
     "@types/react": ^17.0.11
     "@types/react-bootstrap": ^0.32.25
     "@types/react-dom": ^17.0.8
@@ -1819,7 +1818,7 @@ __metadata:
     slate: ^0.63.0
     slate-history: ^0.62.0
     slate-react: ^0.65.2
-    typescript: ^4.3.4
+    typescript: ^4.3.5
   languageName: unknown
   linkType: soft
 
@@ -1851,6 +1850,23 @@ __metadata:
     minimatch: ^3.0.4
     strip-json-comments: ^3.1.1
   checksum: 60b66ce4257bf5c36a920dea83a056102fef746e7afd7100a6fe245a126ff455f67f4948e75d28ed73090bff8f8556b6a996e74a124911ca703440bc245dbc23
+  languageName: node
+  linkType: hard
+
+"@eslint/eslintrc@npm:^0.4.3":
+  version: 0.4.3
+  resolution: "@eslint/eslintrc@npm:0.4.3"
+  dependencies:
+    ajv: ^6.12.4
+    debug: ^4.1.1
+    espree: ^7.3.0
+    globals: ^13.9.0
+    ignore: ^4.0.6
+    import-fresh: ^3.2.1
+    js-yaml: ^3.13.1
+    minimatch: ^3.0.4
+    strip-json-comments: ^3.1.1
+  checksum: fa916db689fac96c749571f03f931448d896ce07c3da40079082f28621f52defa36cc0c88bfcdd8d19b9981a6549c3a9a3977953db2f6945aba1135bb83a3d35
   languageName: node
   linkType: hard
 
@@ -2224,6 +2240,24 @@ __metadata:
     "@hapi/bourne": 2.x.x
     "@hapi/hoek": 9.x.x
   checksum: ea3fd37926e16e0c2667e19b17a707eca1e2a58422af610a070d95c09c8b403e1069df4c04bf68ab44f8e1784bd3b7eb5ba5e05b4a13f4df43de3549dbcb9c82
+  languageName: node
+  linkType: hard
+
+"@humanwhocodes/config-array@npm:^0.5.0":
+  version: 0.5.0
+  resolution: "@humanwhocodes/config-array@npm:0.5.0"
+  dependencies:
+    "@humanwhocodes/object-schema": ^1.2.0
+    debug: ^4.1.1
+    minimatch: ^3.0.4
+  checksum: 71e3c1fef40166ecaacbe29b681499dc6bab3fe45df5bfb3e137baf6e50f22813cf14f24ff759a4da43b6743d7f5a776298ae1e0e266c9602bab62da2ee3b302
+  languageName: node
+  linkType: hard
+
+"@humanwhocodes/object-schema@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "@humanwhocodes/object-schema@npm:1.2.0"
+  checksum: ef533ee0d227b8036e4220013575fedc3d0346e2e40bc5f5536ba5761825f23577eb4b71e52f18a2d3b827c9d83cfa60c821a71e30d5f6537918a94bc1990963
   languageName: node
   linkType: hard
 
@@ -3692,10 +3726,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:>=10.0.0, @types/node@npm:>=12.12.47, @types/node@npm:>=13.7.0, @types/node@npm:^15.12.3":
+"@types/node@npm:*, @types/node@npm:>=10.0.0, @types/node@npm:>=12.12.47, @types/node@npm:>=13.7.0":
   version: 15.12.3
   resolution: "@types/node@npm:15.12.3"
   checksum: 1e7a4f5675416f4dd61a7c16a8754272d0772bec070c1737e848598dad5c4a04fd3d249aab2b456c0f66fbbe8eb0e831ae5d2a4873385fee33ccd4935a53d300
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^16.4.0":
+  version: 16.4.1
+  resolution: "@types/node@npm:16.4.1"
+  checksum: 8b9fda74322631febbf084e3c7a26b799a3a1b8f45d6bbaedfb8943c7b3eb743aa2e41c04de6f5f87f63c99451f3ed0b37822614cbd42ed55c8c9c8f9462d231
   languageName: node
   linkType: hard
 
@@ -3926,13 +3967,6 @@ __metadata:
   version: 3.0.0
   resolution: "@types/warning@npm:3.0.0"
   checksum: cb7a16aa88641beceec53ce765274c1ba3a9136e3c7c53cafd769d5063ea96f8899332ce7031c6f374bd23b5713a9a733d42c369ebdb4b62daf9b7562700848c
-  languageName: node
-  linkType: hard
-
-"@types/webcrypto@npm:^0.0.28":
-  version: 0.0.28
-  resolution: "@types/webcrypto@npm:0.0.28"
-  checksum: ea4c13588e7e637d1372ca6001d4d203fa901bc20f38e9f1d4c09d05ced9e8b51a755caffd41794ae9ec9b6ca049e2bb4657be0348e5dc1fb6a7c04b46e488ef
   languageName: node
   linkType: hard
 
@@ -8766,7 +8800,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint@npm:^7.11.0, eslint@npm:^7.28.0":
+"eslint@npm:^7.11.0":
   version: 7.28.0
   resolution: "eslint@npm:7.28.0"
   dependencies:
@@ -8812,6 +8846,56 @@ __metadata:
   bin:
     eslint: bin/eslint.js
   checksum: 9d49d53ed56a1f1ccba9c71482722a91f2423432df70a3694d36ea478f0e3bb058034f170219f34f3d6b5cd5d47510b269b75e2b4117f88a3241b1db9cb95828
+  languageName: node
+  linkType: hard
+
+"eslint@npm:^7.31.0":
+  version: 7.31.0
+  resolution: "eslint@npm:7.31.0"
+  dependencies:
+    "@babel/code-frame": 7.12.11
+    "@eslint/eslintrc": ^0.4.3
+    "@humanwhocodes/config-array": ^0.5.0
+    ajv: ^6.10.0
+    chalk: ^4.0.0
+    cross-spawn: ^7.0.2
+    debug: ^4.0.1
+    doctrine: ^3.0.0
+    enquirer: ^2.3.5
+    escape-string-regexp: ^4.0.0
+    eslint-scope: ^5.1.1
+    eslint-utils: ^2.1.0
+    eslint-visitor-keys: ^2.0.0
+    espree: ^7.3.1
+    esquery: ^1.4.0
+    esutils: ^2.0.2
+    fast-deep-equal: ^3.1.3
+    file-entry-cache: ^6.0.1
+    functional-red-black-tree: ^1.0.1
+    glob-parent: ^5.1.2
+    globals: ^13.6.0
+    ignore: ^4.0.6
+    import-fresh: ^3.0.0
+    imurmurhash: ^0.1.4
+    is-glob: ^4.0.0
+    js-yaml: ^3.13.1
+    json-stable-stringify-without-jsonify: ^1.0.1
+    levn: ^0.4.1
+    lodash.merge: ^4.6.2
+    minimatch: ^3.0.4
+    natural-compare: ^1.4.0
+    optionator: ^0.9.1
+    progress: ^2.0.0
+    regexpp: ^3.1.0
+    semver: ^7.2.1
+    strip-ansi: ^6.0.0
+    strip-json-comments: ^3.1.0
+    table: ^6.0.9
+    text-table: ^0.2.0
+    v8-compile-cache: ^2.0.3
+  bin:
+    eslint: bin/eslint.js
+  checksum: 38c000372bfafc3715da2d2b6db2a75d4b3b95ac2c20696d774185aa5b6118065a37d0a1292eaa91292e07f86d53a0993cf9bfb838a7a9b935524a125e21af98
   languageName: node
   linkType: hard
 
@@ -21663,9 +21747,9 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
-"ts-node@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "ts-node@npm:10.0.0"
+"ts-node@npm:^10.1.0":
+  version: 10.1.0
+  resolution: "ts-node@npm:10.1.0"
   dependencies:
     "@tsconfig/node10": ^1.0.7
     "@tsconfig/node12": ^1.0.7
@@ -21678,8 +21762,8 @@ resolve@^2.0.0-next.3:
     source-map-support: ^0.5.17
     yn: 3.1.1
   peerDependencies:
-    "@swc/core": ">=1.2.45"
-    "@swc/wasm": ">=1.2.45"
+    "@swc/core": ">=1.2.50"
+    "@swc/wasm": ">=1.2.50"
     "@types/node": "*"
     typescript: ">=2.7"
   peerDependenciesMeta:
@@ -21693,7 +21777,7 @@ resolve@^2.0.0-next.3:
     ts-node-script: dist/bin-script.js
     ts-node-transpile-only: dist/bin-transpile.js
     ts-script: dist/bin-script-deprecated.js
-  checksum: dc461e2b9b931b00ff065530a0247f86da1d035e72a7ef6d7ed072dd8e6b236d1879f113dcc73a354d240c81b6b845445c3d32b16eeb68022ed27ab6d130c049
+  checksum: d1b582dc3624061d86c2657507e21c3875919b7d108db16cde5507f2aa75b025be2e09b35ec607900eb525e429ebd14f0cf1c5f4b81292a191c0f8c7bfdf0720
   languageName: node
   linkType: hard
 
@@ -21928,23 +22012,23 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
-typescript@^4.3.4:
-  version: 4.3.4
-  resolution: "typescript@npm:4.3.4"
+typescript@^4.3.5:
+  version: 4.3.5
+  resolution: "typescript@npm:4.3.5"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 9791c5fe98db6cb70ec0efad8d3d2eb957b9643ee600b90bff49267de69768d0d5f59c41a8fd731cfd63df1ccfb2cb25505a2015d7b39ac10ea51f605a058e16
+  checksum: d9a8e78d72dd19896e6bfa73ab2a0fcea6eca2700d1d6e7c33f67a970af54a3e0fed8f715a8c4e6a0ff7fc0995067b394b2003518ab0aa84cd396377e54b760c
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@^4.3.4#builtin<compat/typescript>":
-  version: 4.3.4
-  resolution: "typescript@patch:typescript@npm%3A4.3.4#builtin<compat/typescript>::version=4.3.4&hash=ddfc1b"
+"typescript@patch:typescript@^4.3.5#builtin<compat/typescript>":
+  version: 4.3.5
+  resolution: "typescript@patch:typescript@npm%3A4.3.5#builtin<compat/typescript>::version=4.3.5&hash=ddfc1b"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: c8766e84a4f71e925cc059af8286cc7f41819fe821d433b90c83e9b36729cbda7a8e4be3292d8a1433cd717d529c93217d58d173418f43862290b206bd88b284
+  checksum: 7f0b8343f71ecac18095be1476b398aca420ab60dc207cc1efe078f381eef5527b80a518297720257114cdbda65612f8839e4b63e85dc95e67ac5cbbade8bdf0
   languageName: node
   linkType: hard
 

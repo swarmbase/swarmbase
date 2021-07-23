@@ -64,7 +64,7 @@ export class Collabswarm<
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
   DocumentKey
-> {
+  > {
   constructor(
     private readonly _userKey: PrivateKey,
     private readonly _crdtProvider: CRDTProvider<
@@ -85,7 +85,7 @@ export class Collabswarm<
       ChangesType,
       DocumentKey
     >,
-  ) {}
+  ) { }
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;

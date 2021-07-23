@@ -12,7 +12,7 @@ import { Collabswarm } from './collabswarm';
 import { readUint8Iterable, shuffleArray } from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import { CRDTSyncMessage } from './crdt-sync-message';
+import { CRDTChangeNode, crdtChangeNodeDeferred, CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentLoadV1 } from './wire-protocols';
@@ -75,12 +75,15 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey
-> {
+  > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
     return this._document;
   }
+
+  // Last sync message (for populating load requests).
+  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
 
   // Document readers ACL.
   private _readers = this._aclProvider.initialize();
@@ -187,16 +190,51 @@ export class CollabswarmDocument<
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
-  ) {}
+  ) { }
 
   // Helpers ------------------------------------------------------------------
 
-  private async _getFile(hash: string): Promise<ChangesType> {
-    const assembled = await readUint8Iterable(
-      this.swarm.ipfsNode.files.read(`/ipfs/${hash}`),
-    );
+  private async _getBlock(hash: string): Promise<ChangesType> {
+    const block = await this.swarm.ipfsNode.block.get(hash);
+    return this._changesSerializer.deserializeChanges(block.data);
+  }
 
-    return this._changesSerializer.deserializeChanges(assembled);
+  private async _mergeSyncTree(
+    remoteRootId: string | undefined,
+    remoteRoot: CRDTChangeNode<ChangesType>,
+
+    localRootId: string | undefined,
+    localHashes: Set<string>,
+  ): Promise<[string, ChangesType | undefined][]> {
+    if (remoteRootId === undefined) {
+      return [];
+    }
+
+    // If remote root CID is the same as the current root CID, do nothing and return.
+    if (remoteRootId === localRootId) {
+      return [];
+    }
+
+    // If remote root CID is already in the set of seen CIDs, do nothing and return.
+    if (localHashes.has(remoteRootId)) {
+      return [];
+    }
+
+    // If this is a leaf node, return the current node pair.
+    if (remoteRoot.children === undefined) {
+      return [[remoteRootId, remoteRoot.change]];
+    }
+
+    if (remoteRoot.children === crdtChangeNodeDeferred) {
+      throw new Error("IPLD dereferencing is not supported yet!");
+    }
+
+    const results: Promise<[string, ChangesType | undefined][]>[] = [];
+    for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
+      results.push(this._mergeSyncTree(hash, currentNode, localRootId, localHashes));
+    }
+
+    return (await Promise.all(results)).flat(1);
   }
 
   private _fireRemoteUpdateHandlers(hashes: string[]) {
@@ -212,30 +250,16 @@ export class CollabswarmDocument<
 
   private _createSyncMessage(): CRDTSyncMessage<ChangesType> {
     const message: CRDTSyncMessage<ChangesType> = {
-      documentId: this.documentPath,
-      changes: {},
-      readersChanges: {},
-      writersChanges: {},
+      ...(this._lastSyncMessage || {
+        documentId: this.documentPath,
+      }),
     };
-    for (const oldHash of this._hashes) {
-      message.changes[oldHash] = null;
-    }
-    for (const oldHash of this._readersHashes) {
-      message.readersChanges[oldHash] = null;
-    }
-    for (const oldHash of this._writersHashes) {
-      message.writersChanges[oldHash] = null;
-    }
     return message;
   }
 
-  private async _syncDocumentChanges(changes: {
-    [hash: string]: ChangesType | null;
-  }) {
+  private async _syncDocumentChanges(changeId: string | undefined, changes: CRDTChangeNode<ChangesType>) {
     // Only process hashes that we haven't seen yet.
-    const newChangeEntries = Object.entries(changes).filter(
-      ([sentHash]) => sentHash && !this._hashes.has(sentHash),
-    );
+    const newChangeEntries = await this._mergeSyncTree(changeId, changes, this._lastSyncMessage && this._lastSyncMessage.changeId, this._hashes);
 
     // First apply changes that were sent directly.
     let newDocument = this.document;
@@ -261,7 +285,7 @@ export class CollabswarmDocument<
     // Then apply missing hashes by fetching them via IPFS.
     for (const missingHash of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
-      this._getFile(missingHash)
+      this._getBlock(missingHash)
         .then((missingChanges) => {
           if (missingChanges) {
             this._document = this._crdtProvider.remoteChange(
@@ -288,14 +312,13 @@ export class CollabswarmDocument<
   }
 
   private async _syncACLChanges(
-    changes: { [hash: string]: ChangesType | null },
+    changeId: string | undefined,
+    changes: CRDTChangeNode<ChangesType>,
     acl: ACL<ChangesType, PublicKey>,
     hashes: Set<string>,
   ) {
     // Only process hashes that we haven't seen yet.
-    const newChangeEntries = Object.entries(changes).filter(
-      ([sentHash]) => sentHash && !hashes.has(sentHash),
-    );
+    const newChangeEntries = await this._mergeSyncTree(changeId, changes, this._lastSyncMessage && this._lastSyncMessage.changeId, this._hashes);
 
     // First apply changes that were sent directly.
     const newDocumentHashes: string[] = [];
@@ -319,7 +342,7 @@ export class CollabswarmDocument<
     // Then apply missing hashes by fetching them via IPFS.
     for (const missingHash of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
-      this._getFile(missingHash)
+      this._getBlock(missingHash)
         .then((missingChanges) => {
           if (missingChanges) {
             acl.merge(missingChanges);
@@ -553,6 +576,7 @@ export class CollabswarmDocument<
     if (message.readersChanges) {
       syncTasks.push(
         this._syncACLChanges(
+          message.readersChangeId,
           message.readersChanges,
           this._readers,
           this._readersHashes,
@@ -562,6 +586,7 @@ export class CollabswarmDocument<
     if (message.writersChanges) {
       syncTasks.push(
         this._syncACLChanges(
+          message.writersChangeId,
           message.writersChanges,
           this._writers,
           this._writersHashes,
@@ -576,7 +601,7 @@ export class CollabswarmDocument<
 
     // Sync document changes.
     if (message.changes) {
-      syncTasks.push(this._syncDocumentChanges(message.changes));
+      syncTasks.push(this._syncDocumentChanges(message.changeId, message.changes));
     }
 
     await Promise.all(syncTasks);
@@ -646,7 +671,7 @@ export class CollabswarmDocument<
     this._document = newDocument;
 
     // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(
+    const newFileResult = await this.swarm.ipfsNode.block.put(
       this._changesSerializer.serializeChanges(changes),
     );
     const hash = newFileResult.cid.toString();
@@ -654,7 +679,20 @@ export class CollabswarmDocument<
 
     // Send new message.
     const updateMessage = this._createSyncMessage();
-    updateMessage.changes[hash] = changes;
+    const changeNode: CRDTChangeNode<ChangesType> = {
+      change: changes,
+    };
+    if (updateMessage.changeId && updateMessage.changes) {
+      // TODO: Add links to other part of change tree (See Merkle CRDT paper section VI.B.e).
+      changeNode.children = {};
+      changeNode.children[updateMessage.changeId] = updateMessage.changes;
+    }
+    updateMessage.changeId = hash;
+    updateMessage.changes = changeNode;
+
+    // TODO: Sign new message.
+
+    this._lastSyncMessage = updateMessage;
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
       this._syncMessageSerializer.serializeSyncMessage(updateMessage),
@@ -664,27 +702,27 @@ export class CollabswarmDocument<
     this._fireLocalUpdateHandlers([hash]);
   }
 
-  public async pin() {
-    // Apply local change w/ CRDT provider.
-    const changes = this._crdtProvider.getHistory(this.document);
+  // public async pin() {
+  //   // Apply local change w/ CRDT provider.
+  //   const changes = this._crdtProvider.getHistory(this.document);
 
-    // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.add(
-      this._changesSerializer.serializeChanges(changes),
-    );
-    const hash = newFileResult.cid.toString();
-    this._hashes.add(hash);
+  //   // Store changes in ipfs.
+  //   const newFileResult = await this.swarm.ipfsNode.add(
+  //     this._changesSerializer.serializeChanges(changes),
+  //   );
+  //   const hash = newFileResult.cid.toString();
+  //   this._hashes.add(hash);
 
-    // Send new message.
-    const updateMessage = this._createSyncMessage();
-    updateMessage.changes[hash] = changes;
+  //   // Send new message.
+  //   const updateMessage = this._createSyncMessage();
+  //   // updateMessage.changes[hash] = changes;
 
-    if (!this.swarm.config) {
-      throw 'Can not pin a file when the node has not been initialized'!;
-    }
-    this.swarm.ipfsNode.pubsub.publish(
-      this.swarm.config.pubsubDocumentPublishPath,
-      this._syncMessageSerializer.serializeSyncMessage(updateMessage),
-    );
-  }
+  //   if (!this.swarm.config) {
+  //     throw 'Can not pin a file when the node has not been initialized'!;
+  //   }
+  //   this.swarm.ipfsNode.pubsub.publish(
+  //     this.swarm.config.pubsubDocumentPublishPath,
+  //     this._syncMessageSerializer.serializeSyncMessage(updateMessage),
+  //   );
+  // }
 }
