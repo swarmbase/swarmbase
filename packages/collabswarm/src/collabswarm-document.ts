@@ -391,20 +391,32 @@ export class CollabswarmDocument<
     }
 
     // TODO: Is there a way to avoid this serialization step:
-    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+    const raw = this._syncMessageSerializer.serializeSyncMessage(
+      messageWithoutSignature,
+    );
 
     // TODO: Is there a way to speedup this loop?
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
-      verificationTasks.push(this._authProvider.verify(raw, writerKey, this._deserializeSignature(signature)));
+      verificationTasks.push(
+        this._authProvider.verify(
+          raw,
+          writerKey,
+          this._deserializeSignature(signature),
+        ),
+      );
     }
     return firstTrue(verificationTasks);
   }
 
-  private async _signAsWriter(message: CRDTSyncMessage<ChangesType>): Promise<string> {
+  private async _signAsWriter(
+    message: CRDTSyncMessage<ChangesType>,
+  ): Promise<string> {
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
-    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+    const raw = this._syncMessageSerializer.serializeSyncMessage(
+      messageWithoutSignature,
+    );
     const rawSignature = await this._authProvider.sign(raw, this._userKey);
     return this._serializeSignature(rawSignature);
   }
