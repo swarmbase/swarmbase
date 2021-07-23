@@ -81,11 +81,12 @@ docker-compose up
 ## Known Limitations
 
 - Please be aware that data loss can occur if all clients lose local storage, for example exit browser, and remote pinning service is not set up. This is something we hope to address and make easier in the future, but at this early moment it's similar to venture investing where they say: only put in what you can afford to lose. Open to comments or requests in this area.
+  - Relevant: [ipfs/js-ipfs#2937](https://github.com/ipfs/js-ipfs/issues/2937)
 - Currently the transport for browser-browser communication is libp2p-js-web-rtc-star. This protocol requires the usage of
   a centralized signaling server and/or a relay (non-browser) node if the two browsers connecting can't communicate due to NAT translation or firewall
-  problems.
-  These libp2p mechanisms fill a role similar to WebRTC's TURN and STUN
+  problems. These libp2p mechanisms fill a role similar to WebRTC's TURN and STUN
   protocols/services.
+  - Explanation of the plan for the removal of this: [libp2p/js-libp2p#385](https://github.com/libp2p/js-libp2p/issues/385)
 
 ## Why SwarmDB?
 
