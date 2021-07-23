@@ -9,7 +9,7 @@ import pipe from 'it-pipe';
 import Libp2p from 'libp2p';
 import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
 import { Collabswarm } from './collabswarm';
-import { readUint8Iterable, shuffleArray } from './utils';
+import { firstTrue, readUint8Iterable, shuffleArray } from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
 import {
@@ -384,6 +384,42 @@ export class CollabswarmDocument<
     }
   }
 
+  private async _verifyWriterSignature(message: CRDTSyncMessage<ChangesType>) {
+    const { signature, ...messageWithoutSignature } = message;
+    if (!signature) {
+      return false;
+    }
+
+    // TODO: Is there a way to avoid this serialization step:
+    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+
+    // TODO: Is there a way to speedup this loop?
+    const verificationTasks: Promise<boolean>[] = [];
+    for (const writerKey of await this._writers.users()) {
+      verificationTasks.push(this._authProvider.verify(raw, writerKey, this._deserializeSignature(signature)));
+    }
+    return firstTrue(verificationTasks);
+  }
+
+  private async _signAsWriter(message: CRDTSyncMessage<ChangesType>): Promise<string> {
+    const { signature: oldSignature, ...messageWithoutSignature } = message;
+
+    const raw = this._syncMessageSerializer.serializeSyncMessage(messageWithoutSignature);
+    const rawSignature = await this._authProvider.sign(raw, this._userKey);
+    return this._serializeSignature(rawSignature);
+  }
+
+  private _decoder = new TextDecoder();
+  private _encoder = new TextEncoder();
+
+  private _deserializeSignature(signature: string): Uint8Array {
+    return this._encoder.encode(atob(signature));
+  }
+
+  private _serializeSignature(signature: Uint8Array): string {
+    return btoa(this._decoder.decode(signature));
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -433,13 +469,11 @@ export class CollabswarmDocument<
     if (stream) {
       console.log(`Opening stream for ${this.protocolLoadV1}`, stream);
 
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
       const signatureBytes = await this._authProvider.sign(
-        encoder.encode(this.documentPath),
+        this._encoder.encode(this.documentPath),
         this._userKey,
       );
-      const signature = btoa(decoder.decode(signatureBytes));
+      const signature = this._serializeSignature(signatureBytes);
 
       // Construct a load request.
       const loadRequest: CRDTLoadRequest = {
@@ -525,13 +559,12 @@ export class CollabswarmDocument<
         // Verify that this user is a reader.
         let requestor: PublicKey | undefined;
         for (const reader of await this._readers.users()) {
-          const encoder = new TextEncoder();
           // TODO: Is this secure? Do we need a salt added to the signed payload?
           if (
             await this._authProvider.verify(
-              encoder.encode(message.documentId),
+              this._encoder.encode(message.documentId),
               reader,
-              encoder.encode(atob(message.signature)),
+              this._deserializeSignature(message.signature),
             )
           ) {
             requestor = reader;
@@ -589,6 +622,13 @@ export class CollabswarmDocument<
    * @param message A sync message to apply.
    */
   public async sync(message: CRDTSyncMessage<ChangesType>) {
+    if (!(await this._verifyWriterSignature(message))) {
+      console.warn(
+        `Received a sync message with an invalid signature for ${message.documentId}`,
+      );
+      return;
+    }
+
     const syncTasks: Promise<void>[] = [];
 
     // Apply new ACL changes.
@@ -683,6 +723,8 @@ export class CollabswarmDocument<
    * @param message An optional change message/description to include.
    */
   public async change(changeFn: ChangeFnType, message?: string) {
+    // TODO: Check that we are a writer (allowed to write to this document).
+
     const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
       message || '',
@@ -699,7 +741,7 @@ export class CollabswarmDocument<
     this._hashes.add(hash);
 
     // Send new message.
-    const updateMessage = this._createSyncMessage();
+    let updateMessage = this._createSyncMessage();
     const changeNode: CRDTChangeNode<ChangesType> = {
       change: changes,
     };
@@ -711,7 +753,8 @@ export class CollabswarmDocument<
     updateMessage.changeId = hash;
     updateMessage.changes = changeNode;
 
-    // TODO: Sign new message.
+    // Sign new message.
+    updateMessage.signature = await this._signAsWriter(updateMessage);
 
     this._lastSyncMessage = updateMessage;
     await this.swarm.ipfsNode.pubsub.publish(

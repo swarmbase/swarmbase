@@ -21,7 +21,6 @@ services:
       - ./examples/browser-test/src:/app/examples/browser-test/src
       - ./client-config.env:/app/.env
     stdin_open: true
-    # working_dir: /app/examples/browser-test
     command:
       # - sh
       # - -c
@@ -53,7 +52,6 @@ services:
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
       - ./client-config.env:/app/.env
     stdin_open: true
-    # working_dir: /app/examples/wiki-swarm
     command:
       - /app/wait-for-file.sh
       - .env
