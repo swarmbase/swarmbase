@@ -33,4 +33,9 @@ export interface Keychain<KeychainChange, DocumentKey> {
    * @return all document encryption keys.
    */
   keys(): Promise<DocumentKey[]>;
+
+  /**
+   * Gets the current encryption key that should be used to encrypt new changes.
+   */
+  current(): Promise<DocumentKey | undefined>;
 }

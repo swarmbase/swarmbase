@@ -4,9 +4,9 @@
  */
 export interface CRDTChangeBlock<ChangesType> {
   /**
-   * Signature of the changes below. Should be signed using the private key of the change author.
+   * Stored nonce for decryption purposes.
    */
-  signature?: string;
+  nonce: Uint8Array;
 
   /**
    * Changes object describing edits made to a CRDT document. CRDTProvider implementation dependent.

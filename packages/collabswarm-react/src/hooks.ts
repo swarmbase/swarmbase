@@ -20,6 +20,7 @@ export function useCollabswarm<
   DocumentKey
 >(
   privateKey: PrivateKey,
+  publicKey: PublicKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
   syncMessageSerializer: SyncMessageSerializer<ChangesType>,
@@ -44,6 +45,7 @@ export function useCollabswarm<
     setCollabswarm(
       new Collabswarm(
         privateKey,
+        publicKey,
         provider,
         changesSerializer,
         syncMessageSerializer,

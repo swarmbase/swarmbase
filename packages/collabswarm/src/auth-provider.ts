@@ -21,4 +21,6 @@ export interface AuthProvider<PrivateKey, PublicKey, DocumentKey = string> {
     documentKey: DocumentKey,
     nonce?: Uint8Array
   ): Promise<Uint8Array>;
+
+  readonly nonceBits: number;
 }

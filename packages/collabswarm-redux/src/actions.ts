@@ -247,7 +247,7 @@ export function openDocumentAsync<
           'Failed to load document from peers, assuming this is a new document...',
           documentRef,
         );
-        await documentRef.pin();
+        // await documentRef.pin();
       }
       dispatch(openDocument(documentId, documentRef));
       return documentRef;

@@ -1,24 +1,10 @@
-export type CRDTChangeNodeDeferred = false;
-export const crdtChangeNodeDeferred: CRDTChangeNodeDeferred = false;
-
-// Change nodes contain the full change
-export type CRDTChangeNode<ChangesType> = {
-  // id: string;
-
-  // `undefined` changes means that the changes should be fetched from IPFS blockstore.
-  change?: ChangesType;
-
-  // `undefined` means that this node is a leaf node (equivalent to `[]`).
-  children?:
-    | { [hash: string]: CRDTChangeNode<ChangesType> }
-    | CRDTChangeNodeDeferred;
-};
+import { CRDTChangeNode } from "./crdt-change-node";
 
 /**
  * CRDTSyncMessage is the message sent over both IPFS pubsub topics and in response to
  * load document requests.
  *
- * @tparam ChangesType Type of a block of change(s).
+ * @tparam ChangesType A block of CRDT change(s).
  */
 export type CRDTSyncMessage<ChangesType> = {
   /**
@@ -39,7 +25,6 @@ export type CRDTSyncMessage<ChangesType> = {
    * Data stored int the IPFS file is deserialized using a `MessageSerializer`
    * implementation.
    */
-  // changes: { [hash: string]: ChangesType | null };
   changes?: CRDTChangeNode<ChangesType>;
 
   /**
@@ -51,7 +36,6 @@ export type CRDTSyncMessage<ChangesType> = {
    * An optional block of change(s) made to the reader ACL. `undefined` means no change
    * was made to the reader ACL.
    */
-  // readersChanges: { [hash: string]: ChangesType | null };
   readersChanges?: CRDTChangeNode<ChangesType>;
 
   /**
@@ -63,7 +47,6 @@ export type CRDTSyncMessage<ChangesType> = {
    * An optional block of change(s) made to the writer ACL. `undefined` means no change
    * was made to the writer ACL.
    */
-  // writersChanges: { [hash: string]: ChangesType | null };
   writersChanges?: CRDTChangeNode<ChangesType>;
 
   /**

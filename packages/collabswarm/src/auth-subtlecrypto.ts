@@ -29,7 +29,7 @@ export class SubtleCrypto
      *
      * @remarks 96 bits length is recommended in docs; though example uses only 12
      */
-    public readonly _nonceBits = 96,
+    public readonly nonceBits = 96,
 
     /**
      * The type of algorithm used for signature and verification keys.
@@ -71,11 +71,10 @@ export class SubtleCrypto
   _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams {
     switch (this._encryptionAlgorithmName) {
       case "AES-GCM":
-        let iv_value = crypto.getRandomValues(new Uint8Array(this._nonceBits));
-        if (nonce) iv_value = nonce;
+        const iv = nonce ? nonce : crypto.getRandomValues(new Uint8Array(this.nonceBits));
         return {
-          name: this._encryptionAlgorithmName,
-          iv: iv_value,
+          name: "AES-GCM",
+          iv,
         };
       default:
         throw "Encryption is only supported with AesGcmParams currently"!;
@@ -135,7 +134,7 @@ export class SubtleCrypto
   public async decrypt(
     data: Uint8Array,
     documentKey: CryptoKey,
-    nonce: Uint8Array
+    nonce?: Uint8Array
   ): Promise<Uint8Array> {
     try {
       return new Uint8Array(
