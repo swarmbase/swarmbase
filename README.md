@@ -47,7 +47,7 @@ Development philosophy: we intend to prioritize improving performance, reliabili
 
 Will be generated based on code comments, so that they are more likely to be current and we are encouraged to provide more detail.
 
-## Situations where SwarmDB works well
+## Situations where SwarmDB may work well
 
 - For implementing collaborative real-time applications which can be very difficult and error prone
 - Applications that want that local-first responsiveness at the point of user interaction
@@ -80,11 +80,12 @@ docker-compose up
 
 ## Known Limitations
 
-Currently the transport for browser-browser communication is libp2p-js-web-rtc-star. This protocol requires the usage of
-a centralized signaling server and/or a relay (non-browser) node if the two browsers connecting can't communicate due to NAT translation or firewall
-problems.
-These libp2p mechanisms fill a role similar to WebRTC's TURN and STUN
-protocols/services.
+- Please be aware that data loss can occur if all clients lose local storage, for example exit browser, and remote pinning service is not set up. This is something we hope to address and make easier in the future, but at this early moment it's similar to venture investing where they say: only put in what you can afford to lose. Open to comments or requests in this area.
+- Currently the transport for browser-browser communication is libp2p-js-web-rtc-star. This protocol requires the usage of
+  a centralized signaling server and/or a relay (non-browser) node if the two browsers connecting can't communicate due to NAT translation or firewall
+  problems.
+  These libp2p mechanisms fill a role similar to WebRTC's TURN and STUN
+  protocols/services.
 
 ## Why SwarmDB?
 
