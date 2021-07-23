@@ -7,6 +7,14 @@ export function shuffleArray<T = any>(array: T[]) {
   }
 }
 
+export function firstTrue(promises: Promise<boolean>[]) {
+  const newPromises = promises.map(p => new Promise<boolean>(
+    (resolve, reject) => p.then(v => v && resolve(true), reject)
+  ));
+  newPromises.push(Promise.all(promises).then(() => false));
+  return Promise.race(newPromises);
+}
+
 // HACK:
 export function isBufferList(input: Uint8Array | BufferList): boolean {
   return !!Object.getOwnPropertySymbols(input).find((s) => {
