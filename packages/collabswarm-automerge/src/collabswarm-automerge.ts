@@ -183,7 +183,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     if (!this._keychain.keys) {
       return;
     }
-    
+
     const hash = this._keychain.keys[this._keychain.keys.length];
 
     let key: CryptoKey | undefined = undefined;

@@ -8,7 +8,7 @@ import {
   KeychainProvider,
   LoadMessageSerializer,
 } from '@collabswarm/collabswarm';
-import {  } from '@collabswarm/collabswarm/src/load-request-serializer';
+import {} from '@collabswarm/collabswarm/src/load-request-serializer';
 import { useEffect, useState } from 'react';
 
 export function useCollabswarm<

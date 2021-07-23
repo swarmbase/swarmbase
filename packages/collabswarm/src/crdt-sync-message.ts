@@ -1,4 +1,4 @@
-import { CRDTChangeNode } from "./crdt-change-node";
+import { CRDTChangeNode } from './crdt-change-node';
 
 /**
  * CRDTSyncMessage is the message sent over both IPFS pubsub topics and in response to

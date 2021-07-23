@@ -1,4 +1,4 @@
-import { AuthProvider } from "./auth-provider";
+import { AuthProvider } from './auth-provider';
 
 /**
  * Used to wrap CryptoKey so that initialized vector used in encryption
@@ -41,8 +41,8 @@ export class SubtleCrypto
       | RsaPssParams
       | EcdsaParams
       | AesCmacParams = {
-      name: "ECDSA",
-      hash: { name: "SHA-384" },
+      name: 'ECDSA',
+      hash: { name: 'SHA-384' },
     },
 
     /**
@@ -52,9 +52,9 @@ export class SubtleCrypto
      * "RSA-OAEP" is not supported at this time because it is a key pair.
      */
     public readonly _encryptionAlgorithmName:
-      | "AES-GCM"
-      | "AES-CTR"
-      | "AES-CBC" = "AES-GCM"
+      | 'AES-GCM'
+      | 'AES-CTR'
+      | 'AES-CBC' = 'AES-GCM',
   ) {}
 
   /**
@@ -70,14 +70,16 @@ export class SubtleCrypto
    */
   _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams {
     switch (this._encryptionAlgorithmName) {
-      case "AES-GCM":
-        const iv = nonce ? nonce : crypto.getRandomValues(new Uint8Array(this.nonceBits));
+      case 'AES-GCM':
+        const iv = nonce
+          ? nonce
+          : crypto.getRandomValues(new Uint8Array(this.nonceBits));
         return {
-          name: "AES-GCM",
+          name: 'AES-GCM',
           iv,
         };
       default:
-        throw "Encryption is only supported with AesGcmParams currently"!;
+        throw 'Encryption is only supported with AesGcmParams currently'!;
     }
   }
 
@@ -90,10 +92,10 @@ export class SubtleCrypto
    */
   public async sign(
     data: Uint8Array,
-    privateKey: CryptoKey
+    privateKey: CryptoKey,
   ): Promise<Uint8Array> {
     return new Uint8Array(
-      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data)
+      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data),
     );
   }
 
@@ -108,13 +110,13 @@ export class SubtleCrypto
   public async verify(
     data: Uint8Array,
     publicKey: CryptoKey,
-    signature: Uint8Array
+    signature: Uint8Array,
   ): Promise<boolean> {
     return await crypto.subtle.verify(
       this.signingAlgorithm,
       publicKey,
       signature,
-      data
+      data,
     );
   }
 
@@ -134,18 +136,18 @@ export class SubtleCrypto
   public async decrypt(
     data: Uint8Array,
     documentKey: CryptoKey,
-    nonce?: Uint8Array
+    nonce?: Uint8Array,
   ): Promise<Uint8Array> {
     try {
       return new Uint8Array(
         await crypto.subtle.decrypt(
           this._encryptionAlgorithmParams(nonce),
           documentKey,
-          data
-        )
+          data,
+        ),
       );
     } catch (err) {
-      console.error("Failed to decrypt data:", err);
+      console.error('Failed to decrypt data:', err);
       throw err;
     }
   }
@@ -160,13 +162,13 @@ export class SubtleCrypto
    */
   public async encrypt(
     data: Uint8Array,
-    documentKey: CryptoKey
+    documentKey: CryptoKey,
   ): Promise<SubtleCryptoEncryptionResult> {
     const algorithmParams = this._encryptionAlgorithmParams();
     const ciphertext = await crypto.subtle.encrypt(
       algorithmParams,
       documentKey,
-      data
+      data,
     );
     return {
       data: new Uint8Array(ciphertext),

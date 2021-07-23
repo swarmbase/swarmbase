@@ -115,7 +115,7 @@ export class CollabswarmNode<
     }
 
     if (node.children === crdtChangeNodeDeferred) {
-      throw new Error("Currently IPLD deferred nodes are not supported!");
+      throw new Error('Currently IPLD deferred nodes are not supported!');
     }
 
     const tasks: Promise<void>[] = [];

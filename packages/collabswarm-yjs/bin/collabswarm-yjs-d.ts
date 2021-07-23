@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
 import { CollabswarmNode, SubtleCrypto } from '@collabswarm/collabswarm';
-import { YjsACLProvider, YjsJSONSerializer, YjsKeychainProvider, YjsProvider } from '../src';
+import {
+  YjsACLProvider,
+  YjsJSONSerializer,
+  YjsKeychainProvider,
+  YjsProvider,
+} from '../src';
 
 global.crypto = require('crypto').webcrypto;
 
@@ -14,14 +19,24 @@ const keychain = new YjsKeychainProvider();
 crypto.subtle
   .generateKey(
     {
-      name: "ECDSA",
-      namedCurve: "P-384",
+      name: 'ECDSA',
+      namedCurve: 'P-384',
     },
     true,
-    ["sign", "verify"]
+    ['sign', 'verify'],
   )
-  .then(keypair => {
-    const swarmNode = new CollabswarmNode(keypair.privateKey, keypair.publicKey, crdt, serializer, serializer, serializer, auth, acl, keychain);
+  .then((keypair) => {
+    const swarmNode = new CollabswarmNode(
+      keypair.privateKey,
+      keypair.publicKey,
+      crdt,
+      serializer,
+      serializer,
+      serializer,
+      auth,
+      acl,
+      keychain,
+    );
     console.log('Starting node...');
     swarmNode.start();
   });

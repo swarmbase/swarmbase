@@ -160,7 +160,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     if (yarr.length === 0) {
       return;
     }
-    
+
     const hash = yarr.get(yarr.length);
 
     let key: CryptoKey | undefined = undefined;

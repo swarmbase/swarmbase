@@ -19,13 +19,13 @@ const keychain = new AutomergeKeychainProvider();
 crypto.subtle
   .generateKey(
     {
-      name: "ECDSA",
-      namedCurve: "P-384",
+      name: 'ECDSA',
+      namedCurve: 'P-384',
     },
     true,
-    ["sign", "verify"]
+    ['sign', 'verify'],
   )
-  .then(keypair => {
+  .then((keypair) => {
     const swarmNode = new CollabswarmNode(
       keypair.privateKey,
       keypair.publicKey,

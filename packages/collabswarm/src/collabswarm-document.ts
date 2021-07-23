@@ -9,13 +9,15 @@ import pipe from 'it-pipe';
 import Libp2p from 'libp2p';
 import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
 import { Collabswarm } from './collabswarm';
-import { concatUint8Arrays, firstTrue, readUint8Iterable, shuffleArray } from './utils';
+import {
+  concatUint8Arrays,
+  firstTrue,
+  readUint8Iterable,
+  shuffleArray,
+} from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import {
-  CRDTChangeNode,
-  crdtChangeNodeDeferred,
-} from './crdt-change-node';
+import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
@@ -232,7 +234,10 @@ export class CollabswarmDocument<
       throw new Error(`Document ${this.documentPath} has an empty keychain!`);
     }
     const content = this._changesSerializer.serializeChanges(block);
-    const { nonce, data } = await this._authProvider.encrypt(content, documentKey);
+    const { nonce, data } = await this._authProvider.encrypt(
+      content,
+      documentKey,
+    );
     const blockData = nonce ? concatUint8Arrays(nonce, data) : data;
     const newFileResult = await this.swarm.ipfsNode.block.put(blockData);
     return newFileResult.cid.toString();
@@ -772,7 +777,9 @@ export class CollabswarmDocument<
   public async change(changeFn: ChangeFnType, message?: string) {
     // Check that we are a writer (allowed to write to this document).
     if (!(await this._writers.check(this._userPublicKey))) {
-      throw new Error(`Current user does not have write permissions for: ${this.documentPath}`);
+      throw new Error(
+        `Current user does not have write permissions for: ${this.documentPath}`,
+      );
     }
 
     const [newDocument, changes] = this._crdtProvider.localChange(
