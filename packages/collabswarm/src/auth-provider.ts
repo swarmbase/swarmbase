@@ -10,15 +10,17 @@ export interface AuthProvider<PrivateKey, PublicKey, DocumentKey = string> {
   verify(
     data: Uint8Array,
     publicKey: PublicKey,
-    signature: Uint8Array
+    signature: Uint8Array,
   ): Promise<boolean>;
   encrypt(
     data: Uint8Array,
-    documentKey: DocumentKey
+    documentKey: DocumentKey,
   ): Promise<EncryptionResult>;
   decrypt(
     data: Uint8Array,
     documentKey: DocumentKey,
-    nonce?: Uint8Array
+    nonce?: Uint8Array,
   ): Promise<Uint8Array>;
+
+  readonly nonceBits: number;
 }

@@ -67,6 +67,7 @@ export class Collabswarm<
 > {
   constructor(
     private readonly _userKey: PrivateKey,
+    private readonly _userPublicKey: PublicKey,
     private readonly _crdtProvider: CRDTProvider<
       DocType,
       ChangesType,
@@ -219,6 +220,7 @@ export class Collabswarm<
       this,
       documentPath,
       this._userKey,
+      this._userPublicKey,
       this._crdtProvider,
       this._authProvider,
       this._aclProvider,

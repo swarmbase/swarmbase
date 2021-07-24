@@ -15,6 +15,7 @@ import { AuthProvider } from './auth-provider';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
 
 export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
   ipfs: {
@@ -50,6 +51,7 @@ export class CollabswarmNode<
 > {
   private _swarm = new Collabswarm(
     this.nodeKey,
+    this.nodePublicKey,
     this.provider,
     this.changesSerializer,
     this.syncMessageSerializer,
@@ -86,6 +88,7 @@ export class CollabswarmNode<
 
   constructor(
     private readonly nodeKey: PrivateKey,
+    private readonly nodePublicKey: PublicKey,
     public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
     public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType>,
@@ -102,6 +105,27 @@ export class CollabswarmNode<
     >,
     public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
   ) {}
+
+  private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
+    if (!this._seenCids.has(cid)) {
+      // TODO: Handle this operation failing (retry).
+      // TODO: Does this need to be converted to a `CID` from a string first?
+      this.swarm.ipfsNode.pin.add(cid);
+      this._seenCids.add(cid);
+    }
+
+    if (node.children === crdtChangeNodeDeferred) {
+      throw new Error('Currently IPLD deferred nodes are not supported!');
+    }
+
+    const tasks: Promise<void>[] = [];
+    if (node.children !== undefined) {
+      for (const [childHash, childNode] of Object.entries(node.children)) {
+        tasks.push(this._pinNewCIDs(childHash, childNode));
+      }
+    }
+    await Promise.all(tasks);
+  }
 
   // Start
   public async start() {
@@ -167,12 +191,14 @@ export class CollabswarmNode<
             docRef.open();
 
             // Pin all of the files that were received.
-            for (const cid of Object.keys(message.changes)) {
-              if (!this._seenCids.has(cid)) {
-                // TODO: Handle this operation failing (retry).
-                this.swarm.ipfsNode.pin.add(cid);
-                this._seenCids.add(cid);
-              }
+            if (message.changeId && message.changes) {
+              this._pinNewCIDs(message.changeId, message.changes);
+            }
+            if (message.readersChangeId && message.readersChanges) {
+              this._pinNewCIDs(message.readersChangeId, message.readersChanges);
+            }
+            if (message.writersChangeId && message.writersChanges) {
+              this._pinNewCIDs(message.writersChangeId, message.writersChanges);
             }
           } else {
             console.warn(

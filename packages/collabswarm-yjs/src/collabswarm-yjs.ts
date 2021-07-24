@@ -155,6 +155,23 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 
     return await Promise.all(promises);
   }
+  async current(): Promise<CryptoKey | undefined> {
+    const yarr = this._keychain.getArray<string>('keys');
+    if (yarr.length === 0) {
+      return;
+    }
+
+    const hash = yarr.get(yarr.length);
+
+    let key: CryptoKey | undefined = undefined;
+    if (this._keyCache.has(hash)) {
+      key = this._keyCache.get(hash);
+    }
+    if (!key) {
+      key = await deserializeKey(hash);
+    }
+    return key;
+  }
 }
 
 export class YjsKeychainProvider

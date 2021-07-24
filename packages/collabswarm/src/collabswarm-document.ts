@@ -9,14 +9,16 @@ import pipe from 'it-pipe';
 import Libp2p from 'libp2p';
 import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
 import { Collabswarm } from './collabswarm';
-import { firstTrue, readUint8Iterable, shuffleArray } from './utils';
+import {
+  concatUint8Arrays,
+  firstTrue,
+  readUint8Iterable,
+  shuffleArray,
+} from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import {
-  CRDTChangeNode,
-  crdtChangeNodeDeferred,
-  CRDTSyncMessage,
-} from './crdt-sync-message';
+import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
+import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentLoadV1 } from './wire-protocols';
@@ -150,6 +152,11 @@ export class CollabswarmDocument<
     private readonly _userKey: PrivateKey,
 
     /**
+     * Private key identifying the current user.
+     */
+    private readonly _userPublicKey: PublicKey,
+
+    /**
      * CRDTProvider handles reading/writing CRDT document data and metadata.
      */
     private readonly _crdtProvider: CRDTProvider<
@@ -198,9 +205,42 @@ export class CollabswarmDocument<
 
   // Helpers ------------------------------------------------------------------
 
+  private async _decryptBlock(nonce: Uint8Array, data: Uint8Array) {
+    // TODO: Remove this loop by storing a document public key or some other id for it.
+    for (const key of await this._keychain.keys()) {
+      try {
+        return this._authProvider.decrypt(data, key, nonce);
+      } catch {
+        // No-op, continue loop.
+      }
+    }
+    return undefined;
+  }
+
   private async _getBlock(hash: string): Promise<ChangesType> {
     const block = await this.swarm.ipfsNode.block.get(hash);
-    return this._changesSerializer.deserializeChanges(block.data);
+    const blockNonce = block.data.slice(0, this._authProvider.nonceBits);
+    const blockData = block.data.slice(this._authProvider.nonceBits);
+    const content = await this._decryptBlock(blockNonce, blockData);
+    if (!content) {
+      throw new Error(`Failed to decrypt block (CID: ${hash})`);
+    }
+    return this._changesSerializer.deserializeChanges(content);
+  }
+
+  private async _putBlock(block: ChangesType): Promise<string> {
+    const documentKey = await this._keychain.current();
+    if (!documentKey) {
+      throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+    }
+    const content = this._changesSerializer.serializeChanges(block);
+    const { nonce, data } = await this._authProvider.encrypt(
+      content,
+      documentKey,
+    );
+    const blockData = nonce ? concatUint8Arrays(nonce, data) : data;
+    const newFileResult = await this.swarm.ipfsNode.block.put(blockData);
+    return newFileResult.cid.toString();
   }
 
   private async _mergeSyncTree(
@@ -735,7 +775,12 @@ export class CollabswarmDocument<
    * @param message An optional change message/description to include.
    */
   public async change(changeFn: ChangeFnType, message?: string) {
-    // TODO: Check that we are a writer (allowed to write to this document).
+    // Check that we are a writer (allowed to write to this document).
+    if (!(await this._writers.check(this._userPublicKey))) {
+      throw new Error(
+        `Current user does not have write permissions for: ${this.documentPath}`,
+      );
+    }
 
     const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
@@ -746,10 +791,7 @@ export class CollabswarmDocument<
     this._document = newDocument;
 
     // Store changes in ipfs.
-    const newFileResult = await this.swarm.ipfsNode.block.put(
-      this._changesSerializer.serializeChanges(changes),
-    );
-    const hash = newFileResult.cid.toString();
+    const hash = await this._putBlock(changes);
     this._hashes.add(hash);
 
     // Send new message.

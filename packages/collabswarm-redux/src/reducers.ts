@@ -82,6 +82,7 @@ export function initialState<
   DocumentKey
 >(
   privateKey: PrivateKey,
+  publicKey: PublicKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
   syncMessageSerializer: SyncMessageSerializer<ChangesType>,
@@ -100,6 +101,7 @@ export function initialState<
   return {
     node: new Collabswarm(
       privateKey,
+      publicKey,
       provider,
       changesSerializer,
       syncMessageSerializer,
@@ -123,6 +125,7 @@ export function collabswarmReducer<
   DocumentKey
 >(
   privateKey: PrivateKey,
+  publicKey: PublicKey,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
   syncMessageSerializer: SyncMessageSerializer<ChangesType>,
@@ -141,6 +144,7 @@ export function collabswarmReducer<
       DocumentKey
     > = initialState(
       privateKey,
+      publicKey,
       provider,
       changesSerializer,
       syncMessageSerializer,

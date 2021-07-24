@@ -19,15 +19,16 @@ const keychain = new AutomergeKeychainProvider();
 crypto.subtle
   .generateKey(
     {
-      name: "AES-GCM",
-      length: 256,
+      name: 'ECDSA',
+      namedCurve: 'P-384',
     },
     true,
-    ["encrypt", "decrypt"]
+    ['sign', 'verify'],
   )
-  .then(key => {
+  .then((keypair) => {
     const swarmNode = new CollabswarmNode(
-      key,
+      keypair.privateKey,
+      keypair.publicKey,
       crdt,
       serializer,
       serializer,

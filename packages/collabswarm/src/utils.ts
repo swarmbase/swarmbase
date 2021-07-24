@@ -18,6 +18,17 @@ export function firstTrue(promises: Promise<boolean>[]) {
   return Promise.race(newPromises);
 }
 
+export function concatUint8Arrays(...arrs: Uint8Array[]): Uint8Array {
+  const length = arrs.reduce((a, b) => a + b.length, 0);
+  const newArr = new Uint8Array(length);
+  let currentIndex = 0;
+  for (const arr of arrs) {
+    newArr.set(arr, currentIndex);
+    currentIndex += arr.length;
+  }
+  return newArr;
+}
+
 // HACK:
 export function isBufferList(input: Uint8Array | BufferList): boolean {
   return !!Object.getOwnPropertySymbols(input).find((s) => {
