@@ -7,7 +7,10 @@ export type CRDTWriterChangeNode = 'writer';
 export const crdtWriterChangeNode: CRDTWriterChangeNode = 'writer';
 export type CRDTReaderChangeNode = 'reader';
 export const crdtReaderChangeNode: CRDTReaderChangeNode = 'reader';
-export type CRDTChangeNodeKind = CRDTDocumentChangeNode | CRDTWriterChangeNode | CRDTReaderChangeNode;
+export type CRDTChangeNodeKind =
+  | CRDTDocumentChangeNode
+  | CRDTWriterChangeNode
+  | CRDTReaderChangeNode;
 
 /**
  * A CRDT Change node represents a shadow copy of a Merkle DAG that is sent over sync messages.
@@ -21,14 +24,14 @@ export type CRDTChangeNode<ChangesType> = {
 
   /**
    * Changes made to the document itself (if any).
-   * 
+   *
    * `false` means that the changes should be fetched from IPFS blockstore.
    */
   change?: ChangesType;
 
   /**
    * Child nodes of the current node keyed on its CID.
-   * 
+   *
    * `undefined` means that this node is a leaf node (equivalent to `[]`).
    */
   children?:

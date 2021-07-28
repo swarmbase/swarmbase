@@ -17,7 +17,14 @@ import {
 } from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import { CRDTChangeNode, crdtChangeNodeDeferred, CRDTChangeNodeKind, crdtDocumentChangeNode, crdtReaderChangeNode, crdtWriterChangeNode } from './crdt-change-node';
+import {
+  CRDTChangeNode,
+  crdtChangeNodeDeferred,
+  CRDTChangeNodeKind,
+  crdtDocumentChangeNode,
+  crdtReaderChangeNode,
+  crdtWriterChangeNode,
+} from './crdt-change-node';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
@@ -275,7 +282,9 @@ export class CollabswarmDocument<
       throw new Error('IPLD dereferencing is not supported yet!');
     }
 
-    const results: Promise<[string, CRDTChangeNodeKind, ChangesType | undefined][]>[] = [];
+    const results: Promise<
+      [string, CRDTChangeNodeKind, ChangesType | undefined][]
+    >[] = [];
     for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
       results.push(
         this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
@@ -326,7 +335,10 @@ export class CollabswarmDocument<
         switch (sentChangeKind) {
           case crdtDocumentChangeNode: {
             // Apply the changes that were sent directly.
-            newDocument = this._crdtProvider.remoteChange(newDocument, sentChanges);
+            newDocument = this._crdtProvider.remoteChange(
+              newDocument,
+              sentChanges,
+            );
             newDocumentHashes.push(sentHash);
             break;
           }
