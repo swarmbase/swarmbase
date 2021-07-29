@@ -18,83 +18,83 @@ function mergeRecursive(obj1, obj2) {
   return obj1;
 }
 function sanitizeModuleName(moduleName) {
-  return moduleName.toLowerCase().replace(/[^a-z0-9]/gi, "_");
+  return moduleName.toLowerCase().replace(/[^a-z0-9]/gi, '_');
 }
 function renderSimpleHTMLRecursive(obj, package, spacing) {
-  void 0 === package && (package = ""),
-    void 0 === spacing && (spacing = "&emsp;");
+  void 0 === package && (package = ''),
+    void 0 === spacing && (spacing = '&emsp;');
   for (
-    var html = "", shownPackages = [], _i = 0, _a = Object.keys(obj);
+    var html = '', shownPackages = [], _i = 0, _a = Object.keys(obj);
     _i < _a.length;
     _i++
   ) {
     var key = _a[_i];
-    if ("object" == typeof obj[key])
+    if ('object' == typeof obj[key])
       html += renderSimpleHTMLRecursive(
         obj[key],
-        package + "_" + key,
-        spacing + "&emsp;"
+        package + '_' + key,
+        spacing + '&emsp;',
       );
     else {
       -1 === shownPackages.indexOf(package) &&
-        ((html += "<div>" + package.replace(/_/g, "/") + "</div>"),
+        ((html += '<div>' + package.replace(/_/g, '/') + '</div>'),
         shownPackages.push(package));
-      var href = "";
-      -1 === window.location.href.indexOf("/modules/") && (href = "modules/"),
-        (window.location.href.indexOf("/assets/") > -1 ||
-          window.location.href.indexOf("/classes/") > -1 ||
-          window.location.href.indexOf("/enums/") > -1 ||
-          window.location.href.indexOf("/interfaces/") > -1) &&
-          (href = "../modules/"),
-        window.location.href.indexOf("/modules/") > -1 &&
-          (href = "../modules/" + href),
+      var href = '';
+      -1 === window.location.href.indexOf('/modules/') && (href = 'modules/'),
+        (window.location.href.indexOf('/assets/') > -1 ||
+          window.location.href.indexOf('/classes/') > -1 ||
+          window.location.href.indexOf('/enums/') > -1 ||
+          window.location.href.indexOf('/interfaces/') > -1) &&
+          (href = '../modules/'),
+        window.location.href.indexOf('/modules/') > -1 &&
+          (href = '../modules/' + href),
         (href += package
-          ? "Overview" === key
-            ? "_" + sanitizeModuleName(package.substr(1)) + "_.html"
-            : "_" +
+          ? 'Overview' === key
+            ? '_' + sanitizeModuleName(package.substr(1)) + '_.html'
+            : '_' +
               sanitizeModuleName(package.substr(1)) +
-              "_" +
+              '_' +
               sanitizeModuleName(key) +
-              "_.html"
-          : "_" + sanitizeModuleName(key) + "_.html"),
-        (html += "<a href='" + href + "'>" + key + "</a>");
+              '_.html'
+          : '_' + sanitizeModuleName(key) + '_.html'),
+        (html += "<a href='" + href + "'>" + key + '</a>');
     }
   }
   return html;
 }
 function renderHTMLRecursive(obj, package, spacing) {
-  void 0 === package && (package = ""),
-    void 0 === spacing && (spacing = "&emsp;");
+  void 0 === package && (package = ''),
+    void 0 === spacing && (spacing = '&emsp;');
   for (
-    var html = "", shownPackages = [], _i = 0, _a = Object.keys(obj);
+    var html = '', shownPackages = [], _i = 0, _a = Object.keys(obj);
     _i < _a.length;
     _i++
   ) {
     var key = _a[_i];
-    if ("object" == typeof obj[key])
+    if ('object' == typeof obj[key])
       html += renderHTMLRecursive(
         obj[key],
-        package + "_" + key,
-        spacing + "&emsp;"
+        package + '_' + key,
+        spacing + '&emsp;',
       );
     else {
       -1 === shownPackages.indexOf(package) &&
-        ((html += "<div>" + package.replace(/_/g, "/").substr(1) + "</div>"),
+        ((html += '<div>' + package.replace(/_/g, '/').substr(1) + '</div>'),
         shownPackages.push(package));
-      var href = "";
-      -1 === obj[key].indexOf("/") && (href = "modules/"),
-        (window.location.href.indexOf("/assets/") > -1 ||
-          window.location.href.indexOf("/classes/") > -1 ||
-          window.location.href.indexOf("/enums/") > -1 ||
-          window.location.href.indexOf("/interfaces/") > -1 ||
-          window.location.href.indexOf("/modules/") > -1) &&
-          (href = "../" + href);
+      var href = '';
+      -1 === obj[key].indexOf('/') && (href = 'modules/'),
+        (window.location.href.indexOf('/assets/') > -1 ||
+          window.location.href.indexOf('/classes/') > -1 ||
+          window.location.href.indexOf('/enums/') > -1 ||
+          window.location.href.indexOf('/interfaces/') > -1 ||
+          window.location.href.indexOf('/modules/') > -1) &&
+          (href = '../' + href);
       var pageName = href + obj[key],
-        pageNamePath = pageName.replace("../", "") + ".html";
+        pageNamePath = pageName.replace('../', '') + '.html';
       window.location.href.indexOf(pageNamePath) > -1
         ? (html +=
-            '<a class="selected" href=\'' + pageName + ".html'>" + key + "</a>")
-        : (html += "<a href='" + pageName + ".html'>" + key + "</a>");
+            '<a class="selected" href=\'' + pageName + ".html'>" + key + '</a>')
+        : (html += "<a href='" + pageName + ".html'>" + key + '</a>');
     }
   }
   return html;
@@ -109,7 +109,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       r.build()
     );
   };
-  (e.version = "2.3.7"),
+  (e.version = '2.3.7'),
     (e.utils = {}),
     (e.utils.warn = (function (e) {
       return function (t) {
@@ -117,7 +117,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       };
     })(this)),
     (e.utils.asString = function (e) {
-      return void 0 === e || null === e ? "" : e.toString();
+      return void 0 === e || null === e ? '' : e.toString();
     }),
     (e.utils.clone = function (e) {
       if (null === e || void 0 === e) return e;
@@ -131,12 +131,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         if (Array.isArray(s)) t[n] = s.slice();
         else {
           if (
-            "string" != typeof s &&
-            "number" != typeof s &&
-            "boolean" != typeof s
+            'string' != typeof s &&
+            'number' != typeof s &&
+            'boolean' != typeof s
           )
             throw new TypeError(
-              "clone is not deep and does not support nested objects"
+              'clone is not deep and does not support nested objects',
             );
           t[n] = s;
         }
@@ -146,10 +146,10 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.FieldRef = function (e, t, r) {
       (this.docRef = e), (this.fieldName = t), (this._stringValue = r);
     }),
-    (e.FieldRef.joiner = "/"),
+    (e.FieldRef.joiner = '/'),
     (e.FieldRef.fromString = function (t) {
       var r = t.indexOf(e.FieldRef.joiner);
-      if (-1 === r) throw "malformed field ref string";
+      if (-1 === r) throw 'malformed field ref string';
       var i = t.slice(0, r),
         n = t.slice(r + 1);
       return new e.FieldRef(n, i, t);
@@ -217,12 +217,12 @@ function renderHTMLRecursive(obj, package, spacing) {
     }),
     (e.idf = function (e, t) {
       var r = 0;
-      for (var i in e) "_index" != i && (r += Object.keys(e[i]).length);
+      for (var i in e) '_index' != i && (r += Object.keys(e[i]).length);
       var n = (t - r + 0.5) / (r + 0.5);
       return Math.log(1 + Math.abs(n));
     }),
     (e.Token = function (e, t) {
-      (this.str = e || ""), (this.metadata = t || {});
+      (this.str = e || ''), (this.metadata = t || {});
     }),
     (e.Token.prototype.toString = function () {
       return this.str;
@@ -246,7 +246,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return t.map(function (t) {
           return new e.Token(
             e.utils.asString(t).toLowerCase(),
-            e.utils.clone(r)
+            e.utils.clone(r),
           );
         });
       for (
@@ -275,15 +275,15 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.Pipeline.registeredFunctions = Object.create(null)),
     (e.Pipeline.registerFunction = function (t, r) {
       r in this.registeredFunctions &&
-        e.utils.warn("Overwriting existing registered function: " + r),
+        e.utils.warn('Overwriting existing registered function: ' + r),
         (t.label = r),
         (e.Pipeline.registeredFunctions[t.label] = t);
     }),
     (e.Pipeline.warnIfFunctionNotRegistered = function (t) {
       (t.label && t.label in this.registeredFunctions) ||
         e.utils.warn(
-          "Function is not registered with pipeline. This may cause problems when serialising the index.\n",
-          t
+          'Function is not registered with pipeline. This may cause problems when serialising the index.\n',
+          t,
         );
     }),
     (e.Pipeline.load = function (t) {
@@ -291,7 +291,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return (
         t.forEach(function (t) {
           var i = e.Pipeline.registeredFunctions[t];
-          if (!i) throw new Error("Cannot load unregistered function: " + t);
+          if (!i) throw new Error('Cannot load unregistered function: ' + t);
           r.add(i);
         }),
         r
@@ -305,13 +305,13 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.Pipeline.prototype.after = function (t, r) {
       e.Pipeline.warnIfFunctionNotRegistered(r);
       var i = this._stack.indexOf(t);
-      if (-1 == i) throw new Error("Cannot find existingFn");
+      if (-1 == i) throw new Error('Cannot find existingFn');
       (i += 1), this._stack.splice(i, 0, r);
     }),
     (e.Pipeline.prototype.before = function (t, r) {
       e.Pipeline.warnIfFunctionNotRegistered(r);
       var i = this._stack.indexOf(t);
-      if (-1 == i) throw new Error("Cannot find existingFn");
+      if (-1 == i) throw new Error('Cannot find existingFn');
       this._stack.splice(i, 0, r);
     }),
     (e.Pipeline.prototype.remove = function (e) {
@@ -322,7 +322,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       for (var t = this._stack.length, r = 0; r < t; r++) {
         for (var i = this._stack[r], n = [], s = 0; s < e.length; s++) {
           var o = i(e[s], s, e);
-          if (null !== o && void 0 !== o && "" !== o)
+          if (null !== o && void 0 !== o && '' !== o)
             if (Array.isArray(o))
               for (var a = 0; a < o.length; a++) n.push(o[a]);
             else n.push(o);
@@ -364,7 +364,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     }),
     (e.Vector.prototype.insert = function (e, t) {
       this.upsert(e, t, function () {
-        throw "duplicate index";
+        throw 'duplicate index';
       });
     }),
     (e.Vector.prototype.upsert = function (e, t, r) {
@@ -422,58 +422,58 @@ function renderHTMLRecursive(obj, package, spacing) {
     }),
     (e.stemmer = (function () {
       var e = {
-          ational: "ate",
-          tional: "tion",
-          enci: "ence",
-          anci: "ance",
-          izer: "ize",
-          bli: "ble",
-          alli: "al",
-          entli: "ent",
-          eli: "e",
-          ousli: "ous",
-          ization: "ize",
-          ation: "ate",
-          ator: "ate",
-          alism: "al",
-          iveness: "ive",
-          fulness: "ful",
-          ousness: "ous",
-          aliti: "al",
-          iviti: "ive",
-          biliti: "ble",
-          logi: "log",
+          ational: 'ate',
+          tional: 'tion',
+          enci: 'ence',
+          anci: 'ance',
+          izer: 'ize',
+          bli: 'ble',
+          alli: 'al',
+          entli: 'ent',
+          eli: 'e',
+          ousli: 'ous',
+          ization: 'ize',
+          ation: 'ate',
+          ator: 'ate',
+          alism: 'al',
+          iveness: 'ive',
+          fulness: 'ful',
+          ousness: 'ous',
+          aliti: 'al',
+          iviti: 'ive',
+          biliti: 'ble',
+          logi: 'log',
         },
         t = {
-          icate: "ic",
-          ative: "",
-          alize: "al",
-          iciti: "ic",
-          ical: "ic",
-          ful: "",
-          ness: "",
+          icate: 'ic',
+          ative: '',
+          alize: 'al',
+          iciti: 'ic',
+          ical: 'ic',
+          ful: '',
+          ness: '',
         },
-        i = "[aeiouy]",
-        n = "[^aeiou][^aeiouy]*",
-        s = i + "[aeiou]*",
+        i = '[aeiouy]',
+        n = '[^aeiou][^aeiouy]*',
+        s = i + '[aeiou]*',
         c = new RegExp(
-          "^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*"
+          '^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*',
         ),
         h = new RegExp(
-          "^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*[aeiouy][aeiou]*[^aeiou][^aeiouy]*"
+          '^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*[aeiouy][aeiou]*[^aeiou][^aeiouy]*',
         ),
         d = new RegExp(
-          "^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*([aeiouy][aeiou]*)?$"
+          '^([^aeiou][^aeiouy]*)?[aeiouy][aeiou]*[^aeiou][^aeiouy]*([aeiouy][aeiou]*)?$',
         ),
-        f = new RegExp("^([^aeiou][^aeiouy]*)?[aeiouy]"),
+        f = new RegExp('^([^aeiou][^aeiouy]*)?[aeiouy]'),
         p = /^(.+?)(ss|i)es$/,
         y = /^(.+?)([^s])s$/,
         m = /^(.+?)eed$/,
         v = /^(.+?)(ed|ing)$/,
         g = /.$/,
         x = /(at|bl|iz)$/,
-        w = new RegExp("([^aeiouylsz])\\1$"),
-        Q = new RegExp("^" + n + i + "[^aeiouwxy]$"),
+        w = new RegExp('([^aeiouylsz])\\1$'),
+        Q = new RegExp('^' + n + i + '[^aeiouwxy]$'),
         k = /^(.+?[^aeiou])y$/,
         S = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/,
         E = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/,
@@ -481,24 +481,24 @@ function renderHTMLRecursive(obj, package, spacing) {
         b = /^(.+?)(s|t)(ion)$/,
         P = /^(.+?)e$/,
         T = /ll$/,
-        O = new RegExp("^" + n + i + "[^aeiouwxy]$"),
+        O = new RegExp('^' + n + i + '[^aeiouwxy]$'),
         I = function (r) {
           var i, n, s, o, a, u, l;
           if (r.length < 3) return r;
           if (
             ((s = r.substr(0, 1)),
-            "y" == s && (r = s.toUpperCase() + r.substr(1)),
+            'y' == s && (r = s.toUpperCase() + r.substr(1)),
             (o = p),
             (a = y),
             o.test(r)
-              ? (r = r.replace(o, "$1$2"))
-              : a.test(r) && (r = r.replace(a, "$1$2")),
+              ? (r = r.replace(o, '$1$2'))
+              : a.test(r) && (r = r.replace(a, '$1$2')),
             (o = m),
             (a = v),
             o.test(r))
           ) {
             var I = o.exec(r);
-            (o = c), o.test(I[1]) && ((o = g), (r = r.replace(o, "")));
+            (o = c), o.test(I[1]) && ((o = g), (r = r.replace(o, '')));
           } else if (a.test(r)) {
             var I = a.exec(r);
             (i = I[1]),
@@ -509,14 +509,14 @@ function renderHTMLRecursive(obj, package, spacing) {
                 (u = w),
                 (l = Q),
                 a.test(r)
-                  ? (r += "e")
+                  ? (r += 'e')
                   : u.test(r)
-                  ? ((o = g), (r = r.replace(o, "")))
-                  : l.test(r) && (r += "e"));
+                  ? ((o = g), (r = r.replace(o, '')))
+                  : l.test(r) && (r += 'e'));
           }
           if (((o = k), o.test(r))) {
             var I = o.exec(r);
-            (i = I[1]), (r = i + "i");
+            (i = I[1]), (r = i + 'i');
           }
           if (((o = S), o.test(r))) {
             var I = o.exec(r);
@@ -544,8 +544,8 @@ function renderHTMLRecursive(obj, package, spacing) {
           return (
             (o = T),
             (a = h),
-            o.test(r) && a.test(r) && ((o = g), (r = r.replace(o, ""))),
-            "y" == s && (r = s.toLowerCase() + r.substr(1)),
+            o.test(r) && a.test(r) && ((o = g), (r = r.replace(o, ''))),
+            'y' == s && (r = s.toLowerCase() + r.substr(1)),
             r
           );
         };
@@ -553,7 +553,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return e.update(I);
       };
     })()),
-    e.Pipeline.registerFunction(e.stemmer, "stemmer"),
+    e.Pipeline.registerFunction(e.stemmer, 'stemmer'),
     (e.generateStopWordFilter = function (e) {
       var t = e.reduce(function (e, t) {
         return (e[t] = t), e;
@@ -563,133 +563,133 @@ function renderHTMLRecursive(obj, package, spacing) {
       };
     }),
     (e.stopWordFilter = e.generateStopWordFilter([
-      "a",
-      "able",
-      "about",
-      "across",
-      "after",
-      "all",
-      "almost",
-      "also",
-      "am",
-      "among",
-      "an",
-      "and",
-      "any",
-      "are",
-      "as",
-      "at",
-      "be",
-      "because",
-      "been",
-      "but",
-      "by",
-      "can",
-      "cannot",
-      "could",
-      "dear",
-      "did",
-      "do",
-      "does",
-      "either",
-      "else",
-      "ever",
-      "every",
-      "for",
-      "from",
-      "get",
-      "got",
-      "had",
-      "has",
-      "have",
-      "he",
-      "her",
-      "hers",
-      "him",
-      "his",
-      "how",
-      "however",
-      "i",
-      "if",
-      "in",
-      "into",
-      "is",
-      "it",
-      "its",
-      "just",
-      "least",
-      "let",
-      "like",
-      "likely",
-      "may",
-      "me",
-      "might",
-      "most",
-      "must",
-      "my",
-      "neither",
-      "no",
-      "nor",
-      "not",
-      "of",
-      "off",
-      "often",
-      "on",
-      "only",
-      "or",
-      "other",
-      "our",
-      "own",
-      "rather",
-      "said",
-      "say",
-      "says",
-      "she",
-      "should",
-      "since",
-      "so",
-      "some",
-      "than",
-      "that",
-      "the",
-      "their",
-      "them",
-      "then",
-      "there",
-      "these",
-      "they",
-      "this",
-      "tis",
-      "to",
-      "too",
-      "twas",
-      "us",
-      "wants",
-      "was",
-      "we",
-      "were",
-      "what",
-      "when",
-      "where",
-      "which",
-      "while",
-      "who",
-      "whom",
-      "why",
-      "will",
-      "with",
-      "would",
-      "yet",
-      "you",
-      "your",
+      'a',
+      'able',
+      'about',
+      'across',
+      'after',
+      'all',
+      'almost',
+      'also',
+      'am',
+      'among',
+      'an',
+      'and',
+      'any',
+      'are',
+      'as',
+      'at',
+      'be',
+      'because',
+      'been',
+      'but',
+      'by',
+      'can',
+      'cannot',
+      'could',
+      'dear',
+      'did',
+      'do',
+      'does',
+      'either',
+      'else',
+      'ever',
+      'every',
+      'for',
+      'from',
+      'get',
+      'got',
+      'had',
+      'has',
+      'have',
+      'he',
+      'her',
+      'hers',
+      'him',
+      'his',
+      'how',
+      'however',
+      'i',
+      'if',
+      'in',
+      'into',
+      'is',
+      'it',
+      'its',
+      'just',
+      'least',
+      'let',
+      'like',
+      'likely',
+      'may',
+      'me',
+      'might',
+      'most',
+      'must',
+      'my',
+      'neither',
+      'no',
+      'nor',
+      'not',
+      'of',
+      'off',
+      'often',
+      'on',
+      'only',
+      'or',
+      'other',
+      'our',
+      'own',
+      'rather',
+      'said',
+      'say',
+      'says',
+      'she',
+      'should',
+      'since',
+      'so',
+      'some',
+      'than',
+      'that',
+      'the',
+      'their',
+      'them',
+      'then',
+      'there',
+      'these',
+      'they',
+      'this',
+      'tis',
+      'to',
+      'too',
+      'twas',
+      'us',
+      'wants',
+      'was',
+      'we',
+      'were',
+      'what',
+      'when',
+      'where',
+      'which',
+      'while',
+      'who',
+      'whom',
+      'why',
+      'will',
+      'with',
+      'would',
+      'yet',
+      'you',
+      'your',
     ])),
-    e.Pipeline.registerFunction(e.stopWordFilter, "stopWordFilter"),
+    e.Pipeline.registerFunction(e.stopWordFilter, 'stopWordFilter'),
     (e.trimmer = function (e) {
       return e.update(function (e) {
-        return e.replace(/^\W+/, "").replace(/\W+$/, "");
+        return e.replace(/^\W+/, '').replace(/\W+$/, '');
       });
     }),
-    e.Pipeline.registerFunction(e.trimmer, "trimmer"),
+    e.Pipeline.registerFunction(e.trimmer, 'trimmer'),
     (e.TokenSet = function () {
       (this.final = !1),
         (this.edges = {}),
@@ -703,7 +703,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return r.finish(), r.root;
     }),
     (e.TokenSet.fromClause = function (t) {
-      return "editDistance" in t
+      return 'editDistance' in t
         ? e.TokenSet.fromFuzzyString(t.term, t.editDistance)
         : e.TokenSet.fromString(t.term);
     }),
@@ -728,10 +728,10 @@ function renderHTMLRecursive(obj, package, spacing) {
             });
         }
         if (0 != s.editsRemaining) {
-          if ("*" in s.node.edges) var u = s.node.edges["*"];
+          if ('*' in s.node.edges) var u = s.node.edges['*'];
           else {
             var u = new e.TokenSet();
-            s.node.edges["*"] = u;
+            s.node.edges['*'] = u;
           }
           if (
             (0 == s.str.length && (u.final = !0),
@@ -749,10 +749,10 @@ function renderHTMLRecursive(obj, package, spacing) {
             1 == s.str.length && (s.node.final = !0),
             s.str.length >= 1)
           ) {
-            if ("*" in s.node.edges) var l = s.node.edges["*"];
+            if ('*' in s.node.edges) var l = s.node.edges['*'];
             else {
               var l = new e.TokenSet();
-              s.node.edges["*"] = l;
+              s.node.edges['*'] = l;
             }
             1 == s.str.length && (l.final = !0),
               n.push({
@@ -783,7 +783,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       for (var r = new e.TokenSet(), i = r, n = 0, s = t.length; n < s; n++) {
         var o = t[n],
           a = n == s - 1;
-        if ("*" == o) (r.edges[o] = r), (r.final = a);
+        if ('*' == o) (r.edges[o] = r), (r.final = a);
         else {
           var u = new e.TokenSet();
           (u.final = a), (r.edges[o] = u), (r = u);
@@ -792,7 +792,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return i;
     }),
     (e.TokenSet.prototype.toArray = function () {
-      for (var e = [], t = [{ prefix: "", node: this }]; t.length; ) {
+      for (var e = [], t = [{ prefix: '', node: this }]; t.length; ) {
         var r = t.pop(),
           i = Object.keys(r.node.edges),
           n = i.length;
@@ -807,7 +807,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.TokenSet.prototype.toString = function () {
       if (this._str) return this._str;
       for (
-        var e = this.final ? "1" : "0",
+        var e = this.final ? '1' : '0',
           t = Object.keys(this.edges).sort(),
           r = t.length,
           i = 0;
@@ -839,7 +839,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         )
           for (var c = s[l], h = 0; h < u; h++) {
             var d = a[h];
-            if (d == c || "*" == c) {
+            if (d == c || '*' == c) {
               var f = i.node.edges[d],
                 p = i.qNode.edges[c],
                 y = f.final && p.final,
@@ -856,7 +856,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return r;
     }),
     (e.TokenSet.Builder = function () {
-      (this.previousWord = ""),
+      (this.previousWord = ''),
         (this.root = new e.TokenSet()),
         (this.uncheckedNodes = []),
         (this.minimizedNodes = {});
@@ -864,7 +864,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.TokenSet.Builder.prototype.insert = function (t) {
       var r,
         i = 0;
-      if (t < this.previousWord) throw new Error("Out of order word insertion");
+      if (t < this.previousWord) throw new Error('Out of order word insertion');
       for (
         var n = 0;
         n < t.length &&
@@ -954,7 +954,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               var v = l.fields[m],
                 k = w[v],
                 S = Object.keys(k),
-                E = x + "/" + v,
+                E = x + '/' + v,
                 L = new e.Set(S);
               if (
                 (l.presence == e.Query.presence.REQUIRED &&
@@ -1057,7 +1057,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             e.version +
             "' does not match serialized index '" +
             t.version +
-            "'"
+            "'",
         );
       for (var l = 0; l < n.length; l++) {
         var c = n[l],
@@ -1082,7 +1082,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       );
     }),
     (e.Builder = function () {
-      (this._ref = "id"),
+      (this._ref = 'id'),
         (this._fields = Object.create(null)),
         (this._documents = Object.create(null)),
         (this.invertedIndex = Object.create(null)),
@@ -1103,7 +1103,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.Builder.prototype.field = function (e, t) {
       if (/\//.test(e))
         throw new RangeError(
-          "Field '" + e + "' contains illegal character '/'"
+          "Field '" + e + "' contains illegal character '/'",
         );
       this._fields[e] = t || {};
     }),
@@ -1225,7 +1225,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     }),
     (e.Builder.prototype.createTokenSet = function () {
       this.tokenSet = e.TokenSet.fromArray(
-        Object.keys(this.invertedIndex).sort()
+        Object.keys(this.invertedIndex).sort(),
       );
     }),
     (e.Builder.prototype.build = function () {
@@ -1274,7 +1274,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             void 0 == this.metadata[i][o][l]
               ? (this.metadata[i][o][l] = e.metadata[i][o][l])
               : (this.metadata[i][o][l] = this.metadata[i][o][l].concat(
-                  e.metadata[i][o][l]
+                  e.metadata[i][o][l],
                 ));
           }
         }
@@ -1297,24 +1297,24 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.Query = function (e) {
       (this.clauses = []), (this.allFields = e);
     }),
-    (e.Query.wildcard = new String("*")),
+    (e.Query.wildcard = new String('*')),
     (e.Query.wildcard.NONE = 0),
     (e.Query.wildcard.LEADING = 1),
     (e.Query.wildcard.TRAILING = 2),
     (e.Query.presence = { OPTIONAL: 1, REQUIRED: 2, PROHIBITED: 3 }),
     (e.Query.prototype.clause = function (t) {
       return (
-        "fields" in t || (t.fields = this.allFields),
-        "boost" in t || (t.boost = 1),
-        "usePipeline" in t || (t.usePipeline = !0),
-        "wildcard" in t || (t.wildcard = e.Query.wildcard.NONE),
+        'fields' in t || (t.fields = this.allFields),
+        'boost' in t || (t.boost = 1),
+        'usePipeline' in t || (t.usePipeline = !0),
+        'wildcard' in t || (t.wildcard = e.Query.wildcard.NONE),
         t.wildcard & e.Query.wildcard.LEADING &&
           t.term.charAt(0) != e.Query.wildcard &&
-          (t.term = "*" + t.term),
+          (t.term = '*' + t.term),
         t.wildcard & e.Query.wildcard.TRAILING &&
           t.term.slice(-1) != e.Query.wildcard &&
-          (t.term = t.term + "*"),
-        "presence" in t || (t.presence = e.Query.presence.OPTIONAL),
+          (t.term = t.term + '*'),
+        'presence' in t || (t.presence = e.Query.presence.OPTIONAL),
         this.clauses.push(t),
         this
       );
@@ -1336,7 +1336,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return (i.term = t.toString()), this.clause(i), this;
     }),
     (e.QueryParseError = function (e, t, r) {
-      (this.name = "QueryParseError"),
+      (this.name = 'QueryParseError'),
         (this.message = e),
         (this.start = t),
         (this.end = r);
@@ -1365,7 +1365,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return (
         e.push(this.str.slice(t, this.pos)),
         (this.escapeCharPositions.length = 0),
-        e.join("")
+        e.join('')
       );
     }),
     (e.QueryLexer.prototype.emit = function (e) {
@@ -1404,12 +1404,12 @@ function renderHTMLRecursive(obj, package, spacing) {
     (e.QueryLexer.prototype.more = function () {
       return this.pos < this.length;
     }),
-    (e.QueryLexer.EOS = "EOS"),
-    (e.QueryLexer.FIELD = "FIELD"),
-    (e.QueryLexer.TERM = "TERM"),
-    (e.QueryLexer.EDIT_DISTANCE = "EDIT_DISTANCE"),
-    (e.QueryLexer.BOOST = "BOOST"),
-    (e.QueryLexer.PRESENCE = "PRESENCE"),
+    (e.QueryLexer.EOS = 'EOS'),
+    (e.QueryLexer.FIELD = 'FIELD'),
+    (e.QueryLexer.TERM = 'TERM'),
+    (e.QueryLexer.EDIT_DISTANCE = 'EDIT_DISTANCE'),
+    (e.QueryLexer.BOOST = 'BOOST'),
+    (e.QueryLexer.PRESENCE = 'PRESENCE'),
     (e.QueryLexer.lexField = function (t) {
       return (
         t.backup(), t.emit(e.QueryLexer.FIELD), t.ignore(), e.QueryLexer.lexText
@@ -1448,22 +1448,22 @@ function renderHTMLRecursive(obj, package, spacing) {
         var r = t.next();
         if (r == e.QueryLexer.EOS) return e.QueryLexer.lexEOS;
         if (92 != r.charCodeAt(0)) {
-          if (":" == r) return e.QueryLexer.lexField;
-          if ("~" == r)
+          if (':' == r) return e.QueryLexer.lexField;
+          if ('~' == r)
             return (
               t.backup(),
               t.width() > 0 && t.emit(e.QueryLexer.TERM),
               e.QueryLexer.lexEditDistance
             );
-          if ("^" == r)
+          if ('^' == r)
             return (
               t.backup(),
               t.width() > 0 && t.emit(e.QueryLexer.TERM),
               e.QueryLexer.lexBoost
             );
-          if ("+" == r && 1 === t.width())
+          if ('+' == r && 1 === t.width())
             return t.emit(e.QueryLexer.PRESENCE), e.QueryLexer.lexText;
-          if ("-" == r && 1 === t.width())
+          if ('-' == r && 1 === t.width())
             return t.emit(e.QueryLexer.PRESENCE), e.QueryLexer.lexText;
           if (r.match(e.QueryLexer.termSeparator)) return e.QueryLexer.lexTerm;
         } else t.escapeCharacter();
@@ -1502,7 +1502,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           case e.QueryLexer.TERM:
             return e.QueryParser.parseTerm;
           default:
-            var i = "expected either a field or a term, found " + r.type;
+            var i = 'expected either a field or a term, found ' + r.type;
             throw (
               (r.str.length >= 1 && (i += " with value '" + r.str + "'"),
               new e.QueryParseError(i, r.start, r.end))
@@ -1513,10 +1513,10 @@ function renderHTMLRecursive(obj, package, spacing) {
       var r = t.consumeLexeme();
       if (void 0 != r) {
         switch (r.str) {
-          case "-":
+          case '-':
             t.currentClause.presence = e.Query.presence.PROHIBITED;
             break;
-          case "+":
+          case '+':
             t.currentClause.presence = e.Query.presence.REQUIRED;
             break;
           default:
@@ -1525,7 +1525,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         }
         var n = t.peekLexeme();
         if (void 0 == n) {
-          var i = "expecting term or field, found nothing";
+          var i = 'expecting term or field, found nothing';
           throw new e.QueryParseError(i, r.start, r.end);
         }
         switch (n.type) {
@@ -1547,14 +1547,14 @@ function renderHTMLRecursive(obj, package, spacing) {
               .map(function (e) {
                 return "'" + e + "'";
               })
-              .join(", "),
+              .join(', '),
             n = "unrecognised field '" + r.str + "', possible fields: " + i;
           throw new e.QueryParseError(n, r.start, r.end);
         }
         t.currentClause.fields = [r.str];
         var s = t.peekLexeme();
         if (void 0 == s) {
-          var n = "expecting term, found nothing";
+          var n = 'expecting term, found nothing';
           throw new e.QueryParseError(n, r.start, r.end);
         }
         switch (s.type) {
@@ -1570,7 +1570,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       var r = t.consumeLexeme();
       if (void 0 != r) {
         (t.currentClause.term = r.str.toLowerCase()),
-          -1 != r.str.indexOf("*") && (t.currentClause.usePipeline = !1);
+          -1 != r.str.indexOf('*') && (t.currentClause.usePipeline = !1);
         var i = t.peekLexeme();
         if (void 0 == i) return void t.nextClause();
         switch (i.type) {
@@ -1595,7 +1595,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       if (void 0 != r) {
         var i = parseInt(r.str, 10);
         if (isNaN(i)) {
-          var n = "edit distance must be numeric";
+          var n = 'edit distance must be numeric';
           throw new e.QueryParseError(n, r.start, r.end);
         }
         t.currentClause.editDistance = i;
@@ -1623,7 +1623,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       if (void 0 != r) {
         var i = parseInt(r.str, 10);
         if (isNaN(i)) {
-          var n = "boost must be numeric";
+          var n = 'boost must be numeric';
           throw new e.QueryParseError(n, r.start, r.end);
         }
         t.currentClause.boost = i;
@@ -1647,9 +1647,9 @@ function renderHTMLRecursive(obj, package, spacing) {
       }
     }),
     (function (e, t) {
-      "function" == typeof define && define.amd
+      'function' == typeof define && define.amd
         ? define(t)
-        : "object" == typeof exports
+        : 'object' == typeof exports
         ? (module.exports = t())
         : (e.lunr = t());
     })(this, function () {
@@ -1657,26 +1657,26 @@ function renderHTMLRecursive(obj, package, spacing) {
     });
 })(),
   (function (a, b) {
-    "object" == typeof module && "object" == typeof module.exports
+    'object' == typeof module && 'object' == typeof module.exports
       ? (module.exports = a.document
           ? b(a, !0)
           : function (a) {
               if (!a.document)
-                throw new Error("jQuery requires a window with a document");
+                throw new Error('jQuery requires a window with a document');
               return b(a);
             })
       : b(a);
-  })("undefined" != typeof window ? window : this, function (a, b) {
+  })('undefined' != typeof window ? window : this, function (a, b) {
     function s(a) {
       var b = a.length,
         c = n.type(a);
       return (
-        "function" !== c &&
+        'function' !== c &&
         !n.isWindow(a) &&
         (!(1 !== a.nodeType || !b) ||
-          "array" === c ||
+          'array' === c ||
           0 === b ||
-          ("number" == typeof b && b > 0 && b - 1 in a))
+          ('number' == typeof b && b > 0 && b - 1 in a))
       );
     }
     function x(a, b, c) {
@@ -1688,7 +1688,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return n.grep(a, function (a) {
           return (a === b) !== c;
         });
-      if ("string" == typeof b) {
+      if ('string' == typeof b) {
         if (w.test(b)) return n.filter(b, a, c);
         b = n.filter(b, a);
       }
@@ -1710,8 +1710,8 @@ function renderHTMLRecursive(obj, package, spacing) {
       );
     }
     function I() {
-      l.removeEventListener("DOMContentLoaded", I, !1),
-        a.removeEventListener("load", I, !1),
+      l.removeEventListener('DOMContentLoaded', I, !1),
+        a.removeEventListener('load', I, !1),
         n.ready();
     }
     function K() {
@@ -1726,16 +1726,16 @@ function renderHTMLRecursive(obj, package, spacing) {
       var d;
       if (void 0 === c && 1 === a.nodeType)
         if (
-          ((d = "data-" + b.replace(O, "-$1").toLowerCase()),
-          "string" == typeof (c = a.getAttribute(d)))
+          ((d = 'data-' + b.replace(O, '-$1').toLowerCase()),
+          'string' == typeof (c = a.getAttribute(d)))
         ) {
           try {
             c =
-              "true" === c ||
-              ("false" !== c &&
-                ("null" === c
+              'true' === c ||
+              ('false' !== c &&
+                ('null' === c
                   ? null
-                  : +c + "" === c
+                  : +c + '' === c
                   ? +c
                   : N.test(c)
                   ? n.parseJSON(c)
@@ -1757,22 +1757,22 @@ function renderHTMLRecursive(obj, package, spacing) {
       } catch (a) {}
     }
     function jb(a, b) {
-      return n.nodeName(a, "table") &&
-        n.nodeName(11 !== b.nodeType ? b : b.firstChild, "tr")
-        ? a.getElementsByTagName("tbody")[0] ||
-            a.appendChild(a.ownerDocument.createElement("tbody"))
+      return n.nodeName(a, 'table') &&
+        n.nodeName(11 !== b.nodeType ? b : b.firstChild, 'tr')
+        ? a.getElementsByTagName('tbody')[0] ||
+            a.appendChild(a.ownerDocument.createElement('tbody'))
         : a;
     }
     function kb(a) {
-      return (a.type = (null !== a.getAttribute("type")) + "/" + a.type), a;
+      return (a.type = (null !== a.getAttribute('type')) + '/' + a.type), a;
     }
     function lb(a) {
       var b = gb.exec(a.type);
-      return b ? (a.type = b[1]) : a.removeAttribute("type"), a;
+      return b ? (a.type = b[1]) : a.removeAttribute('type'), a;
     }
     function mb(a, b) {
       for (var c = 0, d = a.length; d > c; c++)
-        L.set(a[c], "globalEval", !b || L.get(b[c], "globalEval"));
+        L.set(a[c], 'globalEval', !b || L.get(b[c], 'globalEval'));
     }
     function nb(a, b) {
       var c, d, e, f, g, h, i, j;
@@ -1790,17 +1790,17 @@ function renderHTMLRecursive(obj, package, spacing) {
     }
     function ob(a, b) {
       var c = a.getElementsByTagName
-        ? a.getElementsByTagName(b || "*")
+        ? a.getElementsByTagName(b || '*')
         : a.querySelectorAll
-        ? a.querySelectorAll(b || "*")
+        ? a.querySelectorAll(b || '*')
         : [];
       return void 0 === b || (b && n.nodeName(a, b)) ? n.merge([a], c) : c;
     }
     function pb(a, b) {
       var c = b.nodeName.toLowerCase();
-      "input" === c && T.test(a.type)
+      'input' === c && T.test(a.type)
         ? (b.checked = a.checked)
-        : ("input" === c || "textarea" === c) &&
+        : ('input' === c || 'textarea' === c) &&
           (b.defaultValue = a.defaultValue);
     }
     function sb(b, c) {
@@ -1809,7 +1809,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         f =
           a.getDefaultComputedStyle && (d = a.getDefaultComputedStyle(e[0]))
             ? d.display
-            : n.css(e[0], "display");
+            : n.css(e[0], 'display');
       return e.detach(), f;
     }
     function tb(a) {
@@ -1818,7 +1818,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       return (
         c ||
           ((c = sb(a, b)),
-          ("none" !== c && c) ||
+          ('none' !== c && c) ||
             ((qb = (
               qb || n("<iframe frameborder='0' width='0' height='0'/>")
             ).appendTo(b.documentElement)),
@@ -1841,7 +1841,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         (c = c || wb(a)),
         c && (g = c.getPropertyValue(b) || c[b]),
         c &&
-          ("" !== g || n.contains(a.ownerDocument, a) || (g = n.style(a, b)),
+          ('' !== g || n.contains(a.ownerDocument, a) || (g = n.style(a, b)),
           vb.test(g) &&
             ub.test(b) &&
             ((d = h.width),
@@ -1852,7 +1852,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             (h.width = d),
             (h.minWidth = e),
             (h.maxWidth = f))),
-        void 0 !== g ? g + "" : g
+        void 0 !== g ? g + '' : g
       );
     }
     function yb(a, b) {
@@ -1872,30 +1872,30 @@ function renderHTMLRecursive(obj, package, spacing) {
     }
     function Gb(a, b, c) {
       var d = Ab.exec(b);
-      return d ? Math.max(0, d[1] - (c || 0)) + (d[2] || "px") : b;
+      return d ? Math.max(0, d[1] - (c || 0)) + (d[2] || 'px') : b;
     }
     function Hb(a, b, c, d, e) {
       for (
-        var f = c === (d ? "border" : "content") ? 4 : "width" === b ? 1 : 0,
+        var f = c === (d ? 'border' : 'content') ? 4 : 'width' === b ? 1 : 0,
           g = 0;
         4 > f;
         f += 2
       )
-        "margin" === c && (g += n.css(a, c + R[f], !0, e)),
+        'margin' === c && (g += n.css(a, c + R[f], !0, e)),
           d
-            ? ("content" === c && (g -= n.css(a, "padding" + R[f], !0, e)),
-              "margin" !== c &&
-                (g -= n.css(a, "border" + R[f] + "Width", !0, e)))
-            : ((g += n.css(a, "padding" + R[f], !0, e)),
-              "padding" !== c &&
-                (g += n.css(a, "border" + R[f] + "Width", !0, e)));
+            ? ('content' === c && (g -= n.css(a, 'padding' + R[f], !0, e)),
+              'margin' !== c &&
+                (g -= n.css(a, 'border' + R[f] + 'Width', !0, e)))
+            : ((g += n.css(a, 'padding' + R[f], !0, e)),
+              'padding' !== c &&
+                (g += n.css(a, 'border' + R[f] + 'Width', !0, e)));
       return g;
     }
     function Ib(a, b, c) {
       var d = !0,
-        e = "width" === b ? a.offsetWidth : a.offsetHeight,
+        e = 'width' === b ? a.offsetWidth : a.offsetHeight,
         f = wb(a),
-        g = "border-box" === n.css(a, "boxSizing", !1, f);
+        g = 'border-box' === n.css(a, 'boxSizing', !1, f);
       if (0 >= e || null == e) {
         if (
           ((e = xb(a, b, f)),
@@ -1906,27 +1906,27 @@ function renderHTMLRecursive(obj, package, spacing) {
         (d = g && (k.boxSizingReliable() || e === a.style[b])),
           (e = parseFloat(e) || 0);
       }
-      return e + Hb(a, b, c || (g ? "border" : "content"), d, f) + "px";
+      return e + Hb(a, b, c || (g ? 'border' : 'content'), d, f) + 'px';
     }
     function Jb(a, b) {
       for (var c, d, e, f = [], g = 0, h = a.length; h > g; g++)
         (d = a[g]),
           d.style &&
-            ((f[g] = L.get(d, "olddisplay")),
+            ((f[g] = L.get(d, 'olddisplay')),
             (c = d.style.display),
             b
-              ? (f[g] || "none" !== c || (d.style.display = ""),
-                "" === d.style.display &&
+              ? (f[g] || 'none' !== c || (d.style.display = ''),
+                '' === d.style.display &&
                   S(d) &&
-                  (f[g] = L.access(d, "olddisplay", tb(d.nodeName))))
+                  (f[g] = L.access(d, 'olddisplay', tb(d.nodeName))))
               : ((e = S(d)),
-                ("none" === c && e) ||
-                  L.set(d, "olddisplay", e ? c : n.css(d, "display"))));
+                ('none' === c && e) ||
+                  L.set(d, 'olddisplay', e ? c : n.css(d, 'display'))));
       for (g = 0; h > g; g++)
         (d = a[g]),
           d.style &&
-            ((b && "none" !== d.style.display && "" !== d.style.display) ||
-              (d.style.display = b ? f[g] || "" : "none"));
+            ((b && 'none' !== d.style.display && '' !== d.style.display) ||
+              (d.style.display = b ? f[g] || '' : 'none'));
       return a;
     }
     function Kb(a, b, c, d, e) {
@@ -1945,12 +1945,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         d = 0,
         e = { height: a };
       for (b = b ? 1 : 0; 4 > d; d += 2 - b)
-        (c = R[d]), (e["margin" + c] = e["padding" + c] = a);
+        (c = R[d]), (e['margin' + c] = e['padding' + c] = a);
       return b && (e.opacity = e.width = a), e;
     }
     function Ub(a, b, c) {
       for (
-        var d, e = (Rb[b] || []).concat(Rb["*"]), f = 0, g = e.length;
+        var d, e = (Rb[b] || []).concat(Rb['*']), f = 0, g = e.length;
         g > f;
         f++
       )
@@ -1968,9 +1968,9 @@ function renderHTMLRecursive(obj, package, spacing) {
         m = {},
         o = a.style,
         p = a.nodeType && S(a),
-        q = L.get(a, "fxshow");
+        q = L.get(a, 'fxshow');
       c.queue ||
-        ((h = n._queueHooks(a, "fx")),
+        ((h = n._queueHooks(a, 'fx')),
         null == h.unqueued &&
           ((h.unqueued = 0),
           (i = h.empty.fire),
@@ -1980,19 +1980,19 @@ function renderHTMLRecursive(obj, package, spacing) {
         h.unqueued++,
         l.always(function () {
           l.always(function () {
-            h.unqueued--, n.queue(a, "fx").length || h.empty.fire();
+            h.unqueued--, n.queue(a, 'fx').length || h.empty.fire();
           });
         })),
         1 === a.nodeType &&
-          ("height" in b || "width" in b) &&
+          ('height' in b || 'width' in b) &&
           ((c.overflow = [o.overflow, o.overflowX, o.overflowY]),
-          (j = n.css(a, "display")),
-          "inline" ===
-            ("none" === j ? L.get(a, "olddisplay") || tb(a.nodeName) : j) &&
-            "none" === n.css(a, "float") &&
-            (o.display = "inline-block")),
+          (j = n.css(a, 'display')),
+          'inline' ===
+            ('none' === j ? L.get(a, 'olddisplay') || tb(a.nodeName) : j) &&
+            'none' === n.css(a, 'float') &&
+            (o.display = 'inline-block')),
         c.overflow &&
-          ((o.overflow = "hidden"),
+          ((o.overflow = 'hidden'),
           l.always(function () {
             (o.overflow = c.overflow[0]),
               (o.overflowX = c.overflow[1]),
@@ -2002,18 +2002,18 @@ function renderHTMLRecursive(obj, package, spacing) {
         if (((e = b[d]), Nb.exec(e))) {
           if (
             (delete b[d],
-            (f = f || "toggle" === e),
-            e === (p ? "hide" : "show"))
+            (f = f || 'toggle' === e),
+            e === (p ? 'hide' : 'show'))
           ) {
-            if ("show" !== e || !q || void 0 === q[d]) continue;
+            if ('show' !== e || !q || void 0 === q[d]) continue;
             p = !0;
           }
           m[d] = (q && q[d]) || n.style(a, d);
         } else j = void 0;
       if (n.isEmptyObject(m))
-        "inline" === ("none" === j ? tb(a.nodeName) : j) && (o.display = j);
+        'inline' === ('none' === j ? tb(a.nodeName) : j) && (o.display = j);
       else {
-        q ? "hidden" in q && (p = q.hidden) : (q = L.access(a, "fxshow", {})),
+        q ? 'hidden' in q && (p = q.hidden) : (q = L.access(a, 'fxshow', {})),
           f && (q.hidden = !p),
           p
             ? n(a).show()
@@ -2022,7 +2022,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               }),
           l.done(function () {
             var b;
-            L.remove(a, "fxshow");
+            L.remove(a, 'fxshow');
             for (b in m) n.style(a, b, m[b]);
           });
         for (d in m)
@@ -2031,7 +2031,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               ((q[d] = g.start),
               p &&
                 ((g.end = g.start),
-                (g.start = "width" === d || "height" === d ? 1 : 0)));
+                (g.start = 'width' === d || 'height' === d ? 1 : 0)));
       }
     }
     function Wb(a, b) {
@@ -2043,7 +2043,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           (f = a[c]),
           n.isArray(f) && ((e = f[1]), (f = a[c] = f[0])),
           c !== d && ((a[d] = f), delete a[c]),
-          (g = n.cssHooks[d]) && "expand" in g)
+          (g = n.cssHooks[d]) && 'expand' in g)
         ) {
           (f = g.expand(f)), delete a[d];
           for (c in f) c in a || ((a[c] = f[c]), (b[c] = e));
@@ -2090,7 +2090,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               j.opts,
               b,
               c,
-              j.opts.specialEasing[b] || j.opts.easing
+              j.opts.specialEasing[b] || j.opts.easing,
             );
             return j.tweens.push(d), d;
           },
@@ -2118,14 +2118,14 @@ function renderHTMLRecursive(obj, package, spacing) {
     }
     function rc(a) {
       return function (b, c) {
-        "string" != typeof b && ((c = b), (b = "*"));
+        'string' != typeof b && ((c = b), (b = '*'));
         var d,
           e = 0,
           f = b.toLowerCase().match(E) || [];
         if (n.isFunction(c))
           for (; (d = f[e++]); )
-            "+" === d[0]
-              ? ((d = d.slice(1) || "*"), (a[d] = a[d] || []).unshift(c))
+            '+' === d[0]
+              ? ((d = d.slice(1) || '*'), (a[d] = a[d] || []).unshift(c))
               : (a[d] = a[d] || []).push(c);
       };
     }
@@ -2136,7 +2136,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           (e[h] = !0),
           n.each(a[h] || [], function (a, h) {
             var j = h(b, c, d);
-            return "string" != typeof j || f || e[j]
+            return 'string' != typeof j || f || e[j]
               ? f
                 ? !(i = j)
                 : void 0
@@ -2147,7 +2147,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       }
       var e = {},
         f = a === oc;
-      return g(b.dataTypes[0]) || (!e["*"] && g("*"));
+      return g(b.dataTypes[0]) || (!e['*'] && g('*'));
     }
     function tc(a, b) {
       var c,
@@ -2157,10 +2157,10 @@ function renderHTMLRecursive(obj, package, spacing) {
       return d && n.extend(!0, a, d), a;
     }
     function uc(a, b, c) {
-      for (var d, e, f, g, h = a.contents, i = a.dataTypes; "*" === i[0]; )
+      for (var d, e, f, g, h = a.contents, i = a.dataTypes; '*' === i[0]; )
         i.shift(),
           void 0 === d &&
-            (d = a.mimeType || b.getResponseHeader("Content-Type"));
+            (d = a.mimeType || b.getResponseHeader('Content-Type'));
       if (d)
         for (e in h)
           if (h[e] && h[e].test(d)) {
@@ -2170,7 +2170,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       if (i[0] in c) f = i[0];
       else {
         for (e in c) {
-          if (!i[0] || a.converters[e + " " + i[0]]) {
+          if (!i[0] || a.converters[e + ' ' + i[0]]) {
             f = e;
             break;
           }
@@ -2196,13 +2196,13 @@ function renderHTMLRecursive(obj, package, spacing) {
           (i = f),
           (f = k.shift()))
         )
-          if ("*" === f) f = i;
-          else if ("*" !== i && i !== f) {
-            if (!(g = j[i + " " + f] || j["* " + f]))
+          if ('*' === f) f = i;
+          else if ('*' !== i && i !== f) {
+            if (!(g = j[i + ' ' + f] || j['* ' + f]))
               for (e in j)
                 if (
-                  ((h = e.split(" ")),
-                  h[1] === f && (g = j[i + " " + h[0]] || j["* " + h[0]]))
+                  ((h = e.split(' ')),
+                  h[1] === f && (g = j[i + ' ' + h[0]] || j['* ' + h[0]]))
                 ) {
                   !0 === g
                     ? (g = j[e])
@@ -2216,12 +2216,12 @@ function renderHTMLRecursive(obj, package, spacing) {
                   b = g(b);
                 } catch (l) {
                   return {
-                    state: "parsererror",
-                    error: g ? l : "No conversion from " + i + " to " + f,
+                    state: 'parsererror',
+                    error: g ? l : 'No conversion from ' + i + ' to ' + f,
                   };
                 }
           }
-      return { state: "success", data: b };
+      return { state: 'success', data: b };
     }
     function Bc(a, b, c, d) {
       var e;
@@ -2229,10 +2229,10 @@ function renderHTMLRecursive(obj, package, spacing) {
         n.each(b, function (b, e) {
           c || xc.test(a)
             ? d(a, e)
-            : Bc(a + "[" + ("object" == typeof e ? b : "") + "]", e, c, d);
+            : Bc(a + '[' + ('object' == typeof e ? b : '') + ']', e, c, d);
         });
-      else if (c || "object" !== n.type(b)) d(a, b);
-      else for (e in b) Bc(a + "[" + e + "]", b[e], c, d);
+      else if (c || 'object' !== n.type(b)) d(a, b);
+      else for (e in b) Bc(a + '[' + e + ']', b[e], c, d);
     }
     function Kc(a) {
       return n.isWindow(a) ? a : 9 === a.nodeType && a.defaultView;
@@ -2247,7 +2247,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       j = h.hasOwnProperty,
       k = {},
       l = a.document,
-      m = "2.1.1",
+      m = '2.1.1',
       n = function (a, b) {
         return new n.fn.init(a, b);
       },
@@ -2260,7 +2260,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     (n.fn = n.prototype = {
       jquery: m,
       constructor: n,
-      selector: "",
+      selector: '',
       length: 0,
       toArray: function () {
         return d.call(this);
@@ -2283,7 +2283,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return this.pushStack(
           n.map(this, function (b, c) {
             return a.call(b, c, b);
-          })
+          }),
         );
       },
       slice: function () {
@@ -2319,8 +2319,8 @@ function renderHTMLRecursive(obj, package, spacing) {
           i = arguments.length,
           j = !1;
         for (
-          "boolean" == typeof g && ((j = g), (g = arguments[h] || {}), h++),
-            "object" == typeof g || n.isFunction(g) || (g = {}),
+          'boolean' == typeof g && ((j = g), (g = arguments[h] || {}), h++),
+            'object' == typeof g || n.isFunction(g) || (g = {}),
             h === i && ((g = this), h--);
           i > h;
           h++
@@ -2339,14 +2339,14 @@ function renderHTMLRecursive(obj, package, spacing) {
         return g;
       }),
       n.extend({
-        expando: "jQuery" + (m + Math.random()).replace(/\D/g, ""),
+        expando: 'jQuery' + (m + Math.random()).replace(/\D/g, ''),
         isReady: !0,
         error: function (a) {
           throw new Error(a);
         },
         noop: function () {},
         isFunction: function (a) {
-          return "function" === n.type(a);
+          return 'function' === n.type(a);
         },
         isArray: Array.isArray,
         isWindow: function (a) {
@@ -2357,11 +2357,11 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         isPlainObject: function (a) {
           return (
-            "object" === n.type(a) &&
+            'object' === n.type(a) &&
             !a.nodeType &&
             !n.isWindow(a) &&
             !(
-              a.constructor && !j.call(a.constructor.prototype, "isPrototypeOf")
+              a.constructor && !j.call(a.constructor.prototype, 'isPrototypeOf')
             )
           );
         },
@@ -2372,23 +2372,23 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         type: function (a) {
           return null == a
-            ? a + ""
-            : "object" == typeof a || "function" == typeof a
-            ? h[i.call(a)] || "object"
+            ? a + ''
+            : 'object' == typeof a || 'function' == typeof a
+            ? h[i.call(a)] || 'object'
             : typeof a;
         },
         globalEval: function (a) {
           var b,
             c = eval;
           (a = n.trim(a)) &&
-            (1 === a.indexOf("use strict")
-              ? ((b = l.createElement("script")),
+            (1 === a.indexOf('use strict')
+              ? ((b = l.createElement('script')),
                 (b.text = a),
                 l.head.appendChild(b).parentNode.removeChild(b))
               : c(a));
         },
         camelCase: function (a) {
-          return a.replace(p, "ms-").replace(q, r);
+          return a.replace(p, 'ms-').replace(q, r);
         },
         nodeName: function (a, b) {
           return a.nodeName && a.nodeName.toLowerCase() === b.toLowerCase();
@@ -2405,14 +2405,14 @@ function renderHTMLRecursive(obj, package, spacing) {
           return a;
         },
         trim: function (a) {
-          return null == a ? "" : (a + "").replace(o, "");
+          return null == a ? '' : (a + '').replace(o, '');
         },
         makeArray: function (a, b) {
           var c = b || [];
           return (
             null != a &&
               (s(Object(a))
-                ? n.merge(c, "string" == typeof a ? [a] : a)
+                ? n.merge(c, 'string' == typeof a ? [a] : a)
                 : f.call(c, a)),
             c
           );
@@ -2444,7 +2444,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         proxy: function (a, b) {
           var c, e, f;
           return (
-            "string" == typeof b && ((c = a[b]), (b = a), (a = c)),
+            'string' == typeof b && ((c = a[b]), (b = a), (a = c)),
             n.isFunction(a)
               ? ((e = d.call(arguments, 2)),
                 (f = function () {
@@ -2459,12 +2459,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         support: k,
       }),
       n.each(
-        "Boolean Number String Function Array Date RegExp Object Error".split(
-          " "
+        'Boolean Number String Function Array Date RegExp Object Error'.split(
+          ' ',
         ),
         function (a, b) {
-          h["[object " + b + "]"] = b.toLowerCase();
-        }
+          h['[object ' + b + ']'] = b.toLowerCase();
+        },
       );
     var t = (function (a) {
       function fb(a, b, d, e) {
@@ -2473,7 +2473,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           ((b ? b.ownerDocument || b : v) !== n && m(b),
           (b = b || n),
           (d = d || []),
-          !a || "string" != typeof a)
+          !a || 'string' != typeof a)
         )
           return d;
         if (1 !== (k = b.nodeType) && 9 !== k) return [];
@@ -2504,37 +2504,37 @@ function renderHTMLRecursive(obj, package, spacing) {
               ((s = r = u),
               (w = b),
               (x = 9 === k && a),
-              1 === k && "object" !== b.nodeName.toLowerCase())
+              1 === k && 'object' !== b.nodeName.toLowerCase())
             ) {
               for (
                 o = g(a),
-                  (r = b.getAttribute("id"))
-                    ? (s = r.replace(bb, "\\$&"))
-                    : b.setAttribute("id", s),
+                  (r = b.getAttribute('id'))
+                    ? (s = r.replace(bb, '\\$&'))
+                    : b.setAttribute('id', s),
                   s = "[id='" + s + "'] ",
                   l = o.length;
                 l--;
 
               )
                 o[l] = s + qb(o[l]);
-              (w = (ab.test(a) && ob(b.parentNode)) || b), (x = o.join(","));
+              (w = (ab.test(a) && ob(b.parentNode)) || b), (x = o.join(','));
             }
             if (x)
               try {
                 return I.apply(d, w.querySelectorAll(x)), d;
               } catch (y) {
               } finally {
-                r || b.removeAttribute("id");
+                r || b.removeAttribute('id');
               }
           }
         }
-        return i(a.replace(R, "$1"), b, d, e);
+        return i(a.replace(R, '$1'), b, d, e);
       }
       function gb() {
         function b(c, e) {
           return (
-            a.push(c + " ") > d.cacheLength && delete b[a.shift()],
-            (b[c + " "] = e)
+            a.push(c + ' ') > d.cacheLength && delete b[a.shift()],
+            (b[c + ' '] = e)
           );
         }
         var a = [];
@@ -2544,7 +2544,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return (a[u] = !0), a;
       }
       function ib(a) {
-        var b = n.createElement("div");
+        var b = n.createElement('div');
         try {
           return !!a(b);
         } catch (c) {
@@ -2554,7 +2554,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         }
       }
       function jb(a, b) {
-        for (var c = a.split("|"), e = a.length; e--; ) d.attrHandle[c[e]] = b;
+        for (var c = a.split('|'), e = a.length; e--; ) d.attrHandle[c[e]] = b;
       }
       function kb(a, b) {
         var c = b && a,
@@ -2583,12 +2583,12 @@ function renderHTMLRecursive(obj, package, spacing) {
       }
       function pb() {}
       function qb(a) {
-        for (var b = 0, c = a.length, d = ""; c > b; b++) d += a[b].value;
+        for (var b = 0, c = a.length, d = ''; c > b; b++) d += a[b].value;
         return d;
       }
       function rb(a, b, c) {
         var d = b.dir,
-          e = c && "parentNode" === d,
+          e = c && 'parentNode' === d,
           f = x++;
         return b.first
           ? function (b, c, f) {
@@ -2641,7 +2641,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               m = [],
               n = [],
               o = g.length,
-              p = f || tb(b || "*", h.nodeType ? [h] : h, []),
+              p = f || tb(b || '*', h.nodeType ? [h] : h, []),
               q = !a || (!f && b) ? p : ub(p, m, a, h, i),
               r = c ? (e || (f ? a : o || d) ? [] : g) : q;
             if ((c && c(q, r, h, i), d))
@@ -2670,21 +2670,21 @@ function renderHTMLRecursive(obj, package, spacing) {
             e,
             f = a.length,
             g = d.relative[a[0].type],
-            h = g || d.relative[" "],
+            h = g || d.relative[' '],
             i = g ? 1 : 0,
             k = rb(
               function (a) {
                 return a === b;
               },
               h,
-              !0
+              !0,
             ),
             l = rb(
               function (a) {
                 return K.call(b, a) > -1;
               },
               h,
-              !0
+              !0,
             ),
             m = [
               function (a, c, d) {
@@ -2707,12 +2707,12 @@ function renderHTMLRecursive(obj, package, spacing) {
                   qb(
                     a
                       .slice(0, i - 1)
-                      .concat({ value: " " === a[i - 2].type ? "*" : "" })
-                  ).replace(R, "$1"),
+                      .concat({ value: ' ' === a[i - 2].type ? '*' : '' }),
+                  ).replace(R, '$1'),
                 c,
                 e > i && wb(a.slice(i, e)),
                 f > e && wb((a = a.slice(e))),
-                f > e && qb(a)
+                f > e && qb(a),
               );
             }
             m.push(c);
@@ -2727,11 +2727,11 @@ function renderHTMLRecursive(obj, package, spacing) {
               m,
               o,
               p = 0,
-              q = "0",
+              q = '0',
               r = f && [],
               s = [],
               t = j,
-              u = f || (e && d.find.TAG("*", k)),
+              u = f || (e && d.find.TAG('*', k)),
               v = (w += null == t ? 1 : Math.random() || 0.1),
               x = u.length;
             for (k && (j = g !== n && g); q !== x && null != (l = u[q]); q++) {
@@ -2777,7 +2777,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         r,
         s,
         t,
-        u = "sizzle" + -new Date(),
+        u = 'sizzle' + -new Date(),
         v = a.document,
         w = 0,
         x = 0,
@@ -2787,7 +2787,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         B = function (a, b) {
           return a === b && (l = !0), 0;
         },
-        C = "undefined",
+        C = 'undefined',
         D = 1 << 31,
         E = {}.hasOwnProperty,
         F = [],
@@ -2803,64 +2803,64 @@ function renderHTMLRecursive(obj, package, spacing) {
             return -1;
           },
         L =
-          "checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped",
-        M = "[\\x20\\t\\r\\n\\f]",
-        N = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",
-        O = N.replace("w", "w#"),
+          'checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped',
+        M = '[\\x20\\t\\r\\n\\f]',
+        N = '(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+',
+        O = N.replace('w', 'w#'),
         P =
-          "\\[" +
+          '\\[' +
           M +
-          "*(" +
+          '*(' +
           N +
-          ")(?:" +
+          ')(?:' +
           M +
-          "*([*^$|!~]?=)" +
+          '*([*^$|!~]?=)' +
           M +
-          "*(?:'((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\"|(" +
+          '*(?:\'((?:\\\\.|[^\\\\\'])*)\'|"((?:\\\\.|[^\\\\"])*)"|(' +
           O +
-          "))|)" +
+          '))|)' +
           M +
-          "*\\]",
+          '*\\]',
         Q =
-          ":(" +
+          ':(' +
           N +
-          ")(?:\\((('((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\")|((?:\\\\.|[^\\\\()[\\]]|" +
+          ')(?:\\(((\'((?:\\\\.|[^\\\\\'])*)\'|"((?:\\\\.|[^\\\\"])*)")|((?:\\\\.|[^\\\\()[\\]]|' +
           P +
-          ")*)|.*)\\)|)",
-        R = new RegExp("^" + M + "+|((?:^|[^\\\\])(?:\\\\.)*)" + M + "+$", "g"),
-        S = new RegExp("^" + M + "*," + M + "*"),
-        T = new RegExp("^" + M + "*([>+~]|" + M + ")" + M + "*"),
-        U = new RegExp("=" + M + "*([^\\]'\"]*?)" + M + "*\\]", "g"),
+          ')*)|.*)\\)|)',
+        R = new RegExp('^' + M + '+|((?:^|[^\\\\])(?:\\\\.)*)' + M + '+$', 'g'),
+        S = new RegExp('^' + M + '*,' + M + '*'),
+        T = new RegExp('^' + M + '*([>+~]|' + M + ')' + M + '*'),
+        U = new RegExp('=' + M + '*([^\\]\'"]*?)' + M + '*\\]', 'g'),
         V = new RegExp(Q),
-        W = new RegExp("^" + O + "$"),
+        W = new RegExp('^' + O + '$'),
         X = {
-          ID: new RegExp("^#(" + N + ")"),
-          CLASS: new RegExp("^\\.(" + N + ")"),
-          TAG: new RegExp("^(" + N.replace("w", "w*") + ")"),
-          ATTR: new RegExp("^" + P),
-          PSEUDO: new RegExp("^" + Q),
+          ID: new RegExp('^#(' + N + ')'),
+          CLASS: new RegExp('^\\.(' + N + ')'),
+          TAG: new RegExp('^(' + N.replace('w', 'w*') + ')'),
+          ATTR: new RegExp('^' + P),
+          PSEUDO: new RegExp('^' + Q),
           CHILD: new RegExp(
-            "^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(" +
+            '^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(' +
               M +
-              "*(even|odd|(([+-]|)(\\d*)n|)" +
+              '*(even|odd|(([+-]|)(\\d*)n|)' +
               M +
-              "*(?:([+-]|)" +
+              '*(?:([+-]|)' +
               M +
-              "*(\\d+)|))" +
+              '*(\\d+)|))' +
               M +
-              "*\\)|)",
-            "i"
+              '*\\)|)',
+            'i',
           ),
-          bool: new RegExp("^(?:" + L + ")$", "i"),
+          bool: new RegExp('^(?:' + L + ')$', 'i'),
           needsContext: new RegExp(
-            "^" +
+            '^' +
               M +
-              "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" +
+              '*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(' +
               M +
-              "*((?:-\\d)?\\d*)" +
+              '*((?:-\\d)?\\d*)' +
               M +
-              "*\\)|)(?=[^-]|$)",
-            "i"
+              '*\\)|)(?=[^-]|$)',
+            'i',
           ),
         },
         Y = /^(?:input|select|textarea|button)$/i,
@@ -2869,9 +2869,9 @@ function renderHTMLRecursive(obj, package, spacing) {
         _ = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,
         ab = /[+~]/,
         bb = /'|\\/g,
-        cb = new RegExp("\\\\([\\da-f]{1,6}" + M + "?|(" + M + ")|.)", "ig"),
+        cb = new RegExp('\\\\([\\da-f]{1,6}' + M + '?|(' + M + ')|.)', 'ig'),
         db = function (a, b, c) {
-          var d = "0x" + b - 65536;
+          var d = '0x' + b - 65536;
           return d !== d || c
             ? b
             : 0 > d
@@ -2896,7 +2896,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       (c = fb.support = {}),
         (f = fb.isXML = function (a) {
           var b = a && (a.ownerDocument || a).documentElement;
-          return !!b && "HTML" !== b.nodeName;
+          return !!b && 'HTML' !== b.nodeName;
         }),
         (m = fb.setDocument = function (a) {
           var b,
@@ -2910,23 +2910,23 @@ function renderHTMLRecursive(obj, package, spacing) {
                 g !== g.top &&
                 (g.addEventListener
                   ? g.addEventListener(
-                      "unload",
+                      'unload',
                       function () {
                         m();
                       },
-                      !1
+                      !1,
                     )
                   : g.attachEvent &&
-                    g.attachEvent("onunload", function () {
+                    g.attachEvent('onunload', function () {
                       m();
                     })),
               (c.attributes = ib(function (a) {
-                return (a.className = "i"), !a.getAttribute("className");
+                return (a.className = 'i'), !a.getAttribute('className');
               })),
               (c.getElementsByTagName = ib(function (a) {
                 return (
-                  a.appendChild(e.createComment("")),
-                  !a.getElementsByTagName("*").length
+                  a.appendChild(e.createComment('')),
+                  !a.getElementsByTagName('*').length
                 );
               })),
               (c.getElementsByClassName =
@@ -2935,8 +2935,8 @@ function renderHTMLRecursive(obj, package, spacing) {
                   return (
                     (a.innerHTML =
                       "<div class='a'></div><div class='a i'></div>"),
-                    (a.firstChild.className = "i"),
-                    2 === a.getElementsByClassName("i").length
+                    (a.firstChild.className = 'i'),
+                    2 === a.getElementsByClassName('i').length
                   );
                 })),
               (c.getById = ib(function (a) {
@@ -2955,7 +2955,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   (d.filter.ID = function (a) {
                     var b = a.replace(cb, db);
                     return function (a) {
-                      return a.getAttribute("id") === b;
+                      return a.getAttribute('id') === b;
                     };
                   }))
                 : (delete d.find.ID,
@@ -2964,7 +2964,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                     return function (a) {
                       var c =
                         typeof a.getAttributeNode !== C &&
-                        a.getAttributeNode("id");
+                        a.getAttributeNode('id');
                       return c && c.value === b;
                     };
                   })),
@@ -2979,7 +2979,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                       d = [],
                       e = 0,
                       f = b.getElementsByTagName(a);
-                    if ("*" === a) {
+                    if ('*' === a) {
                       for (; (c = f[e++]); ) 1 === c.nodeType && d.push(c);
                       return d;
                     }
@@ -2999,21 +2999,21 @@ function renderHTMLRecursive(obj, package, spacing) {
                   (a.innerHTML =
                     "<select msallowclip=''><option selected=''></option></select>"),
                     a.querySelectorAll("[msallowclip^='']").length &&
-                      q.push("[*^$]=" + M + "*(?:''|\"\")"),
-                    a.querySelectorAll("[selected]").length ||
-                      q.push("\\[" + M + "*(?:value|" + L + ")"),
-                    a.querySelectorAll(":checked").length || q.push(":checked");
+                      q.push('[*^$]=' + M + '*(?:\'\'|"")'),
+                    a.querySelectorAll('[selected]').length ||
+                      q.push('\\[' + M + '*(?:value|' + L + ')'),
+                    a.querySelectorAll(':checked').length || q.push(':checked');
                 }),
                 ib(function (a) {
-                  var b = e.createElement("input");
-                  b.setAttribute("type", "hidden"),
-                    a.appendChild(b).setAttribute("name", "D"),
-                    a.querySelectorAll("[name=d]").length &&
-                      q.push("name" + M + "*[*^$|!~]?="),
-                    a.querySelectorAll(":enabled").length ||
-                      q.push(":enabled", ":disabled"),
-                    a.querySelectorAll("*,:x"),
-                    q.push(",.*:");
+                  var b = e.createElement('input');
+                  b.setAttribute('type', 'hidden'),
+                    a.appendChild(b).setAttribute('name', 'D'),
+                    a.querySelectorAll('[name=d]').length &&
+                      q.push('name' + M + '*[*^$|!~]?='),
+                    a.querySelectorAll(':enabled').length ||
+                      q.push(':enabled', ':disabled'),
+                    a.querySelectorAll('*,:x'),
+                    q.push(',.*:');
                 })),
               (c.matchesSelector = $.test(
                 (s =
@@ -3021,15 +3021,15 @@ function renderHTMLRecursive(obj, package, spacing) {
                   o.webkitMatchesSelector ||
                   o.mozMatchesSelector ||
                   o.oMatchesSelector ||
-                  o.msMatchesSelector)
+                  o.msMatchesSelector),
               )) &&
                 ib(function (a) {
-                  (c.disconnectedMatch = s.call(a, "div")),
+                  (c.disconnectedMatch = s.call(a, 'div')),
                     s.call(a, "[s!='']:x"),
-                    r.push("!=", Q);
+                    r.push('!=', Q);
                 }),
-              (q = q.length && new RegExp(q.join("|"))),
-              (r = r.length && new RegExp(r.join("|"))),
+              (q = q.length && new RegExp(q.join('|'))),
+              (r = r.length && new RegExp(r.join('|'))),
               (b = $.test(o.compareDocumentPosition)),
               (t =
                 b || $.test(o.contains)
@@ -3150,7 +3150,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             : null;
         }),
         (fb.error = function (a) {
-          throw new Error("Syntax error, unrecognized expression: " + a);
+          throw new Error('Syntax error, unrecognized expression: ' + a);
         }),
         (fb.uniqueSort = function (a) {
           var b,
@@ -3170,12 +3170,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         }),
         (e = fb.getText = function (a) {
           var b,
-            c = "",
+            c = '',
             d = 0,
             f = a.nodeType;
           if (f) {
             if (1 === f || 9 === f || 11 === f) {
-              if ("string" == typeof a.textContent) return a.textContent;
+              if ('string' == typeof a.textContent) return a.textContent;
               for (a = a.firstChild; a; a = a.nextSibling) c += e(a);
             } else if (3 === f || 4 === f) return a.nodeValue;
           } else for (; (b = a[d++]); ) c += e(b);
@@ -3188,29 +3188,29 @@ function renderHTMLRecursive(obj, package, spacing) {
           attrHandle: {},
           find: {},
           relative: {
-            ">": { dir: "parentNode", first: !0 },
-            " ": { dir: "parentNode" },
-            "+": { dir: "previousSibling", first: !0 },
-            "~": { dir: "previousSibling" },
+            '>': { dir: 'parentNode', first: !0 },
+            ' ': { dir: 'parentNode' },
+            '+': { dir: 'previousSibling', first: !0 },
+            '~': { dir: 'previousSibling' },
           },
           preFilter: {
             ATTR: function (a) {
               return (
                 (a[1] = a[1].replace(cb, db)),
-                (a[3] = (a[3] || a[4] || a[5] || "").replace(cb, db)),
-                "~=" === a[2] && (a[3] = " " + a[3] + " "),
+                (a[3] = (a[3] || a[4] || a[5] || '').replace(cb, db)),
+                '~=' === a[2] && (a[3] = ' ' + a[3] + ' '),
                 a.slice(0, 4)
               );
             },
             CHILD: function (a) {
               return (
                 (a[1] = a[1].toLowerCase()),
-                "nth" === a[1].slice(0, 3)
+                'nth' === a[1].slice(0, 3)
                   ? (a[3] || fb.error(a[0]),
                     (a[4] = +(a[4]
                       ? a[5] + (a[6] || 1)
-                      : 2 * ("even" === a[3] || "odd" === a[3]))),
-                    (a[5] = +(a[7] + a[8] || "odd" === a[3])))
+                      : 2 * ('even' === a[3] || 'odd' === a[3]))),
+                    (a[5] = +(a[7] + a[8] || 'odd' === a[3])))
                   : a[3] && fb.error(a[0]),
                 a
               );
@@ -3221,11 +3221,11 @@ function renderHTMLRecursive(obj, package, spacing) {
               return X.CHILD.test(a[0])
                 ? null
                 : (a[3]
-                    ? (a[2] = a[4] || a[5] || "")
+                    ? (a[2] = a[4] || a[5] || '')
                     : c &&
                       V.test(c) &&
                       (b = g(c, !0)) &&
-                      (b = c.indexOf(")", c.length - b) - c.length) &&
+                      (b = c.indexOf(')', c.length - b) - c.length) &&
                       ((a[0] = a[0].slice(0, b)), (a[2] = c.slice(0, b))),
                   a.slice(0, 3));
             },
@@ -3233,7 +3233,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           filter: {
             TAG: function (a) {
               var b = a.replace(cb, db).toLowerCase();
-              return "*" === a
+              return '*' === a
                 ? function () {
                     return !0;
                   }
@@ -3242,16 +3242,16 @@ function renderHTMLRecursive(obj, package, spacing) {
                   };
             },
             CLASS: function (a) {
-              var b = y[a + " "];
+              var b = y[a + ' '];
               return (
                 b ||
-                ((b = new RegExp("(^|" + M + ")" + a + "(" + M + "|$)")) &&
+                ((b = new RegExp('(^|' + M + ')' + a + '(' + M + '|$)')) &&
                   y(a, function (a) {
                     return b.test(
-                      ("string" == typeof a.className && a.className) ||
+                      ('string' == typeof a.className && a.className) ||
                         (typeof a.getAttribute !== C &&
-                          a.getAttribute("class")) ||
-                        ""
+                          a.getAttribute('class')) ||
+                        '',
                     );
                   }))
               );
@@ -3260,29 +3260,29 @@ function renderHTMLRecursive(obj, package, spacing) {
               return function (d) {
                 var e = fb.attr(d, a);
                 return null == e
-                  ? "!=" === b
+                  ? '!=' === b
                   : !b ||
-                      ((e += ""),
-                      "=" === b
+                      ((e += ''),
+                      '=' === b
                         ? e === c
-                        : "!=" === b
+                        : '!=' === b
                         ? e !== c
-                        : "^=" === b
+                        : '^=' === b
                         ? c && 0 === e.indexOf(c)
-                        : "*=" === b
+                        : '*=' === b
                         ? c && e.indexOf(c) > -1
-                        : "$=" === b
+                        : '$=' === b
                         ? c && e.slice(-c.length) === c
-                        : "~=" === b
-                        ? (" " + e + " ").indexOf(c) > -1
-                        : "|=" === b &&
-                          (e === c || e.slice(0, c.length + 1) === c + "-"));
+                        : '~=' === b
+                        ? (' ' + e + ' ').indexOf(c) > -1
+                        : '|=' === b &&
+                          (e === c || e.slice(0, c.length + 1) === c + '-'));
               };
             },
             CHILD: function (a, b, c, d, e) {
-              var f = "nth" !== a.slice(0, 3),
-                g = "last" !== a.slice(-4),
-                h = "of-type" === b;
+              var f = 'nth' !== a.slice(0, 3),
+                g = 'last' !== a.slice(-4),
+                h = 'of-type' === b;
               return 1 === d && 0 === e
                 ? function (a) {
                     return !!a.parentNode;
@@ -3294,7 +3294,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                       m,
                       n,
                       o,
-                      p = f !== g ? "nextSibling" : "previousSibling",
+                      p = f !== g ? 'nextSibling' : 'previousSibling',
                       q = b.parentNode,
                       r = h && b.nodeName.toLowerCase(),
                       s = !i && !h;
@@ -3308,7 +3308,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                                 : 1 === l.nodeType
                             )
                               return !1;
-                          o = p = "only" === a && !o && "nextSibling";
+                          o = p = 'only' === a && !o && 'nextSibling';
                         }
                         return !0;
                       }
@@ -3353,11 +3353,11 @@ function renderHTMLRecursive(obj, package, spacing) {
                 e =
                   d.pseudos[a] ||
                   d.setFilters[a.toLowerCase()] ||
-                  fb.error("unsupported pseudo: " + a);
+                  fb.error('unsupported pseudo: ' + a);
               return e[u]
                 ? e(b)
                 : e.length > 1
-                ? ((c = [a, a, "", b]),
+                ? ((c = [a, a, '', b]),
                   d.setFilters.hasOwnProperty(a.toLowerCase())
                     ? hb(function (a, c) {
                         for (var d, f = e(a, b), g = f.length; g--; )
@@ -3373,7 +3373,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             not: hb(function (a) {
               var b = [],
                 c = [],
-                d = h(a.replace(R, "$1"));
+                d = h(a.replace(R, '$1'));
               return d[u]
                 ? hb(function (a, b, c, e) {
                     for (var f, g = d(a, null, e, []), h = a.length; h--; )
@@ -3395,7 +3395,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             }),
             lang: hb(function (a) {
               return (
-                W.test(a || "") || fb.error("unsupported lang: " + a),
+                W.test(a || '') || fb.error('unsupported lang: ' + a),
                 (a = a.replace(cb, db).toLowerCase()),
                 function (b) {
                   var c;
@@ -3403,10 +3403,10 @@ function renderHTMLRecursive(obj, package, spacing) {
                     if (
                       (c = p
                         ? b.lang
-                        : b.getAttribute("xml:lang") || b.getAttribute("lang"))
+                        : b.getAttribute('xml:lang') || b.getAttribute('lang'))
                     )
                       return (
-                        (c = c.toLowerCase()) === a || 0 === c.indexOf(a + "-")
+                        (c = c.toLowerCase()) === a || 0 === c.indexOf(a + '-')
                       );
                   } while ((b = b.parentNode) && 1 === b.nodeType);
                   return !1;
@@ -3436,8 +3436,8 @@ function renderHTMLRecursive(obj, package, spacing) {
             checked: function (a) {
               var b = a.nodeName.toLowerCase();
               return (
-                ("input" === b && !!a.checked) ||
-                ("option" === b && !!a.selected)
+                ('input' === b && !!a.checked) ||
+                ('option' === b && !!a.selected)
               );
             },
             selected: function (a) {
@@ -3461,15 +3461,15 @@ function renderHTMLRecursive(obj, package, spacing) {
             },
             button: function (a) {
               var b = a.nodeName.toLowerCase();
-              return ("input" === b && "button" === a.type) || "button" === b;
+              return ('input' === b && 'button' === a.type) || 'button' === b;
             },
             text: function (a) {
               var b;
               return (
-                "input" === a.nodeName.toLowerCase() &&
-                "text" === a.type &&
-                (null == (b = a.getAttribute("type")) ||
-                  "text" === b.toLowerCase())
+                'input' === a.nodeName.toLowerCase() &&
+                'text' === a.type &&
+                (null == (b = a.getAttribute('type')) ||
+                  'text' === b.toLowerCase())
               );
             },
             first: nb(function () {
@@ -3503,14 +3503,14 @@ function renderHTMLRecursive(obj, package, spacing) {
       for (b in { radio: !0, checkbox: !0, file: !0, password: !0, image: !0 })
         d.pseudos[b] = (function (a) {
           return function (b) {
-            return "input" === b.nodeName.toLowerCase() && b.type === a;
+            return 'input' === b.nodeName.toLowerCase() && b.type === a;
           };
         })(b);
       for (b in { submit: !0, reset: !0 })
         d.pseudos[b] = (function (a) {
           return function (b) {
             var c = b.nodeName.toLowerCase();
-            return ("input" === c || "button" === c) && b.type === a;
+            return ('input' === c || 'button' === c) && b.type === a;
           };
         })(b);
       return (
@@ -3524,7 +3524,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             h,
             i,
             j,
-            k = z[a + " "];
+            k = z[a + ' '];
           if (k) return b ? 0 : k.slice(0);
           for (h = a, i = [], j = d.preFilter; h; ) {
             (!c || (e = S.exec(h))) &&
@@ -3532,7 +3532,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               (c = !1),
               (e = T.exec(h)) &&
                 ((c = e.shift()),
-                f.push({ value: c, type: e[0].replace(R, " ") }),
+                f.push({ value: c, type: e[0].replace(R, ' ') }),
                 (h = h.slice(c.length)));
             for (g in d.filter)
               !(e = X[g].exec(h)) ||
@@ -3548,7 +3548,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           var c,
             d = [],
             e = [],
-            f = A[a + " "];
+            f = A[a + ' '];
           if (!f) {
             for (b || (b = g(a)), c = b.length; c--; )
               (f = wb(b[c])), f[u] ? d.push(f) : e.push(f);
@@ -3562,13 +3562,13 @@ function renderHTMLRecursive(obj, package, spacing) {
             k,
             l,
             m,
-            n = "function" == typeof a && a,
+            n = 'function' == typeof a && a,
             o = !f && g((a = n.selector || a));
           if (((e = e || []), 1 === o.length)) {
             if (
               ((j = o[0] = o[0].slice(0)),
               j.length > 2 &&
-                "ID" === (k = j[0]).type &&
+                'ID' === (k = j[0]).type &&
                 c.getById &&
                 9 === b.nodeType &&
                 p &&
@@ -3587,7 +3587,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                 (m = d.find[l]) &&
                 (f = m(
                   k.matches[0].replace(cb, db),
-                  (ab.test(j[0].type) && ob(b.parentNode)) || b
+                  (ab.test(j[0].type) && ob(b.parentNode)) || b,
                 ))
               ) {
                 if ((j.splice(i, 1), !(a = f.length && qb(j))))
@@ -3600,38 +3600,38 @@ function renderHTMLRecursive(obj, package, spacing) {
             e
           );
         }),
-        (c.sortStable = u.split("").sort(B).join("") === u),
+        (c.sortStable = u.split('').sort(B).join('') === u),
         (c.detectDuplicates = !!l),
         m(),
         (c.sortDetached = ib(function (a) {
-          return 1 & a.compareDocumentPosition(n.createElement("div"));
+          return 1 & a.compareDocumentPosition(n.createElement('div'));
         })),
         ib(function (a) {
           return (
             (a.innerHTML = "<a href='#'></a>"),
-            "#" === a.firstChild.getAttribute("href")
+            '#' === a.firstChild.getAttribute('href')
           );
         }) ||
-          jb("type|href|height|width", function (a, b, c) {
+          jb('type|href|height|width', function (a, b, c) {
             return c
               ? void 0
-              : a.getAttribute(b, "type" === b.toLowerCase() ? 1 : 2);
+              : a.getAttribute(b, 'type' === b.toLowerCase() ? 1 : 2);
           }),
         (c.attributes &&
           ib(function (a) {
             return (
-              (a.innerHTML = "<input/>"),
-              a.firstChild.setAttribute("value", ""),
-              "" === a.firstChild.getAttribute("value")
+              (a.innerHTML = '<input/>'),
+              a.firstChild.setAttribute('value', ''),
+              '' === a.firstChild.getAttribute('value')
             );
           })) ||
-          jb("value", function (a, b, c) {
-            return c || "input" !== a.nodeName.toLowerCase()
+          jb('value', function (a, b, c) {
+            return c || 'input' !== a.nodeName.toLowerCase()
               ? void 0
               : a.defaultValue;
           }),
         ib(function (a) {
-          return null == a.getAttribute("disabled");
+          return null == a.getAttribute('disabled');
         }) ||
           jb(L, function (a, b, c) {
             var d;
@@ -3648,7 +3648,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     })(a);
     (n.find = t),
       (n.expr = t.selectors),
-      (n.expr[":"] = n.expr.pseudos),
+      (n.expr[':'] = n.expr.pseudos),
       (n.unique = t.uniqueSort),
       (n.text = t.getText),
       (n.isXMLDoc = t.isXML),
@@ -3659,7 +3659,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     (n.filter = function (a, b, c) {
       var d = b[0];
       return (
-        c && (a = ":not(" + a + ")"),
+        c && (a = ':not(' + a + ')'),
         1 === b.length && 1 === d.nodeType
           ? n.find.matchesSelector(d, a)
             ? [d]
@@ -3668,7 +3668,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               a,
               n.grep(b, function (a) {
                 return 1 === a.nodeType;
-              })
+              }),
             )
       );
     }),
@@ -3678,16 +3678,16 @@ function renderHTMLRecursive(obj, package, spacing) {
             c = this.length,
             d = [],
             e = this;
-          if ("string" != typeof a)
+          if ('string' != typeof a)
             return this.pushStack(
               n(a).filter(function () {
                 for (b = 0; c > b; b++) if (n.contains(e[b], this)) return !0;
-              })
+              }),
             );
           for (b = 0; c > b; b++) n.find(a, e[b], d);
           return (
             (d = this.pushStack(c > 1 ? n.unique(d) : d)),
-            (d.selector = this.selector ? this.selector + " " + a : a),
+            (d.selector = this.selector ? this.selector + ' ' + a : a),
             d
           );
         },
@@ -3700,8 +3700,8 @@ function renderHTMLRecursive(obj, package, spacing) {
         is: function (a) {
           return !!x(
             this,
-            "string" == typeof a && u.test(a) ? n(a) : a || [],
-            !1
+            'string' == typeof a && u.test(a) ? n(a) : a || [],
+            !1,
           ).length;
         },
       });
@@ -3710,10 +3710,10 @@ function renderHTMLRecursive(obj, package, spacing) {
     ((n.fn.init = function (a, b) {
       var c, d;
       if (!a) return this;
-      if ("string" == typeof a) {
+      if ('string' == typeof a) {
         if (
           !(c =
-            "<" === a[0] && ">" === a[a.length - 1] && a.length >= 3
+            '<' === a[0] && '>' === a[a.length - 1] && a.length >= 3
               ? [null, a, null]
               : z.exec(a)) ||
           (!c[1] && b)
@@ -3726,7 +3726,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             ((b = b instanceof n ? b[0] : b),
             n.merge(
               this,
-              n.parseHTML(c[1], b && b.nodeType ? b.ownerDocument || b : l, !0)
+              n.parseHTML(c[1], b && b.nodeType ? b.ownerDocument || b : l, !0),
             ),
             v.test(c[1]) && n.isPlainObject(b))
           )
@@ -3785,7 +3785,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               e = this.length,
               f = [],
               g =
-                u.test(a) || "string" != typeof a ? n(a, b || this.context) : 0;
+                u.test(a) || 'string' != typeof a ? n(a, b || this.context) : 0;
             e > d;
             d++
           )
@@ -3803,7 +3803,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         index: function (a) {
           return a
-            ? "string" == typeof a
+            ? 'string' == typeof a
               ? g.call(n(a), this[0])
               : g.call(this, a.jquery ? a[0] : a)
             : this[0] && this[0].parentNode
@@ -3815,7 +3815,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         addBack: function (a) {
           return this.add(
-            null == a ? this.prevObject : this.prevObject.filter(a)
+            null == a ? this.prevObject : this.prevObject.filter(a),
           );
         },
       }),
@@ -3826,28 +3826,28 @@ function renderHTMLRecursive(obj, package, spacing) {
             return b && 11 !== b.nodeType ? b : null;
           },
           parents: function (a) {
-            return n.dir(a, "parentNode");
+            return n.dir(a, 'parentNode');
           },
           parentsUntil: function (a, b, c) {
-            return n.dir(a, "parentNode", c);
+            return n.dir(a, 'parentNode', c);
           },
           next: function (a) {
-            return D(a, "nextSibling");
+            return D(a, 'nextSibling');
           },
           prev: function (a) {
-            return D(a, "previousSibling");
+            return D(a, 'previousSibling');
           },
           nextAll: function (a) {
-            return n.dir(a, "nextSibling");
+            return n.dir(a, 'nextSibling');
           },
           prevAll: function (a) {
-            return n.dir(a, "previousSibling");
+            return n.dir(a, 'previousSibling');
           },
           nextUntil: function (a, b, c) {
-            return n.dir(a, "nextSibling", c);
+            return n.dir(a, 'nextSibling', c);
           },
           prevUntil: function (a, b, c) {
-            return n.dir(a, "previousSibling", c);
+            return n.dir(a, 'previousSibling', c);
           },
           siblings: function (a) {
             return n.sibling((a.parentNode || {}).firstChild, a);
@@ -3863,19 +3863,19 @@ function renderHTMLRecursive(obj, package, spacing) {
           n.fn[a] = function (c, d) {
             var e = n.map(this, b, c);
             return (
-              "Until" !== a.slice(-5) && (d = c),
-              d && "string" == typeof d && (e = n.filter(d, e)),
+              'Until' !== a.slice(-5) && (d = c),
+              d && 'string' == typeof d && (e = n.filter(d, e)),
               this.length > 1 &&
                 (C[a] || n.unique(e), B.test(a) && e.reverse()),
               this.pushStack(e)
             );
           };
-        }
+        },
       );
     var E = /\S+/g,
       F = {};
     (n.Callbacks = function (a) {
-      a = "string" == typeof a ? F[a] || G(a) : n.extend({}, a);
+      a = 'string' == typeof a ? F[a] || G(a) : n.extend({}, a);
       var b,
         c,
         d,
@@ -3904,9 +3904,9 @@ function renderHTMLRecursive(obj, package, spacing) {
               !(function g(b) {
                 n.each(b, function (b, c) {
                   var d = n.type(c);
-                  "function" === d
+                  'function' === d
                     ? (a.unique && k.has(c)) || h.push(c)
-                    : c && c.length && "string" !== d && g(c);
+                    : c && c.length && 'string' !== d && g(c);
                 });
               })(arguments),
                 d ? (f = h.length) : b && ((e = c), j(b));
@@ -3963,11 +3963,11 @@ function renderHTMLRecursive(obj, package, spacing) {
       n.extend({
         Deferred: function (a) {
           var b = [
-              ["resolve", "done", n.Callbacks("once memory"), "resolved"],
-              ["reject", "fail", n.Callbacks("once memory"), "rejected"],
-              ["notify", "progress", n.Callbacks("memory")],
+              ['resolve', 'done', n.Callbacks('once memory'), 'resolved'],
+              ['reject', 'fail', n.Callbacks('once memory'), 'rejected'],
+              ['notify', 'progress', n.Callbacks('memory')],
             ],
-            c = "pending",
+            c = 'pending',
             d = {
               state: function () {
                 return c;
@@ -3989,9 +3989,9 @@ function renderHTMLRecursive(obj, package, spacing) {
                               .done(c.resolve)
                               .fail(c.reject)
                               .progress(c.notify)
-                          : c[f[0] + "With"](
+                          : c[f[0] + 'With'](
                               this === d ? c.promise() : this,
-                              g ? [a] : arguments
+                              g ? [a] : arguments,
                             );
                       });
                     }),
@@ -4016,14 +4016,14 @@ function renderHTMLRecursive(obj, package, spacing) {
                       c = h;
                     },
                     b[1 ^ a][2].disable,
-                    b[2][2].lock
+                    b[2][2].lock,
                   ),
                 (e[f[0]] = function () {
                   return (
-                    e[f[0] + "With"](this === e ? d : this, arguments), this
+                    e[f[0] + 'With'](this === e ? d : this, arguments), this
                   );
                 }),
-                (e[f[0] + "With"] = g.fireWith);
+                (e[f[0] + 'With'] = g.fireWith);
             }),
             d.promise(e),
             a && a.call(e, e),
@@ -4078,17 +4078,17 @@ function renderHTMLRecursive(obj, package, spacing) {
             (!0 !== a && --n.readyWait > 0) ||
               (H.resolveWith(l, [n]),
               n.fn.triggerHandler &&
-                (n(l).triggerHandler("ready"), n(l).off("ready"))));
+                (n(l).triggerHandler('ready'), n(l).off('ready'))));
         },
       }),
       (n.ready.promise = function (b) {
         return (
           H ||
             ((H = n.Deferred()),
-            "complete" === l.readyState
+            'complete' === l.readyState
               ? setTimeout(n.ready)
-              : (l.addEventListener("DOMContentLoaded", I, !1),
-                a.addEventListener("load", I, !1))),
+              : (l.addEventListener('DOMContentLoaded', I, !1),
+                a.addEventListener('load', I, !1))),
           H.promise(b)
         );
       }),
@@ -4097,7 +4097,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       var h = 0,
         i = a.length,
         j = null == c;
-      if ("object" === n.type(c)) {
+      if ('object' === n.type(c)) {
         e = !0;
         for (h in c) n.access(a, b, h, c[h], !0, f, g);
       } else if (
@@ -4140,7 +4140,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           var d,
             e = this.key(a),
             f = this.cache[e];
-          if ("string" == typeof b) f[b] = c;
+          if ('string' == typeof b) f[b] = c;
           else if (n.isEmptyObject(f)) n.extend(this.cache[e], b);
           else for (d in b) f[d] = b[d];
           return f;
@@ -4151,7 +4151,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         access: function (a, b, c) {
           var d;
-          return void 0 === b || (b && "string" == typeof b && void 0 === c)
+          return void 0 === b || (b && 'string' == typeof b && void 0 === c)
             ? ((d = this.get(a, b)),
               void 0 !== d ? d : this.get(a, n.camelCase(b)))
             : (this.set(a, b, c), void 0 !== c ? c : b);
@@ -4212,18 +4212,18 @@ function renderHTMLRecursive(obj, package, spacing) {
           if (void 0 === a) {
             if (
               this.length &&
-              ((e = M.get(f)), 1 === f.nodeType && !L.get(f, "hasDataAttrs"))
+              ((e = M.get(f)), 1 === f.nodeType && !L.get(f, 'hasDataAttrs'))
             ) {
               for (c = g.length; c--; )
                 g[c] &&
                   ((d = g[c].name),
-                  0 === d.indexOf("data-") &&
+                  0 === d.indexOf('data-') &&
                     ((d = n.camelCase(d.slice(5))), P(f, d, e[d])));
-              L.set(f, "hasDataAttrs", !0);
+              L.set(f, 'hasDataAttrs', !0);
             }
             return e;
           }
-          return "object" == typeof a
+          return 'object' == typeof a
             ? this.each(function () {
                 M.set(this, a);
               })
@@ -4240,7 +4240,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                     this.each(function () {
                       var c = M.get(this, d);
                       M.set(this, d, b),
-                        -1 !== a.indexOf("-") &&
+                        -1 !== a.indexOf('-') &&
                           void 0 !== c &&
                           M.set(this, a, b);
                     });
@@ -4249,7 +4249,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                 b,
                 arguments.length > 1,
                 null,
-                !0
+                !0,
               );
         },
         removeData: function (a) {
@@ -4262,7 +4262,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         queue: function (a, b, c) {
           var d;
           return a
-            ? ((b = (b || "fx") + "queue"),
+            ? ((b = (b || 'fx') + 'queue'),
               (d = L.get(a, b)),
               c &&
                 (!d || n.isArray(c)
@@ -4272,7 +4272,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             : void 0;
         },
         dequeue: function (a, b) {
-          b = b || "fx";
+          b = b || 'fx';
           var c = n.queue(a, b),
             d = c.length,
             e = c.shift(),
@@ -4280,20 +4280,20 @@ function renderHTMLRecursive(obj, package, spacing) {
             g = function () {
               n.dequeue(a, b);
             };
-          "inprogress" === e && ((e = c.shift()), d--),
+          'inprogress' === e && ((e = c.shift()), d--),
             e &&
-              ("fx" === b && c.unshift("inprogress"),
+              ('fx' === b && c.unshift('inprogress'),
               delete f.stop,
               e.call(a, g, f)),
             !d && f && f.empty.fire();
         },
         _queueHooks: function (a, b) {
-          var c = b + "queueHooks";
+          var c = b + 'queueHooks';
           return (
             L.get(a, c) ||
             L.access(a, c, {
-              empty: n.Callbacks("once memory").add(function () {
-                L.remove(a, [b + "queue", c]);
+              empty: n.Callbacks('once memory').add(function () {
+                L.remove(a, [b + 'queue', c]);
               }),
             })
           );
@@ -4303,7 +4303,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         queue: function (a, b) {
           var c = 2;
           return (
-            "string" != typeof a && ((b = a), (a = "fx"), c--),
+            'string' != typeof a && ((b = a), (a = 'fx'), c--),
             arguments.length < c
               ? n.queue(this[0], a)
               : void 0 === b
@@ -4311,7 +4311,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               : this.each(function () {
                   var c = n.queue(this, a, b);
                   n._queueHooks(this, a),
-                    "fx" === a && "inprogress" !== c[0] && n.dequeue(this, a);
+                    'fx' === a && 'inprogress' !== c[0] && n.dequeue(this, a);
                 })
           );
         },
@@ -4321,7 +4321,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           });
         },
         clearQueue: function (a) {
-          return this.queue(a || "fx", []);
+          return this.queue(a || 'fx', []);
         },
         promise: function (a, b) {
           var c,
@@ -4333,39 +4333,39 @@ function renderHTMLRecursive(obj, package, spacing) {
               --d || e.resolveWith(f, [f]);
             };
           for (
-            "string" != typeof a && ((b = a), (a = void 0)), a = a || "fx";
+            'string' != typeof a && ((b = a), (a = void 0)), a = a || 'fx';
             g--;
 
           )
-            (c = L.get(f[g], a + "queueHooks")) &&
+            (c = L.get(f[g], a + 'queueHooks')) &&
               c.empty &&
               (d++, c.empty.add(h));
           return h(), e.promise(b);
         },
       });
     var Q = /[+-]?(?:\d*\.|)\d+(?:[eE][+-]?\d+|)/.source,
-      R = ["Top", "Right", "Bottom", "Left"],
+      R = ['Top', 'Right', 'Bottom', 'Left'],
       S = function (a, b) {
         return (
           (a = b || a),
-          "none" === n.css(a, "display") || !n.contains(a.ownerDocument, a)
+          'none' === n.css(a, 'display') || !n.contains(a.ownerDocument, a)
         );
       },
       T = /^(?:checkbox|radio)$/i;
     !(function () {
       var a = l.createDocumentFragment(),
-        b = a.appendChild(l.createElement("div")),
-        c = l.createElement("input");
-      c.setAttribute("type", "radio"),
-        c.setAttribute("checked", "checked"),
-        c.setAttribute("name", "t"),
+        b = a.appendChild(l.createElement('div')),
+        c = l.createElement('input');
+      c.setAttribute('type', 'radio'),
+        c.setAttribute('checked', 'checked'),
+        c.setAttribute('name', 't'),
         b.appendChild(c),
         (k.checkClone = b.cloneNode(!0).cloneNode(!0).lastChild.checked),
-        (b.innerHTML = "<textarea>x</textarea>"),
+        (b.innerHTML = '<textarea>x</textarea>'),
         (k.noCloneChecked = !!b.cloneNode(!0).lastChild.defaultValue);
     })();
-    var U = "undefined";
-    k.focusinBubbles = "onfocusin" in a;
+    var U = 'undefined';
+    k.focusinBubbles = 'onfocusin' in a;
     var V = /^key/,
       W = /^(?:mouse|pointer|contextmenu)|click/,
       X = /^(?:focusinfocus|focusoutblur)$/,
@@ -4396,14 +4396,14 @@ function renderHTMLRecursive(obj, package, spacing) {
                     ? n.event.dispatch.apply(a, arguments)
                     : void 0;
                 }),
-              b = (b || "").match(E) || [""],
+              b = (b || '').match(E) || [''],
               j = b.length;
             j--;
 
           )
             (h = Y.exec(b[j]) || []),
               (o = q = h[1]),
-              (p = (h[2] || "").split(".").sort()),
+              (p = (h[2] || '').split('.').sort()),
               o &&
                 ((l = n.event.special[o] || {}),
                 (o = (e ? l.delegateType : l.bindType) || o),
@@ -4417,9 +4417,9 @@ function renderHTMLRecursive(obj, package, spacing) {
                     guid: c.guid,
                     selector: e,
                     needsContext: e && n.expr.match.needsContext.test(e),
-                    namespace: p.join("."),
+                    namespace: p.join('.'),
                   },
-                  f
+                  f,
                 )),
                 (m = i[o]) ||
                   ((m = i[o] = []),
@@ -4446,11 +4446,11 @@ function renderHTMLRecursive(obj, package, spacing) {
           q,
           r = L.hasData(a) && L.get(a);
         if (r && (i = r.events)) {
-          for (b = (b || "").match(E) || [""], j = b.length; j--; )
+          for (b = (b || '').match(E) || [''], j = b.length; j--; )
             if (
               ((h = Y.exec(b[j]) || []),
               (o = q = h[1]),
-              (p = (h[2] || "").split(".").sort()),
+              (p = (h[2] || '').split('.').sort()),
               o)
             ) {
               for (
@@ -4459,7 +4459,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   m = i[o] || [],
                   h =
                     h[2] &&
-                    new RegExp("(^|\\.)" + p.join("\\.(?:.*\\.|)") + "(\\.|$)"),
+                    new RegExp('(^|\\.)' + p.join('\\.(?:.*\\.|)') + '(\\.|$)'),
                   g = f = m.length;
                 f--;
 
@@ -4468,7 +4468,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   (!e && q !== k.origType) ||
                     (c && c.guid !== k.guid) ||
                     (h && !h.test(k.namespace)) ||
-                    (d && d !== k.selector && ("**" !== d || !k.selector)) ||
+                    (d && d !== k.selector && ('**' !== d || !k.selector)) ||
                     (m.splice(f, 1),
                     k.selector && m.delegateCount--,
                     l.remove && l.remove.call(a, k));
@@ -4478,7 +4478,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   n.removeEvent(a, o, r.handle),
                 delete i[o]);
             } else for (o in i) n.event.remove(a, o + b[j], c, d, !0);
-          n.isEmptyObject(i) && (delete r.handle, L.remove(a, "events"));
+          n.isEmptyObject(i) && (delete r.handle, L.remove(a, 'events'));
         }
       },
       trigger: function (b, c, d, e) {
@@ -4490,21 +4490,21 @@ function renderHTMLRecursive(obj, package, spacing) {
           m,
           o,
           p = [d || l],
-          q = j.call(b, "type") ? b.type : b,
-          r = j.call(b, "namespace") ? b.namespace.split(".") : [];
+          q = j.call(b, 'type') ? b.type : b,
+          r = j.call(b, 'namespace') ? b.namespace.split('.') : [];
         if (
           ((g = h = d = d || l),
           3 !== d.nodeType &&
             8 !== d.nodeType &&
             !X.test(q + n.event.triggered) &&
-            (q.indexOf(".") >= 0 &&
-              ((r = q.split(".")), (q = r.shift()), r.sort()),
-            (k = q.indexOf(":") < 0 && "on" + q),
-            (b = b[n.expando] ? b : new n.Event(q, "object" == typeof b && b)),
+            (q.indexOf('.') >= 0 &&
+              ((r = q.split('.')), (q = r.shift()), r.sort()),
+            (k = q.indexOf(':') < 0 && 'on' + q),
+            (b = b[n.expando] ? b : new n.Event(q, 'object' == typeof b && b)),
             (b.isTrigger = e ? 2 : 3),
-            (b.namespace = r.join(".")),
+            (b.namespace = r.join('.')),
             (b.namespace_re = b.namespace
-              ? new RegExp("(^|\\.)" + r.join("\\.(?:.*\\.|)") + "(\\.|$)")
+              ? new RegExp('(^|\\.)' + r.join('\\.(?:.*\\.|)') + '(\\.|$)')
               : null),
             (b.result = void 0),
             b.target || (b.target = d),
@@ -4524,7 +4524,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           }
           for (f = 0; (g = p[f++]) && !b.isPropagationStopped(); )
             (b.type = f > 1 ? i : o.bindType || q),
-              (m = (L.get(g, "events") || {})[b.type] && L.get(g, "handle")),
+              (m = (L.get(g, 'events') || {})[b.type] && L.get(g, 'handle')),
               m && m.apply(g, c),
               (m = k && g[k]) &&
                 m.apply &&
@@ -4559,7 +4559,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           g,
           h = [],
           i = d.call(arguments),
-          j = (L.get(this, "events") || {})[a.type] || [],
+          j = (L.get(this, 'events') || {})[a.type] || [],
           k = n.event.special[a.type] || {};
         if (
           ((i[0] = a),
@@ -4596,12 +4596,12 @@ function renderHTMLRecursive(obj, package, spacing) {
           g = [],
           h = b.delegateCount,
           i = a.target;
-        if (h && i.nodeType && (!a.button || "click" !== a.type))
+        if (h && i.nodeType && (!a.button || 'click' !== a.type))
           for (; i !== this; i = i.parentNode || this)
-            if (!0 !== i.disabled || "click" !== a.type) {
+            if (!0 !== i.disabled || 'click' !== a.type) {
               for (d = [], c = 0; h > c; c++)
                 (f = b[c]),
-                  (e = f.selector + " "),
+                  (e = f.selector + ' '),
                   void 0 === d[e] &&
                     (d[e] = f.needsContext
                       ? n(e, this).index(i) >= 0
@@ -4611,12 +4611,12 @@ function renderHTMLRecursive(obj, package, spacing) {
             }
         return h < b.length && g.push({ elem: this, handlers: b.slice(h) }), g;
       },
-      props: "altKey bubbles cancelable ctrlKey currentTarget eventPhase metaKey relatedTarget shiftKey target timeStamp view which".split(
-        " "
+      props: 'altKey bubbles cancelable ctrlKey currentTarget eventPhase metaKey relatedTarget shiftKey target timeStamp view which'.split(
+        ' ',
       ),
       fixHooks: {},
       keyHooks: {
-        props: "char charCode key keyCode".split(" "),
+        props: 'char charCode key keyCode'.split(' '),
         filter: function (a, b) {
           return (
             null == a.which &&
@@ -4626,8 +4626,8 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
       },
       mouseHooks: {
-        props: "button buttons clientX clientY offsetX offsetY pageX pageY screenX screenY toElement".split(
-          " "
+        props: 'button buttons clientX clientY offsetX offsetY pageX pageY screenX screenY toElement'.split(
+          ' ',
         ),
         filter: function (a, b) {
           var c,
@@ -4689,24 +4689,24 @@ function renderHTMLRecursive(obj, package, spacing) {
           trigger: function () {
             return this !== _() && this.focus ? (this.focus(), !1) : void 0;
           },
-          delegateType: "focusin",
+          delegateType: 'focusin',
         },
         blur: {
           trigger: function () {
             return this === _() && this.blur ? (this.blur(), !1) : void 0;
           },
-          delegateType: "focusout",
+          delegateType: 'focusout',
         },
         click: {
           trigger: function () {
-            return "checkbox" === this.type &&
+            return 'checkbox' === this.type &&
               this.click &&
-              n.nodeName(this, "input")
+              n.nodeName(this, 'input')
               ? (this.click(), !1)
               : void 0;
           },
           _default: function (a) {
-            return n.nodeName(a.target, "a");
+            return n.nodeName(a.target, 'a');
           },
         },
         beforeunload: {
@@ -4769,10 +4769,10 @@ function renderHTMLRecursive(obj, package, spacing) {
       }),
       n.each(
         {
-          mouseenter: "mouseover",
-          mouseleave: "mouseout",
-          pointerenter: "pointerover",
-          pointerleave: "pointerout",
+          mouseenter: 'mouseover',
+          mouseleave: 'mouseout',
+          pointerenter: 'pointerover',
+          pointerleave: 'pointerout',
         },
         function (a, b) {
           n.event.special[a] = {
@@ -4792,10 +4792,10 @@ function renderHTMLRecursive(obj, package, spacing) {
               );
             },
           };
-        }
+        },
       ),
       k.focusinBubbles ||
-        n.each({ focus: "focusin", blur: "focusout" }, function (a, b) {
+        n.each({ focus: 'focusin', blur: 'focusout' }, function (a, b) {
           var c = function (a) {
             n.event.simulate(b, a.target, n.event.fix(a), !0);
           };
@@ -4817,8 +4817,8 @@ function renderHTMLRecursive(obj, package, spacing) {
       n.fn.extend({
         on: function (a, b, c, d, e) {
           var f, g;
-          if ("object" == typeof a) {
-            "string" != typeof b && ((c = c || b), (b = void 0));
+          if ('object' == typeof a) {
+            'string' != typeof b && ((c = c || b), (b = void 0));
             for (g in a) this.on(g, b, c, a[g], e);
             return this;
           }
@@ -4826,7 +4826,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             (null == c && null == d
               ? ((d = b), (c = b = void 0))
               : null == d &&
-                ("string" == typeof b
+                ('string' == typeof b
                   ? ((d = c), (c = void 0))
                   : ((d = c), (c = b), (b = void 0))),
             !1 === d)
@@ -4854,18 +4854,18 @@ function renderHTMLRecursive(obj, package, spacing) {
             return (
               (d = a.handleObj),
               n(a.delegateTarget).off(
-                d.namespace ? d.origType + "." + d.namespace : d.origType,
+                d.namespace ? d.origType + '.' + d.namespace : d.origType,
                 d.selector,
-                d.handler
+                d.handler,
               ),
               this
             );
-          if ("object" == typeof a) {
+          if ('object' == typeof a) {
             for (e in a) this.off(e, b, a[e]);
             return this;
           }
           return (
-            (!1 === b || "function" == typeof b) && ((c = b), (b = void 0)),
+            (!1 === b || 'function' == typeof b) && ((c = b), (b = void 0)),
             !1 === c && (c = $),
             this.each(function () {
               n.event.remove(this, a, c, b);
@@ -4891,12 +4891,12 @@ function renderHTMLRecursive(obj, package, spacing) {
       gb = /^true\/(.*)/,
       hb = /^\s*<!(?:\[CDATA\[|--)|(?:\]\]|--)>\s*$/g,
       ib = {
-        option: [1, "<select multiple='multiple'>", "</select>"],
-        thead: [1, "<table>", "</table>"],
-        col: [2, "<table><colgroup>", "</colgroup></table>"],
-        tr: [2, "<table><tbody>", "</tbody></table>"],
-        td: [3, "<table><tbody><tr>", "</tr></tbody></table>"],
-        _default: [0, "", ""],
+        option: [1, "<select multiple='multiple'>", '</select>'],
+        thead: [1, '<table>', '</table>'],
+        col: [2, '<table><colgroup>', '</colgroup></table>'],
+        tr: [2, '<table><tbody>', '</tbody></table>'],
+        td: [3, '<table><tbody><tr>', '</tr></tbody></table>'],
+        _default: [0, '', ''],
       };
     (ib.optgroup = ib.option),
       (ib.tbody = ib.tfoot = ib.colgroup = ib.caption = ib.thead),
@@ -4928,8 +4928,8 @@ function renderHTMLRecursive(obj, package, spacing) {
                 nb(f[d], g[d]);
             else nb(a, h);
           return (
-            (g = ob(h, "script")),
-            g.length > 0 && mb(g, !i && ob(a, "script")),
+            (g = ob(h, 'script')),
+            g.length > 0 && mb(g, !i && ob(a, 'script')),
             h
           );
         },
@@ -4949,13 +4949,13 @@ function renderHTMLRecursive(obj, package, spacing) {
             m++
           )
             if ((e = a[m]) || 0 === e)
-              if ("object" === n.type(e)) n.merge(l, e.nodeType ? [e] : e);
+              if ('object' === n.type(e)) n.merge(l, e.nodeType ? [e] : e);
               else if (cb.test(e)) {
                 for (
-                  f = f || k.appendChild(b.createElement("div")),
-                    g = (bb.exec(e) || ["", ""])[1].toLowerCase(),
+                  f = f || k.appendChild(b.createElement('div')),
+                    g = (bb.exec(e) || ['', ''])[1].toLowerCase(),
                     h = ib[g] || ib._default,
-                    f.innerHTML = h[1] + e.replace(ab, "<$1></$2>") + h[2],
+                    f.innerHTML = h[1] + e.replace(ab, '<$1></$2>') + h[2],
                     j = h[0];
                   j--;
 
@@ -4963,17 +4963,17 @@ function renderHTMLRecursive(obj, package, spacing) {
                   f = f.lastChild;
                 n.merge(l, f.childNodes),
                   (f = k.firstChild),
-                  (f.textContent = "");
+                  (f.textContent = '');
               } else l.push(b.createTextNode(e));
-          for (k.textContent = "", m = 0; (e = l[m++]); )
+          for (k.textContent = '', m = 0; (e = l[m++]); )
             if (
               (!d || -1 === n.inArray(e, d)) &&
               ((i = n.contains(e.ownerDocument, e)),
-              (f = ob(k.appendChild(e), "script")),
+              (f = ob(k.appendChild(e), 'script')),
               i && mb(f),
               c)
             )
-              for (j = 0; (e = f[j++]); ) fb.test(e.type || "") && c.push(e);
+              for (j = 0; (e = f[j++]); ) fb.test(e.type || '') && c.push(e);
           return k;
         },
         cleanData: function (a) {
@@ -5008,7 +5008,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             },
             null,
             a,
-            arguments.length
+            arguments.length,
           );
         },
         append: function () {
@@ -5053,13 +5053,13 @@ function renderHTMLRecursive(obj, package, spacing) {
           )
             b || 1 !== c.nodeType || n.cleanData(ob(c)),
               c.parentNode &&
-                (b && n.contains(c.ownerDocument, c) && mb(ob(c, "script")),
+                (b && n.contains(c.ownerDocument, c) && mb(ob(c, 'script')),
                 c.parentNode.removeChild(c));
           return this;
         },
         empty: function () {
           for (var a, b = 0; null != (a = this[b]); b++)
-            1 === a.nodeType && (n.cleanData(ob(a, !1)), (a.textContent = ""));
+            1 === a.nodeType && (n.cleanData(ob(a, !1)), (a.textContent = ''));
           return this;
         },
         clone: function (a, b) {
@@ -5080,11 +5080,11 @@ function renderHTMLRecursive(obj, package, spacing) {
                 d = this.length;
               if (void 0 === a && 1 === b.nodeType) return b.innerHTML;
               if (
-                "string" == typeof a &&
+                'string' == typeof a &&
                 !db.test(a) &&
-                !ib[(bb.exec(a) || ["", ""])[1].toLowerCase()]
+                !ib[(bb.exec(a) || ['', ''])[1].toLowerCase()]
               ) {
-                a = a.replace(ab, "<$1></$2>");
+                a = a.replace(ab, '<$1></$2>');
                 try {
                   for (; d > c; c++)
                     (b = this[c] || {}),
@@ -5097,7 +5097,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             },
             null,
             a,
-            arguments.length
+            arguments.length,
           );
         },
         replaceWith: function () {
@@ -5130,7 +5130,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             q = n.isFunction(p);
           if (
             q ||
-            (l > 1 && "string" == typeof p && !k.checkClone && eb.test(p))
+            (l > 1 && 'string' == typeof p && !k.checkClone && eb.test(p))
           )
             return this.each(function (c) {
               var d = m.eq(c);
@@ -5143,10 +5143,10 @@ function renderHTMLRecursive(obj, package, spacing) {
             1 === c.childNodes.length && (c = d),
             d)
           ) {
-            for (f = n.map(ob(c, "script"), kb), g = f.length; l > j; j++)
+            for (f = n.map(ob(c, 'script'), kb), g = f.length; l > j; j++)
               (h = c),
                 j !== o &&
-                  ((h = n.clone(h, !0, !0)), g && n.merge(f, ob(h, "script"))),
+                  ((h = n.clone(h, !0, !0)), g && n.merge(f, ob(h, 'script'))),
                 b.call(this[j], h, j);
             if (g)
               for (
@@ -5155,23 +5155,23 @@ function renderHTMLRecursive(obj, package, spacing) {
                 j++
               )
                 (h = f[j]),
-                  fb.test(h.type || "") &&
-                    !L.access(h, "globalEval") &&
+                  fb.test(h.type || '') &&
+                    !L.access(h, 'globalEval') &&
                     n.contains(i, h) &&
                     (h.src
                       ? n._evalUrl && n._evalUrl(h.src)
-                      : n.globalEval(h.textContent.replace(hb, "")));
+                      : n.globalEval(h.textContent.replace(hb, '')));
           }
           return this;
         },
       }),
       n.each(
         {
-          appendTo: "append",
-          prependTo: "prepend",
-          insertBefore: "before",
-          insertAfter: "after",
-          replaceAll: "replaceWith",
+          appendTo: 'append',
+          prependTo: 'prepend',
+          insertBefore: 'before',
+          insertAfter: 'after',
+          replaceAll: 'replaceWith',
         },
         function (a, b) {
           n.fn[a] = function (a) {
@@ -5181,35 +5181,35 @@ function renderHTMLRecursive(obj, package, spacing) {
                 f.apply(d, c.get());
             return this.pushStack(d);
           };
-        }
+        },
       );
     var qb,
       rb = {},
       ub = /^margin/,
-      vb = new RegExp("^(" + Q + ")(?!px)[a-z%]+$", "i"),
+      vb = new RegExp('^(' + Q + ')(?!px)[a-z%]+$', 'i'),
       wb = function (a) {
         return a.ownerDocument.defaultView.getComputedStyle(a, null);
       };
     !(function () {
       function g() {
         (f.style.cssText =
-          "-webkit-box-sizing:border-box;-moz-box-sizing:border-box;box-sizing:border-box;display:block;margin-top:1%;top:1%;border:1px;padding:1px;width:4px;position:absolute"),
-          (f.innerHTML = ""),
+          '-webkit-box-sizing:border-box;-moz-box-sizing:border-box;box-sizing:border-box;display:block;margin-top:1%;top:1%;border:1px;padding:1px;width:4px;position:absolute'),
+          (f.innerHTML = ''),
           d.appendChild(e);
         var g = a.getComputedStyle(f, null);
-        (b = "1%" !== g.top), (c = "4px" === g.width), d.removeChild(e);
+        (b = '1%' !== g.top), (c = '4px' === g.width), d.removeChild(e);
       }
       var b,
         c,
         d = l.documentElement,
-        e = l.createElement("div"),
-        f = l.createElement("div");
+        e = l.createElement('div'),
+        f = l.createElement('div');
       f.style &&
-        ((f.style.backgroundClip = "content-box"),
-        (f.cloneNode(!0).style.backgroundClip = ""),
-        (k.clearCloneStyle = "content-box" === f.style.backgroundClip),
+        ((f.style.backgroundClip = 'content-box'),
+        (f.cloneNode(!0).style.backgroundClip = ''),
+        (k.clearCloneStyle = 'content-box' === f.style.backgroundClip),
         (e.style.cssText =
-          "border:0;width:0;height:0;top:0;left:-9999px;margin-top:1px;position:absolute"),
+          'border:0;width:0;height:0;top:0;left:-9999px;margin-top:1px;position:absolute'),
         e.appendChild(f),
         a.getComputedStyle &&
           n.extend(k, {
@@ -5221,12 +5221,12 @@ function renderHTMLRecursive(obj, package, spacing) {
             },
             reliableMarginRight: function () {
               var b,
-                c = f.appendChild(l.createElement("div"));
+                c = f.appendChild(l.createElement('div'));
               return (
                 (c.style.cssText = f.style.cssText =
-                  "-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;display:block;margin:0;border:0;padding:0"),
-                (c.style.marginRight = c.style.width = "0"),
-                (f.style.width = "1px"),
+                  '-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;display:block;margin:0;border:0;padding:0'),
+                (c.style.marginRight = c.style.width = '0'),
+                (f.style.width = '1px'),
                 d.appendChild(e),
                 (b = !parseFloat(a.getComputedStyle(c, null).marginRight)),
                 d.removeChild(e),
@@ -5245,18 +5245,18 @@ function renderHTMLRecursive(obj, package, spacing) {
         return e;
       });
     var zb = /^(none|table(?!-c[ea]).+)/,
-      Ab = new RegExp("^(" + Q + ")(.*)$", "i"),
-      Bb = new RegExp("^([+-])=(" + Q + ")", "i"),
-      Cb = { position: "absolute", visibility: "hidden", display: "block" },
-      Db = { letterSpacing: "0", fontWeight: "400" },
-      Eb = ["Webkit", "O", "Moz", "ms"];
+      Ab = new RegExp('^(' + Q + ')(.*)$', 'i'),
+      Bb = new RegExp('^([+-])=(' + Q + ')', 'i'),
+      Cb = { position: 'absolute', visibility: 'hidden', display: 'block' },
+      Db = { letterSpacing: '0', fontWeight: '400' },
+      Eb = ['Webkit', 'O', 'Moz', 'ms'];
     n.extend({
       cssHooks: {
         opacity: {
           get: function (a, b) {
             if (b) {
-              var c = xb(a, "opacity");
-              return "" === c ? "1" : c;
+              var c = xb(a, 'opacity');
+              return '' === c ? '1' : c;
             }
           },
         },
@@ -5275,7 +5275,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         zIndex: !0,
         zoom: !0,
       },
-      cssProps: { float: "cssFloat" },
+      cssProps: { float: 'cssFloat' },
       style: function (a, b, c, d) {
         if (a && 3 !== a.nodeType && 8 !== a.nodeType && a.style) {
           var e,
@@ -5287,23 +5287,23 @@ function renderHTMLRecursive(obj, package, spacing) {
             (b = n.cssProps[h] || (n.cssProps[h] = Fb(i, h))),
             (g = n.cssHooks[b] || n.cssHooks[h]),
             void 0 === c
-              ? g && "get" in g && void 0 !== (e = g.get(a, !1, d))
+              ? g && 'get' in g && void 0 !== (e = g.get(a, !1, d))
                 ? e
                 : i[b]
               : ((f = typeof c),
-                "string" === f &&
+                'string' === f &&
                   (e = Bb.exec(c)) &&
                   ((c = (e[1] + 1) * e[2] + parseFloat(n.css(a, b))),
-                  (f = "number")),
+                  (f = 'number')),
                 void (
                   null != c &&
                   c === c &&
-                  ("number" !== f || n.cssNumber[h] || (c += "px"),
+                  ('number' !== f || n.cssNumber[h] || (c += 'px'),
                   k.clearCloneStyle ||
-                    "" !== c ||
-                    0 !== b.indexOf("background") ||
-                    (i[b] = "inherit"),
-                  (g && "set" in g && void 0 === (c = g.set(a, c, d))) ||
+                    '' !== c ||
+                    0 !== b.indexOf('background') ||
+                    (i[b] = 'inherit'),
+                  (g && 'set' in g && void 0 === (c = g.set(a, c, d))) ||
                     (i[b] = c))
                 ))
           );
@@ -5317,20 +5317,20 @@ function renderHTMLRecursive(obj, package, spacing) {
         return (
           (b = n.cssProps[h] || (n.cssProps[h] = Fb(a.style, h))),
           (g = n.cssHooks[b] || n.cssHooks[h]),
-          g && "get" in g && (e = g.get(a, !0, c)),
+          g && 'get' in g && (e = g.get(a, !0, c)),
           void 0 === e && (e = xb(a, b, d)),
-          "normal" === e && b in Db && (e = Db[b]),
-          "" === c || c
+          'normal' === e && b in Db && (e = Db[b]),
+          '' === c || c
             ? ((f = parseFloat(e)), !0 === c || n.isNumeric(f) ? f || 0 : e)
             : e
         );
       },
     }),
-      n.each(["height", "width"], function (a, b) {
+      n.each(['height', 'width'], function (a, b) {
         n.cssHooks[b] = {
           get: function (a, c, d) {
             return c
-              ? zb.test(n.css(a, "display")) && 0 === a.offsetWidth
+              ? zb.test(n.css(a, 'display')) && 0 === a.offsetWidth
                 ? n.swap(a, Cb, function () {
                     return Ib(a, b, d);
                   })
@@ -5343,22 +5343,22 @@ function renderHTMLRecursive(obj, package, spacing) {
               a,
               c,
               d
-                ? Hb(a, b, d, "border-box" === n.css(a, "boxSizing", !1, e), e)
-                : 0
+                ? Hb(a, b, d, 'border-box' === n.css(a, 'boxSizing', !1, e), e)
+                : 0,
             );
           },
         };
       }),
       (n.cssHooks.marginRight = yb(k.reliableMarginRight, function (a, b) {
         return b
-          ? n.swap(a, { display: "inline-block" }, xb, [a, "marginRight"])
+          ? n.swap(a, { display: 'inline-block' }, xb, [a, 'marginRight'])
           : void 0;
       })),
-      n.each({ margin: "", padding: "", border: "Width" }, function (a, b) {
+      n.each({ margin: '', padding: '', border: 'Width' }, function (a, b) {
         (n.cssHooks[a + b] = {
           expand: function (c) {
             for (
-              var d = 0, e = {}, f = "string" == typeof c ? c.split(" ") : [c];
+              var d = 0, e = {}, f = 'string' == typeof c ? c.split(' ') : [c];
               4 > d;
               d++
             )
@@ -5386,7 +5386,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             },
             a,
             b,
-            arguments.length > 1
+            arguments.length > 1,
           );
         },
         show: function () {
@@ -5396,7 +5396,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           return Jb(this);
         },
         toggle: function (a) {
-          return "boolean" == typeof a
+          return 'boolean' == typeof a
             ? a
               ? this.show()
               : this.hide()
@@ -5411,11 +5411,11 @@ function renderHTMLRecursive(obj, package, spacing) {
         init: function (a, b, c, d, e, f) {
           (this.elem = a),
             (this.prop = c),
-            (this.easing = e || "swing"),
+            (this.easing = e || 'swing'),
             (this.options = b),
             (this.start = this.now = this.cur()),
             (this.end = d),
-            (this.unit = f || (n.cssNumber[c] ? "" : "px"));
+            (this.unit = f || (n.cssNumber[c] ? '' : 'px'));
         },
         cur: function () {
           var a = Kb.propHooks[this.prop];
@@ -5431,7 +5431,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   this.options.duration * a,
                   0,
                   1,
-                  this.options.duration
+                  this.options.duration,
                 )
               : a),
             (this.now = (this.end - this.start) * b + this.start),
@@ -5449,7 +5449,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             var b;
             return null == a.elem[a.prop] ||
               (a.elem.style && null != a.elem.style[a.prop])
-              ? ((b = n.css(a.elem, a.prop, "")), b && "auto" !== b ? b : 0)
+              ? ((b = n.css(a.elem, a.prop, '')), b && 'auto' !== b ? b : 0)
               : a.elem[a.prop];
           },
           set: function (a) {
@@ -5480,25 +5480,25 @@ function renderHTMLRecursive(obj, package, spacing) {
     var Lb,
       Mb,
       Nb = /^(?:toggle|show|hide)$/,
-      Ob = new RegExp("^(?:([+-])=|)(" + Q + ")([a-z%]*)$", "i"),
+      Ob = new RegExp('^(?:([+-])=|)(' + Q + ')([a-z%]*)$', 'i'),
       Pb = /queueHooks$/,
       Qb = [Vb],
       Rb = {
-        "*": [
+        '*': [
           function (a, b) {
             var c = this.createTween(a, b),
               d = c.cur(),
               e = Ob.exec(b),
-              f = (e && e[3]) || (n.cssNumber[a] ? "" : "px"),
+              f = (e && e[3]) || (n.cssNumber[a] ? '' : 'px'),
               g =
-                (n.cssNumber[a] || ("px" !== f && +d)) &&
+                (n.cssNumber[a] || ('px' !== f && +d)) &&
                 Ob.exec(n.css(c.elem, a)),
               h = 1,
               i = 20;
             if (g && g[3] !== f) {
               (f = f || g[3]), (e = e || []), (g = +d || 1);
               do {
-                (h = h || ".5"), (g /= h), n.style(c.elem, a, g + f);
+                (h = h || '.5'), (g /= h), n.style(c.elem, a, g + f);
               } while (h !== (h = c.cur() / d) && 1 !== h && --i);
             }
             return (
@@ -5513,7 +5513,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       };
     (n.Animation = n.extend(Xb, {
       tweener: function (a, b) {
-        n.isFunction(a) ? ((b = a), (a = ["*"])) : (a = a.split(" "));
+        n.isFunction(a) ? ((b = a), (a = ['*'])) : (a = a.split(' '));
         for (var c, d = 0, e = a.length; e > d; d++)
           (c = a[d]), (Rb[c] = Rb[c] || []), Rb[c].unshift(b);
       },
@@ -5523,7 +5523,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     })),
       (n.speed = function (a, b, c) {
         var d =
-          a && "object" == typeof a
+          a && 'object' == typeof a
             ? n.extend({}, a)
             : {
                 complete: c || (!c && b) || (n.isFunction(a) && a),
@@ -5533,12 +5533,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         return (
           (d.duration = n.fx.off
             ? 0
-            : "number" == typeof d.duration
+            : 'number' == typeof d.duration
             ? d.duration
             : d.duration in n.fx.speeds
             ? n.fx.speeds[d.duration]
             : n.fx.speeds._default),
-          (null == d.queue || !0 === d.queue) && (d.queue = "fx"),
+          (null == d.queue || !0 === d.queue) && (d.queue = 'fx'),
           (d.old = d.complete),
           (d.complete = function () {
             n.isFunction(d.old) && d.old.call(this),
@@ -5550,7 +5550,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       n.fn.extend({
         fadeTo: function (a, b, c, d) {
           return this.filter(S)
-            .css("opacity", 0)
+            .css('opacity', 0)
             .show()
             .end()
             .animate({ opacity: b }, a, c, d);
@@ -5560,7 +5560,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             f = n.speed(b, c, d),
             g = function () {
               var b = Xb(this, n.extend({}, a), f);
-              (e || L.get(this, "finish")) && b.stop(!0);
+              (e || L.get(this, 'finish')) && b.stop(!0);
             };
           return (
             (g.finish = g),
@@ -5573,11 +5573,11 @@ function renderHTMLRecursive(obj, package, spacing) {
             delete a.stop, b(c);
           };
           return (
-            "string" != typeof a && ((c = b), (b = a), (a = void 0)),
-            b && !1 !== a && this.queue(a || "fx", []),
+            'string' != typeof a && ((c = b), (b = a), (a = void 0)),
+            b && !1 !== a && this.queue(a || 'fx', []),
             this.each(function () {
               var b = !0,
-                e = null != a && a + "queueHooks",
+                e = null != a && a + 'queueHooks',
                 f = n.timers,
                 g = L.get(this);
               if (e) g[e] && g[e].stop && d(g[e]);
@@ -5592,12 +5592,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         finish: function (a) {
           return (
-            !1 !== a && (a = a || "fx"),
+            !1 !== a && (a = a || 'fx'),
             this.each(function () {
               var b,
                 c = L.get(this),
-                d = c[a + "queue"],
-                e = c[a + "queueHooks"],
+                d = c[a + 'queue'],
+                e = c[a + 'queueHooks'],
                 f = n.timers,
                 g = d ? d.length : 0;
               for (
@@ -5618,28 +5618,28 @@ function renderHTMLRecursive(obj, package, spacing) {
           );
         },
       }),
-      n.each(["toggle", "show", "hide"], function (a, b) {
+      n.each(['toggle', 'show', 'hide'], function (a, b) {
         var c = n.fn[b];
         n.fn[b] = function (a, d, e) {
-          return null == a || "boolean" == typeof a
+          return null == a || 'boolean' == typeof a
             ? c.apply(this, arguments)
             : this.animate(Tb(b, !0), a, d, e);
         };
       }),
       n.each(
         {
-          slideDown: Tb("show"),
-          slideUp: Tb("hide"),
-          slideToggle: Tb("toggle"),
-          fadeIn: { opacity: "show" },
-          fadeOut: { opacity: "hide" },
-          fadeToggle: { opacity: "toggle" },
+          slideDown: Tb('show'),
+          slideUp: Tb('hide'),
+          slideToggle: Tb('toggle'),
+          fadeIn: { opacity: 'show' },
+          fadeOut: { opacity: 'hide' },
+          fadeToggle: { opacity: 'toggle' },
         },
         function (a, b) {
           n.fn[a] = function (a, c, d) {
             return this.animate(b, a, c, d);
           };
-        }
+        },
       ),
       (n.timers = []),
       (n.fx.tick = function () {
@@ -5664,7 +5664,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       (n.fn.delay = function (a, b) {
         return (
           (a = n.fx ? n.fx.speeds[a] || a : a),
-          (b = b || "fx"),
+          (b = b || 'fx'),
           this.queue(b, function (b, c) {
             var d = setTimeout(b, a);
             c.stop = function () {
@@ -5674,18 +5674,18 @@ function renderHTMLRecursive(obj, package, spacing) {
         );
       }),
       (function () {
-        var a = l.createElement("input"),
-          b = l.createElement("select"),
-          c = b.appendChild(l.createElement("option"));
-        (a.type = "checkbox"),
-          (k.checkOn = "" !== a.value),
+        var a = l.createElement('input'),
+          b = l.createElement('select'),
+          c = b.appendChild(l.createElement('option'));
+        (a.type = 'checkbox'),
+          (k.checkOn = '' !== a.value),
           (k.optSelected = c.selected),
           (b.disabled = !0),
           (k.optDisabled = !c.disabled),
-          (a = l.createElement("input")),
-          (a.value = "t"),
-          (a.type = "radio"),
-          (k.radioValue = "t" === a.value);
+          (a = l.createElement('input')),
+          (a.value = 't'),
+          (a.type = 'radio'),
+          (k.radioValue = 't' === a.value);
       })();
     var Zb,
       $b = n.expr.attrHandle;
@@ -5713,13 +5713,13 @@ function renderHTMLRecursive(obj, package, spacing) {
                     n.attrHooks[b] ||
                     (n.expr.match.bool.test(b) ? Zb : void 0))),
                 void 0 === c
-                  ? d && "get" in d && null !== (e = d.get(a, b))
+                  ? d && 'get' in d && null !== (e = d.get(a, b))
                     ? e
                     : ((e = n.find.attr(a, b)), null == e ? void 0 : e)
                   : null !== c
-                  ? d && "set" in d && void 0 !== (e = d.set(a, c, b))
+                  ? d && 'set' in d && void 0 !== (e = d.set(a, c, b))
                     ? e
-                    : (a.setAttribute(b, c + ""), c)
+                    : (a.setAttribute(b, c + ''), c)
                   : void n.removeAttr(a, b));
         },
         removeAttr: function (a, b) {
@@ -5736,9 +5736,9 @@ function renderHTMLRecursive(obj, package, spacing) {
         attrHooks: {
           type: {
             set: function (a, b) {
-              if (!k.radioValue && "radio" === b && n.nodeName(a, "input")) {
+              if (!k.radioValue && 'radio' === b && n.nodeName(a, 'input')) {
                 var c = a.value;
-                return a.setAttribute("type", b), c && (a.value = c), b;
+                return a.setAttribute('type', b), c && (a.value = c), b;
               }
             },
           },
@@ -5775,7 +5775,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       },
     }),
       n.extend({
-        propFix: { for: "htmlFor", class: "className" },
+        propFix: { for: 'htmlFor', class: 'className' },
         prop: function (a, b, c) {
           var d,
             e,
@@ -5786,10 +5786,10 @@ function renderHTMLRecursive(obj, package, spacing) {
               (f = 1 !== g || !n.isXMLDoc(a)),
               f && ((b = n.propFix[b] || b), (e = n.propHooks[b])),
               void 0 !== c
-                ? e && "set" in e && void 0 !== (d = e.set(a, c, b))
+                ? e && 'set' in e && void 0 !== (d = e.set(a, c, b))
                   ? d
                   : (a[b] = c)
-                : e && "get" in e && null !== (d = e.get(a, b))
+                : e && 'get' in e && null !== (d = e.get(a, b))
                 ? d
                 : a[b]
             );
@@ -5797,7 +5797,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         propHooks: {
           tabIndex: {
             get: function (a) {
-              return a.hasAttribute("tabindex") || _b.test(a.nodeName) || a.href
+              return a.hasAttribute('tabindex') || _b.test(a.nodeName) || a.href
                 ? a.tabIndex
                 : -1;
             },
@@ -5813,20 +5813,20 @@ function renderHTMLRecursive(obj, package, spacing) {
         }),
       n.each(
         [
-          "tabIndex",
-          "readOnly",
-          "maxLength",
-          "cellSpacing",
-          "cellPadding",
-          "rowSpan",
-          "colSpan",
-          "useMap",
-          "frameBorder",
-          "contentEditable",
+          'tabIndex',
+          'readOnly',
+          'maxLength',
+          'cellSpacing',
+          'cellPadding',
+          'rowSpan',
+          'colSpan',
+          'useMap',
+          'frameBorder',
+          'contentEditable',
         ],
         function () {
           n.propFix[this.toLowerCase()] = this;
-        }
+        },
       );
     var ac = /[\t\r\n\f]/g;
     n.fn.extend({
@@ -5837,7 +5837,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           e,
           f,
           g,
-          h = "string" == typeof a && a,
+          h = 'string' == typeof a && a,
           i = 0,
           j = this.length;
         if (n.isFunction(a))
@@ -5845,17 +5845,17 @@ function renderHTMLRecursive(obj, package, spacing) {
             n(this).addClass(a.call(this, b, this.className));
           });
         if (h)
-          for (b = (a || "").match(E) || []; j > i; i++)
+          for (b = (a || '').match(E) || []; j > i; i++)
             if (
               ((c = this[i]),
               (d =
                 1 === c.nodeType &&
                 (c.className
-                  ? (" " + c.className + " ").replace(ac, " ")
-                  : " ")))
+                  ? (' ' + c.className + ' ').replace(ac, ' ')
+                  : ' ')))
             ) {
               for (f = 0; (e = b[f++]); )
-                d.indexOf(" " + e + " ") < 0 && (d += e + " ");
+                d.indexOf(' ' + e + ' ') < 0 && (d += e + ' ');
               (g = n.trim(d)), c.className !== g && (c.className = g);
             }
         return this;
@@ -5867,7 +5867,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           e,
           f,
           g,
-          h = 0 === arguments.length || ("string" == typeof a && a),
+          h = 0 === arguments.length || ('string' == typeof a && a),
           i = 0,
           j = this.length;
         if (n.isFunction(a))
@@ -5875,25 +5875,25 @@ function renderHTMLRecursive(obj, package, spacing) {
             n(this).removeClass(a.call(this, b, this.className));
           });
         if (h)
-          for (b = (a || "").match(E) || []; j > i; i++)
+          for (b = (a || '').match(E) || []; j > i; i++)
             if (
               ((c = this[i]),
               (d =
                 1 === c.nodeType &&
                 (c.className
-                  ? (" " + c.className + " ").replace(ac, " ")
-                  : "")))
+                  ? (' ' + c.className + ' ').replace(ac, ' ')
+                  : '')))
             ) {
               for (f = 0; (e = b[f++]); )
-                for (; d.indexOf(" " + e + " ") >= 0; )
-                  d = d.replace(" " + e + " ", " ");
-              (g = a ? n.trim(d) : ""), c.className !== g && (c.className = g);
+                for (; d.indexOf(' ' + e + ' ') >= 0; )
+                  d = d.replace(' ' + e + ' ', ' ');
+              (g = a ? n.trim(d) : ''), c.className !== g && (c.className = g);
             }
         return this;
       },
       toggleClass: function (a, b) {
         var c = typeof a;
-        return "boolean" == typeof b && "string" === c
+        return 'boolean' == typeof b && 'string' === c
           ? b
             ? this.addClass(a)
             : this.removeClass(a)
@@ -5903,7 +5903,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                     n(this).toggleClass(a.call(this, c, this.className, b), b);
                   }
                 : function () {
-                    if ("string" === c)
+                    if ('string' === c)
                       for (
                         var b, d = 0, e = n(this), f = a.match(E) || [];
                         (b = f[d++]);
@@ -5911,21 +5911,21 @@ function renderHTMLRecursive(obj, package, spacing) {
                       )
                         e.hasClass(b) ? e.removeClass(b) : e.addClass(b);
                     else
-                      (c === U || "boolean" === c) &&
+                      (c === U || 'boolean' === c) &&
                         (this.className &&
-                          L.set(this, "__className__", this.className),
+                          L.set(this, '__className__', this.className),
                         (this.className =
                           this.className || !1 === a
-                            ? ""
-                            : L.get(this, "__className__") || ""));
-                  }
+                            ? ''
+                            : L.get(this, '__className__') || ''));
+                  },
             );
       },
       hasClass: function (a) {
-        for (var b = " " + a + " ", c = 0, d = this.length; d > c; c++)
+        for (var b = ' ' + a + ' ', c = 0, d = this.length; d > c; c++)
           if (
             1 === this[c].nodeType &&
-            (" " + this[c].className + " ").replace(ac, " ").indexOf(b) >= 0
+            (' ' + this[c].className + ' ').replace(ac, ' ').indexOf(b) >= 0
           )
             return !0;
         return !1;
@@ -5945,26 +5945,26 @@ function renderHTMLRecursive(obj, package, spacing) {
               1 === this.nodeType &&
                 ((e = d ? a.call(this, c, n(this).val()) : a),
                 null == e
-                  ? (e = "")
-                  : "number" == typeof e
-                  ? (e += "")
+                  ? (e = '')
+                  : 'number' == typeof e
+                  ? (e += '')
                   : n.isArray(e) &&
                     (e = n.map(e, function (a) {
-                      return null == a ? "" : a + "";
+                      return null == a ? '' : a + '';
                     })),
                 ((b =
                   n.valHooks[this.type] ||
                   n.valHooks[this.nodeName.toLowerCase()]) &&
-                  "set" in b &&
-                  void 0 !== b.set(this, e, "value")) ||
+                  'set' in b &&
+                  void 0 !== b.set(this, e, 'value')) ||
                   (this.value = e));
             }))
           : e
           ? ((b = n.valHooks[e.type] || n.valHooks[e.nodeName.toLowerCase()]),
-            b && "get" in b && void 0 !== (c = b.get(e, "value"))
+            b && 'get' in b && void 0 !== (c = b.get(e, 'value'))
               ? c
               : ((c = e.value),
-                "string" == typeof c ? c.replace(bc, "") : null == c ? "" : c))
+                'string' == typeof c ? c.replace(bc, '') : null == c ? '' : c))
           : void 0;
       },
     }),
@@ -5972,7 +5972,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         valHooks: {
           option: {
             get: function (a) {
-              var b = n.find.attr(a, "value");
+              var b = n.find.attr(a, 'value');
               return null != b ? b : n.trim(n.text(a));
             },
           },
@@ -5983,7 +5983,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   c,
                   d = a.options,
                   e = a.selectedIndex,
-                  f = "select-one" === a.type || 0 > e,
+                  f = 'select-one' === a.type || 0 > e,
                   g = f ? null : [],
                   h = f ? e + 1 : d.length,
                   i = 0 > e ? h : f ? e : 0;
@@ -5996,9 +5996,9 @@ function renderHTMLRecursive(obj, package, spacing) {
                     (!c.selected && i !== e) ||
                     (k.optDisabled
                       ? c.disabled
-                      : null !== c.getAttribute("disabled")) ||
+                      : null !== c.getAttribute('disabled')) ||
                     (c.parentNode.disabled &&
-                      n.nodeName(c.parentNode, "optgroup"))
+                      n.nodeName(c.parentNode, 'optgroup'))
                   ))
                 ) {
                   if (((b = n(c).val()), f)) return b;
@@ -6019,7 +6019,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           },
         },
       }),
-      n.each(["radio", "checkbox"], function () {
+      n.each(['radio', 'checkbox'], function () {
         (n.valHooks[this] = {
           set: function (a, b) {
             return n.isArray(b)
@@ -6029,12 +6029,12 @@ function renderHTMLRecursive(obj, package, spacing) {
         }),
           k.checkOn ||
             (n.valHooks[this].get = function (a) {
-              return null === a.getAttribute("value") ? "on" : a.value;
+              return null === a.getAttribute('value') ? 'on' : a.value;
             });
       }),
       n.each(
-        "blur focus focusin focusout load resize scroll unload click dblclick mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave change select submit keydown keypress keyup error contextmenu".split(
-          " "
+        'blur focus focusin focusout load resize scroll unload click dblclick mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave change select submit keydown keypress keyup error contextmenu'.split(
+          ' ',
         ),
         function (a, b) {
           n.fn[b] = function (a, c) {
@@ -6042,7 +6042,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               ? this.on(b, null, a, c)
               : this.trigger(b);
           };
-        }
+        },
       ),
       n.fn.extend({
         hover: function (a, b) {
@@ -6059,26 +6059,26 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         undelegate: function (a, b, c) {
           return 1 === arguments.length
-            ? this.off(a, "**")
-            : this.off(b, a || "**", c);
+            ? this.off(a, '**')
+            : this.off(b, a || '**', c);
         },
       });
     var cc = n.now(),
       dc = /\?/;
     (n.parseJSON = function (a) {
-      return JSON.parse(a + "");
+      return JSON.parse(a + '');
     }),
       (n.parseXML = function (a) {
         var b, c;
-        if (!a || "string" != typeof a) return null;
+        if (!a || 'string' != typeof a) return null;
         try {
-          (c = new DOMParser()), (b = c.parseFromString(a, "text/xml"));
+          (c = new DOMParser()), (b = c.parseFromString(a, 'text/xml'));
         } catch (d) {
           b = void 0;
         }
         return (
-          (!b || b.getElementsByTagName("parsererror").length) &&
-            n.error("Invalid XML: " + a),
+          (!b || b.getElementsByTagName('parsererror').length) &&
+            n.error('Invalid XML: ' + a),
           b
         );
       });
@@ -6093,11 +6093,11 @@ function renderHTMLRecursive(obj, package, spacing) {
       mc = /^([\w.+-]+:)(?:\/\/(?:[^\/?#]*@|)([^\/?#:]*)(?::(\d+)|)|)/,
       nc = {},
       oc = {},
-      pc = "*/".concat("*");
+      pc = '*/'.concat('*');
     try {
       fc = location.href;
     } catch (qc) {
-      (fc = l.createElement("a")), (fc.href = ""), (fc = fc.href);
+      (fc = l.createElement('a')), (fc.href = ''), (fc = fc.href);
     }
     (ec = mc.exec(fc.toLowerCase()) || []),
       n.extend({
@@ -6106,30 +6106,30 @@ function renderHTMLRecursive(obj, package, spacing) {
         etag: {},
         ajaxSettings: {
           url: fc,
-          type: "GET",
+          type: 'GET',
           isLocal: jc.test(ec[1]),
           global: !0,
           processData: !0,
           async: !0,
-          contentType: "application/x-www-form-urlencoded; charset=UTF-8",
+          contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
           accepts: {
-            "*": pc,
-            text: "text/plain",
-            html: "text/html",
-            xml: "application/xml, text/xml",
-            json: "application/json, text/javascript",
+            '*': pc,
+            text: 'text/plain',
+            html: 'text/html',
+            xml: 'application/xml, text/xml',
+            json: 'application/json, text/javascript',
           },
           contents: { xml: /xml/, html: /html/, json: /json/ },
           responseFields: {
-            xml: "responseXML",
-            text: "responseText",
-            json: "responseJSON",
+            xml: 'responseXML',
+            text: 'responseText',
+            json: 'responseJSON',
           },
           converters: {
-            "* text": String,
-            "text html": !0,
-            "text json": n.parseJSON,
-            "text xml": n.parseXML,
+            '* text': String,
+            'text html': !0,
+            'text json': n.parseJSON,
+            'text xml': n.parseXML,
           },
           flatOptions: { url: !0, context: !0 },
         },
@@ -6150,38 +6150,38 @@ function renderHTMLRecursive(obj, package, spacing) {
               ((t = 2),
               g && clearTimeout(g),
               (c = void 0),
-              (e = h || ""),
+              (e = h || ''),
               (v.readyState = a > 0 ? 4 : 0),
               (j = (a >= 200 && 300 > a) || 304 === a),
               f && (u = uc(k, v, f)),
               (u = vc(k, u, v, j)),
               j
                 ? (k.ifModified &&
-                    ((w = v.getResponseHeader("Last-Modified")),
+                    ((w = v.getResponseHeader('Last-Modified')),
                     w && (n.lastModified[d] = w),
-                    (w = v.getResponseHeader("etag")) && (n.etag[d] = w)),
-                  204 === a || "HEAD" === k.type
-                    ? (x = "nocontent")
+                    (w = v.getResponseHeader('etag')) && (n.etag[d] = w)),
+                  204 === a || 'HEAD' === k.type
+                    ? (x = 'nocontent')
                     : 304 === a
-                    ? (x = "notmodified")
+                    ? (x = 'notmodified')
                     : ((x = u.loadingState),
                       (r = u.data),
                       (s = u.error),
                       (j = !s)))
-                : ((s = x), (a || !x) && ((x = "error"), 0 > a && (a = 0))),
+                : ((s = x), (a || !x) && ((x = 'error'), 0 > a && (a = 0))),
               (v.status = a),
-              (v.statusText = (b || x) + ""),
+              (v.statusText = (b || x) + ''),
               j ? o.resolveWith(l, [r, x, v]) : o.rejectWith(l, [v, x, s]),
               v.statusCode(q),
               (q = void 0),
               i &&
-                m.trigger(j ? "ajaxSuccess" : "ajaxError", [v, k, j ? r : s]),
+                m.trigger(j ? 'ajaxSuccess' : 'ajaxError', [v, k, j ? r : s]),
               p.fireWith(l, [v, x]),
               i &&
-                (m.trigger("ajaxComplete", [v, k]),
-                --n.active || n.event.trigger("ajaxStop")));
+                (m.trigger('ajaxComplete', [v, k]),
+                --n.active || n.event.trigger('ajaxStop')));
           }
-          "object" == typeof a && ((b = a), (a = void 0)), (b = b || {});
+          'object' == typeof a && ((b = a), (a = void 0)), (b = b || {});
           var c,
             d,
             e,
@@ -6194,12 +6194,12 @@ function renderHTMLRecursive(obj, package, spacing) {
             l = k.context || k,
             m = k.context && (l.nodeType || l.jquery) ? n(l) : n.event,
             o = n.Deferred(),
-            p = n.Callbacks("once memory"),
+            p = n.Callbacks('once memory'),
             q = k.statusCode || {},
             r = {},
             s = {},
             t = 0,
-            u = "canceled",
+            u = 'canceled',
             v = {
               readyState: 0,
               getResponseHeader: function (a) {
@@ -6238,70 +6238,70 @@ function renderHTMLRecursive(obj, package, spacing) {
             ((o.promise(v).complete = p.add),
             (v.success = v.done),
             (v.error = v.fail),
-            (k.url = ((a || k.url || fc) + "")
-              .replace(gc, "")
-              .replace(lc, ec[1] + "//")),
+            (k.url = ((a || k.url || fc) + '')
+              .replace(gc, '')
+              .replace(lc, ec[1] + '//')),
             (k.type = b.method || b.type || k.method || k.type),
             (k.dataTypes = n
-              .trim(k.dataType || "*")
+              .trim(k.dataType || '*')
               .toLowerCase()
-              .match(E) || [""]),
+              .match(E) || ['']),
             null == k.crossDomain &&
               ((h = mc.exec(k.url.toLowerCase())),
               (k.crossDomain = !(
                 !h ||
                 (h[1] === ec[1] &&
                   h[2] === ec[2] &&
-                  (h[3] || ("http:" === h[1] ? "80" : "443")) ===
-                    (ec[3] || ("http:" === ec[1] ? "80" : "443")))
+                  (h[3] || ('http:' === h[1] ? '80' : '443')) ===
+                    (ec[3] || ('http:' === ec[1] ? '80' : '443')))
               ))),
             k.data &&
               k.processData &&
-              "string" != typeof k.data &&
+              'string' != typeof k.data &&
               (k.data = n.param(k.data, k.traditional)),
             sc(nc, k, b, v),
             2 === t)
           )
             return v;
           (i = k.global),
-            i && 0 == n.active++ && n.event.trigger("ajaxStart"),
+            i && 0 == n.active++ && n.event.trigger('ajaxStart'),
             (k.type = k.type.toUpperCase()),
             (k.hasContent = !kc.test(k.type)),
             (d = k.url),
             k.hasContent ||
               (k.data &&
-                ((d = k.url += (dc.test(d) ? "&" : "?") + k.data),
+                ((d = k.url += (dc.test(d) ? '&' : '?') + k.data),
                 delete k.data),
               !1 === k.cache &&
                 (k.url = hc.test(d)
-                  ? d.replace(hc, "$1_=" + cc++)
-                  : d + (dc.test(d) ? "&" : "?") + "_=" + cc++)),
+                  ? d.replace(hc, '$1_=' + cc++)
+                  : d + (dc.test(d) ? '&' : '?') + '_=' + cc++)),
             k.ifModified &&
               (n.lastModified[d] &&
-                v.setRequestHeader("If-Modified-Since", n.lastModified[d]),
-              n.etag[d] && v.setRequestHeader("If-None-Match", n.etag[d])),
+                v.setRequestHeader('If-Modified-Since', n.lastModified[d]),
+              n.etag[d] && v.setRequestHeader('If-None-Match', n.etag[d])),
             ((k.data && k.hasContent && !1 !== k.contentType) ||
               b.contentType) &&
-              v.setRequestHeader("Content-Type", k.contentType),
+              v.setRequestHeader('Content-Type', k.contentType),
             v.setRequestHeader(
-              "Accept",
+              'Accept',
               k.dataTypes[0] && k.accepts[k.dataTypes[0]]
                 ? k.accepts[k.dataTypes[0]] +
-                    ("*" !== k.dataTypes[0] ? ", " + pc + "; q=0.01" : "")
-                : k.accepts["*"]
+                    ('*' !== k.dataTypes[0] ? ', ' + pc + '; q=0.01' : '')
+                : k.accepts['*'],
             );
           for (j in k.headers) v.setRequestHeader(j, k.headers[j]);
           if (k.beforeSend && (!1 === k.beforeSend.call(l, v, k) || 2 === t))
             return v.abort();
-          u = "abort";
+          u = 'abort';
           for (j in { success: 1, error: 1, complete: 1 }) v[j](k[j]);
           if ((c = sc(oc, k, b, v))) {
             (v.readyState = 1),
-              i && m.trigger("ajaxSend", [v, k]),
+              i && m.trigger('ajaxSend', [v, k]),
               k.async &&
                 k.timeout > 0 &&
                 (g = setTimeout(function () {
-                  v.abort("timeout");
+                  v.abort('timeout');
                 }, k.timeout));
             try {
               (t = 1), c.send(r, x);
@@ -6309,17 +6309,17 @@ function renderHTMLRecursive(obj, package, spacing) {
               if (!(2 > t)) throw w;
               x(-1, w);
             }
-          } else x(-1, "No Transport");
+          } else x(-1, 'No Transport');
           return v;
         },
         getJSON: function (a, b, c) {
-          return n.get(a, b, c, "json");
+          return n.get(a, b, c, 'json');
         },
         getScript: function (a, b) {
-          return n.get(a, void 0, b, "script");
+          return n.get(a, void 0, b, 'script');
         },
       }),
-      n.each(["get", "post"], function (a, b) {
+      n.each(['get', 'post'], function (a, b) {
         n[b] = function (a, c, d, e) {
           return (
             n.isFunction(c) && ((e = e || d), (d = c), (c = void 0)),
@@ -6329,24 +6329,24 @@ function renderHTMLRecursive(obj, package, spacing) {
       }),
       n.each(
         [
-          "ajaxStart",
-          "ajaxStop",
-          "ajaxComplete",
-          "ajaxError",
-          "ajaxSuccess",
-          "ajaxSend",
+          'ajaxStart',
+          'ajaxStop',
+          'ajaxComplete',
+          'ajaxError',
+          'ajaxSuccess',
+          'ajaxSend',
         ],
         function (a, b) {
           n.fn[b] = function (a) {
             return this.on(b, a);
           };
-        }
+        },
       ),
       (n._evalUrl = function (a) {
         return n.ajax({
           url: a,
-          type: "GET",
-          dataType: "script",
+          type: 'GET',
+          dataType: 'script',
           async: !1,
           global: !1,
           throws: !0,
@@ -6381,7 +6381,7 @@ function renderHTMLRecursive(obj, package, spacing) {
                   var b = n(this),
                     c = b.contents();
                   c.length ? c.wrapAll(a) : b.append(a);
-                }
+                },
           );
         },
         wrap: function (a) {
@@ -6393,7 +6393,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         unwrap: function () {
           return this.parent()
             .each(function () {
-              n.nodeName(this, "body") || n(this).replaceWith(this.childNodes);
+              n.nodeName(this, 'body') || n(this).replaceWith(this.childNodes);
             })
             .end();
         },
@@ -6413,8 +6413,8 @@ function renderHTMLRecursive(obj, package, spacing) {
       var c,
         d = [],
         e = function (a, b) {
-          (b = n.isFunction(b) ? b() : null == b ? "" : b),
-            (d[d.length] = encodeURIComponent(a) + "=" + encodeURIComponent(b));
+          (b = n.isFunction(b) ? b() : null == b ? '' : b),
+            (d[d.length] = encodeURIComponent(a) + '=' + encodeURIComponent(b));
         };
       if (
         (void 0 === b && (b = n.ajaxSettings && n.ajaxSettings.traditional),
@@ -6424,7 +6424,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           e(this.name, this.value);
         });
       else for (c in a) Bc(c, a[c], b, e);
-      return d.join("&").replace(wc, "+");
+      return d.join('&').replace(wc, '+');
     }),
       n.fn.extend({
         serialize: function () {
@@ -6432,14 +6432,14 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         serializeArray: function () {
           return this.map(function () {
-            var a = n.prop(this, "elements");
+            var a = n.prop(this, 'elements');
             return a ? n.makeArray(a) : this;
           })
             .filter(function () {
               var a = this.type;
               return (
                 this.name &&
-                !n(this).is(":disabled") &&
+                !n(this).is(':disabled') &&
                 Ac.test(this.nodeName) &&
                 !zc.test(a) &&
                 (this.checked || !T.test(a))
@@ -6451,9 +6451,9 @@ function renderHTMLRecursive(obj, package, spacing) {
                 ? null
                 : n.isArray(c)
                 ? n.map(c, function (a) {
-                    return { name: b.name, value: a.replace(yc, "\r\n") };
+                    return { name: b.name, value: a.replace(yc, '\r\n') };
                   })
-                : { name: b.name, value: c.replace(yc, "\r\n") };
+                : { name: b.name, value: c.replace(yc, '\r\n') };
             })
             .get();
         },
@@ -6468,10 +6468,10 @@ function renderHTMLRecursive(obj, package, spacing) {
       Ec = { 0: 200, 1223: 204 },
       Fc = n.ajaxSettings.xhr();
     a.ActiveXObject &&
-      n(a).on("unload", function () {
+      n(a).on('unload', function () {
         for (var a in Dc) Dc[a]();
       }),
-      (k.cors = !!Fc && "withCredentials" in Fc),
+      (k.cors = !!Fc && 'withCredentials' in Fc),
       (k.ajax = Fc = !!Fc),
       n.ajaxTransport(function (a) {
         var b;
@@ -6490,31 +6490,31 @@ function renderHTMLRecursive(obj, package, spacing) {
                   f.overrideMimeType &&
                   f.overrideMimeType(a.mimeType),
                   a.crossDomain ||
-                    c["X-Requested-With"] ||
-                    (c["X-Requested-With"] = "XMLHttpRequest");
+                    c['X-Requested-With'] ||
+                    (c['X-Requested-With'] = 'XMLHttpRequest');
                 for (e in c) f.setRequestHeader(e, c[e]);
                 (b = function (a) {
                   return function () {
                     b &&
                       (delete Dc[g],
                       (b = f.onload = f.onerror = null),
-                      "abort" === a
+                      'abort' === a
                         ? f.abort()
-                        : "error" === a
+                        : 'error' === a
                         ? d(f.status, f.statusText)
                         : d(
                             Ec[f.status] || f.status,
                             f.statusText,
-                            "string" == typeof f.responseText
+                            'string' == typeof f.responseText
                               ? { text: f.responseText }
                               : void 0,
-                            f.getAllResponseHeaders()
+                            f.getAllResponseHeaders(),
                           ));
                   };
                 }),
                   (f.onload = b()),
-                  (f.onerror = b("error")),
-                  (b = Dc[g] = b("abort"));
+                  (f.onerror = b('error')),
+                  (b = Dc[g] = b('abort'));
                 try {
                   f.send((a.hasContent && a.data) || null);
                 } catch (h) {
@@ -6530,32 +6530,32 @@ function renderHTMLRecursive(obj, package, spacing) {
       n.ajaxSetup({
         accepts: {
           script:
-            "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript",
+            'text/javascript, application/javascript, application/ecmascript, application/x-ecmascript',
         },
         contents: { script: /(?:java|ecma)script/ },
         converters: {
-          "text script": function (a) {
+          'text script': function (a) {
             return n.globalEval(a), a;
           },
         },
       }),
-      n.ajaxPrefilter("script", function (a) {
-        void 0 === a.cache && (a.cache = !1), a.crossDomain && (a.type = "GET");
+      n.ajaxPrefilter('script', function (a) {
+        void 0 === a.cache && (a.cache = !1), a.crossDomain && (a.type = 'GET');
       }),
-      n.ajaxTransport("script", function (a) {
+      n.ajaxTransport('script', function (a) {
         if (a.crossDomain) {
           var b, c;
           return {
             send: function (d, e) {
-              (b = n("<script>")
+              (b = n('<script>')
                 .prop({ async: !0, charset: a.scriptCharset, src: a.url })
                 .on(
-                  "load error",
+                  'load error',
                   (c = function (a) {
                     b.remove(),
                       (c = null),
-                      a && e("error" === a.type ? 404 : 200, a.type);
-                  })
+                      a && e('error' === a.type ? 404 : 200, a.type);
+                  }),
                 )),
                 l.head.appendChild(b[0]);
             },
@@ -6568,38 +6568,38 @@ function renderHTMLRecursive(obj, package, spacing) {
     var Gc = [],
       Hc = /(=)\?(?=&|$)|\?\?/;
     n.ajaxSetup({
-      jsonp: "callback",
+      jsonp: 'callback',
       jsonpCallback: function () {
-        var a = Gc.pop() || n.expando + "_" + cc++;
+        var a = Gc.pop() || n.expando + '_' + cc++;
         return (this[a] = !0), a;
       },
     }),
-      n.ajaxPrefilter("json jsonp", function (b, c, d) {
+      n.ajaxPrefilter('json jsonp', function (b, c, d) {
         var e,
           f,
           g,
           h =
             !1 !== b.jsonp &&
             (Hc.test(b.url)
-              ? "url"
-              : "string" == typeof b.data &&
-                !(b.contentType || "").indexOf(
-                  "application/x-www-form-urlencoded"
+              ? 'url'
+              : 'string' == typeof b.data &&
+                !(b.contentType || '').indexOf(
+                  'application/x-www-form-urlencoded',
                 ) &&
                 Hc.test(b.data) &&
-                "data");
-        return h || "jsonp" === b.dataTypes[0]
+                'data');
+        return h || 'jsonp' === b.dataTypes[0]
           ? ((e = b.jsonpCallback = n.isFunction(b.jsonpCallback)
               ? b.jsonpCallback()
               : b.jsonpCallback),
             h
-              ? (b[h] = b[h].replace(Hc, "$1" + e))
+              ? (b[h] = b[h].replace(Hc, '$1' + e))
               : !1 !== b.jsonp &&
-                (b.url += (dc.test(b.url) ? "&" : "?") + b.jsonp + "=" + e),
-            (b.converters["script json"] = function () {
-              return g || n.error(e + " was not called"), g[0];
+                (b.url += (dc.test(b.url) ? '&' : '?') + b.jsonp + '=' + e),
+            (b.converters['script json'] = function () {
+              return g || n.error(e + ' was not called'), g[0];
             }),
-            (b.dataTypes[0] = "json"),
+            (b.dataTypes[0] = 'json'),
             (f = a[e]),
             (a[e] = function () {
               g = arguments;
@@ -6610,12 +6610,12 @@ function renderHTMLRecursive(obj, package, spacing) {
                 g && n.isFunction(f) && f(g[0]),
                 (g = f = void 0);
             }),
-            "script")
+            'script')
           : void 0;
       }),
       (n.parseHTML = function (a, b, c) {
-        if (!a || "string" != typeof a) return null;
-        "boolean" == typeof b && ((c = b), (b = !1)), (b = b || l);
+        if (!a || 'string' != typeof a) return null;
+        'boolean' == typeof b && ((c = b), (b = !1)), (b = b || l);
         var d = v.exec(a),
           e = !c && [];
         return d
@@ -6626,29 +6626,29 @@ function renderHTMLRecursive(obj, package, spacing) {
       });
     var Ic = n.fn.load;
     (n.fn.load = function (a, b, c) {
-      if ("string" != typeof a && Ic) return Ic.apply(this, arguments);
+      if ('string' != typeof a && Ic) return Ic.apply(this, arguments);
       var d,
         e,
         f,
         g = this,
-        h = a.indexOf(" ");
+        h = a.indexOf(' ');
       return (
         h >= 0 && ((d = n.trim(a.slice(h))), (a = a.slice(0, h))),
         n.isFunction(b)
           ? ((c = b), (b = void 0))
-          : b && "object" == typeof b && (e = "POST"),
+          : b && 'object' == typeof b && (e = 'POST'),
         g.length > 0 &&
           n
-            .ajax({ url: a, type: e, dataType: "html", data: b })
+            .ajax({ url: a, type: e, dataType: 'html', data: b })
             .done(function (a) {
               (f = arguments),
-                g.html(d ? n("<div>").append(n.parseHTML(a)).find(d) : a);
+                g.html(d ? n('<div>').append(n.parseHTML(a)).find(d) : a);
             })
             .complete(
               c &&
                 function (a, b) {
                   g.each(c, f || [a.responseText, b, a]);
-                }
+                },
             ),
         this
       );
@@ -6668,23 +6668,23 @@ function renderHTMLRecursive(obj, package, spacing) {
           h,
           i,
           j,
-          k = n.css(a, "position"),
+          k = n.css(a, 'position'),
           l = n(a),
           m = {};
-        "static" === k && (a.style.position = "relative"),
+        'static' === k && (a.style.position = 'relative'),
           (h = l.offset()),
-          (f = n.css(a, "top")),
-          (i = n.css(a, "left")),
+          (f = n.css(a, 'top')),
+          (i = n.css(a, 'left')),
           (j =
-            ("absolute" === k || "fixed" === k) &&
-            (f + i).indexOf("auto") > -1),
+            ('absolute' === k || 'fixed' === k) &&
+            (f + i).indexOf('auto') > -1),
           j
             ? ((d = l.position()), (g = d.top), (e = d.left))
             : ((g = parseFloat(f) || 0), (e = parseFloat(i) || 0)),
           n.isFunction(b) && (b = b.call(a, c, h)),
           null != b.top && (m.top = b.top - h.top + g),
           null != b.left && (m.left = b.left - h.left + e),
-          "using" in b ? b.using.call(a, m) : l.css(m);
+          'using' in b ? b.using.call(a, m) : l.css(m);
       },
     }),
       n.fn.extend({
@@ -6720,16 +6720,16 @@ function renderHTMLRecursive(obj, package, spacing) {
               c = this[0],
               d = { top: 0, left: 0 };
             return (
-              "fixed" === n.css(c, "position")
+              'fixed' === n.css(c, 'position')
                 ? (b = c.getBoundingClientRect())
                 : ((a = this.offsetParent()),
                   (b = this.offset()),
-                  n.nodeName(a[0], "html") || (d = a.offset()),
-                  (d.top += n.css(a[0], "borderTopWidth", !0)),
-                  (d.left += n.css(a[0], "borderLeftWidth", !0))),
+                  n.nodeName(a[0], 'html') || (d = a.offset()),
+                  (d.top += n.css(a[0], 'borderTopWidth', !0)),
+                  (d.left += n.css(a[0], 'borderLeftWidth', !0))),
               {
-                top: b.top - d.top - n.css(c, "marginTop", !0),
-                left: b.left - d.left - n.css(c, "marginLeft", !0),
+                top: b.top - d.top - n.css(c, 'marginTop', !0),
+                left: b.left - d.left - n.css(c, 'marginLeft', !0),
               }
             );
           }
@@ -6738,7 +6738,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           return this.map(function () {
             for (
               var a = this.offsetParent || Jc;
-              a && !n.nodeName(a, "html") && "static" === n.css(a, "position");
+              a && !n.nodeName(a, 'html') && 'static' === n.css(a, 'position');
 
             )
               a = a.offsetParent;
@@ -6747,9 +6747,9 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
       }),
       n.each(
-        { scrollLeft: "pageXOffset", scrollTop: "pageYOffset" },
+        { scrollLeft: 'pageXOffset', scrollTop: 'pageYOffset' },
         function (b, c) {
-          var d = "pageYOffset" === c;
+          var d = 'pageYOffset' === c;
           n.fn[b] = function (e) {
             return J(
               this,
@@ -6766,39 +6766,39 @@ function renderHTMLRecursive(obj, package, spacing) {
               b,
               e,
               arguments.length,
-              null
+              null,
             );
           };
-        }
+        },
       ),
-      n.each(["top", "left"], function (a, b) {
+      n.each(['top', 'left'], function (a, b) {
         n.cssHooks[b] = yb(k.pixelPosition, function (a, c) {
           return c
-            ? ((c = xb(a, b)), vb.test(c) ? n(a).position()[b] + "px" : c)
+            ? ((c = xb(a, b)), vb.test(c) ? n(a).position()[b] + 'px' : c)
             : void 0;
         });
       }),
-      n.each({ Height: "height", Width: "width" }, function (a, b) {
+      n.each({ Height: 'height', Width: 'width' }, function (a, b) {
         n.each(
-          { padding: "inner" + a, content: b, "": "outer" + a },
+          { padding: 'inner' + a, content: b, '': 'outer' + a },
           function (c, d) {
             n.fn[d] = function (d, e) {
-              var f = arguments.length && (c || "boolean" != typeof d),
-                g = c || (!0 === d || !0 === e ? "margin" : "border");
+              var f = arguments.length && (c || 'boolean' != typeof d),
+                g = c || (!0 === d || !0 === e ? 'margin' : 'border');
               return J(
                 this,
                 function (b, c, d) {
                   var e;
                   return n.isWindow(b)
-                    ? b.document.documentElement["client" + a]
+                    ? b.document.documentElement['client' + a]
                     : 9 === b.nodeType
                     ? ((e = b.documentElement),
                       Math.max(
-                        b.body["scroll" + a],
-                        e["scroll" + a],
-                        b.body["offset" + a],
-                        e["offset" + a],
-                        e["client" + a]
+                        b.body['scroll' + a],
+                        e['scroll' + a],
+                        b.body['offset' + a],
+                        e['offset' + a],
+                        e['client' + a],
                       ))
                     : void 0 === d
                     ? n.css(b, c, g)
@@ -6807,19 +6807,19 @@ function renderHTMLRecursive(obj, package, spacing) {
                 b,
                 f ? d : void 0,
                 f,
-                null
+                null,
               );
             };
-          }
+          },
         );
       }),
       (n.fn.size = function () {
         return this.length;
       }),
       (n.fn.andSelf = n.fn.addBack),
-      "function" == typeof define &&
+      'function' == typeof define &&
         define.amd &&
-        define("jquery", [], function () {
+        define('jquery', [], function () {
           return n;
         });
     var Lc = a.jQuery,
@@ -6865,13 +6865,13 @@ function renderHTMLRecursive(obj, package, spacing) {
           ? void (this._wrapped = n)
           : new j(n);
       };
-    "undefined" != typeof exports
-      ? ("undefined" != typeof module &&
+    'undefined' != typeof exports
+      ? ('undefined' != typeof module &&
           module.exports &&
           (exports = module.exports = j),
         (exports._ = j))
       : (n._ = j),
-      (j.VERSION = "1.6.0");
+      (j.VERSION = '1.6.0');
     var A = (j.each = j.forEach = function (n, t, e) {
       if (null == n) return n;
       if (s && n.forEach === s) n.forEach(t, e);
@@ -6894,7 +6894,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           }),
           e);
     };
-    var O = "Reduce of empty array with no initial value";
+    var O = 'Reduce of empty array with no initial value';
     (j.reduce = j.foldl = j.inject = function (n, t, r, e) {
       var u = arguments.length > 2;
       if ((null == n && (n = []), h && n.reduce === h))
@@ -6955,7 +6955,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           function (n, e, u) {
             return !t.call(r, n, e, u);
           },
-          r
+          r,
         );
       }),
       (j.every = j.all = function (n, t, e) {
@@ -7071,7 +7071,7 @@ function renderHTMLRecursive(obj, package, spacing) {
               }
               return n.index - t.index;
             }),
-          "value"
+          'value',
         )
       );
     };
@@ -7206,13 +7206,13 @@ function renderHTMLRecursive(obj, package, spacing) {
       }),
       (j.zip = function () {
         for (
-          var n = j.max(j.pluck(arguments, "length").concat(0)),
+          var n = j.max(j.pluck(arguments, 'length').concat(0)),
             t = new Array(n),
             r = 0;
           n > r;
           r++
         )
-          t[r] = j.pluck(arguments, "" + r);
+          t[r] = j.pluck(arguments, '' + r);
         return t;
       }),
       (j.object = function (n, t) {
@@ -7226,7 +7226,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         var e = 0,
           u = n.length;
         if (r) {
-          if ("number" != typeof r)
+          if ('number' != typeof r)
             return (e = j.sortedIndex(n, t)), n[e] === t ? e : -1;
           e = 0 > r ? Math.max(0, u + r) : r;
         }
@@ -7283,7 +7283,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       (j.bindAll = function (n) {
         var t = o.call(arguments, 1);
         if (0 === t.length)
-          throw new Error("bindAll must be passed function names");
+          throw new Error('bindAll must be passed function names');
         return (
           A(t, function (t) {
             n[t] = j.bind(n[t], n);
@@ -7468,14 +7468,14 @@ function renderHTMLRecursive(obj, package, spacing) {
       var u = l.call(n);
       if (u != l.call(t)) return !1;
       switch (u) {
-        case "[object String]":
+        case '[object String]':
           return n == String(t);
-        case "[object Number]":
+        case '[object Number]':
           return n != +n ? t != +t : 0 == n ? 1 / n == 1 / t : n == +t;
-        case "[object Date]":
-        case "[object Boolean]":
+        case '[object Date]':
+        case '[object Boolean]':
           return +n == +t;
-        case "[object RegExp]":
+        case '[object RegExp]':
           return (
             n.source == t.source &&
             n.global == t.global &&
@@ -7483,7 +7483,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             n.ignoreCase == t.ignoreCase
           );
       }
-      if ("object" != typeof n || "object" != typeof t) return !1;
+      if ('object' != typeof n || 'object' != typeof t) return !1;
       for (var i = r.length; i--; ) if (r[i] == n) return e[i] == t;
       var a = n.constructor,
         o = t.constructor;
@@ -7495,14 +7495,14 @@ function renderHTMLRecursive(obj, package, spacing) {
           j.isFunction(o) &&
           o instanceof o
         ) &&
-        "constructor" in n &&
-        "constructor" in t
+        'constructor' in n &&
+        'constructor' in t
       )
         return !1;
       r.push(n), e.push(t);
       var c = 0,
         f = !0;
-      if ("[object Array]" == u) {
+      if ('[object Array]' == u) {
         if (((c = n.length), (f = c == t.length)))
           for (; c-- && (f = S(n[c], t[c], r, e)); );
       } else {
@@ -7531,26 +7531,26 @@ function renderHTMLRecursive(obj, package, spacing) {
       (j.isArray =
         x ||
         function (n) {
-          return "[object Array]" == l.call(n);
+          return '[object Array]' == l.call(n);
         }),
       (j.isObject = function (n) {
         return n === Object(n);
       }),
       A(
-        ["Arguments", "Function", "String", "Number", "Date", "RegExp"],
+        ['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp'],
         function (n) {
-          j["is" + n] = function (t) {
-            return l.call(t) == "[object " + n + "]";
+          j['is' + n] = function (t) {
+            return l.call(t) == '[object ' + n + ']';
           };
-        }
+        },
       ),
       j.isArguments(arguments) ||
         (j.isArguments = function (n) {
-          return !(!n || !j.has(n, "callee"));
+          return !(!n || !j.has(n, 'callee'));
         }),
-      "function" != typeof /./ &&
+      'function' != typeof /./ &&
         (j.isFunction = function (n) {
-          return "function" == typeof n;
+          return 'function' == typeof n;
         }),
       (j.isFinite = function (n) {
         return isFinite(n) && !isNaN(parseFloat(n));
@@ -7559,7 +7559,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return j.isNumber(n) && n != +n;
       }),
       (j.isBoolean = function (n) {
-        return !0 === n || !1 === n || "[object Boolean]" == l.call(n);
+        return !0 === n || !1 === n || '[object Boolean]' == l.call(n);
       }),
       (j.isNull = function (n) {
         return null === n;
@@ -7611,23 +7611,23 @@ function renderHTMLRecursive(obj, package, spacing) {
         });
     var T = {
       escape: {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#x27;",
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;',
       },
     };
     T.unescape = j.invert(T.escape);
     var I = {
-      escape: new RegExp("[" + j.keys(T.escape).join("") + "]", "g"),
-      unescape: new RegExp("(" + j.keys(T.unescape).join("|") + ")", "g"),
+      escape: new RegExp('[' + j.keys(T.escape).join('') + ']', 'g'),
+      unescape: new RegExp('(' + j.keys(T.unescape).join('|') + ')', 'g'),
     };
-    j.each(["escape", "unescape"], function (n) {
+    j.each(['escape', 'unescape'], function (n) {
       j[n] = function (t) {
         return null == t
-          ? ""
-          : ("" + t).replace(I[n], function (t) {
+          ? ''
+          : ('' + t).replace(I[n], function (t) {
               return T[n][t];
             });
       };
@@ -7649,7 +7649,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       });
     var N = 0;
     (j.uniqueId = function (n) {
-      var t = ++N + "";
+      var t = ++N + '';
       return n ? n + t : t;
     }),
       (j.templateSettings = {
@@ -7660,12 +7660,12 @@ function renderHTMLRecursive(obj, package, spacing) {
     var q = /(.)^/,
       B = {
         "'": "'",
-        "\\": "\\",
-        "\r": "r",
-        "\n": "n",
-        "\t": "t",
-        "\u2028": "u2028",
-        "\u2029": "u2029",
+        '\\': '\\',
+        '\r': 'r',
+        '\n': 'n',
+        '\t': 't',
+        '\u2028': 'u2028',
+        '\u2029': 'u2029',
       },
       D = /\\|'|\r|\n|\t|\u2028|\u2029/g;
     (j.template = function (n, t, r) {
@@ -7676,15 +7676,15 @@ function renderHTMLRecursive(obj, package, spacing) {
             (r.escape || q).source,
             (r.interpolate || q).source,
             (r.evaluate || q).source,
-          ].join("|") + "|$",
-          "g"
+          ].join('|') + '|$',
+          'g',
         ),
         i = 0,
         a = "__p+='";
       n.replace(u, function (t, r, e, u, o) {
         return (
           (a += n.slice(i, o).replace(D, function (n) {
-            return "\\" + B[n];
+            return '\\' + B[n];
           })),
           r && (a += "'+\n((__t=(" + r + "))==null?'':_.escape(__t))+\n'"),
           e && (a += "'+\n((__t=(" + e + "))==null?'':__t)+\n'"),
@@ -7694,13 +7694,13 @@ function renderHTMLRecursive(obj, package, spacing) {
         );
       }),
         (a += "';\n"),
-        r.variable || (a = "with(obj||{}){\n" + a + "}\n"),
+        r.variable || (a = 'with(obj||{}){\n' + a + '}\n'),
         (a =
           "var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};\n" +
           a +
-          "return __p;\n");
+          'return __p;\n');
       try {
-        e = new Function(r.variable || "obj", "_", a);
+        e = new Function(r.variable || 'obj', '_', a);
       } catch (o) {
         throw ((o.source = a), o);
       }
@@ -7709,7 +7709,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return e.call(this, n, j);
       };
       return (
-        (c.source = "function(" + (r.variable || "obj") + "){\n" + a + "}"), c
+        (c.source = 'function(' + (r.variable || 'obj') + '){\n' + a + '}'), c
       );
     }),
       (j.chain = function (n) {
@@ -7720,20 +7720,20 @@ function renderHTMLRecursive(obj, package, spacing) {
     };
     j.mixin(j),
       A(
-        ["pop", "push", "reverse", "shift", "sort", "splice", "unshift"],
+        ['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'],
         function (n) {
           var t = e[n];
           j.prototype[n] = function () {
             var r = this._wrapped;
             return (
               t.apply(r, arguments),
-              ("shift" != n && "splice" != n) || 0 !== r.length || delete r[0],
+              ('shift' != n && 'splice' != n) || 0 !== r.length || delete r[0],
               z.call(this, r)
             );
           };
-        }
+        },
       ),
-      A(["concat", "join", "slice"], function (n) {
+      A(['concat', 'join', 'slice'], function (n) {
         var t = e[n];
         j.prototype[n] = function () {
           return z.call(this, t.apply(this._wrapped, arguments));
@@ -7747,26 +7747,26 @@ function renderHTMLRecursive(obj, package, spacing) {
           return this._wrapped;
         },
       }),
-      "function" == typeof define &&
+      'function' == typeof define &&
         define.amd &&
-        define("underscore", [], function () {
+        define('underscore', [], function () {
           return j;
         });
   }.call(this),
   (function (t, e) {
-    if ("function" == typeof define && define.amd)
-      define(["underscore", "jquery", "exports"], function (i, r, s) {
+    if ('function' == typeof define && define.amd)
+      define(['underscore', 'jquery', 'exports'], function (i, r, s) {
         t.Backbone = e(t, s, i, r);
       });
-    else if ("undefined" != typeof exports) {
-      var i = require("underscore");
+    else if ('undefined' != typeof exports) {
+      var i = require('underscore');
       e(t, exports, i);
     } else t.Backbone = e(t, {}, t._, t.jQuery || t.Zepto || t.ender || t.$);
   })(this, function (t, e, i, r) {
     var s = t.Backbone,
       n = [],
       o = n.slice;
-    (e.VERSION = "1.1.2"),
+    (e.VERSION = '1.1.2'),
       (e.$ = r),
       (e.noConflict = function () {
         return (t.Backbone = s), this;
@@ -7775,7 +7775,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       (e.emulateJSON = !1);
     var u = (e.Events = {
         on: function (t, e, i) {
-          return c(this, "on", t, [e, i]) && e
+          return c(this, 'on', t, [e, i]) && e
             ? (this._events || (this._events = {}),
               (this._events[t] || (this._events[t] = [])).push({
                 callback: e,
@@ -7786,7 +7786,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             : this;
         },
         once: function (t, e, r) {
-          if (!c(this, "once", t, [e, r]) || !e) return this;
+          if (!c(this, 'once', t, [e, r]) || !e) return this;
           var s = this,
             n = i.once(function () {
               s.off(t, n), e.apply(this, arguments);
@@ -7795,7 +7795,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         off: function (t, e, r) {
           var s, n, a, o, h, u, l, f;
-          if (!this._events || !c(this, "off", t, [e, r])) return this;
+          if (!this._events || !c(this, 'off', t, [e, r])) return this;
           if (!t && !e && !r) return (this._events = void 0), this;
           for (
             o = t ? [t] : i.keys(this._events), h = 0, u = o.length;
@@ -7816,7 +7816,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         trigger: function (t) {
           if (!this._events) return this;
           var e = o.call(arguments, 1);
-          if (!c(this, "trigger", t, e)) return this;
+          if (!c(this, 'trigger', t, e)) return this;
           var i = this._events[t],
             r = this._events.all;
           return i && f(i, e), r && f(r, arguments), this;
@@ -7825,7 +7825,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           var s = this._listeningTo;
           if (!s) return this;
           var n = !e && !r;
-          r || "object" != typeof e || (r = this),
+          r || 'object' != typeof e || (r = this),
             t && ((s = {})[t._listenId] = t);
           for (var a in s)
             (t = s[a]),
@@ -7837,7 +7837,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       l = /\s+/,
       c = function (t, e, i, r) {
         if (!i) return !0;
-        if ("object" == typeof i) {
+        if ('object' == typeof i) {
           for (var s in i) t[e].apply(t, [s, i[s]].concat(r));
           return !1;
         }
@@ -7873,14 +7873,14 @@ function renderHTMLRecursive(obj, package, spacing) {
             return;
         }
       },
-      d = { listenTo: "on", listenToOnce: "once" };
+      d = { listenTo: 'on', listenToOnce: 'once' };
     i.each(d, function (t, e) {
       u[e] = function (e, r, s) {
         return (
           ((this._listeningTo || (this._listeningTo = {}))[
-            e._listenId || (e._listenId = i.uniqueId("l"))
+            e._listenId || (e._listenId = i.uniqueId('l'))
           ] = e),
-          s || "object" != typeof r || (s = this),
+          s || 'object' != typeof r || (s = this),
           e[t](r, s, this),
           this
         );
@@ -7892,11 +7892,11 @@ function renderHTMLRecursive(obj, package, spacing) {
     var p = (e.Model = function (t, e) {
       var r = t || {};
       e || (e = {}),
-        (this.cid = i.uniqueId("c")),
+        (this.cid = i.uniqueId('c')),
         (this.attributes = {}),
         e.collection && (this.collection = e.collection),
         e.parse && (r = this.parse(r, e) || {}),
-        (r = i.defaults({}, r, i.result(this, "defaults"))),
+        (r = i.defaults({}, r, i.result(this, 'defaults'))),
         this.set(r, e),
         (this.changed = {}),
         this.initialize.apply(this, arguments);
@@ -7904,7 +7904,7 @@ function renderHTMLRecursive(obj, package, spacing) {
     i.extend(p.prototype, u, {
       changed: null,
       validationError: null,
-      idAttribute: "id",
+      idAttribute: 'id',
       initialize: function () {},
       toJSON: function (t) {
         return i.clone(this.attributes);
@@ -7925,7 +7925,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         var s, n, a, o, h, u, l, c;
         if (null == t) return this;
         if (
-          ("object" == typeof t ? ((n = t), (r = e)) : ((n = {})[t] = e),
+          ('object' == typeof t ? ((n = t), (r = e)) : ((n = {})[t] = e),
           r || (r = {}),
           !this._validate(n, r))
         )
@@ -7949,14 +7949,14 @@ function renderHTMLRecursive(obj, package, spacing) {
         if (!h) {
           o.length && (this._pending = r);
           for (var f = 0, d = o.length; f < d; f++)
-            this.trigger("change:" + o[f], this, c[o[f]], r);
+            this.trigger('change:' + o[f], this, c[o[f]], r);
         }
         if (u) return this;
         if (!h)
           for (; this._pending; )
             (r = this._pending),
               (this._pending = !1),
-              this.trigger("change", this, r);
+              this.trigger('change', this, r);
         return (this._pending = !1), (this._changing = !1), this;
       },
       unset: function (t, e) {
@@ -7994,10 +7994,10 @@ function renderHTMLRecursive(obj, package, spacing) {
         return (
           (t.success = function (i) {
             if (!e.set(e.parse(i, t), t)) return !1;
-            r && r(e, i, t), e.trigger("sync", e, i, t);
+            r && r(e, i, t), e.trigger('sync', e, i, t);
           }),
           q(this, t),
-          this.sync("read", this, t)
+          this.sync('read', this, t)
         );
       },
       save: function (t, e, r) {
@@ -8006,7 +8006,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           a,
           o = this.attributes;
         if (
-          (null == t || "object" == typeof t
+          (null == t || 'object' == typeof t
             ? ((s = t), (r = e))
             : ((s = {})[t] = e),
           (r = i.extend({ validate: !0 }, r)),
@@ -8027,11 +8027,11 @@ function renderHTMLRecursive(obj, package, spacing) {
               i.isObject(e) && !h.set(e, r))
             )
               return !1;
-            u && u(h, t, r), h.trigger("sync", h, t, r);
+            u && u(h, t, r), h.trigger('sync', h, t, r);
           }),
           q(this, r),
-          (n = this.isNew() ? "create" : r.patch ? "patch" : "update"),
-          "patch" === n && (r.attrs = s),
+          (n = this.isNew() ? 'create' : r.patch ? 'patch' : 'update'),
+          'patch' === n && (r.attrs = s),
           (a = this.sync(n, this, r)),
           s && r.wait && (this.attributes = o),
           a
@@ -8042,27 +8042,27 @@ function renderHTMLRecursive(obj, package, spacing) {
         var e = this,
           r = t.success,
           s = function () {
-            e.trigger("destroy", e, e.collection, t);
+            e.trigger('destroy', e, e.collection, t);
           };
         if (
           ((t.success = function (i) {
             (t.wait || e.isNew()) && s(),
               r && r(e, i, t),
-              e.isNew() || e.trigger("sync", e, i, t);
+              e.isNew() || e.trigger('sync', e, i, t);
           }),
           this.isNew())
         )
           return t.success(), !1;
         q(this, t);
-        var n = this.sync("delete", this, t);
+        var n = this.sync('delete', this, t);
         return t.wait || s(), n;
       },
       url: function () {
         var t =
-          i.result(this, "urlRoot") || i.result(this.collection, "url") || M();
+          i.result(this, 'urlRoot') || i.result(this.collection, 'url') || M();
         return this.isNew()
           ? t
-          : t.replace(/([^\/])$/, "$1/") + encodeURIComponent(this.id);
+          : t.replace(/([^\/])$/, '$1/') + encodeURIComponent(this.id);
       },
       parse: function (t, e) {
         return t;
@@ -8083,16 +8083,16 @@ function renderHTMLRecursive(obj, package, spacing) {
         return (
           !r ||
           (this.trigger(
-            "invalid",
+            'invalid',
             this,
             r,
-            i.extend(e, { validationError: r })
+            i.extend(e, { validationError: r }),
           ),
           !1)
         );
       },
     });
-    var v = ["keys", "values", "pairs", "invert", "pick", "omit"];
+    var v = ['keys', 'values', 'pairs', 'invert', 'pick', 'omit'];
     i.each(v, function (t) {
       p.prototype[t] = function () {
         var e = o.call(arguments);
@@ -8134,7 +8134,7 @@ function renderHTMLRecursive(obj, package, spacing) {
             (a = this.indexOf(o)),
             this.models.splice(a, 1),
             this.length--,
-            e.silent || ((e.index = a), o.trigger("remove", o, this, e)),
+            e.silent || ((e.index = a), o.trigger('remove', o, this, e)),
             this._removeReference(o, e));
         return r ? t[0] : t;
       },
@@ -8163,7 +8163,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         for (s = 0, n = t.length; s < n; s++) {
           if (
             ((h = t[s] || {}),
-            (a = h instanceof p ? (o = h) : h[f.prototype.idAttribute || "id"]),
+            (a = h instanceof p ? (o = h) : h[f.prototype.idAttribute || 'id']),
             (u = this.get(a)))
           )
             x && (_[u.cid] = !0),
@@ -8197,8 +8197,8 @@ function renderHTMLRecursive(obj, package, spacing) {
           }
         if ((l && this.sort({ silent: !0 }), !e.silent)) {
           for (s = 0, n = g.length; s < n; s++)
-            (o = g[s]).trigger("add", o, this, e);
-          (l || (E && E.length)) && this.trigger("sort", this, e);
+            (o = g[s]).trigger('add', o, this, e);
+          (l || (E && E.length)) && this.trigger('sort', this, e);
         }
         return r ? t[0] : t;
       },
@@ -8210,7 +8210,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           (e.previousModels = this.models),
           this._reset(),
           (t = this.add(t, i.extend({ silent: !0 }, e))),
-          e.silent || this.trigger("reset", this, e),
+          e.silent || this.trigger('reset', this, e),
           t
         );
       },
@@ -8243,7 +8243,7 @@ function renderHTMLRecursive(obj, package, spacing) {
           ? e
             ? void 0
             : []
-          : this[e ? "find" : "filter"](function (e) {
+          : this[e ? 'find' : 'filter'](function (e) {
               for (var i in t) if (t[i] !== e.get(i)) return !1;
               return !0;
             });
@@ -8253,18 +8253,18 @@ function renderHTMLRecursive(obj, package, spacing) {
       },
       sort: function (t) {
         if (!this.comparator)
-          throw new Error("Cannot sort a set without a comparator");
+          throw new Error('Cannot sort a set without a comparator');
         return (
           t || (t = {}),
           i.isString(this.comparator) || 1 === this.comparator.length
             ? (this.models = this.sortBy(this.comparator, this))
             : this.models.sort(i.bind(this.comparator, this)),
-          t.silent || this.trigger("sort", this, t),
+          t.silent || this.trigger('sort', this, t),
           this
         );
       },
       pluck: function (t) {
-        return i.invoke(this.models, "get", t);
+        return i.invoke(this.models, 'get', t);
       },
       fetch: function (t) {
         (t = t ? i.clone(t) : {}), void 0 === t.parse && (t.parse = !0);
@@ -8272,11 +8272,11 @@ function renderHTMLRecursive(obj, package, spacing) {
           r = this;
         return (
           (t.success = function (i) {
-            var s = t.reset ? "reset" : "set";
-            r[s](i, t), e && e(r, i, t), r.trigger("sync", r, i, t);
+            var s = t.reset ? 'reset' : 'set';
+            r[s](i, t), e && e(r, i, t), r.trigger('sync', r, i, t);
           }),
           q(this, t),
-          this.sync("read", this, t)
+          this.sync('read', this, t)
         );
       },
       create: function (t, e) {
@@ -8307,71 +8307,71 @@ function renderHTMLRecursive(obj, package, spacing) {
         (e = e ? i.clone(e) : {}), (e.collection = this);
         var r = new this.model(t, e);
         return r.validationError
-          ? (this.trigger("invalid", this, r.validationError, e), !1)
+          ? (this.trigger('invalid', this, r.validationError, e), !1)
           : r;
       },
       _addReference: function (t, e) {
         (this._byId[t.cid] = t),
           null != t.id && (this._byId[t.id] = t),
           t.collection || (t.collection = this),
-          t.on("all", this._onModelEvent, this);
+          t.on('all', this._onModelEvent, this);
       },
       _removeReference: function (t, e) {
         this === t.collection && delete t.collection,
-          t.off("all", this._onModelEvent, this);
+          t.off('all', this._onModelEvent, this);
       },
       _onModelEvent: function (t, e, i, r) {
-        (("add" !== t && "remove" !== t) || i === this) &&
-          ("destroy" === t && this.remove(e, r),
+        (('add' !== t && 'remove' !== t) || i === this) &&
+          ('destroy' === t && this.remove(e, r),
           e &&
-            t === "change:" + e.idAttribute &&
+            t === 'change:' + e.idAttribute &&
             (delete this._byId[e.previous(e.idAttribute)],
             null != e.id && (this._byId[e.id] = e)),
           this.trigger.apply(this, arguments));
       },
     });
     var _ = [
-      "forEach",
-      "each",
-      "map",
-      "collect",
-      "reduce",
-      "foldl",
-      "inject",
-      "reduceRight",
-      "foldr",
-      "find",
-      "detect",
-      "filter",
-      "select",
-      "reject",
-      "every",
-      "all",
-      "some",
-      "any",
-      "include",
-      "contains",
-      "invoke",
-      "max",
-      "min",
-      "toArray",
-      "size",
-      "first",
-      "head",
-      "take",
-      "initial",
-      "rest",
-      "tail",
-      "drop",
-      "last",
-      "without",
-      "difference",
-      "indexOf",
-      "shuffle",
-      "lastIndexOf",
-      "isEmpty",
-      "chain",
-      "sample",
+      'forEach',
+      'each',
+      'map',
+      'collect',
+      'reduce',
+      'foldl',
+      'inject',
+      'reduceRight',
+      'foldr',
+      'find',
+      'detect',
+      'filter',
+      'select',
+      'reject',
+      'every',
+      'all',
+      'some',
+      'any',
+      'include',
+      'contains',
+      'invoke',
+      'max',
+      'min',
+      'toArray',
+      'size',
+      'first',
+      'head',
+      'take',
+      'initial',
+      'rest',
+      'tail',
+      'drop',
+      'last',
+      'without',
+      'difference',
+      'indexOf',
+      'shuffle',
+      'lastIndexOf',
+      'isEmpty',
+      'chain',
+      'sample',
     ];
     i.each(_, function (t) {
       g.prototype[t] = function () {
@@ -8379,7 +8379,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         return e.unshift(this.models), i[t].apply(i, e);
       };
     });
-    var b = ["groupBy", "countBy", "sortBy", "indexBy"];
+    var b = ['groupBy', 'countBy', 'sortBy', 'indexBy'];
     i.each(b, function (t) {
       g.prototype[t] = function (e, r) {
         var s = i.isFunction(e)
@@ -8391,7 +8391,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       };
     });
     var w = (e.View = function (t) {
-        (this.cid = i.uniqueId("view")),
+        (this.cid = i.uniqueId('view')),
           t || (t = {}),
           i.extend(this, i.pick(t, E)),
           this._ensureElement(),
@@ -8400,17 +8400,17 @@ function renderHTMLRecursive(obj, package, spacing) {
       }),
       x = /^(\S+)\s*(.*)$/,
       E = [
-        "model",
-        "collection",
-        "el",
-        "id",
-        "attributes",
-        "className",
-        "tagName",
-        "events",
+        'model',
+        'collection',
+        'el',
+        'id',
+        'attributes',
+        'className',
+        'tagName',
+        'events',
       ];
     i.extend(w.prototype, u, {
-      tagName: "div",
+      tagName: 'div',
       $: function (t) {
         return this.$el.find(t);
       },
@@ -8431,7 +8431,7 @@ function renderHTMLRecursive(obj, package, spacing) {
         );
       },
       delegateEvents: function (t) {
-        if (!t && !(t = i.result(this, "events"))) return this;
+        if (!t && !(t = i.result(this, 'events'))) return this;
         this.undelegateEvents();
         for (var e in t) {
           var r = t[e];
@@ -8440,22 +8440,22 @@ function renderHTMLRecursive(obj, package, spacing) {
               n = s[1],
               a = s[2];
             (r = i.bind(r, this)),
-              (n += ".delegateEvents" + this.cid),
-              "" === a ? this.$el.on(n, r) : this.$el.on(n, a, r);
+              (n += '.delegateEvents' + this.cid),
+              '' === a ? this.$el.on(n, r) : this.$el.on(n, a, r);
           }
         }
         return this;
       },
       undelegateEvents: function () {
-        return this.$el.off(".delegateEvents" + this.cid), this;
+        return this.$el.off('.delegateEvents' + this.cid), this;
       },
       _ensureElement: function () {
-        if (this.el) this.setElement(i.result(this, "el"), !1);
+        if (this.el) this.setElement(i.result(this, 'el'), !1);
         else {
-          var t = i.extend({}, i.result(this, "attributes"));
-          this.id && (t.id = i.result(this, "id")),
-            this.className && (t.class = i.result(this, "className"));
-          var r = e.$("<" + i.result(this, "tagName") + ">").attr(t);
+          var t = i.extend({}, i.result(this, 'attributes'));
+          this.id && (t.id = i.result(this, 'id')),
+            this.className && (t.class = i.result(this, 'className'));
+          var r = e.$('<' + i.result(this, 'tagName') + '>').attr(t);
           this.setElement(r, !1);
         }
       },
@@ -8466,46 +8466,46 @@ function renderHTMLRecursive(obj, package, spacing) {
           emulateHTTP: e.emulateHTTP,
           emulateJSON: e.emulateJSON,
         });
-        var a = { type: n, dataType: "json" };
+        var a = { type: n, dataType: 'json' };
         if (
-          (s.url || (a.url = i.result(r, "url") || M()),
+          (s.url || (a.url = i.result(r, 'url') || M()),
           null != s.data ||
             !r ||
-            ("create" !== t && "update" !== t && "patch" !== t) ||
-            ((a.contentType = "application/json"),
+            ('create' !== t && 'update' !== t && 'patch' !== t) ||
+            ((a.contentType = 'application/json'),
             (a.data = JSON.stringify(s.attrs || r.toJSON(s)))),
           s.emulateJSON &&
-            ((a.contentType = "application/x-www-form-urlencoded"),
+            ((a.contentType = 'application/x-www-form-urlencoded'),
             (a.data = a.data ? { model: a.data } : {})),
-          s.emulateHTTP && ("PUT" === n || "DELETE" === n || "PATCH" === n))
+          s.emulateHTTP && ('PUT' === n || 'DELETE' === n || 'PATCH' === n))
         ) {
-          (a.type = "POST"), s.emulateJSON && (a.data._method = n);
+          (a.type = 'POST'), s.emulateJSON && (a.data._method = n);
           var o = s.beforeSend;
           s.beforeSend = function (t) {
-            if ((t.setRequestHeader("X-HTTP-Method-Override", n), o))
+            if ((t.setRequestHeader('X-HTTP-Method-Override', n), o))
               return o.apply(this, arguments);
           };
         }
-        "GET" === a.type || s.emulateJSON || (a.processData = !1),
-          "PATCH" === a.type &&
+        'GET' === a.type || s.emulateJSON || (a.processData = !1),
+          'PATCH' === a.type &&
             k &&
             (a.xhr = function () {
-              return new ActiveXObject("Microsoft.XMLHTTP");
+              return new ActiveXObject('Microsoft.XMLHTTP');
             });
         var h = (s.xhr = e.ajax(i.extend(a, s)));
-        return r.trigger("request", r, h, s), h;
+        return r.trigger('request', r, h, s), h;
       });
     var k = !(
-        "undefined" == typeof window ||
+        'undefined' == typeof window ||
         !window.ActiveXObject ||
         (window.XMLHttpRequest && new XMLHttpRequest().dispatchEvent)
       ),
       T = {
-        create: "POST",
-        update: "PUT",
-        patch: "PATCH",
-        delete: "DELETE",
-        read: "GET",
+        create: 'POST',
+        update: 'PUT',
+        patch: 'PATCH',
+        delete: 'DELETE',
+        read: 'GET',
       };
     e.ajax = function () {
       return e.$.ajax.apply(e.$, arguments);
@@ -8524,16 +8524,16 @@ function renderHTMLRecursive(obj, package, spacing) {
       initialize: function () {},
       route: function (t, r, s) {
         i.isRegExp(t) || (t = this._routeToRegExp(t)),
-          i.isFunction(r) && ((s = r), (r = "")),
+          i.isFunction(r) && ((s = r), (r = '')),
           s || (s = this[r]);
         var n = this;
         return (
           e.history.route(t, function (i) {
             var a = n._extractParameters(t, i);
             n.execute(s, a),
-              n.trigger.apply(n, ["route:" + r].concat(a)),
-              n.trigger("route", r, a),
-              e.history.trigger("route", n, r, a);
+              n.trigger.apply(n, ['route:' + r].concat(a)),
+              n.trigger('route', r, a),
+              e.history.trigger('route', n, r, a);
           }),
           this
         );
@@ -8546,7 +8546,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       },
       _bindRoutes: function () {
         if (this.routes) {
-          this.routes = i.result(this, "routes");
+          this.routes = i.result(this, 'routes');
           for (var t, e = i.keys(this.routes); null != (t = e.pop()); )
             this.route(t, this.routes[t]);
         }
@@ -8554,13 +8554,13 @@ function renderHTMLRecursive(obj, package, spacing) {
       _routeToRegExp: function (t) {
         return (
           (t = t
-            .replace(I, "\\$&")
-            .replace(S, "(?:$1)?")
+            .replace(I, '\\$&')
+            .replace(S, '(?:$1)?')
             .replace(H, function (t, e) {
-              return e ? t : "([^/?]+)";
+              return e ? t : '([^/?]+)';
             })
-            .replace(A, "([^?]*?)")),
-          new RegExp("^" + t + "(?:\\?([\\s\\S]*))?$")
+            .replace(A, '([^?]*?)')),
+          new RegExp('^' + t + '(?:\\?([\\s\\S]*))?$')
         );
       },
       _extractParameters: function (t, e) {
@@ -8576,8 +8576,8 @@ function renderHTMLRecursive(obj, package, spacing) {
     });
     var N = (e.History = function () {
         (this.handlers = []),
-          i.bindAll(this, "checkUrl"),
-          "undefined" != typeof window &&
+          i.bindAll(this, 'checkUrl'),
+          'undefined' != typeof window &&
             ((this.location = window.location),
             (this.history = window.history));
       }),
@@ -8590,26 +8590,26 @@ function renderHTMLRecursive(obj, package, spacing) {
       i.extend(N.prototype, u, {
         interval: 50,
         atRoot: function () {
-          return this.location.pathname.replace(/[^\/]$/, "$&/") === this.root;
+          return this.location.pathname.replace(/[^\/]$/, '$&/') === this.root;
         },
         getHash: function (t) {
           var e = (t || this).location.href.match(/#(.*)$/);
-          return e ? e[1] : "";
+          return e ? e[1] : '';
         },
         getFragment: function (t, e) {
           if (null == t)
             if (this._hasPushState || !this._wantsHashChange || e) {
               t = decodeURI(this.location.pathname + this.location.search);
-              var i = this.root.replace(C, "");
+              var i = this.root.replace(C, '');
               t.indexOf(i) || (t = t.slice(i.length));
             } else t = this.getHash();
-          return t.replace(R, "");
+          return t.replace(R, '');
         },
         start: function (t) {
           if (N.started)
-            throw new Error("Backbone.history has already been started");
+            throw new Error('Backbone.history has already been started');
           (N.started = !0),
-            (this.options = i.extend({ root: "/" }, this.options, t)),
+            (this.options = i.extend({ root: '/' }, this.options, t)),
             (this.root = this.options.root),
             (this._wantsHashChange = !1 !== this.options.hashChange),
             (this._wantsPushState = !!this.options.pushState),
@@ -8622,21 +8622,21 @@ function renderHTMLRecursive(obj, package, spacing) {
             s = document.documentMode,
             n = P.exec(navigator.userAgent.toLowerCase()) && (!s || s <= 7);
           if (
-            ((this.root = ("/" + this.root + "/").replace(O, "/")),
+            ((this.root = ('/' + this.root + '/').replace(O, '/')),
             n && this._wantsHashChange)
           ) {
             var a = e.$('<iframe src="javascript:0" tabindex="-1">');
-            (this.iframe = a.hide().appendTo("body")[0].contentWindow),
+            (this.iframe = a.hide().appendTo('body')[0].contentWindow),
               this.navigate(r);
           }
           this._hasPushState
-            ? e.$(window).on("popstate", this.checkUrl)
-            : this._wantsHashChange && "onhashchange" in window && !n
-            ? e.$(window).on("hashchange", this.checkUrl)
+            ? e.$(window).on('popstate', this.checkUrl)
+            : this._wantsHashChange && 'onhashchange' in window && !n
+            ? e.$(window).on('hashchange', this.checkUrl)
             : this._wantsHashChange &&
               (this._checkUrlInterval = setInterval(
                 this.checkUrl,
-                this.interval
+                this.interval,
               )),
             (this.fragment = r);
           var o = this.location;
@@ -8644,17 +8644,17 @@ function renderHTMLRecursive(obj, package, spacing) {
             if (!this._hasPushState && !this.atRoot())
               return (
                 (this.fragment = this.getFragment(null, !0)),
-                this.location.replace(this.root + "#" + this.fragment),
+                this.location.replace(this.root + '#' + this.fragment),
                 !0
               );
             this._hasPushState &&
               this.atRoot() &&
               o.hash &&
-              ((this.fragment = this.getHash().replace(R, "")),
+              ((this.fragment = this.getHash().replace(R, '')),
               this.history.replaceState(
                 {},
                 document.title,
-                this.root + this.fragment
+                this.root + this.fragment,
               ));
           }
           if (!this.options.silent) return this.loadUrl();
@@ -8662,8 +8662,8 @@ function renderHTMLRecursive(obj, package, spacing) {
         stop: function () {
           e
             .$(window)
-            .off("popstate", this.checkUrl)
-            .off("hashchange", this.checkUrl),
+            .off('popstate', this.checkUrl)
+            .off('hashchange', this.checkUrl),
             this._checkUrlInterval && clearInterval(this._checkUrlInterval),
             (N.started = !1);
         },
@@ -8692,17 +8692,17 @@ function renderHTMLRecursive(obj, package, spacing) {
         navigate: function (t, e) {
           if (!N.started) return !1;
           (e && !0 !== e) || (e = { trigger: !!e });
-          var i = this.root + (t = this.getFragment(t || ""));
-          if (((t = t.replace(j, "")), this.fragment !== t)) {
+          var i = this.root + (t = this.getFragment(t || ''));
+          if (((t = t.replace(j, '')), this.fragment !== t)) {
             if (
               ((this.fragment = t),
-              "" === t && "/" !== i && (i = i.slice(0, -1)),
+              '' === t && '/' !== i && (i = i.slice(0, -1)),
               this._hasPushState)
             )
-              this.history[e.replace ? "replaceState" : "pushState"](
+              this.history[e.replace ? 'replaceState' : 'pushState'](
                 {},
                 document.title,
-                i
+                i,
               );
             else {
               if (!this._wantsHashChange) return this.location.assign(i);
@@ -8717,9 +8717,9 @@ function renderHTMLRecursive(obj, package, spacing) {
         },
         _updateHash: function (t, e, i) {
           if (i) {
-            var r = t.href.replace(/(javascript:|#).*$/, "");
-            t.replace(r + "#" + e);
-          } else t.hash = "#" + e;
+            var r = t.href.replace(/(javascript:|#).*$/, '');
+            t.replace(r + '#' + e);
+          } else t.hash = '#' + e;
         },
       }),
       (e.history = new N());
@@ -8727,7 +8727,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       var s,
         r = this;
       (s =
-        t && i.has(t, "constructor")
+        t && i.has(t, 'constructor')
           ? t.constructor
           : function () {
               return r.apply(this, arguments);
@@ -8751,7 +8751,7 @@ function renderHTMLRecursive(obj, package, spacing) {
       q = function (t, e) {
         var i = e.error;
         e.error = function (r) {
-          i && i(t, r, e), t.trigger("error", t, r, e);
+          i && i(t, r, e), t.trigger('error', t, r, e);
         };
       };
     return e;
@@ -8775,9 +8775,11 @@ var __extends =
         function __() {
           this.constructor = d;
         }
-        if ("function" != typeof b && null !== b)
+        if ('function' != typeof b && null !== b)
           throw new TypeError(
-            "Class extends value " + String(b) + " is not a constructor or null"
+            'Class extends value ' +
+              String(b) +
+              ' is not a constructor or null',
           );
         extendStatics(d, b),
           (d.prototype =
@@ -8802,7 +8804,7 @@ var __extends =
   }
   function registerComponent(constructor, selector, priority, namespace) {
     void 0 === priority && (priority = 0),
-      void 0 === namespace && (namespace = "*"),
+      void 0 === namespace && (namespace = '*'),
       components.push({
         selector: selector,
         constructor: constructor,
@@ -8813,15 +8815,15 @@ var __extends =
         return a.priority - b.priority;
       });
   }
-  typedoc.$html = $("html");
+  typedoc.$html = $('html');
   var services = [],
     components = [];
   (typedoc.$document = $(document)),
     (typedoc.$window = $(window)),
-    (typedoc.$body = $("body")),
+    (typedoc.$body = $('body')),
     (typedoc.registerService = registerService),
     (typedoc.registerComponent = registerComponent),
-    "undefined" != typeof Backbone &&
+    'undefined' != typeof Backbone &&
       (typedoc.Events = (function () {
         var res = function () {};
         return _.extend(res.prototype, Backbone.Events), res;
@@ -8841,18 +8843,18 @@ var __extends =
         });
       }),
       (Application.prototype.createComponents = function ($context, namespace) {
-        void 0 === namespace && (namespace = "default");
+        void 0 === namespace && (namespace = 'default');
         var result = [];
         return (
           _(components).forEach(function (c) {
-            (c.namespace != namespace && "*" != c.namespace) ||
+            (c.namespace != namespace && '*' != c.namespace) ||
               $context.find(c.selector).each(function (m, el) {
                 var instance,
                   $el = $(el);
-                (instance = $el.data("component"))
+                (instance = $el.data('component'))
                   ? -1 == _(result).indexOf(instance) && result.push(instance)
                   : ((instance = new c.constructor({ el: el })),
-                    $el.data("component", instance),
+                    $el.data('component', instance),
                     result.push(instance));
               });
           }),
@@ -8879,7 +8881,7 @@ var typedoc;
         (FilterItem.prototype.initialize = function () {}),
         (FilterItem.prototype.handleValueChange = function (
           oldValue,
-          newValue
+          newValue,
         ) {}),
         (FilterItem.prototype.fromLocalStorage = function (value) {
           return value;
@@ -8906,26 +8908,26 @@ var typedoc;
         __extends(FilterItemCheckbox, _super),
         (FilterItemCheckbox.prototype.initialize = function () {
           var _this = this;
-          (this.$checkbox = $("#tsd-filter-" + this.key)),
-            this.$checkbox.on("change", function () {
-              _this.setValue(_this.$checkbox.prop("checked"));
+          (this.$checkbox = $('#tsd-filter-' + this.key)),
+            this.$checkbox.on('change', function () {
+              _this.setValue(_this.$checkbox.prop('checked'));
             });
         }),
         (FilterItemCheckbox.prototype.handleValueChange = function (
           oldValue,
-          newValue
+          newValue,
         ) {
-          this.$checkbox.prop("checked", this.value),
+          this.$checkbox.prop('checked', this.value),
             typedoc.$html.toggleClass(
-              "toggle-" + this.key,
-              this.value !== this.defaultValue
+              'toggle-' + this.key,
+              this.value !== this.defaultValue,
             );
         }),
         (FilterItemCheckbox.prototype.fromLocalStorage = function (value) {
-          return "true" === value;
+          return 'true' === value;
         }),
         (FilterItemCheckbox.prototype.toLocalStorage = function (value) {
-          return value ? "true" : "false";
+          return value ? 'true' : 'false';
         }),
         FilterItemCheckbox
       );
@@ -8938,37 +8940,37 @@ var typedoc;
         __extends(FilterItemSelect, _super),
         (FilterItemSelect.prototype.initialize = function () {
           var _this = this;
-          typedoc.$html.addClass("toggle-" + this.key + this.value),
-            (this.$select = $("#tsd-filter-" + this.key)),
+          typedoc.$html.addClass('toggle-' + this.key + this.value),
+            (this.$select = $('#tsd-filter-' + this.key)),
             this.$select
-              .on(typedoc.pointerDown + " mouseover", function () {
-                _this.$select.addClass("active");
+              .on(typedoc.pointerDown + ' mouseover', function () {
+                _this.$select.addClass('active');
               })
-              .on("mouseleave", function () {
-                _this.$select.removeClass("active");
+              .on('mouseleave', function () {
+                _this.$select.removeClass('active');
               })
-              .on(typedoc.pointerUp, "li", function (e) {
-                _this.$select.removeClass("active"),
-                  _this.setValue($(e.target).attr("data-value"));
+              .on(typedoc.pointerUp, 'li', function (e) {
+                _this.$select.removeClass('active'),
+                  _this.setValue($(e.target).attr('data-value'));
               }),
             typedoc.$document.on(typedoc.pointerDown, function (e) {
               $(e.target).parents().addBack().is(_this.$select) ||
-                _this.$select.removeClass("active");
+                _this.$select.removeClass('active');
             });
         }),
         (FilterItemSelect.prototype.handleValueChange = function (
           oldValue,
-          newValue
+          newValue,
         ) {
-          this.$select.find("li.selected").removeClass("selected"),
-            this.$select.find(".tsd-select-label").text(
+          this.$select.find('li.selected').removeClass('selected'),
+            this.$select.find('.tsd-select-label').text(
               this.$select
                 .find('li[data-value="' + newValue + '"]')
-                .addClass("selected")
-                .text()
+                .addClass('selected')
+                .text(),
             ),
-            typedoc.$html.removeClass("toggle-" + oldValue),
-            typedoc.$html.addClass("toggle-" + newValue);
+            typedoc.$html.removeClass('toggle-' + oldValue),
+            typedoc.$html.addClass('toggle-' + newValue);
         }),
         FilterItemSelect
       );
@@ -8978,14 +8980,14 @@ var typedoc;
         var _this = _super.call(this, options) || this;
         return (
           (_this.optionVisibility = new FilterItemSelect(
-            "visibility",
-            "private"
+            'visibility',
+            'private',
           )),
-          (_this.optionInherited = new FilterItemCheckbox("inherited", !0)),
-          (_this.optionExternals = new FilterItemCheckbox("externals", !0)),
+          (_this.optionInherited = new FilterItemCheckbox('inherited', !0)),
+          (_this.optionExternals = new FilterItemCheckbox('externals', !0)),
           (_this.optionOnlyExported = new FilterItemCheckbox(
-            "only-exported",
-            !1
+            'only-exported',
+            !1,
           )),
           _this
         );
@@ -9003,8 +9005,8 @@ var typedoc;
       );
     })(Backbone.View);
   Filter.isSupported()
-    ? typedoc.registerComponent(Filter, "#tsd-filter")
-    : typedoc.$html.addClass("no-filter");
+    ? typedoc.registerComponent(Filter, '#tsd-filter')
+    : typedoc.$html.addClass('no-filter');
 })(typedoc || (typedoc = {}));
 var typedoc;
 !(function (typedoc) {
@@ -9013,8 +9015,8 @@ var typedoc;
       var _this = _super.call(this, options) || this;
       return (
         (_this.index = 0),
-        _this.listenTo(typedoc.viewport, "resize", _this.onResize),
-        _this.listenTo(typedoc.viewport, "scroll", _this.onScroll),
+        _this.listenTo(typedoc.viewport, 'resize', _this.onResize),
+        _this.listenTo(typedoc.viewport, 'scroll', _this.onScroll),
         _this.createAnchors(),
         _this
       );
@@ -9025,15 +9027,15 @@ var typedoc;
         var _this = this;
         (this.index = 0), (this.anchors = [{ position: 0 }]);
         var base = window.location.href;
-        -1 !== base.indexOf("#") && (base = base.substr(0, base.indexOf("#"))),
-          this.$el.find("a").each(function (index, el) {
+        -1 !== base.indexOf('#') && (base = base.substr(0, base.indexOf('#'))),
+          this.$el.find('a').each(function (index, el) {
             var href = el.href;
             if (
-              -1 !== href.indexOf("#") &&
+              -1 !== href.indexOf('#') &&
               href.substr(0, base.length) === base
             ) {
-              var hash = href.substr(href.indexOf("#") + 1),
-                $anchor = $("a.tsd-anchor[name=" + hash + "]");
+              var hash = href.substr(href.indexOf('#') + 1),
+                $anchor = $('a.tsd-anchor[name=' + hash + ']');
               0 !== $anchor.length &&
                 _this.anchors.push({
                   $link: $(el.parentNode),
@@ -9067,37 +9069,37 @@ var typedoc;
           index += 1;
         this.index !== index &&
           (this.index > 0 &&
-            this.anchors[this.index].$link.removeClass("focus"),
+            this.anchors[this.index].$link.removeClass('focus'),
           (this.index = index),
-          this.index > 0 && this.anchors[this.index].$link.addClass("focus"));
+          this.index > 0 && this.anchors[this.index].$link.addClass('focus'));
       }),
       MenuHighlight
     );
   })(Backbone.View);
   (typedoc.MenuHighlight = MenuHighlight),
-    typedoc.registerComponent(MenuHighlight, ".menu-highlight");
+    typedoc.registerComponent(MenuHighlight, '.menu-highlight');
 })(typedoc || (typedoc = {}));
 var typedoc;
 !(function (typedoc) {
   var StickyMode,
-    hasPositionSticky = typedoc.$html.hasClass("csspositionsticky");
+    hasPositionSticky = typedoc.$html.hasClass('csspositionsticky');
   !(function (StickyMode) {
-    (StickyMode[(StickyMode.None = 0)] = "None"),
-      (StickyMode[(StickyMode.Secondary = 1)] = "Secondary"),
-      (StickyMode[(StickyMode.Current = 2)] = "Current");
+    (StickyMode[(StickyMode.None = 0)] = 'None'),
+      (StickyMode[(StickyMode.Secondary = 1)] = 'Secondary'),
+      (StickyMode[(StickyMode.Current = 2)] = 'Current');
   })(StickyMode || (StickyMode = {}));
   var MenuSticky = (function (_super) {
     function MenuSticky(options) {
       var _this = _super.call(this, options) || this;
       return (
-        (_this.state = ""),
+        (_this.state = ''),
         (_this.stickyMode = StickyMode.None),
-        (_this.$current = _this.$el.find("> ul.current")),
+        (_this.$current = _this.$el.find('> ul.current')),
         (_this.$navigation = _this.$el),
-        (_this.$container = _this.$el.parents(".row")),
-        _this.listenTo(typedoc.viewport, "resize", _this.onResize),
+        (_this.$container = _this.$el.parents('.row')),
+        _this.listenTo(typedoc.viewport, 'resize', _this.onResize),
         hasPositionSticky ||
-          _this.listenTo(typedoc.viewport, "scroll", _this.onScroll),
+          _this.listenTo(typedoc.viewport, 'scroll', _this.onScroll),
         _this.onResize(typedoc.viewport.width, typedoc.viewport.height),
         _this
       );
@@ -9106,12 +9108,12 @@ var typedoc;
       __extends(MenuSticky, _super),
       (MenuSticky.prototype.setState = function (state) {
         this.state !== state &&
-          ("" !== this.state && this.$navigation.removeClass(this.state),
+          ('' !== this.state && this.$navigation.removeClass(this.state),
           (this.state = state),
-          "" !== this.state && this.$navigation.addClass(this.state));
+          '' !== this.state && this.$navigation.addClass(this.state));
       }),
       (MenuSticky.prototype.onResize = function (width, height) {
-        (this.stickyMode = StickyMode.None), this.setState("");
+        (this.stickyMode = StickyMode.None), this.setState('');
         var containerTop = this.$container.offset().top,
           containerHeight = this.$container.height(),
           bottom = containerTop + containerHeight;
@@ -9121,7 +9123,7 @@ var typedoc;
           if (this.$current.length) {
             var currentHeight = this.$current.height(),
               currentTop = this.$current.offset().top;
-            this.$navigation.css("top", containerTop - currentTop + 20),
+            this.$navigation.css('top', containerTop - currentTop + 20),
               currentHeight < height &&
                 ((this.stickyMode = StickyMode.Current),
                 (this.stickyTop = currentTop),
@@ -9129,62 +9131,62 @@ var typedoc;
                   bottom - elHeight + (currentTop - elTop) - 20));
           }
           elHeight < height &&
-            (this.$navigation.css("top", containerTop - elTop + 20),
+            (this.$navigation.css('top', containerTop - elTop + 20),
             (this.stickyMode = StickyMode.Secondary),
             (this.stickyTop = elTop),
             (this.stickyBottom = bottom - elHeight - 20));
         }
         hasPositionSticky
           ? this.stickyMode === StickyMode.Current
-            ? this.setState("sticky-current")
+            ? this.setState('sticky-current')
             : this.stickyMode === StickyMode.Secondary
-            ? this.setState("sticky")
-            : this.setState("")
-          : (this.$navigation.css("left", this.$navigation.offset().left),
+            ? this.setState('sticky')
+            : this.setState('')
+          : (this.$navigation.css('left', this.$navigation.offset().left),
             this.onScroll(typedoc.viewport.scrollTop));
       }),
       (MenuSticky.prototype.onScroll = function (scrollTop) {
         this.stickyMode === StickyMode.Current
           ? scrollTop > this.stickyBottom
-            ? this.setState("sticky-bottom")
+            ? this.setState('sticky-bottom')
             : this.setState(
-                scrollTop + 20 > this.stickyTop ? "sticky-current" : ""
+                scrollTop + 20 > this.stickyTop ? 'sticky-current' : '',
               )
           : this.stickyMode === StickyMode.Secondary &&
             (scrollTop > this.stickyBottom
-              ? this.setState("sticky-bottom")
-              : this.setState(scrollTop + 20 > this.stickyTop ? "sticky" : ""));
+              ? this.setState('sticky-bottom')
+              : this.setState(scrollTop + 20 > this.stickyTop ? 'sticky' : ''));
       }),
       MenuSticky
     );
   })(Backbone.View);
   (typedoc.MenuSticky = MenuSticky),
-    typedoc.registerComponent(MenuSticky, ".menu-sticky");
+    typedoc.registerComponent(MenuSticky, '.menu-sticky');
 })(typedoc || (typedoc = {})),
-  window.addEventListener("load", function () {
-    if (document.querySelector(".tsd-navigation.outline")) {
-      var filter = ".tsd-navigation ul",
+  window.addEventListener('load', function () {
+    if (document.querySelector('.tsd-navigation.outline')) {
+      var filter = '.tsd-navigation ul',
         outlineElement = document.querySelector(filter),
         outline = JSON.parse(outlineElement.innerHTML);
       (outlineElement.innerHTML = renderHTMLRecursive(outline)),
-        (outlineElement.style.display = "block");
+        (outlineElement.style.display = 'block');
     } else {
-      var filter = ".tsd-navigation .tsd-kind-external-module > a",
+      var filter = '.tsd-navigation .tsd-kind-external-module > a',
         modules = document.querySelectorAll(filter),
         hierarchy_1 = {};
       Array.from(modules).forEach(function (m) {
-        var packageArr = m.innerText.split("/"),
+        var packageArr = m.innerText.split('/'),
           nestedArr = arrayToNest(packageArr);
         mergeRecursive(hierarchy_1, nestedArr);
       });
       var listItems = document.querySelectorAll(
-        ".tsd-navigation .tsd-kind-external-module"
+        '.tsd-navigation .tsd-kind-external-module',
       );
       Array.from(listItems).forEach(function (el) {
         el.remove();
       });
       document.querySelector(
-        ".tsd-navigation ul"
+        '.tsd-navigation ul',
       ).innerHTML += renderSimpleHTMLRecursive(hierarchy_1);
     }
   });
@@ -9193,7 +9195,7 @@ var typedoc;
   !(function (search) {
     function initializePriorityResults() {
       var priorityResultsDom = Array.from(
-        document.querySelectorAll(".results-priority li")
+        document.querySelectorAll('.results-priority li'),
       );
       this.priorityResults = priorityResultsDom.map(function (node) {
         var element = node;
@@ -9209,7 +9211,7 @@ var typedoc;
           loadingState == SearchLoadingState.Idle &&
             setLoadingState(SearchLoadingState.Loading);
         }, 500);
-        if (!$el.attr("data-index"))
+        if (!$el.attr('data-index'))
           return void setLoadingState(SearchLoadingState.Failure);
         try {
           (search.data = window.searchData),
@@ -9227,7 +9229,7 @@ var typedoc;
       if (loadingState === SearchLoadingState.Ready) {
         $results.empty();
         for (
-          var res = index.search("*" + query + "*"),
+          var res = index.search('*' + query + '*'),
             i = 0,
             c = Math.min(10, res.length);
           i < c;
@@ -9235,10 +9237,10 @@ var typedoc;
         ) {
           var row = search.data.rows[res[i].ref],
             name_1 = row.name,
-            fullName = row.parent + "." + name_1;
+            fullName = row.parent + '.' + name_1;
           row.parent &&
             (name_1 =
-              '<span class="parent">' + row.parent + ".</span>" + name_1);
+              '<span class="parent">' + row.parent + '.</span>' + name_1);
           for (
             var priority = !1, _i = 0, _a = this.priorityResults;
             _i < _a.length;
@@ -9254,11 +9256,11 @@ var typedoc;
                   row.url +
                   '" class="tsd-kind-icon">' +
                   name_1 +
-                  "&emsp;|&emsp;" +
+                  '&emsp;|&emsp;' +
                   result.subtitle +
-                  "&emsp;|&emsp;" +
+                  '&emsp;|&emsp;' +
                   getKind(row.classes) +
-                  "</li>"
+                  '</li>',
               ),
                 (priority = !0);
               break;
@@ -9273,7 +9275,7 @@ var typedoc;
                 row.url +
                 '">' +
                 name_1 +
-                "</li>"
+                '</li>',
             );
         }
         for (
@@ -9295,20 +9297,20 @@ var typedoc;
       }
     }
     function getKind(classes) {
-      return classes.indexOf("tsd-kind-class") > -1
-        ? "Class"
-        : classes.indexOf("tsd-kind-interface") > -1
-        ? "Interface"
-        : classes.indexOf("tsd-kind-property") > -1
-        ? "Property"
-        : classes.indexOf("tsd-kind-method") > -1
-        ? "Method"
-        : classes.indexOf("tsd-kind-type-alias") > -1
-        ? "Type"
-        : classes.indexOf("tsd-kind-function") > -1
-        ? "Function"
-        : classes.indexOf("tsd-kind-external-module") > -1
-        ? "Module"
+      return classes.indexOf('tsd-kind-class') > -1
+        ? 'Class'
+        : classes.indexOf('tsd-kind-interface') > -1
+        ? 'Interface'
+        : classes.indexOf('tsd-kind-property') > -1
+        ? 'Property'
+        : classes.indexOf('tsd-kind-method') > -1
+        ? 'Method'
+        : classes.indexOf('tsd-kind-type-alias') > -1
+        ? 'Type'
+        : classes.indexOf('tsd-kind-function') > -1
+        ? 'Function'
+        : classes.indexOf('tsd-kind-external-module') > -1
+        ? 'Module'
         : void 0;
     }
     function setLoadingState(value) {
@@ -9321,69 +9323,69 @@ var typedoc;
     function setHasFocus(value) {
       hasFocus !== value &&
         ((hasFocus = value),
-        $el.toggleClass("has-focus"),
-        value ? (setQuery(""), $field.val("")) : $field.val(query));
+        $el.toggleClass('has-focus'),
+        value ? (setQuery(''), $field.val('')) : $field.val(query));
     }
     function setQuery(value) {
       (query = $.trim(value)), updateResults();
     }
     function setCurrentResult(dir) {
-      var $current = $results.find(".current");
+      var $current = $results.find('.current');
       if (0 === $current.length)
         $results
-          .find(1 === dir ? "li:first-child" : "li:last-child")
-          .addClass("current");
+          .find(1 === dir ? 'li:first-child' : 'li:last-child')
+          .addClass('current');
       else {
-        var $rel = 1 === dir ? $current.next("li") : $current.prev("li");
+        var $rel = 1 === dir ? $current.next('li') : $current.prev('li');
         $rel.length > 0 &&
-          ($current.removeClass("current"), $rel.addClass("current"));
+          ($current.removeClass('current'), $rel.addClass('current'));
       }
     }
     function gotoCurrentResult() {
-      var $current = $results.find(".current");
-      0 === $current.length && ($current = $results.find("li:first-child")),
+      var $current = $results.find('.current');
+      0 === $current.length && ($current = $results.find('li:first-child')),
         $current.length > 0 &&
-          ((window.location.href = $current.find("a").prop("href")),
+          ((window.location.href = $current.find('a').prop('href')),
           $field.blur());
     }
     var SearchLoadingState;
     !(function (SearchLoadingState) {
-      (SearchLoadingState[(SearchLoadingState.Idle = 0)] = "Idle"),
-        (SearchLoadingState[(SearchLoadingState.Loading = 1)] = "Loading"),
-        (SearchLoadingState[(SearchLoadingState.Ready = 2)] = "Ready"),
-        (SearchLoadingState[(SearchLoadingState.Failure = 3)] = "Failure");
+      (SearchLoadingState[(SearchLoadingState.Idle = 0)] = 'Idle'),
+        (SearchLoadingState[(SearchLoadingState.Loading = 1)] = 'Loading'),
+        (SearchLoadingState[(SearchLoadingState.Ready = 2)] = 'Ready'),
+        (SearchLoadingState[(SearchLoadingState.Failure = 3)] = 'Failure');
     })(SearchLoadingState || (SearchLoadingState = {}));
     var index,
-      $el = $("#tsd-search"),
-      $field = $("#tsd-search-field"),
-      $results = $(".results"),
-      base = $el.attr("data-base") + "/",
-      query = "",
+      $el = $('#tsd-search'),
+      $field = $('#tsd-search-field'),
+      $results = $('.results'),
+      base = $el.attr('data-base') + '/',
+      query = '',
       loadingState = SearchLoadingState.Idle,
       hasFocus = !1,
       preventPress = !1,
       resultClicked = !1;
     $results
-      .on("mousedown", function () {
+      .on('mousedown', function () {
         resultClicked = !0;
       })
-      .on("mouseup", function () {
+      .on('mouseup', function () {
         (resultClicked = !1), setHasFocus(!1);
       }),
       $field
-        .on("focusin", function () {
+        .on('focusin', function () {
           setHasFocus(!0), loadIndex();
         })
-        .on("focusout", function () {
+        .on('focusout', function () {
           if (resultClicked) return void (resultClicked = !1);
           setTimeout(function () {
             return setHasFocus(!1);
           }, 100);
         })
-        .on("input", function () {
+        .on('input', function () {
           setQuery($.trim($field.val()));
         })
-        .on("keydown", function (e) {
+        .on('keydown', function (e) {
           13 === e.keyCode ||
           27 === e.keyCode ||
           38 === e.keyCode ||
@@ -9399,10 +9401,10 @@ var typedoc;
                 : 40 === e.keyCode && setCurrentResult(1))
             : (preventPress = !1);
         })
-        .on("keypress", function (e) {
+        .on('keypress', function (e) {
           preventPress && e.preventDefault();
         }),
-      $("body").on("keydown", function (e) {
+      $('body').on('keydown', function (e) {
         e.altKey ||
           e.ctrlKey ||
           e.metaKey ||
@@ -9442,14 +9444,14 @@ var typedoc;
           _this.createGroups(),
           _this.groups &&
             (_this.$el
-              .addClass("active")
-              .on("touchstart", ".tsd-signature", function (event) {
+              .addClass('active')
+              .on('touchstart', '.tsd-signature', function (event) {
                 return _this.onClick(event);
               })
-              .on("click", ".tsd-signature", function (event) {
+              .on('click', '.tsd-signature', function (event) {
                 return _this.onClick(event);
               }),
-            _this.$container.addClass("active"),
+            _this.$container.addClass('active'),
             _this.setIndex(0)),
           _this
         );
@@ -9466,27 +9468,27 @@ var typedoc;
             if (this.index > -1) {
               var from_1 = this.groups[this.index];
               typedoc.animateHeight(this.$container, function () {
-                from_1.removeClass("current").addClass("fade-out"),
-                  to.addClass("current fade-in"),
+                from_1.removeClass('current').addClass('fade-out'),
+                  to.addClass('current fade-in'),
                   typedoc.viewport.triggerResize();
               }),
                 setTimeout(function () {
-                  from_1.removeClass("fade-out"), to.removeClass("fade-in");
+                  from_1.removeClass('fade-out'), to.removeClass('fade-in');
                 }, 300);
-            } else to.addClass("current"), typedoc.viewport.triggerResize();
+            } else to.addClass('current'), typedoc.viewport.triggerResize();
             this.index = index;
           }
         }),
         (Signature.prototype.createGroups = function () {
           var _this = this,
-            $signatures = this.$el.find("> .tsd-signature");
+            $signatures = this.$el.find('> .tsd-signature');
           if (!($signatures.length < 2)) {
-            this.$container = this.$el.siblings(".tsd-descriptions");
-            var $descriptions = this.$container.find("> .tsd-description");
+            this.$container = this.$el.siblings('.tsd-descriptions');
+            var $descriptions = this.$container.find('> .tsd-description');
             (this.groups = []),
               $signatures.each(function (index, el) {
                 _this.groups.push(
-                  new SignatureGroup($(el), $descriptions.eq(index))
+                  new SignatureGroup($(el), $descriptions.eq(index)),
                 );
               });
           }
@@ -9501,7 +9503,7 @@ var typedoc;
         Signature
       );
     })(Backbone.View);
-  typedoc.registerComponent(Signature, ".tsd-signatures");
+  typedoc.registerComponent(Signature, '.tsd-signatures');
 })(typedoc || (typedoc = {}));
 var typedoc;
 !(function (typedoc) {
@@ -9509,11 +9511,11 @@ var typedoc;
     function Toggle(options) {
       var _this = _super.call(this, options) || this;
       return (
-        (_this.className = _this.$el.attr("data-toggle")),
+        (_this.className = _this.$el.attr('data-toggle')),
         _this.$el.on(typedoc.pointerUp, function (e) {
           return _this.onPointerUp(e);
         }),
-        _this.$el.on("click", function (e) {
+        _this.$el.on('click', function (e) {
           return e.preventDefault();
         }),
         typedoc.$document.on(typedoc.pointerDown, function (e) {
@@ -9530,10 +9532,10 @@ var typedoc;
       (Toggle.prototype.setActive = function (value) {
         if (this.active !== value) {
           (this.active = value),
-            typedoc.$html.toggleClass("has-" + this.className, value),
-            this.$el.toggleClass("active", value);
+            typedoc.$html.toggleClass('has-' + this.className, value),
+            this.$el.toggleClass('active', value);
           var transition =
-            (this.active ? "to-has-" : "from-has-") + this.className;
+            (this.active ? 'to-has-' : 'from-has-') + this.className;
           typedoc.$html.addClass(transition),
             setTimeout(function () {
               return typedoc.$html.removeClass(transition);
@@ -9546,8 +9548,8 @@ var typedoc;
       (Toggle.prototype.onDocumentPointerDown = function (e) {
         if (this.active) {
           var $path = $(e.target).parents().addBack();
-          if ($path.hasClass("col-menu")) return;
-          if ($path.hasClass("tsd-filter-group")) return;
+          if ($path.hasClass('col-menu')) return;
+          if ($path.hasClass('tsd-filter-group')) return;
           this.setActive(!1);
         }
       }),
@@ -9555,13 +9557,13 @@ var typedoc;
         var _this = this;
         if (!typedoc.hasPointerMoved && this.active) {
           var $path = $(e.target).parents().addBack();
-          if ($path.hasClass("col-menu")) {
-            var $link = $path.filter("a");
+          if ($path.hasClass('col-menu')) {
+            var $link = $path.filter('a');
             if ($link.length) {
               var href = window.location.href;
-              -1 !== href.indexOf("#") &&
-                (href = href.substr(0, href.indexOf("#"))),
-                $link.prop("href").substr(0, href.length) === href &&
+              -1 !== href.indexOf('#') &&
+                (href = href.substr(0, href.indexOf('#'))),
+                $link.prop('href').substr(0, href.length) === href &&
                   setTimeout(function () {
                     return _this.setActive(!1);
                   }, 250);
@@ -9572,7 +9574,7 @@ var typedoc;
       Toggle
     );
   })(Backbone.View);
-  typedoc.registerComponent(Toggle, "a[data-toggle]");
+  typedoc.registerComponent(Toggle, 'a[data-toggle]');
 })(typedoc || (typedoc = {}));
 var typedoc;
 !(function (typedoc) {
@@ -9584,16 +9586,16 @@ var typedoc;
         (_this.width = 0),
         (_this.height = 0),
         typedoc.$window.on(
-          "scroll",
+          'scroll',
           _(function () {
             return _this.onScroll();
-          }).throttle(10)
+          }).throttle(10),
         ),
         typedoc.$window.on(
-          "resize",
+          'resize',
           _(function () {
             return _this.onResize();
-          }).throttle(10)
+          }).throttle(10),
         ),
         _this.onResize(),
         _this.onScroll(),
@@ -9603,47 +9605,47 @@ var typedoc;
     return (
       __extends(Viewport, _super),
       (Viewport.prototype.triggerResize = function () {
-        this.trigger("resize", this.width, this.height);
+        this.trigger('resize', this.width, this.height);
       }),
       (Viewport.prototype.onResize = function () {
         (this.width = typedoc.$window.width()),
           (this.height = typedoc.$window.height()),
-          this.trigger("resize", this.width, this.height);
+          this.trigger('resize', this.width, this.height);
       }),
       (Viewport.prototype.onScroll = function () {
         (this.scrollTop = typedoc.$window.scrollTop()),
-          this.trigger("scroll", this.scrollTop);
+          this.trigger('scroll', this.scrollTop);
       }),
       Viewport
     );
   })(typedoc.Events);
-  (typedoc.Viewport = Viewport), typedoc.registerService(Viewport, "viewport");
+  (typedoc.Viewport = Viewport), typedoc.registerService(Viewport, 'viewport');
 })(typedoc || (typedoc = {}));
 var typedoc;
 !(function (typedoc) {
-  (typedoc.pointerDown = "mousedown"),
-    (typedoc.pointerMove = "mousemove"),
-    (typedoc.pointerUp = "mouseup"),
+  (typedoc.pointerDown = 'mousedown'),
+    (typedoc.pointerMove = 'mousemove'),
+    (typedoc.pointerUp = 'mouseup'),
     (typedoc.pointerDownPosition = { x: 0, y: 0 }),
     (typedoc.preventNextClick = !1),
     (typedoc.isPointerDown = !1),
     (typedoc.isPointerTouch = !1),
     (typedoc.hasPointerMoved = !1),
     (typedoc.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
+      navigator.userAgent,
     )),
-    typedoc.$html.addClass(typedoc.isMobile ? "is-mobile" : "not-mobile"),
+    typedoc.$html.addClass(typedoc.isMobile ? 'is-mobile' : 'not-mobile'),
     typedoc.isMobile &&
-      "ontouchstart" in document.documentElement &&
+      'ontouchstart' in document.documentElement &&
       ((typedoc.isPointerTouch = !0),
-      (typedoc.pointerDown = "touchstart"),
-      (typedoc.pointerMove = "touchmove"),
-      (typedoc.pointerUp = "touchend")),
+      (typedoc.pointerDown = 'touchstart'),
+      (typedoc.pointerMove = 'touchmove'),
+      (typedoc.pointerUp = 'touchend')),
     typedoc.$document
       .on(typedoc.pointerDown, function (e) {
         (typedoc.isPointerDown = !0), (typedoc.hasPointerMoved = !1);
         var t =
-          "touchstart" === typedoc.pointerDown
+          'touchstart' === typedoc.pointerDown
             ? e.originalEvent.targetTouches[0]
             : e;
         (typedoc.pointerDownPosition.x = t.pageX),
@@ -9652,7 +9654,7 @@ var typedoc;
       .on(typedoc.pointerMove, function (e) {
         if (typedoc.isPointerDown && !typedoc.hasPointerMoved) {
           var t =
-              "touchstart" === typedoc.pointerDown
+              'touchstart' === typedoc.pointerDown
                 ? e.originalEvent.targetTouches[0]
                 : e,
             x = typedoc.pointerDownPosition.x - t.pageX,
@@ -9663,7 +9665,7 @@ var typedoc;
       .on(typedoc.pointerUp, function (e) {
         typedoc.isPointerDown = !1;
       })
-      .on("click", function (e) {
+      .on('click', function (e) {
         typedoc.preventNextClick &&
           (e.preventDefault(),
           e.stopImmediatePropagation(),
@@ -9673,25 +9675,25 @@ var typedoc;
 var typedoc;
 !(function (typedoc) {
   function noTransition($el, callback) {
-    $el.addClass("no-transition"),
+    $el.addClass('no-transition'),
       callback(),
       $el.offset(),
-      $el.removeClass("no-transition");
+      $el.removeClass('no-transition');
   }
   function animateHeight($el, callback, success) {
     var to,
       from = $el.height();
     noTransition($el, function () {
       callback(),
-        $el.css("height", ""),
+        $el.css('height', ''),
         (to = $el.height()),
-        from !== to && typedoc.transition && $el.css("height", from);
+        from !== to && typedoc.transition && $el.css('height', from);
     }),
       from !== to && typedoc.transition
-        ? ($el.css("height", to),
+        ? ($el.css('height', to),
           $el.on(typedoc.transition.endEvent, function () {
             noTransition($el, function () {
-              $el.off(typedoc.transition.endEvent).css("height", ""),
+              $el.off(typedoc.transition.endEvent).css('height', ''),
                 success && success();
             });
           }))
@@ -9706,11 +9708,11 @@ var typedoc;
         return { name: name_2, endEvent: tuples[name_2] };
     return null;
   })({
-    transition: "transitionend",
-    OTransition: "oTransitionEnd",
-    msTransition: "msTransitionEnd",
-    MozTransition: "transitionend",
-    WebkitTransition: "webkitTransitionEnd",
+    transition: 'transitionend',
+    OTransition: 'oTransitionEnd',
+    msTransition: 'msTransitionEnd',
+    MozTransition: 'transitionend',
+    WebkitTransition: 'webkitTransitionEnd',
   })),
     (typedoc.noTransition = noTransition),
     (typedoc.animateHeight = animateHeight);

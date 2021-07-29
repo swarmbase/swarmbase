@@ -110,15 +110,12 @@
           </nav>
         </div>
         <div class="col-7 offset-3 col-content">
-          <h1>Class JSONSerializer&lt;ChangesType, MessageType&gt;</h1>
+          <h1>Class JSONSerializer&lt;ChangesType&gt;</h1>
           <section class="tsd-panel tsd-type-parameters">
             <h3>Type parameters</h3>
             <ul class="tsd-type-parameters">
               <li>
                 <h4>ChangesType</h4>
-              </li>
-              <li>
-                <h4>MessageType</h4>
               </li>
             </ul>
           </section>
@@ -144,12 +141,19 @@
               </li>
               <li>
                 <a
-                  href="../interfaces/messageserializer.html"
+                  href="../interfaces/syncmessageserializer.html"
                   class="tsd-signature-type"
-                  >MessageSerializer</a
+                  >SyncMessageSerializer</a
                 ><span class="tsd-signature-symbol">&lt;</span
-                ><span class="tsd-signature-type">MessageType</span
+                ><span class="tsd-signature-type">ChangesType</span
                 ><span class="tsd-signature-symbol">&gt;</span>
+              </li>
+              <li>
+                <a
+                  href="../interfaces/loadmessageserializer.html"
+                  class="tsd-signature-type"
+                  >LoadMessageSerializer</a
+                >
               </li>
             </ul>
           </section>
@@ -201,9 +205,16 @@
                     </li>
                     <li class="tsd-kind-method tsd-parent-kind-class">
                       <a
-                        href="jsonserializer.html#deserializemessage"
+                        href="jsonserializer.html#deserializeloadrequest"
                         class="tsd-kind-icon"
-                        >deserialize<wbr />Message</a
+                        >deserialize<wbr />Load<wbr />Request</a
+                      >
+                    </li>
+                    <li class="tsd-kind-method tsd-parent-kind-class">
+                      <a
+                        href="jsonserializer.html#deserializesyncmessage"
+                        class="tsd-kind-icon"
+                        >deserialize<wbr />Sync<wbr />Message</a
                       >
                     </li>
                     <li class="tsd-kind-method tsd-parent-kind-class">
@@ -234,9 +245,16 @@
                     </li>
                     <li class="tsd-kind-method tsd-parent-kind-class">
                       <a
-                        href="jsonserializer.html#serializemessage"
+                        href="jsonserializer.html#serializeloadrequest"
                         class="tsd-kind-icon"
-                        >serialize<wbr />Message</a
+                        >serialize<wbr />Load<wbr />Request</a
+                      >
+                    </li>
+                    <li class="tsd-kind-method tsd-parent-kind-class">
+                      <a
+                        href="jsonserializer.html#serializesyncmessage"
+                        class="tsd-kind-icon"
+                        >serialize<wbr />Sync<wbr />Message</a
                       >
                     </li>
                   </ul>
@@ -255,7 +273,7 @@
                 class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class tsd-has-type-parameter"
               >
                 <li class="tsd-signature tsd-kind-icon">
-                  new JSONSerializer&lt;ChangesType, MessageType&gt;<span
+                  new JSONSerializer&lt;ChangesType&gt;<span
                     class="tsd-signature-symbol"
                     >(</span
                   ><span class="tsd-signature-symbol">)</span
@@ -264,8 +282,6 @@
                     >JSONSerializer</a
                   ><span class="tsd-signature-symbol">&lt;</span
                   ><span class="tsd-signature-type">ChangesType</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">MessageType</span
                   ><span class="tsd-signature-symbol">&gt;</span>
                 </li>
               </ul>
@@ -277,9 +293,6 @@
                     <li>
                       <h4>ChangesType</h4>
                     </li>
-                    <li>
-                      <h4>MessageType</h4>
-                    </li>
                   </ul>
                   <h4 class="tsd-returns-title">
                     Returns
@@ -287,8 +300,6 @@
                       >JSONSerializer</a
                     ><span class="tsd-signature-symbol">&lt;</span
                     ><span class="tsd-signature-type">ChangesType</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">MessageType</span
                     ><span class="tsd-signature-symbol">&gt;</span>
                   </h4>
                 </li>
@@ -317,7 +328,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in json-serializer.ts:22</li>
+                      <li>Defined in json-serializer.ts:29</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -354,7 +365,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in json-serializer.ts:9</li>
+                      <li>Defined in json-serializer.ts:16</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -404,7 +415,7 @@
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:36</li>
+                      <li>Defined in json-serializer.ts:43</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -454,7 +465,7 @@
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:30</li>
+                      <li>Defined in json-serializer.ts:37</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -475,17 +486,18 @@
             <section
               class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
             >
-              <a name="deserializemessage" class="tsd-anchor"></a>
-              <h3>deserialize<wbr />Message</h3>
+              <a name="deserializeloadrequest" class="tsd-anchor"></a>
+              <h3>deserialize<wbr />Load<wbr />Request</h3>
               <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
                 <li class="tsd-signature tsd-kind-icon">
-                  deserialize<wbr />Message<span class="tsd-signature-symbol"
+                  deserialize<wbr />Load<wbr />Request<span
+                    class="tsd-signature-symbol"
                     >(</span
                   >message<span class="tsd-signature-symbol">: </span
                   ><span class="tsd-signature-type">Uint8Array</span
                   ><span class="tsd-signature-symbol">)</span
                   ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">MessageType</span>
+                  ><span class="tsd-signature-type">CRDTLoadRequest</span>
                 </li>
               </ul>
               <ul class="tsd-descriptions">
@@ -493,15 +505,15 @@
                   <aside class="tsd-sources">
                     <p>
                       Implementation of
-                      <a href="../interfaces/messageserializer.html"
-                        >MessageSerializer</a
+                      <a href="../interfaces/loadmessageserializer.html"
+                        >LoadMessageSerializer</a
                       >.<a
-                        href="../interfaces/messageserializer.html#deserializemessage"
-                        >deserializeMessage</a
+                        href="../interfaces/loadmessageserializer.html#deserializeloadrequest"
+                        >deserializeLoadRequest</a
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:42</li>
+                      <li>Defined in json-serializer.ts:55</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -514,7 +526,69 @@
                     </li>
                   </ul>
                   <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">MessageType</span>
+                    Returns
+                    <span class="tsd-signature-type">CRDTLoadRequest</span>
+                  </h4>
+                </li>
+              </ul>
+            </section>
+            <section
+              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
+            >
+              <a name="deserializesyncmessage" class="tsd-anchor"></a>
+              <h3>deserialize<wbr />Sync<wbr />Message</h3>
+              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+                <li class="tsd-signature tsd-kind-icon">
+                  deserialize<wbr />Sync<wbr />Message<span
+                    class="tsd-signature-symbol"
+                    >(</span
+                  >message<span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">Uint8Array</span
+                  ><span class="tsd-signature-symbol">)</span
+                  ><span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../modules.html#crdtsyncmessage"
+                    class="tsd-signature-type"
+                    >CRDTSyncMessage</a
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">&gt;</span>
+                </li>
+              </ul>
+              <ul class="tsd-descriptions">
+                <li class="tsd-description">
+                  <aside class="tsd-sources">
+                    <p>
+                      Implementation of
+                      <a href="../interfaces/syncmessageserializer.html"
+                        >SyncMessageSerializer</a
+                      >.<a
+                        href="../interfaces/syncmessageserializer.html#deserializesyncmessage"
+                        >deserializeSyncMessage</a
+                      >
+                    </p>
+                    <ul>
+                      <li>Defined in json-serializer.ts:49</li>
+                    </ul>
+                  </aside>
+                  <h4 class="tsd-parameters-title">Parameters</h4>
+                  <ul class="tsd-parameters">
+                    <li>
+                      <h5>
+                        message:
+                        <span class="tsd-signature-type">Uint8Array</span>
+                      </h5>
+                    </li>
+                  </ul>
+                  <h4 class="tsd-returns-title">
+                    Returns
+                    <a
+                      href="../modules.html#crdtsyncmessage"
+                      class="tsd-signature-type"
+                      >CRDTSyncMessage</a
+                    ><span class="tsd-signature-symbol">&lt;</span
+                    ><span class="tsd-signature-type">ChangesType</span
+                    ><span class="tsd-signature-symbol">&gt;</span>
                   </h4>
                 </li>
               </ul>
@@ -539,7 +613,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in json-serializer.ts:18</li>
+                      <li>Defined in json-serializer.ts:25</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -575,7 +649,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in json-serializer.ts:6</li>
+                      <li>Defined in json-serializer.ts:13</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -625,7 +699,7 @@
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:33</li>
+                      <li>Defined in json-serializer.ts:40</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -675,7 +749,7 @@
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:27</li>
+                      <li>Defined in json-serializer.ts:34</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -696,14 +770,15 @@
             <section
               class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
             >
-              <a name="serializemessage" class="tsd-anchor"></a>
-              <h3>serialize<wbr />Message</h3>
+              <a name="serializeloadrequest" class="tsd-anchor"></a>
+              <h3>serialize<wbr />Load<wbr />Request</h3>
               <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
                 <li class="tsd-signature tsd-kind-icon">
-                  serialize<wbr />Message<span class="tsd-signature-symbol"
+                  serialize<wbr />Load<wbr />Request<span
+                    class="tsd-signature-symbol"
                     >(</span
                   >message<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">MessageType</span
+                  ><span class="tsd-signature-type">CRDTLoadRequest</span
                   ><span class="tsd-signature-symbol">)</span
                   ><span class="tsd-signature-symbol">: </span
                   ><span class="tsd-signature-type">Uint8Array</span>
@@ -714,15 +789,15 @@
                   <aside class="tsd-sources">
                     <p>
                       Implementation of
-                      <a href="../interfaces/messageserializer.html"
-                        >MessageSerializer</a
+                      <a href="../interfaces/loadmessageserializer.html"
+                        >LoadMessageSerializer</a
                       >.<a
-                        href="../interfaces/messageserializer.html#serializemessage"
-                        >serializeMessage</a
+                        href="../interfaces/loadmessageserializer.html#serializeloadrequest"
+                        >serializeLoadRequest</a
                       >
                     </p>
                     <ul>
-                      <li>Defined in json-serializer.ts:39</li>
+                      <li>Defined in json-serializer.ts:52</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
@@ -730,7 +805,67 @@
                     <li>
                       <h5>
                         message:
-                        <span class="tsd-signature-type">MessageType</span>
+                        <span class="tsd-signature-type">CRDTLoadRequest</span>
+                      </h5>
+                    </li>
+                  </ul>
+                  <h4 class="tsd-returns-title">
+                    Returns <span class="tsd-signature-type">Uint8Array</span>
+                  </h4>
+                </li>
+              </ul>
+            </section>
+            <section
+              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
+            >
+              <a name="serializesyncmessage" class="tsd-anchor"></a>
+              <h3>serialize<wbr />Sync<wbr />Message</h3>
+              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+                <li class="tsd-signature tsd-kind-icon">
+                  serialize<wbr />Sync<wbr />Message<span
+                    class="tsd-signature-symbol"
+                    >(</span
+                  >message<span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../modules.html#crdtsyncmessage"
+                    class="tsd-signature-type"
+                    >CRDTSyncMessage</a
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">&gt;</span
+                  ><span class="tsd-signature-symbol">)</span
+                  ><span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">Uint8Array</span>
+                </li>
+              </ul>
+              <ul class="tsd-descriptions">
+                <li class="tsd-description">
+                  <aside class="tsd-sources">
+                    <p>
+                      Implementation of
+                      <a href="../interfaces/syncmessageserializer.html"
+                        >SyncMessageSerializer</a
+                      >.<a
+                        href="../interfaces/syncmessageserializer.html#serializesyncmessage"
+                        >serializeSyncMessage</a
+                      >
+                    </p>
+                    <ul>
+                      <li>Defined in json-serializer.ts:46</li>
+                    </ul>
+                  </aside>
+                  <h4 class="tsd-parameters-title">Parameters</h4>
+                  <ul class="tsd-parameters">
+                    <li>
+                      <h5>
+                        message:
+                        <a
+                          href="../modules.html#crdtsyncmessage"
+                          class="tsd-signature-type"
+                          >CRDTSyncMessage</a
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
                       </h5>
                     </li>
                   </ul>
@@ -741,7 +876,7 @@
               </ul>
             </section>
           </section>
-          <!--{&quot;options&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
+          <!--{&quot;options&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
         </div>
         <div class="col-2 col-menu secondary-menu">
           <nav class="tsd-navigation secondary menu-sticky">
@@ -803,9 +938,16 @@
                   </li>
                   <li class="tsd-kind-method tsd-parent-kind-class">
                     <a
-                      href="jsonserializer.html#deserializemessage"
+                      href="jsonserializer.html#deserializeloadrequest"
                       class="tsd-kind-icon"
-                      >deserialize<wbr />Message</a
+                      >deserialize<wbr />Load<wbr />Request</a
+                    >
+                  </li>
+                  <li class="tsd-kind-method tsd-parent-kind-class">
+                    <a
+                      href="jsonserializer.html#deserializesyncmessage"
+                      class="tsd-kind-icon"
+                      >deserialize<wbr />Sync<wbr />Message</a
                     >
                   </li>
                   <li class="tsd-kind-method tsd-parent-kind-class">
@@ -836,25 +978,43 @@
                   </li>
                   <li class="tsd-kind-method tsd-parent-kind-class">
                     <a
-                      href="jsonserializer.html#serializemessage"
+                      href="jsonserializer.html#serializeloadrequest"
                       class="tsd-kind-icon"
-                      >serialize<wbr />Message</a
+                      >serialize<wbr />Load<wbr />Request</a
+                    >
+                  </li>
+                  <li class="tsd-kind-method tsd-parent-kind-class">
+                    <a
+                      href="jsonserializer.html#serializesyncmessage"
+                      class="tsd-kind-icon"
+                      >serialize<wbr />Sync<wbr />Message</a
                     >
                   </li>
                 </ul>
               </li>
             </ul>
             <ul class="after-current">
-              <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a href="../interfaces/crdtprovider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
+              <li class="tsd-kind-class root">
+                <a href="subtlecrypto.html" class="tsd-kind-icon"
+                  >Subtle<wbr />Crypto</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a
-                  href="../interfaces/crdtsyncmessage.html"
-                  class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
+                <a href="../interfaces/acl.html" class="tsd-kind-icon">ACL</a>
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/aclprovider.html" class="tsd-kind-icon"
+                  >ACLProvider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/authprovider.html" class="tsd-kind-icon"
+                  >Auth<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/crdtprovider.html" class="tsd-kind-icon"
+                  >CRDTProvider</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
@@ -872,10 +1032,34 @@
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/keychain.html" class="tsd-kind-icon"
+                  >Keychain</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
                 <a
-                  href="../interfaces/messageserializer.html"
+                  href="../interfaces/keychainprovider.html"
                   class="tsd-kind-icon"
-                  >Message<wbr />Serializer</a
+                  >Keychain<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface root">
+                <a
+                  href="../interfaces/loadmessageserializer.html"
+                  class="tsd-kind-icon"
+                  >Load<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a
+                  href="../interfaces/syncmessageserializer.html"
+                  class="tsd-kind-icon"
+                  >Sync<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-type-alias tsd-has-type-parameter root">
+                <a href="../modules.html#crdtsyncmessage" class="tsd-kind-icon"
+                  >CRDTSync<wbr />Message</a
                 >
               </li>
               <li class="tsd-kind-type-alias tsd-has-type-parameter root">

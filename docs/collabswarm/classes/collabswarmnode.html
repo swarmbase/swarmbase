@@ -112,7 +112,7 @@
         <div class="col-7 offset-3 col-content">
           <h1>
             Class CollabswarmNode&lt;DocType, ChangesType, ChangeFnType,
-            MessageType&gt;
+            PrivateKey, PublicKey, DocumentKey&gt;
           </h1>
           <section class="tsd-panel tsd-type-parameters">
             <h3>Type parameters</h3>
@@ -127,16 +127,13 @@
                 <h4>ChangeFnType</h4>
               </li>
               <li>
-                <h4>
-                  MessageType<span class="tsd-signature-symbol">: </span
-                  ><a
-                    href="../interfaces/crdtsyncmessage.html"
-                    class="tsd-signature-type"
-                    >CRDTSyncMessage</a
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type">ChangesType</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </h4>
+                <h4>PrivateKey</h4>
+              </li>
+              <li>
+                <h4>PublicKey</h4>
+              </li>
+              <li>
+                <h4>DocumentKey</h4>
               </li>
             </ul>
           </section>
@@ -206,6 +203,13 @@
                     </li>
                     <li class="tsd-kind-property tsd-parent-kind-class">
                       <a
+                        href="collabswarmnode.html#authprovider"
+                        class="tsd-kind-icon"
+                        >auth<wbr />Provider</a
+                      >
+                    </li>
+                    <li class="tsd-kind-property tsd-parent-kind-class">
+                      <a
                         href="collabswarmnode.html#changesserializer"
                         class="tsd-kind-icon"
                         >changes<wbr />Serializer</a
@@ -220,9 +224,9 @@
                     </li>
                     <li class="tsd-kind-property tsd-parent-kind-class">
                       <a
-                        href="collabswarmnode.html#messageserializer"
+                        href="collabswarmnode.html#loadmessageserializer"
                         class="tsd-kind-icon"
-                        >message<wbr />Serializer</a
+                        >load<wbr />Message<wbr />Serializer</a
                       >
                     </li>
                     <li class="tsd-kind-property tsd-parent-kind-class">
@@ -230,6 +234,13 @@
                         href="collabswarmnode.html#provider"
                         class="tsd-kind-icon"
                         >provider</a
+                      >
+                    </li>
+                    <li class="tsd-kind-property tsd-parent-kind-class">
+                      <a
+                        href="collabswarmnode.html#syncmessageserializer"
+                        class="tsd-kind-icon"
+                        >sync<wbr />Message<wbr />Serializer</a
                       >
                     </li>
                   </ul>
@@ -247,6 +258,15 @@
                 <section class="tsd-index-section">
                   <h3>Methods</h3>
                   <ul class="tsd-index-list">
+                    <li
+                      class="tsd-kind-method tsd-parent-kind-class tsd-is-private"
+                    >
+                      <a
+                        href="collabswarmnode.html#_pinnewcids"
+                        class="tsd-kind-icon"
+                        >_pin<wbr />NewCIDs</a
+                      >
+                    </li>
                     <li class="tsd-kind-method tsd-parent-kind-class">
                       <a href="collabswarmnode.html#start" class="tsd-kind-icon"
                         >start</a
@@ -274,10 +294,14 @@
               >
                 <li class="tsd-signature tsd-kind-icon">
                   new <wbr />Collabswarm<wbr />Node&lt;DocType, ChangesType,
-                  ChangeFnType, MessageType&gt;<span
+                  ChangeFnType, PrivateKey, PublicKey, DocumentKey&gt;<span
                     class="tsd-signature-symbol"
                     >(</span
-                  >provider<span class="tsd-signature-symbol">: </span
+                  >nodeKey<span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">PrivateKey</span>,
+                  nodePublicKey<span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">PublicKey</span>,
+                  provider<span class="tsd-signature-symbol">: </span
                   ><a
                     href="../interfaces/crdtprovider.html"
                     class="tsd-signature-type"
@@ -288,8 +312,6 @@
                   ><span class="tsd-signature-type">ChangesType</span
                   ><span class="tsd-signature-symbol">, </span
                   ><span class="tsd-signature-type">ChangeFnType</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">MessageType</span
                   ><span class="tsd-signature-symbol">&gt;</span>,
                   changesSerializer<span class="tsd-signature-symbol">: </span
                   ><a
@@ -299,13 +321,52 @@
                   ><span class="tsd-signature-symbol">&lt;</span
                   ><span class="tsd-signature-type">ChangesType</span
                   ><span class="tsd-signature-symbol">&gt;</span>,
-                  messageSerializer<span class="tsd-signature-symbol">: </span
+                  syncMessageSerializer<span class="tsd-signature-symbol"
+                    >: </span
                   ><a
-                    href="../interfaces/messageserializer.html"
+                    href="../interfaces/syncmessageserializer.html"
                     class="tsd-signature-type"
-                    >MessageSerializer</a
+                    >SyncMessageSerializer</a
                   ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type">MessageType</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">&gt;</span>,
+                  loadMessageSerializer<span class="tsd-signature-symbol"
+                    >: </span
+                  ><a
+                    href="../interfaces/loadmessageserializer.html"
+                    class="tsd-signature-type"
+                    >LoadMessageSerializer</a
+                  >, authProvider<span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../interfaces/authprovider.html"
+                    class="tsd-signature-type"
+                    >AuthProvider</a
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">PrivateKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">PublicKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">DocumentKey</span
+                  ><span class="tsd-signature-symbol">&gt;</span>,
+                  aclProvider<span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../interfaces/aclprovider.html"
+                    class="tsd-signature-type"
+                    >ACLProvider</a
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">PublicKey</span
+                  ><span class="tsd-signature-symbol">&gt;</span>,
+                  keychainProvider<span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../interfaces/keychainprovider.html"
+                    class="tsd-signature-type"
+                    >KeychainProvider</a
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">DocumentKey</span
                   ><span class="tsd-signature-symbol">&gt;</span>, config<span
                     class="tsd-signature-symbol"
                     >?: </span
@@ -324,7 +385,11 @@
                   ><span class="tsd-signature-symbol">, </span
                   ><span class="tsd-signature-type">ChangeFnType</span
                   ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">MessageType</span
+                  ><span class="tsd-signature-type">PrivateKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">PublicKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">DocumentKey</span
                   ><span class="tsd-signature-symbol">&gt;</span>
                 </li>
               </ul>
@@ -332,7 +397,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in collabswarm-node.ts:44</li>
+                      <li>Defined in collabswarm-node.ts:87</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-type-parameters-title">Type parameters</h4>
@@ -347,22 +412,29 @@
                       <h4>ChangeFnType</h4>
                     </li>
                     <li>
-                      <h4>
-                        MessageType<span class="tsd-signature-symbol">: </span
-                        ><a
-                          href="../interfaces/crdtsyncmessage.html"
-                          class="tsd-signature-type"
-                          >CRDTSyncMessage</a
-                        ><span class="tsd-signature-symbol">&lt;</span
-                        ><span class="tsd-signature-type">ChangesType</span
-                        ><span class="tsd-signature-symbol">, </span
-                        ><span class="tsd-signature-type">MessageType</span
-                        ><span class="tsd-signature-symbol">&gt;</span>
-                      </h4>
+                      <h4>PrivateKey</h4>
+                    </li>
+                    <li>
+                      <h4>PublicKey</h4>
+                    </li>
+                    <li>
+                      <h4>DocumentKey</h4>
                     </li>
                   </ul>
                   <h4 class="tsd-parameters-title">Parameters</h4>
                   <ul class="tsd-parameters">
+                    <li>
+                      <h5>
+                        nodeKey:
+                        <span class="tsd-signature-type">PrivateKey</span>
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        nodePublicKey:
+                        <span class="tsd-signature-type">PublicKey</span>
+                      </h5>
+                    </li>
                     <li>
                       <h5>
                         provider:
@@ -376,8 +448,6 @@
                         ><span class="tsd-signature-type">ChangesType</span
                         ><span class="tsd-signature-symbol">, </span
                         ><span class="tsd-signature-type">ChangeFnType</span
-                        ><span class="tsd-signature-symbol">, </span
-                        ><span class="tsd-signature-type">MessageType</span
                         ><span class="tsd-signature-symbol">&gt;</span>
                       </h5>
                     </li>
@@ -395,13 +465,67 @@
                     </li>
                     <li>
                       <h5>
-                        messageSerializer:
+                        syncMessageSerializer:
                         <a
-                          href="../interfaces/messageserializer.html"
+                          href="../interfaces/syncmessageserializer.html"
                           class="tsd-signature-type"
-                          >MessageSerializer</a
+                          >SyncMessageSerializer</a
                         ><span class="tsd-signature-symbol">&lt;</span
-                        ><span class="tsd-signature-type">MessageType</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        loadMessageSerializer:
+                        <a
+                          href="../interfaces/loadmessageserializer.html"
+                          class="tsd-signature-type"
+                          >LoadMessageSerializer</a
+                        >
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        authProvider:
+                        <a
+                          href="../interfaces/authprovider.html"
+                          class="tsd-signature-type"
+                          >AuthProvider</a
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">PrivateKey</span
+                        ><span class="tsd-signature-symbol">, </span
+                        ><span class="tsd-signature-type">PublicKey</span
+                        ><span class="tsd-signature-symbol">, </span
+                        ><span class="tsd-signature-type">DocumentKey</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        aclProvider:
+                        <a
+                          href="../interfaces/aclprovider.html"
+                          class="tsd-signature-type"
+                          >ACLProvider</a
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">, </span
+                        ><span class="tsd-signature-type">PublicKey</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        keychainProvider:
+                        <a
+                          href="../interfaces/keychainprovider.html"
+                          class="tsd-signature-type"
+                          >KeychainProvider</a
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">, </span
+                        ><span class="tsd-signature-type">DocumentKey</span
                         ><span class="tsd-signature-symbol">&gt;</span>
                       </h5>
                     </li>
@@ -427,7 +551,11 @@
                     ><span class="tsd-signature-symbol">, </span
                     ><span class="tsd-signature-type">ChangeFnType</span
                     ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">MessageType</span
+                    ><span class="tsd-signature-type">PrivateKey</span
+                    ><span class="tsd-signature-symbol">, </span
+                    ><span class="tsd-signature-type">PublicKey</span
+                    ><span class="tsd-signature-symbol">, </span
+                    ><span class="tsd-signature-type">DocumentKey</span
                     ><span class="tsd-signature-symbol">&gt;</span>
                   </h4>
                 </li>
@@ -456,7 +584,7 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-node.ts:44</li>
+                  <li>Defined in collabswarm-node.ts:87</li>
                 </ul>
               </aside>
             </section>
@@ -479,7 +607,7 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-node.ts:42</li>
+                  <li>Defined in collabswarm-node.ts:85</li>
                 </ul>
               </aside>
             </section>
@@ -507,14 +635,18 @@
                 ><span class="tsd-signature-symbol">, </span
                 ><span class="tsd-signature-type">ChangeFnType</span
                 ><span class="tsd-signature-symbol">, </span
-                ><span class="tsd-signature-type">MessageType</span
+                ><span class="tsd-signature-type">PrivateKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">PublicKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">DocumentKey</span
                 ><span class="tsd-signature-symbol">&gt;</span
                 ><span class="tsd-signature-symbol">&gt;</span
                 ><span class="tsd-signature-symbol"> = ...</span>
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-node.ts:41</li>
+                  <li>Defined in collabswarm-node.ts:74</li>
                 </ul>
               </aside>
             </section>
@@ -536,15 +668,43 @@
                 ><span class="tsd-signature-symbol">, </span
                 ><span class="tsd-signature-type">ChangeFnType</span
                 ><span class="tsd-signature-symbol">, </span
-                ><span class="tsd-signature-type">MessageType</span
+                ><span class="tsd-signature-type">PrivateKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">PublicKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">DocumentKey</span
                 ><span class="tsd-signature-symbol">&gt;</span
                 ><span class="tsd-signature-symbol"> = ...</span>
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-node.ts:36</li>
+                  <li>Defined in collabswarm-node.ts:52</li>
                 </ul>
               </aside>
+            </section>
+            <section
+              class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
+            >
+              <a name="authprovider" class="tsd-anchor"></a>
+              <h3>
+                <span class="tsd-flag ts-flagReadonly">Readonly</span>
+                auth<wbr />Provider
+              </h3>
+              <div class="tsd-signature tsd-kind-icon">
+                auth<wbr />Provider<span class="tsd-signature-symbol">:</span>
+                <a
+                  href="../interfaces/authprovider.html"
+                  class="tsd-signature-type"
+                  >AuthProvider</a
+                ><span class="tsd-signature-symbol">&lt;</span
+                ><span class="tsd-signature-type">PrivateKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">PublicKey</span
+                ><span class="tsd-signature-symbol">, </span
+                ><span class="tsd-signature-type">DocumentKey</span
+                ><span class="tsd-signature-symbol">&gt;</span>
+              </div>
+              <aside class="tsd-sources"></aside>
             </section>
             <section
               class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
@@ -588,22 +748,21 @@
             <section
               class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
             >
-              <a name="messageserializer" class="tsd-anchor"></a>
+              <a name="loadmessageserializer" class="tsd-anchor"></a>
               <h3>
                 <span class="tsd-flag ts-flagReadonly">Readonly</span>
-                message<wbr />Serializer
+                load<wbr />Message<wbr />Serializer
               </h3>
               <div class="tsd-signature tsd-kind-icon">
-                message<wbr />Serializer<span class="tsd-signature-symbol"
+                load<wbr />Message<wbr />Serializer<span
+                  class="tsd-signature-symbol"
                   >:</span
                 >
                 <a
-                  href="../interfaces/messageserializer.html"
+                  href="../interfaces/loadmessageserializer.html"
                   class="tsd-signature-type"
-                  >MessageSerializer</a
-                ><span class="tsd-signature-symbol">&lt;</span
-                ><span class="tsd-signature-type">MessageType</span
-                ><span class="tsd-signature-symbol">&gt;</span>
+                  >LoadMessageSerializer</a
+                >
               </div>
               <aside class="tsd-sources"></aside>
             </section>
@@ -626,8 +785,29 @@
                 ><span class="tsd-signature-type">ChangesType</span
                 ><span class="tsd-signature-symbol">, </span
                 ><span class="tsd-signature-type">ChangeFnType</span
-                ><span class="tsd-signature-symbol">, </span
-                ><span class="tsd-signature-type">MessageType</span
+                ><span class="tsd-signature-symbol">&gt;</span>
+              </div>
+              <aside class="tsd-sources"></aside>
+            </section>
+            <section
+              class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
+            >
+              <a name="syncmessageserializer" class="tsd-anchor"></a>
+              <h3>
+                <span class="tsd-flag ts-flagReadonly">Readonly</span>
+                sync<wbr />Message<wbr />Serializer
+              </h3>
+              <div class="tsd-signature tsd-kind-icon">
+                sync<wbr />Message<wbr />Serializer<span
+                  class="tsd-signature-symbol"
+                  >:</span
+                >
+                <a
+                  href="../interfaces/syncmessageserializer.html"
+                  class="tsd-signature-type"
+                  >SyncMessageSerializer</a
+                ><span class="tsd-signature-symbol">&lt;</span
+                ><span class="tsd-signature-type">ChangesType</span
                 ><span class="tsd-signature-symbol">&gt;</span>
               </div>
               <aside class="tsd-sources"></aside>
@@ -658,7 +838,11 @@
                   ><span class="tsd-signature-symbol">, </span
                   ><span class="tsd-signature-type">ChangeFnType</span
                   ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">MessageType</span
+                  ><span class="tsd-signature-type">PrivateKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">PublicKey</span
+                  ><span class="tsd-signature-symbol">, </span
+                  ><span class="tsd-signature-type">DocumentKey</span
                   ><span class="tsd-signature-symbol">&gt;</span>
                 </li>
               </ul>
@@ -666,7 +850,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in collabswarm-node.ts:37</li>
+                      <li>Defined in collabswarm-node.ts:63</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-returns-title">
@@ -680,7 +864,11 @@
                     ><span class="tsd-signature-symbol">, </span
                     ><span class="tsd-signature-type">ChangeFnType</span
                     ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">MessageType</span
+                    ><span class="tsd-signature-type">PrivateKey</span
+                    ><span class="tsd-signature-symbol">, </span
+                    ><span class="tsd-signature-type">PublicKey</span
+                    ><span class="tsd-signature-symbol">, </span
+                    ><span class="tsd-signature-type">DocumentKey</span
                     ><span class="tsd-signature-symbol">&gt;</span>
                   </h4>
                 </li>
@@ -689,6 +877,68 @@
           </section>
           <section class="tsd-panel-group tsd-member-group">
             <h2>Methods</h2>
+            <section
+              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-private"
+            >
+              <a name="_pinnewcids" class="tsd-anchor"></a>
+              <h3>
+                <span class="tsd-flag ts-flagPrivate">Private</span>
+                _pin<wbr />NewCIDs
+              </h3>
+              <ul
+                class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-private"
+              >
+                <li class="tsd-signature tsd-kind-icon">
+                  _pin<wbr />NewCIDs<span class="tsd-signature-symbol">(</span
+                  >cid<span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">string</span>, node<span
+                    class="tsd-signature-symbol"
+                    >: </span
+                  ><span class="tsd-signature-type">CRDTChangeNode</span
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">ChangesType</span
+                  ><span class="tsd-signature-symbol">&gt;</span
+                  ><span class="tsd-signature-symbol">)</span
+                  ><span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">Promise</span
+                  ><span class="tsd-signature-symbol">&lt;</span
+                  ><span class="tsd-signature-type">void</span
+                  ><span class="tsd-signature-symbol">&gt;</span>
+                </li>
+              </ul>
+              <ul class="tsd-descriptions">
+                <li class="tsd-description">
+                  <aside class="tsd-sources">
+                    <ul>
+                      <li>Defined in collabswarm-node.ts:109</li>
+                    </ul>
+                  </aside>
+                  <h4 class="tsd-parameters-title">Parameters</h4>
+                  <ul class="tsd-parameters">
+                    <li>
+                      <h5>
+                        cid: <span class="tsd-signature-type">string</span>
+                      </h5>
+                    </li>
+                    <li>
+                      <h5>
+                        node:
+                        <span class="tsd-signature-type">CRDTChangeNode</span
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
+                      </h5>
+                    </li>
+                  </ul>
+                  <h4 class="tsd-returns-title">
+                    Returns <span class="tsd-signature-type">Promise</span
+                    ><span class="tsd-signature-symbol">&lt;</span
+                    ><span class="tsd-signature-type">void</span
+                    ><span class="tsd-signature-symbol">&gt;</span>
+                  </h4>
+                </li>
+              </ul>
+            </section>
             <section
               class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
             >
@@ -709,7 +959,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in collabswarm-node.ts:54</li>
+                      <li>Defined in collabswarm-node.ts:131</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-returns-title">
@@ -738,7 +988,7 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in collabswarm-node.ts:128</li>
+                      <li>Defined in collabswarm-node.ts:230</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-returns-title">
@@ -748,7 +998,7 @@
               </ul>
             </section>
           </section>
-          <!--{&quot;options&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
+          <!--{&quot;options&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
         </div>
         <div class="col-2 col-menu secondary-menu">
           <nav class="tsd-navigation secondary menu-sticky">
@@ -813,6 +1063,13 @@
                   </li>
                   <li class="tsd-kind-property tsd-parent-kind-class">
                     <a
+                      href="collabswarmnode.html#authprovider"
+                      class="tsd-kind-icon"
+                      >auth<wbr />Provider</a
+                    >
+                  </li>
+                  <li class="tsd-kind-property tsd-parent-kind-class">
+                    <a
                       href="collabswarmnode.html#changesserializer"
                       class="tsd-kind-icon"
                       >changes<wbr />Serializer</a
@@ -825,9 +1082,9 @@
                   </li>
                   <li class="tsd-kind-property tsd-parent-kind-class">
                     <a
-                      href="collabswarmnode.html#messageserializer"
+                      href="collabswarmnode.html#loadmessageserializer"
                       class="tsd-kind-icon"
-                      >message<wbr />Serializer</a
+                      >load<wbr />Message<wbr />Serializer</a
                     >
                   </li>
                   <li class="tsd-kind-property tsd-parent-kind-class">
@@ -837,9 +1094,25 @@
                       >provider</a
                     >
                   </li>
+                  <li class="tsd-kind-property tsd-parent-kind-class">
+                    <a
+                      href="collabswarmnode.html#syncmessageserializer"
+                      class="tsd-kind-icon"
+                      >sync<wbr />Message<wbr />Serializer</a
+                    >
+                  </li>
                   <li class="tsd-kind-get-signature tsd-parent-kind-class">
                     <a href="collabswarmnode.html#swarm" class="tsd-kind-icon"
                       >swarm</a
+                    >
+                  </li>
+                  <li
+                    class="tsd-kind-method tsd-parent-kind-class tsd-is-private"
+                  >
+                    <a
+                      href="collabswarmnode.html#_pinnewcids"
+                      class="tsd-kind-icon"
+                      >_pin<wbr />NewCIDs</a
                     >
                   </li>
                   <li class="tsd-kind-method tsd-parent-kind-class">
@@ -861,16 +1134,27 @@
                   >JSONSerializer</a
                 >
               </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a href="../interfaces/crdtprovider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
+              <li class="tsd-kind-class root">
+                <a href="subtlecrypto.html" class="tsd-kind-icon"
+                  >Subtle<wbr />Crypto</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a
-                  href="../interfaces/crdtsyncmessage.html"
-                  class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
+                <a href="../interfaces/acl.html" class="tsd-kind-icon">ACL</a>
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/aclprovider.html" class="tsd-kind-icon"
+                  >ACLProvider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/authprovider.html" class="tsd-kind-icon"
+                  >Auth<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/crdtprovider.html" class="tsd-kind-icon"
+                  >CRDTProvider</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
@@ -888,10 +1172,34 @@
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="../interfaces/keychain.html" class="tsd-kind-icon"
+                  >Keychain</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
                 <a
-                  href="../interfaces/messageserializer.html"
+                  href="../interfaces/keychainprovider.html"
                   class="tsd-kind-icon"
-                  >Message<wbr />Serializer</a
+                  >Keychain<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface root">
+                <a
+                  href="../interfaces/loadmessageserializer.html"
+                  class="tsd-kind-icon"
+                  >Load<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a
+                  href="../interfaces/syncmessageserializer.html"
+                  class="tsd-kind-icon"
+                  >Sync<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-type-alias tsd-has-type-parameter root">
+                <a href="../modules.html#crdtsyncmessage" class="tsd-kind-icon"
+                  >CRDTSync<wbr />Message</a
                 >
               </li>
               <li class="tsd-kind-type-alias tsd-has-type-parameter root">

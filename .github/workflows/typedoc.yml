@@ -1,0 +1,22 @@
+name: docs
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    branches: [main, build-docs]
+  pull_request:
+    branches: [main]
+jobs:
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        run: |
+          npm install -g yarn
+          yarn set version berry
+          yarn install
+          yarn workspace @collabswarm/collabswarm doc
+      - uses: JamesIves/github-pages-deploy-action@4.1.4
+        with:
+          branch: gh-pages # The branch the action should deploy to.
+          folder: docs # The folder the action should deploy.

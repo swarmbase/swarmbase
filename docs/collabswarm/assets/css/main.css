@@ -104,7 +104,7 @@ kbd,
 pre,
 samp {
   font-family: monospace, serif;
-  _font-family: "courier new", monospace;
+  _font-family: 'courier new', monospace;
   font-size: 1em;
 }
 pre {
@@ -117,7 +117,7 @@ q {
 }
 q:before,
 q:after {
-  content: "";
+  content: '';
   content: none;
 }
 small {
@@ -198,13 +198,13 @@ select {
   text-transform: none;
 }
 button,
-html input[type="button"] {
+html input[type='button'] {
   -webkit-appearance: button;
   cursor: pointer;
   *overflow: visible;
 }
-input[type="reset"],
-input[type="submit"] {
+input[type='reset'],
+input[type='submit'] {
   -webkit-appearance: button;
   cursor: pointer;
   *overflow: visible;
@@ -213,19 +213,19 @@ button[disabled],
 html input[disabled] {
   cursor: default;
 }
-input[type="checkbox"],
-input[type="radio"] {
+input[type='checkbox'],
+input[type='radio'] {
   box-sizing: border-box;
   padding: 0;
   *height: 13px;
   *width: 13px;
 }
-input[type="search"] {
+input[type='search'] {
   -webkit-appearance: textfield;
   box-sizing: content-box;
 }
-input[type="search"]::-webkit-search-cancel-button,
-input[type="search"]::-webkit-search-decoration {
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
   -webkit-appearance: none;
 }
 button::-moz-focus-inner,
@@ -446,7 +446,7 @@ ul.tsd-descriptions > li > :last-child > :last-child > :last-child,
 .row:after {
   visibility: hidden;
   display: block;
-  content: "";
+  content: '';
   clear: both;
   height: 0;
 }
@@ -607,7 +607,7 @@ ul.tsd-descriptions > li > :last-child > :last-child > :last-child,
   text-indent: -20px;
 }
 .tsd-kind-icon:before {
-  content: "";
+  content: '';
   display: inline-block;
   vertical-align: middle;
   width: 17px;
@@ -1691,7 +1691,7 @@ ul.tsd-descriptions > li > :last-child > :last-child > :last-child,
 }
 body {
   background: #fdfdfd;
-  font-family: "Segoe UI", sans-serif;
+  font-family: 'Segoe UI', sans-serif;
   font-size: 16px;
   color: #222;
 }
@@ -1704,7 +1704,7 @@ a:hover {
 }
 code,
 pre {
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
   padding: 0.2em;
   margin: 0;
   font-size: 14px;
@@ -1780,7 +1780,7 @@ pre code {
     padding-bottom: 20px;
   }
   html.default .overlay {
-    content: "";
+    content: '';
     display: block;
     position: fixed;
     z-index: 1023;
@@ -1854,7 +1854,7 @@ pre code {
   display: inline;
 }
 .tsd-breadcrumb li:after {
-  content: " / ";
+  content: ' / ';
 }
 html.minimal .container {
   margin: 0;
@@ -1927,7 +1927,7 @@ dl.tsd-comment-tags dd {
 dl.tsd-comment-tags dd:before,
 dl.tsd-comment-tags dd:after {
   display: table;
-  content: " ";
+  content: ' ';
 }
 dl.tsd-comment-tags dd pre,
 dl.tsd-comment-tags dd:after {
@@ -2290,7 +2290,7 @@ footer .tsd-legend {
   margin-left: 16px;
 }
 .root > ul > .tsd-kind-constructor:before {
-  content: "Constructors";
+  content: 'Constructors';
   font-size: 13px;
   margin-left: 24px;
 }
@@ -2298,7 +2298,7 @@ footer .tsd-legend {
   content: none;
 }
 .root > ul > .tsd-kind-property:before {
-  content: "Properties";
+  content: 'Properties';
   font-size: 13px;
   margin-left: 24px;
 }
@@ -2306,7 +2306,7 @@ footer .tsd-legend {
   content: none;
 }
 .root > ul > .tsd-kind-get-signature:before {
-  content: "Accessors";
+  content: 'Accessors';
   font-size: 13px;
   margin-left: 24px;
 }
@@ -2314,7 +2314,7 @@ footer .tsd-legend {
   content: none;
 }
 .root > ul > .tsd-kind-method:before {
-  content: "Methods";
+  content: 'Methods';
   font-size: 13px;
   margin-left: 24px;
 }
@@ -2322,35 +2322,35 @@ footer .tsd-legend {
   content: none;
 }
 .root.tsd-kind-class:before {
-  content: "Classes";
+  content: 'Classes';
   font-size: 13px;
 }
 .root.tsd-kind-class ~ .tsd-kind-class::before {
   content: none;
 }
 .root.tsd-kind-interface:before {
-  content: "Interfaces";
+  content: 'Interfaces';
   font-size: 13px;
 }
 .root.tsd-kind-interface ~ .tsd-kind-interface::before {
   content: none;
 }
 .root.tsd-kind-type-alias:before {
-  content: "Types";
+  content: 'Types';
   font-size: 13px;
 }
 .root.tsd-kind-type-alias ~ .tsd-kind-type-alias::before {
   content: none;
 }
 .root.tsd-kind-function:before {
-  content: "Functions";
+  content: 'Functions';
   font-size: 13px;
 }
 .root.tsd-kind-function ~ .tsd-kind-function::before {
   content: none;
 }
 .root.tsd-kind-enum:before {
-  content: "Enums";
+  content: 'Enums';
   font-size: 13px;
 }
 .root.tsd-kind-enum ~ .tsd-kind-enum::before {
@@ -2509,7 +2509,7 @@ footer .tsd-legend {
   margin: 0 0 1em 0;
   padding: 10px;
   border: 1px solid #eee;
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
   font-size: 14px;
 }
 .tsd-signature.tsd-kind-icon {
@@ -2679,7 +2679,7 @@ ul.tsd-type-parameters .tsd-comment {
 .tsd-select .tsd-select-list li:before,
 .tsd-select .tsd-select-label:before,
 .tsd-widget:before {
-  content: "";
+  content: '';
   display: inline-block;
   width: 40px;
   height: 40px;
@@ -2740,10 +2740,10 @@ ul.tsd-type-parameters .tsd-comment {
     display: inline-block;
   }
 }
-input[type="checkbox"] + .tsd-widget:before {
+input[type='checkbox'] + .tsd-widget:before {
   background-position: -120px 0;
 }
-input[type="checkbox"]:checked + .tsd-widget:before {
+input[type='checkbox']:checked + .tsd-widget:before {
   background-position: -160px 0;
 }
 .tsd-select {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>ChangesSerializer | @collabswarm/collabswarm</title>
+    <title>SyncMessageSerializer | @collabswarm/collabswarm</title>
     <meta name="description" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="../assets/css/main.css" />
@@ -92,7 +92,7 @@
         <div class="container">
           <ul class="tsd-breadcrumb">
             <li>
-              <a href="changesserializer.html">ChangesSerializer</a>
+              <a href="syncmessageserializer.html">SyncMessageSerializer</a>
             </li>
           </ul>
         </div>
@@ -110,13 +110,13 @@
           </nav>
         </div>
         <div class="col-7 offset-3 col-content">
-          <h1>Interface ChangesSerializer&lt;ChangesType&gt;</h1>
+          <h1>Interface SyncMessageSerializer&lt;ChangesType&gt;</h1>
           <section class="tsd-panel tsd-comment">
             <div class="tsd-comment tsd-typography tsd-comment-shorttext">
               <div class="lead">
                 <p>
-                  ChangesSerializer provides serialization/deserialization
-                  methods for <code>CRDTChangeBlock</code>s and Changes.
+                  MessageSerializer provides serialization/deserialization
+                  methods for <code>CRDTSyncMessage</code>s.
                 </p>
               </div>
             </div>
@@ -125,8 +125,8 @@
                 <dt>tparam</dt>
                 <dd>
                   <p>
-                    ChangesType Type describing changes to a CRDT document. CRDT
-                    implementation dependent.
+                    ChangesType Type describing changes made to a CRDT document.
+                    CRDT implementation dependent.
                   </p>
                 </dd>
               </dl>
@@ -144,7 +144,7 @@
             <h3>Hierarchy</h3>
             <ul class="tsd-hierarchy">
               <li>
-                <span class="target">ChangesSerializer</span>
+                <span class="target">SyncMessageSerializer</span>
               </li>
             </ul>
           </section>
@@ -168,30 +168,16 @@
                   <ul class="tsd-index-list">
                     <li class="tsd-kind-method tsd-parent-kind-interface">
                       <a
-                        href="changesserializer.html#deserializechangeblock"
+                        href="syncmessageserializer.html#deserializesyncmessage"
                         class="tsd-kind-icon"
-                        >deserialize<wbr />Change<wbr />Block</a
+                        >deserialize<wbr />Sync<wbr />Message</a
                       >
                     </li>
                     <li class="tsd-kind-method tsd-parent-kind-interface">
                       <a
-                        href="changesserializer.html#deserializechanges"
+                        href="syncmessageserializer.html#serializesyncmessage"
                         class="tsd-kind-icon"
-                        >deserialize<wbr />Changes</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="changesserializer.html#serializechangeblock"
-                        class="tsd-kind-icon"
-                        >serialize<wbr />Change<wbr />Block</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="changesserializer.html#serializechanges"
-                        class="tsd-kind-icon"
-                        >serialize<wbr />Changes</a
+                        >serialize<wbr />Sync<wbr />Message</a
                       >
                     </li>
                   </ul>
@@ -204,20 +190,23 @@
             <section
               class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
             >
-              <a name="deserializechangeblock" class="tsd-anchor"></a>
-              <h3>deserialize<wbr />Change<wbr />Block</h3>
+              <a name="deserializesyncmessage" class="tsd-anchor"></a>
+              <h3>deserialize<wbr />Sync<wbr />Message</h3>
               <ul
                 class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
               >
                 <li class="tsd-signature tsd-kind-icon">
-                  deserialize<wbr />Change<wbr />Block<span
+                  deserialize<wbr />Sync<wbr />Message<span
                     class="tsd-signature-symbol"
                     >(</span
-                  >changes<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">string</span
+                  >message<span class="tsd-signature-symbol">: </span
+                  ><span class="tsd-signature-type">Uint8Array</span
                   ><span class="tsd-signature-symbol">)</span
                   ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CRDTChangeBlock</span
+                  ><a
+                    href="../modules.html#crdtsyncmessage"
+                    class="tsd-signature-type"
+                    >CRDTSyncMessage</a
                   ><span class="tsd-signature-symbol">&lt;</span
                   ><span class="tsd-signature-type">ChangesType</span
                   ><span class="tsd-signature-symbol">&gt;</span>
@@ -227,20 +216,24 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in changes-serializer.ts:12</li>
+                      <li>Defined in sync-message-serializer.ts:10</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
                   <ul class="tsd-parameters">
                     <li>
                       <h5>
-                        changes: <span class="tsd-signature-type">string</span>
+                        message:
+                        <span class="tsd-signature-type">Uint8Array</span>
                       </h5>
                     </li>
                   </ul>
                   <h4 class="tsd-returns-title">
                     Returns
-                    <span class="tsd-signature-type">CRDTChangeBlock</span
+                    <a
+                      href="../modules.html#crdtsyncmessage"
+                      class="tsd-signature-type"
+                      >CRDTSyncMessage</a
                     ><span class="tsd-signature-symbol">&lt;</span
                     ><span class="tsd-signature-type">ChangesType</span
                     ><span class="tsd-signature-symbol">&gt;</span>
@@ -251,103 +244,23 @@
             <section
               class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
             >
-              <a name="deserializechanges" class="tsd-anchor"></a>
-              <h3>deserialize<wbr />Changes</h3>
+              <a name="serializesyncmessage" class="tsd-anchor"></a>
+              <h3>serialize<wbr />Sync<wbr />Message</h3>
               <ul
                 class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
               >
                 <li class="tsd-signature tsd-kind-icon">
-                  deserialize<wbr />Changes<span class="tsd-signature-symbol"
-                    >(</span
-                  >changes<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">ChangesType</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>Defined in changes-serializer.ts:10</li>
-                    </ul>
-                  </aside>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        changes:
-                        <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">ChangesType</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="serializechangeblock" class="tsd-anchor"></a>
-              <h3>serialize<wbr />Change<wbr />Block</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  serialize<wbr />Change<wbr />Block<span
+                  serialize<wbr />Sync<wbr />Message<span
                     class="tsd-signature-symbol"
                     >(</span
-                  >changes<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CRDTChangeBlock</span
+                  >message<span class="tsd-signature-symbol">: </span
+                  ><a
+                    href="../modules.html#crdtsyncmessage"
+                    class="tsd-signature-type"
+                    >CRDTSyncMessage</a
                   ><span class="tsd-signature-symbol">&lt;</span
                   ><span class="tsd-signature-type">ChangesType</span
                   ><span class="tsd-signature-symbol">&gt;</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">string</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>Defined in changes-serializer.ts:11</li>
-                    </ul>
-                  </aside>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        changes:
-                        <span class="tsd-signature-type">CRDTChangeBlock</span
-                        ><span class="tsd-signature-symbol">&lt;</span
-                        ><span class="tsd-signature-type">ChangesType</span
-                        ><span class="tsd-signature-symbol">&gt;</span>
-                      </h5>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">string</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="serializechanges" class="tsd-anchor"></a>
-              <h3>serialize<wbr />Changes</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  serialize<wbr />Changes<span class="tsd-signature-symbol"
-                    >(</span
-                  >changes<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">ChangesType</span
                   ><span class="tsd-signature-symbol">)</span
                   ><span class="tsd-signature-symbol">: </span
                   ><span class="tsd-signature-type">Uint8Array</span>
@@ -357,15 +270,21 @@
                 <li class="tsd-description">
                   <aside class="tsd-sources">
                     <ul>
-                      <li>Defined in changes-serializer.ts:9</li>
+                      <li>Defined in sync-message-serializer.ts:9</li>
                     </ul>
                   </aside>
                   <h4 class="tsd-parameters-title">Parameters</h4>
                   <ul class="tsd-parameters">
                     <li>
                       <h5>
-                        changes:
-                        <span class="tsd-signature-type">ChangesType</span>
+                        message:
+                        <a
+                          href="../modules.html#crdtsyncmessage"
+                          class="tsd-signature-type"
+                          >CRDTSyncMessage</a
+                        ><span class="tsd-signature-symbol">&lt;</span
+                        ><span class="tsd-signature-type">ChangesType</span
+                        ><span class="tsd-signature-symbol">&gt;</span>
                       </h5>
                     </li>
                   </ul>
@@ -424,47 +343,11 @@
                   >CRDTProvider</a
                 >
               </li>
-            </ul>
-            <ul class="current">
-              <li
-                class="current tsd-kind-interface tsd-has-type-parameter root"
-              >
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
                 <a href="changesserializer.html" class="tsd-kind-icon"
                   >Changes<wbr />Serializer</a
                 >
-                <ul>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="changesserializer.html#deserializechangeblock"
-                      class="tsd-kind-icon"
-                      >deserialize<wbr />Change<wbr />Block</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="changesserializer.html#deserializechanges"
-                      class="tsd-kind-icon"
-                      >deserialize<wbr />Changes</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="changesserializer.html#serializechangeblock"
-                      class="tsd-kind-icon"
-                      >serialize<wbr />Change<wbr />Block</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="changesserializer.html#serializechanges"
-                      class="tsd-kind-icon"
-                      >serialize<wbr />Changes</a
-                    >
-                  </li>
-                </ul>
               </li>
-            </ul>
-            <ul class="after-current">
               <li class="tsd-kind-interface root">
                 <a href="collabswarmconfig.html" class="tsd-kind-icon"
                   >Collabswarm<wbr />Config</a
@@ -483,11 +366,33 @@
                   >Load<wbr />Message<wbr />Serializer</a
                 >
               </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter root">
+            </ul>
+            <ul class="current">
+              <li
+                class="current tsd-kind-interface tsd-has-type-parameter root"
+              >
                 <a href="syncmessageserializer.html" class="tsd-kind-icon"
                   >Sync<wbr />Message<wbr />Serializer</a
                 >
+                <ul>
+                  <li class="tsd-kind-method tsd-parent-kind-interface">
+                    <a
+                      href="syncmessageserializer.html#deserializesyncmessage"
+                      class="tsd-kind-icon"
+                      >deserialize<wbr />Sync<wbr />Message</a
+                    >
+                  </li>
+                  <li class="tsd-kind-method tsd-parent-kind-interface">
+                    <a
+                      href="syncmessageserializer.html#serializesyncmessage"
+                      class="tsd-kind-icon"
+                      >serialize<wbr />Sync<wbr />Message</a
+                    >
+                  </li>
+                </ul>
               </li>
+            </ul>
+            <ul class="after-current">
               <li class="tsd-kind-type-alias tsd-has-type-parameter root">
                 <a href="../modules.html#crdtsyncmessage" class="tsd-kind-icon"
                   >CRDTSync<wbr />Message</a

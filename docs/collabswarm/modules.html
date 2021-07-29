@@ -139,23 +139,40 @@
                         >JSONSerializer</a
                       >
                     </li>
+                    <li class="tsd-kind-class">
+                      <a href="classes/subtlecrypto.html" class="tsd-kind-icon"
+                        >Subtle<wbr />Crypto</a
+                      >
+                    </li>
                   </ul>
                 </section>
                 <section class="tsd-index-section">
                   <h3>Interfaces</h3>
                   <ul class="tsd-index-list">
                     <li class="tsd-kind-interface tsd-has-type-parameter">
-                      <a
-                        href="interfaces/crdtprovider.html"
-                        class="tsd-kind-icon"
-                        >CRDTProvider</a
+                      <a href="interfaces/acl.html" class="tsd-kind-icon"
+                        >ACL</a
                       >
                     </li>
                     <li class="tsd-kind-interface tsd-has-type-parameter">
                       <a
-                        href="interfaces/crdtsyncmessage.html"
+                        href="interfaces/aclprovider.html"
                         class="tsd-kind-icon"
-                        >CRDTSync<wbr />Message</a
+                        >ACLProvider</a
+                      >
+                    </li>
+                    <li class="tsd-kind-interface tsd-has-type-parameter">
+                      <a
+                        href="interfaces/authprovider.html"
+                        class="tsd-kind-icon"
+                        >Auth<wbr />Provider</a
+                      >
+                    </li>
+                    <li class="tsd-kind-interface tsd-has-type-parameter">
+                      <a
+                        href="interfaces/crdtprovider.html"
+                        class="tsd-kind-icon"
+                        >CRDTProvider</a
                       >
                     </li>
                     <li class="tsd-kind-interface tsd-has-type-parameter">
@@ -173,10 +190,29 @@
                       >
                     </li>
                     <li class="tsd-kind-interface tsd-has-type-parameter">
+                      <a href="interfaces/keychain.html" class="tsd-kind-icon"
+                        >Keychain</a
+                      >
+                    </li>
+                    <li class="tsd-kind-interface tsd-has-type-parameter">
                       <a
-                        href="interfaces/messageserializer.html"
+                        href="interfaces/keychainprovider.html"
                         class="tsd-kind-icon"
-                        >Message<wbr />Serializer</a
+                        >Keychain<wbr />Provider</a
+                      >
+                    </li>
+                    <li class="tsd-kind-interface">
+                      <a
+                        href="interfaces/loadmessageserializer.html"
+                        class="tsd-kind-icon"
+                        >Load<wbr />Message<wbr />Serializer</a
+                      >
+                    </li>
+                    <li class="tsd-kind-interface tsd-has-type-parameter">
+                      <a
+                        href="interfaces/syncmessageserializer.html"
+                        class="tsd-kind-icon"
+                        >Sync<wbr />Message<wbr />Serializer</a
                       >
                     </li>
                   </ul>
@@ -184,6 +220,13 @@
                 <section class="tsd-index-section">
                   <h3>Type aliases</h3>
                   <ul class="tsd-index-list">
+                    <li class="tsd-kind-type-alias tsd-has-type-parameter">
+                      <a
+                        href="modules.html#crdtsyncmessage"
+                        class="tsd-kind-icon"
+                        >CRDTSync<wbr />Message</a
+                      >
+                    </li>
                     <li class="tsd-kind-type-alias tsd-has-type-parameter">
                       <a
                         href="modules.html#collabswarmdocumentchangehandler"
@@ -227,6 +270,222 @@
             <section
               class="tsd-panel tsd-member tsd-kind-type-alias tsd-has-type-parameter"
             >
+              <a name="crdtsyncmessage" class="tsd-anchor"></a>
+              <h3>CRDTSync<wbr />Message</h3>
+              <div class="tsd-signature tsd-kind-icon">
+                CRDTSync<wbr />Message&lt;ChangesType&gt;<span
+                  class="tsd-signature-symbol"
+                  >:</span
+                >
+                <span class="tsd-signature-type">object</span>
+              </div>
+              <aside class="tsd-sources">
+                <ul>
+                  <li>Defined in crdt-sync-message.ts:9</li>
+                </ul>
+              </aside>
+              <div class="tsd-comment tsd-typography tsd-comment-shorttext">
+                <div class="lead">
+                  <p>
+                    CRDTSyncMessage is the message sent over both IPFS pubsub
+                    topics and in response to load document requests.
+                  </p>
+                </div>
+              </div>
+              <div class="tsd-comment tsd-typography tsd-comment-tags">
+                <dl class="tsd-comment-tags">
+                  <dt>tparam</dt>
+                  <dd><p>ChangesType A block of CRDT change(s).</p></dd>
+                </dl>
+              </div>
+              <h4 class="tsd-type-parameters-title">Type parameters</h4>
+              <ul class="tsd-type-parameters">
+                <li>
+                  <h4>ChangesType</h4>
+                </li>
+              </ul>
+              <div class="tsd-type-declaration">
+                <h4>Type declaration</h4>
+                <ul class="tsd-parameters">
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      change<wbr />Id<span class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">string</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>CID of the root change node.</p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      changes<span class="tsd-signature-symbol">?: </span
+                      ><span class="tsd-signature-type">CRDTChangeNode</span
+                      ><span class="tsd-signature-symbol">&lt;</span
+                      ><span class="tsd-signature-type">ChangesType</span
+                      ><span class="tsd-signature-symbol">&gt;</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>
+                          All document changes as an object who&#39;s keys are
+                          change object hashes and values are change objects or
+                          null. A null value means that the change should be
+                          fetched from an IPFS file (the IPFS filename is the
+                          hash).
+                        </p>
+                      </div>
+                    </div>
+                    <div class="tsd-comment tsd-typography tsd-comment-text">
+                      <p>
+                        Data stored int the IPFS file is deserialized using a
+                        <code>MessageSerializer</code> implementation.
+                      </p>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      document<wbr />Id<span class="tsd-signature-symbol"
+                        >: </span
+                      ><span class="tsd-signature-type">string</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>ID of a collabswarm document.</p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      keychain<wbr />Changes<span class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">ChangesType</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>
+                          Optional document keys list. Only populated while
+                          loading and receiving a document key update (due to
+                          the removal of an ACL reader).
+                        </p>
+                      </div>
+                    </div>
+                    <div class="tsd-comment tsd-typography tsd-comment-text">
+                      <p>
+                        NOTE: Keychain changes should only ever be sent over
+                        encrypted libp2p streams (not IPFS pubsub).
+                      </p>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      readers<wbr />Change<wbr />Id<span
+                        class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">string</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>CID of the root readers ACL change node.</p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      readers<wbr />Changes<span class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">CRDTChangeNode</span
+                      ><span class="tsd-signature-symbol">&lt;</span
+                      ><span class="tsd-signature-type">ChangesType</span
+                      ><span class="tsd-signature-symbol">&gt;</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>
+                          An optional block of change(s) made to the reader ACL.
+                          <code>undefined</code> means no change was made to the
+                          reader ACL.
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      signature<span class="tsd-signature-symbol">?: </span
+                      ><span class="tsd-signature-type">string</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>Signature of the sync message.</p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      writers<wbr />Change<wbr />Id<span
+                        class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">string</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>CID of the root readers ACL change node.</p>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="tsd-parameter">
+                    <h5>
+                      <span class="tsd-flag ts-flagOptional">Optional</span>
+                      writers<wbr />Changes<span class="tsd-signature-symbol"
+                        >?: </span
+                      ><span class="tsd-signature-type">CRDTChangeNode</span
+                      ><span class="tsd-signature-symbol">&lt;</span
+                      ><span class="tsd-signature-type">ChangesType</span
+                      ><span class="tsd-signature-symbol">&gt;</span>
+                    </h5>
+                    <div
+                      class="tsd-comment tsd-typography tsd-comment-shorttext"
+                    >
+                      <div class="lead">
+                        <p>
+                          An optional block of change(s) made to the writer ACL.
+                          <code>undefined</code> means no change was made to the
+                          writer ACL.
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </section>
+            <section
+              class="tsd-panel tsd-member tsd-kind-type-alias tsd-has-type-parameter"
+            >
               <a name="collabswarmdocumentchangehandler" class="tsd-anchor"></a>
               <h3>Collabswarm<wbr />Document<wbr />Change<wbr />Handler</h3>
               <div class="tsd-signature tsd-kind-icon">
@@ -238,9 +497,24 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-document.ts:12</li>
+                  <li>Defined in collabswarm-document.ts:36</li>
                 </ul>
               </aside>
+              <div class="tsd-comment tsd-typography tsd-comment-shorttext">
+                <div class="lead">
+                  <p>
+                    Handler type for local-change (changes made on the current
+                    computer) and remote-change (changes made by a remote peer)
+                    events.
+                  </p>
+                </div>
+              </div>
+              <div class="tsd-comment tsd-typography tsd-comment-text">
+                <p>
+                  Subscribe functions that match this type signature to track
+                  local-change/remote-change events.
+                </p>
+              </div>
               <h4 class="tsd-type-parameters-title">Type parameters</h4>
               <ul class="tsd-type-parameters">
                 <li>
@@ -306,9 +580,22 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm.ts:11</li>
+                  <li>Defined in collabswarm.ts:31</li>
                 </ul>
               </aside>
+              <div class="tsd-comment tsd-typography tsd-comment-shorttext">
+                <div class="lead">
+                  <p>
+                    Handler type for peer-connect and peer-disconnect events.
+                  </p>
+                </div>
+              </div>
+              <div class="tsd-comment tsd-typography tsd-comment-text">
+                <p>
+                  Subscribe functions that match this type signature to track
+                  peer-connection/peer-disconnection events.
+                </p>
+              </div>
               <div class="tsd-type-declaration">
                 <h4>Type declaration</h4>
                 <ul class="tsd-parameters">
@@ -373,9 +660,21 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-config.ts:1</li>
+                  <li>Defined in collabswarm-config.ts:9</li>
                 </ul>
               </aside>
+              <div class="tsd-comment tsd-typography tsd-comment-shorttext">
+                <div class="lead">
+                  <p>Default collabswarm config to use if none is provided.</p>
+                </div>
+              </div>
+              <div class="tsd-comment tsd-typography tsd-comment-text">
+                <p>
+                  Note: This default configuration does not contain any other
+                  bootstrap nodes so upon startup this node will be in a swarm
+                  of one.
+                </p>
+              </div>
             </section>
             <section class="tsd-panel tsd-member tsd-kind-variable">
               <a name="default_node_config" class="tsd-anchor"></a>
@@ -396,12 +695,12 @@
               </div>
               <aside class="tsd-sources">
                 <ul>
-                  <li>Defined in collabswarm-node.ts:11</li>
+                  <li>Defined in collabswarm-node.ts:20</li>
                 </ul>
               </aside>
             </section>
           </section>
-          <!--{&quot;options&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/robert/src/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
+          <!--{&quot;options&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
         </div>
         <div class="col-2 col-menu secondary-menu">
           <nav class="tsd-navigation secondary menu-sticky">
@@ -426,14 +725,27 @@
                   >JSONSerializer</a
                 >
               </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a href="interfaces/crdtprovider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
+              <li class="tsd-kind-class root">
+                <a href="classes/subtlecrypto.html" class="tsd-kind-icon"
+                  >Subtle<wbr />Crypto</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
-                <a href="interfaces/crdtsyncmessage.html" class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
+                <a href="interfaces/acl.html" class="tsd-kind-icon">ACL</a>
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="interfaces/aclprovider.html" class="tsd-kind-icon"
+                  >ACLProvider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="interfaces/authprovider.html" class="tsd-kind-icon"
+                  >Auth<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="interfaces/crdtprovider.html" class="tsd-kind-icon"
+                  >CRDTProvider</a
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
@@ -451,10 +763,32 @@
                 >
               </li>
               <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="interfaces/keychain.html" class="tsd-kind-icon"
+                  >Keychain</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a href="interfaces/keychainprovider.html" class="tsd-kind-icon"
+                  >Keychain<wbr />Provider</a
+                >
+              </li>
+              <li class="tsd-kind-interface root">
                 <a
-                  href="interfaces/messageserializer.html"
+                  href="interfaces/loadmessageserializer.html"
                   class="tsd-kind-icon"
-                  >Message<wbr />Serializer</a
+                  >Load<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-interface tsd-has-type-parameter root">
+                <a
+                  href="interfaces/syncmessageserializer.html"
+                  class="tsd-kind-icon"
+                  >Sync<wbr />Message<wbr />Serializer</a
+                >
+              </li>
+              <li class="tsd-kind-type-alias tsd-has-type-parameter root">
+                <a href="modules.html#crdtsyncmessage" class="tsd-kind-icon"
+                  >CRDTSync<wbr />Message</a
                 >
               </li>
               <li class="tsd-kind-type-alias tsd-has-type-parameter root">
