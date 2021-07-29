@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>ChangesSerializer | @collabswarm/collabswarm</title>
+	<title>ACL | @collabswarm/collabswarm</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -61,7 +61,7 @@
 		<div class="container">
 			<ul class="tsd-breadcrumb">
 				<li>
-					<a href="changesserializer.html">ChangesSerializer</a>
+					<a href="acl.html">ACL</a>
 				</li>
 			</ul>
 		</div>
@@ -79,14 +79,17 @@
 			</nav>
 		</div>
 		<div class="col-7 offset-3 col-content">
-			<h1>Interface ChangesSerializer&lt;ChangesType&gt;</h1>
+			<h1>Interface ACL&lt;ChangesType, PublicKey&gt;</h1>
 			<section class="tsd-panel tsd-comment"><div class="tsd-comment tsd-typography tsd-comment-shorttext">
 					<div class="lead">
-						<p>ChangesSerializer provides serialization/deserialization methods for <code>CRDTChangeBlock</code>s and Changes.</p>
+						<p>An ACL keeps track of a list of user&#39;s public keys and produces changes that
+						can be sent to other swarm peers.</p>
 					</div>
 					</div><div class="tsd-comment tsd-typography tsd-comment-tags">
 					<dl class="tsd-comment-tags"><dt>tparam</dt>
-						<dd><p>ChangesType Type describing changes to a CRDT document. CRDT implementation dependent.</p>
+						<dd><p>ChangesType A block of CRDT change(s).</p>
+						</dd><dt>tparam</dt>
+						<dd><p>PublicKey Type of a user&#39;s public key.</p>
 					</dd></dl>
 			</div></section>
 			<section class="tsd-panel tsd-type-parameters">
@@ -95,20 +98,17 @@
 					<li>
 						<h4>ChangesType</h4>
 					</li>
+					<li>
+						<h4>PublicKey</h4>
+					</li>
 				</ul>
 			</section>
 			<section class="tsd-panel tsd-hierarchy">
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">ChangesSerializer</span>
+						<span class="target">ACL</span>
 					</li>
-				</ul>
-			</section>
-			<section class="tsd-panel">
-				<h3>Implemented by</h3>
-				<ul class="tsd-hierarchy">
-					<li><a href="../classes/jsonserializer.html" class="tsd-signature-type">JSONSerializer</a></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -117,10 +117,12 @@
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#deserializechangeblock" class="tsd-kind-icon">deserialize<wbr>Change<wbr>Block</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#deserializechanges" class="tsd-kind-icon">deserialize<wbr>Changes</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#serializechangeblock" class="tsd-kind-icon">serialize<wbr>Change<wbr>Block</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#serializechanges" class="tsd-kind-icon">serialize<wbr>Changes</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#add" class="tsd-kind-icon">add</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#check" class="tsd-kind-icon">check</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#current" class="tsd-kind-icon">current</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#merge" class="tsd-kind-icon">merge</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#remove" class="tsd-kind-icon">remove</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="acl.html#users" class="tsd-kind-icon">users</a></li>
 							</ul>
 						</section>
 					</div>
@@ -129,94 +131,174 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Methods</h2>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="deserializechangeblock" class="tsd-anchor"></a>
-					<h3>deserialize<wbr>Change<wbr>Block</h3>
+					<a name="add" class="tsd-anchor"></a>
+					<h3>add</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">deserialize<wbr>Change<wbr>Block<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">add<span class="tsd-signature-symbol">(</span>publicKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:12</li>
+									<li>Defined in acl.ts:15</li>
 								</ul>
 							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Add a new user to the ACL.</p>
+								</div>
+							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>changes: <span class="tsd-signature-type">string</span></h5>
+									<h5>publicKey: <span class="tsd-signature-type">PublicKey</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>User&#39;s public key.</p>
+									</div>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>A block of change(s) for the addition to the ACL.</p>
 						</li>
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="deserializechanges" class="tsd-anchor"></a>
-					<h3>deserialize<wbr>Changes</h3>
+					<a name="check" class="tsd-anchor"></a>
+					<h3>check</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">deserialize<wbr>Changes<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span></li>
+						<li class="tsd-signature tsd-kind-icon">check<span class="tsd-signature-symbol">(</span>publicKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:10</li>
+									<li>Defined in acl.ts:45</li>
 								</ul>
 							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Checks to see if the specified user is in the ACL already.</p>
+								</div>
+							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>changes: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<h5>publicKey: <span class="tsd-signature-type">PublicKey</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>User&#39;s public key.</p>
+									</div>
 								</li>
 							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>true if the user is in the ACL.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="current" class="tsd-anchor"></a>
+					<h3>current</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">current<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in acl.ts:30</li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Gets a block of change(s) describing the current state of the ACL.</p>
+								</div>
+							</div>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">ChangesType</span></h4>
+							<p>A block of change(s) describing the whole ACL.</p>
 						</li>
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="serializechangeblock" class="tsd-anchor"></a>
-					<h3>serialize<wbr>Change<wbr>Block</h3>
+					<a name="merge" class="tsd-anchor"></a>
+					<h3>merge</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">serialize<wbr>Change<wbr>Block<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
+						<li class="tsd-signature tsd-kind-icon">merge<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:11</li>
+									<li>Defined in acl.ts:37</li>
 								</ul>
 							</aside>
-							<h4 class="tsd-parameters-title">Parameters</h4>
-							<ul class="tsd-parameters">
-								<li>
-									<h5>changes: <span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h5>
-								</li>
-							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
-						</li>
-					</ul>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="serializechanges" class="tsd-anchor"></a>
-					<h3>serialize<wbr>Changes</h3>
-					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">serialize<wbr>Changes<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span></li>
-					</ul>
-					<ul class="tsd-descriptions">
-						<li class="tsd-description">
-							<aside class="tsd-sources">
-								<ul>
-									<li>Defined in changes-serializer.ts:9</li>
-								</ul>
-							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Applies a block of change(s) to the ACL.</p>
+								</div>
+							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
 									<h5>changes: <span class="tsd-signature-type">ChangesType</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>A block of change(s) to apply.</p>
+									</div>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Uint8Array</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="remove" class="tsd-anchor"></a>
+					<h3>remove</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">remove<span class="tsd-signature-symbol">(</span>publicKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in acl.ts:23</li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Remove a user from the ACL.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>publicKey: <span class="tsd-signature-type">PublicKey</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>User&#39;s public key.</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>A block of change(s) for the removal from the ACL.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="users" class="tsd-anchor"></a>
+					<h3>users</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">users<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in acl.ts:50</li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Returns the list of users in the ACL.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -241,9 +323,33 @@
 					<li class=" tsd-kind-class root">
 						<a href="../classes/subtlecrypto.html" class="tsd-kind-icon">Subtle<wbr>Crypto</a>
 					</li>
-					<li class=" tsd-kind-interface tsd-has-type-parameter root">
+				</ul>
+				<ul class="current">
+					<li class="current tsd-kind-interface tsd-has-type-parameter root">
 						<a href="acl.html" class="tsd-kind-icon">ACL</a>
+						<ul>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#add" class="tsd-kind-icon">add</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#check" class="tsd-kind-icon">check</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#current" class="tsd-kind-icon">current</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#merge" class="tsd-kind-icon">merge</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#remove" class="tsd-kind-icon">remove</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="acl.html#users" class="tsd-kind-icon">users</a>
+							</li>
+						</ul>
 					</li>
+				</ul>
+				<ul class="after-current">
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="aclprovider.html" class="tsd-kind-icon">ACLProvider</a>
 					</li>
@@ -253,27 +359,9 @@
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="crdtprovider.html" class="tsd-kind-icon">CRDTProvider</a>
 					</li>
-				</ul>
-				<ul class="current">
-					<li class="current tsd-kind-interface tsd-has-type-parameter root">
+					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="changesserializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
-						<ul>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#deserializechangeblock" class="tsd-kind-icon">deserialize<wbr>Change<wbr>Block</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#deserializechanges" class="tsd-kind-icon">deserialize<wbr>Changes</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#serializechangeblock" class="tsd-kind-icon">serialize<wbr>Change<wbr>Block</a>
-							</li>
-							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#serializechanges" class="tsd-kind-icon">serialize<wbr>Changes</a>
-							</li>
-						</ul>
 					</li>
-				</ul>
-				<ul class="after-current">
 					<li class=" tsd-kind-interface root">
 						<a href="collabswarmconfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
 					</li>

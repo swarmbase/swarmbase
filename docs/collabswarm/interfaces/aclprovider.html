@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>CollabswarmConfig | @collabswarm/collabswarm</title>
+	<title>ACLProvider | @collabswarm/collabswarm</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -61,7 +61,7 @@
 		<div class="container">
 			<ul class="tsd-breadcrumb">
 				<li>
-					<a href="collabswarmconfig.html">CollabswarmConfig</a>
+					<a href="aclprovider.html">ACLProvider</a>
 				</li>
 			</ul>
 		</div>
@@ -79,17 +79,34 @@
 			</nav>
 		</div>
 		<div class="col-7 offset-3 col-content">
-			<h1>Interface CollabswarmConfig</h1>
+			<h1>Interface ACLProvider&lt;ChangesType, PublicKey&gt;</h1>
 			<section class="tsd-panel tsd-comment"><div class="tsd-comment tsd-typography tsd-comment-shorttext">
 					<div class="lead">
-						<p>CollabswarmConfig is a settings object for collabswarm.</p>
+						<p>Factory for ACL objects.</p>
 					</div>
+					</div><div class="tsd-comment tsd-typography tsd-comment-tags">
+					<dl class="tsd-comment-tags"><dt>tparam</dt>
+						<dd><p>ChangesType A block of CRDT change(s).</p>
+						</dd><dt>tparam</dt>
+						<dd><p>PublicKey Type of a user&#39;s public key.</p>
+					</dd></dl>
 			</div></section>
+			<section class="tsd-panel tsd-type-parameters">
+				<h3>Type parameters</h3>
+				<ul class="tsd-type-parameters">
+					<li>
+						<h4>ChangesType</h4>
+					</li>
+					<li>
+						<h4>PublicKey</h4>
+					</li>
+				</ul>
+			</section>
 			<section class="tsd-panel tsd-hierarchy">
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">CollabswarmConfig</span>
+						<span class="target">ACLProvider</span>
 					</li>
 				</ul>
 			</section>
@@ -97,62 +114,38 @@
 				<section class="tsd-panel tsd-index-panel">
 					<div class="tsd-index-content">
 						<section class="tsd-index-section ">
-							<h3>Properties</h3>
+							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="collabswarmconfig.html#ipfs" class="tsd-kind-icon">ipfs</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="collabswarmconfig.html#pubsubdocumentprefix" class="tsd-kind-icon">pubsub<wbr>Document<wbr>Prefix</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-interface"><a href="collabswarmconfig.html#pubsubdocumentpublishpath" class="tsd-kind-icon">pubsub<wbr>Document<wbr>Publish<wbr>Path</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="aclprovider.html#initialize" class="tsd-kind-icon">initialize</a></li>
 							</ul>
 						</section>
 					</div>
 				</section>
 			</section>
 			<section class="tsd-panel-group tsd-member-group ">
-				<h2>Properties</h2>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="ipfs" class="tsd-anchor"></a>
-					<h3><span class="tsd-flag ts-flagOptional">Optional</span> ipfs</h3>
-					<div class="tsd-signature tsd-kind-icon">ipfs<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Options</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in collabswarm-config.ts:49</li>
-						</ul>
-					</aside>
-					<div class="tsd-comment tsd-typography tsd-comment-shorttext">
-						<div class="lead">
-							<p>Configuration for IPFS/libp2p.</p>
-						</div>
-					</div>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="pubsubdocumentprefix" class="tsd-anchor"></a>
-					<h3>pubsub<wbr>Document<wbr>Prefix</h3>
-					<div class="tsd-signature tsd-kind-icon">pubsub<wbr>Document<wbr>Prefix<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in collabswarm-config.ts:54</li>
-						</ul>
-					</aside>
-					<div class="tsd-comment tsd-typography tsd-comment-shorttext">
-						<div class="lead">
-							<p>Prefix to apply to newly created documents.</p>
-						</div>
-					</div>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface">
-					<a name="pubsubdocumentpublishpath" class="tsd-anchor"></a>
-					<h3>pubsub<wbr>Document<wbr>Publish<wbr>Path</h3>
-					<div class="tsd-signature tsd-kind-icon">pubsub<wbr>Document<wbr>Publish<wbr>Path<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in collabswarm-config.ts:59</li>
-						</ul>
-					</aside>
-					<div class="tsd-comment tsd-typography tsd-comment-shorttext">
-						<div class="lead">
-							<p>Prefix to apply to Libp2p PubSub topics for documents.</p>
-						</div>
-					</div>
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="initialize" class="tsd-anchor"></a>
+					<h3>initialize</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">initialize<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="acl.html" class="tsd-signature-type">ACL</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in acl-provider.ts:15</li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Construct a new ACL object.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <a href="acl.html" class="tsd-signature-type">ACL</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">PublicKey</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>A new ACL object.</p>
+						</li>
+					</ul>
 				</section>
 			</section>
 			<!--{&quot;options&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;tsconfig&quot;:&quot;/Users/eric/dev_local/CollabSwarm/collabswarm/packages/collabswarm&quot;,&quot;entryPoints&quot;:[&quot;src/index.ts&quot;],&quot;exclude&quot;:[],&quot;externalPattern&quot;:[&quot;**/node_modules/**&quot;],&quot;excludeExternals&quot;:false,&quot;excludeNotDocumented&quot;:false,&quot;excludeInternal&quot;:false,&quot;excludePrivate&quot;:false,&quot;excludeProtected&quot;:false,&quot;disableSources&quot;:false,&quot;disableAliases&quot;:false,&quot;includes&quot;:&quot;&quot;,&quot;media&quot;:&quot;&quot;,&quot;watch&quot;:false,&quot;preserveWatchOutput&quot;:false,&quot;emit&quot;:false,&quot;out&quot;:&quot;../../docs/collabswarm&quot;,&quot;json&quot;:&quot;&quot;,&quot;pretty&quot;:true,&quot;theme&quot;:&quot;../../node_modules/typedoc-neo-theme/bin/default&quot;,&quot;highlightTheme&quot;:&quot;light-plus&quot;,&quot;name&quot;:&quot;&quot;,&quot;includeVersion&quot;:false,&quot;excludeTags&quot;:[],&quot;readme&quot;:&quot;README.md&quot;,&quot;defaultCategory&quot;:&quot;Other&quot;,&quot;categoryOrder&quot;:[],&quot;categorizeByGroup&quot;:true,&quot;gitRevision&quot;:&quot;&quot;,&quot;gitRemote&quot;:&quot;origin&quot;,&quot;gaID&quot;:&quot;&quot;,&quot;gaSite&quot;:&quot;auto&quot;,&quot;hideGenerator&quot;:false,&quot;toc&quot;:[],&quot;disableOutputCheck&quot;:false,&quot;help&quot;:false,&quot;version&quot;:false,&quot;showConfig&quot;:false,&quot;plugin&quot;:[],&quot;logger&quot;:&quot;console&quot;,&quot;logLevel&quot;:1,&quot;listInvalidSymbolLinks&quot;:false,&quot;links&quot;:[{&quot;label&quot;:&quot;@collabswarm/collabswarm&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-automerge&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-automerge&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-react&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-react&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-redux&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-redux&quot;},{&quot;label&quot;:&quot;@collabswarm/collabswarm-yjs&quot;,&quot;url&quot;:&quot;/collabswarm/collabswarm-yjs&quot;}]}-->
@@ -178,9 +171,18 @@
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="acl.html" class="tsd-kind-icon">ACL</a>
 					</li>
-					<li class=" tsd-kind-interface tsd-has-type-parameter root">
+				</ul>
+				<ul class="current">
+					<li class="current tsd-kind-interface tsd-has-type-parameter root">
 						<a href="aclprovider.html" class="tsd-kind-icon">ACLProvider</a>
+						<ul>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="aclprovider.html#initialize" class="tsd-kind-icon">initialize</a>
+							</li>
+						</ul>
 					</li>
+				</ul>
+				<ul class="after-current">
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="authprovider.html" class="tsd-kind-icon">Auth<wbr>Provider</a>
 					</li>
@@ -190,24 +192,9 @@
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="changesserializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
 					</li>
-				</ul>
-				<ul class="current">
-					<li class="current tsd-kind-interface root">
+					<li class=" tsd-kind-interface root">
 						<a href="collabswarmconfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
-						<ul>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="collabswarmconfig.html#ipfs" class="tsd-kind-icon">ipfs</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="collabswarmconfig.html#pubsubdocumentprefix" class="tsd-kind-icon">pubsub<wbr>Document<wbr>Prefix</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-interface">
-								<a href="collabswarmconfig.html#pubsubdocumentpublishpath" class="tsd-kind-icon">pubsub<wbr>Document<wbr>Publish<wbr>Path</a>
-							</li>
-						</ul>
 					</li>
-				</ul>
-				<ul class="after-current">
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="keychain.html" class="tsd-kind-icon">Keychain</a>
 					</li>

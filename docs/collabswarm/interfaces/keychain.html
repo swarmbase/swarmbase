@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<title>ChangesSerializer | @collabswarm/collabswarm</title>
+	<title>Keychain | @collabswarm/collabswarm</title>
 	<meta name="description" content="">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="../assets/css/main.css">
@@ -61,7 +61,7 @@
 		<div class="container">
 			<ul class="tsd-breadcrumb">
 				<li>
-					<a href="changesserializer.html">ChangesSerializer</a>
+					<a href="keychain.html">Keychain</a>
 				</li>
 			</ul>
 		</div>
@@ -79,21 +79,26 @@
 			</nav>
 		</div>
 		<div class="col-7 offset-3 col-content">
-			<h1>Interface ChangesSerializer&lt;ChangesType&gt;</h1>
+			<h1>Interface Keychain&lt;KeychainChange, DocumentKey&gt;</h1>
 			<section class="tsd-panel tsd-comment"><div class="tsd-comment tsd-typography tsd-comment-shorttext">
 					<div class="lead">
-						<p>ChangesSerializer provides serialization/deserialization methods for <code>CRDTChangeBlock</code>s and Changes.</p>
+						<p>A keychain contains a CollabswarmDocument&#39;s encryption keys.</p>
 					</div>
 					</div><div class="tsd-comment tsd-typography tsd-comment-tags">
 					<dl class="tsd-comment-tags"><dt>tparam</dt>
-						<dd><p>ChangesType Type describing changes to a CRDT document. CRDT implementation dependent.</p>
+						<dd><p>KeychainChange Type of a block of change(s) describing edits made to the document keychain.</p>
+						</dd><dt>tparam</dt>
+						<dd><p>DocumentKey Type of a document encryption key.</p>
 					</dd></dl>
 			</div></section>
 			<section class="tsd-panel tsd-type-parameters">
 				<h3>Type parameters</h3>
 				<ul class="tsd-type-parameters">
 					<li>
-						<h4>ChangesType</h4>
+						<h4>KeychainChange</h4>
+					</li>
+					<li>
+						<h4>DocumentKey</h4>
 					</li>
 				</ul>
 			</section>
@@ -101,14 +106,8 @@
 				<h3>Hierarchy</h3>
 				<ul class="tsd-hierarchy">
 					<li>
-						<span class="target">ChangesSerializer</span>
+						<span class="target">Keychain</span>
 					</li>
-				</ul>
-			</section>
-			<section class="tsd-panel">
-				<h3>Implemented by</h3>
-				<ul class="tsd-hierarchy">
-					<li><a href="../classes/jsonserializer.html" class="tsd-signature-type">JSONSerializer</a></li>
 				</ul>
 			</section>
 			<section class="tsd-panel-group tsd-index-group">
@@ -117,10 +116,11 @@
 						<section class="tsd-index-section ">
 							<h3>Methods</h3>
 							<ul class="tsd-index-list">
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#deserializechangeblock" class="tsd-kind-icon">deserialize<wbr>Change<wbr>Block</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#deserializechanges" class="tsd-kind-icon">deserialize<wbr>Changes</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#serializechangeblock" class="tsd-kind-icon">serialize<wbr>Change<wbr>Block</a></li>
-								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="changesserializer.html#serializechanges" class="tsd-kind-icon">serialize<wbr>Changes</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="keychain.html#add" class="tsd-kind-icon">add</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="keychain.html#current" class="tsd-kind-icon">current</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="keychain.html#history" class="tsd-kind-icon">history</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="keychain.html#keys" class="tsd-kind-icon">keys</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="keychain.html#merge" class="tsd-kind-icon">merge</a></li>
 							</ul>
 						</section>
 					</div>
@@ -129,94 +129,133 @@
 			<section class="tsd-panel-group tsd-member-group ">
 				<h2>Methods</h2>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="deserializechangeblock" class="tsd-anchor"></a>
-					<h3>deserialize<wbr>Change<wbr>Block</h3>
+					<a name="add" class="tsd-anchor"></a>
+					<h3>add</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">deserialize<wbr>Change<wbr>Block<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></li>
+						<li class="tsd-signature tsd-kind-icon">add<span class="tsd-signature-symbol">(</span>key<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:12</li>
+									<li>Defined in keychain.ts:14</li>
 								</ul>
 							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Add a document encryption key to the keychain.</p>
+								</div>
+							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>changes: <span class="tsd-signature-type">string</span></h5>
+									<h5>key: <span class="tsd-signature-type">DocumentKey</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>Document encryption key to add.</p>
+									</div>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>A block of change(s) describing the keychain addition.</p>
 						</li>
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="deserializechanges" class="tsd-anchor"></a>
-					<h3>deserialize<wbr>Changes</h3>
+					<a name="current" class="tsd-anchor"></a>
+					<h3>current</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">deserialize<wbr>Changes<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span></li>
+						<li class="tsd-signature tsd-kind-icon">current<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:10</li>
+									<li>Defined in keychain.ts:40</li>
 								</ul>
 							</aside>
-							<h4 class="tsd-parameters-title">Parameters</h4>
-							<ul class="tsd-parameters">
-								<li>
-									<h5>changes: <span class="tsd-signature-type">Uint8Array</span></h5>
-								</li>
-							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">ChangesType</span></h4>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Gets the current encryption key that should be used to encrypt new changes.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="serializechangeblock" class="tsd-anchor"></a>
-					<h3>serialize<wbr>Change<wbr>Block</h3>
+					<a name="history" class="tsd-anchor"></a>
+					<h3>history</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">serialize<wbr>Change<wbr>Block<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
+						<li class="tsd-signature tsd-kind-icon">history<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">KeychainChange</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:11</li>
+									<li>Defined in keychain.ts:21</li>
 								</ul>
 							</aside>
-							<h4 class="tsd-parameters-title">Parameters</h4>
-							<ul class="tsd-parameters">
-								<li>
-									<h5>changes: <span class="tsd-signature-type">CRDTChangeBlock</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">&gt;</span></h5>
-								</li>
-							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Gets a block of change(s) describing the whole state of the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">KeychainChange</span></h4>
+							<p>A block of change(s) describing the keychain.</p>
 						</li>
 					</ul>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
-					<a name="serializechanges" class="tsd-anchor"></a>
-					<h3>serialize<wbr>Changes</h3>
+					<a name="keys" class="tsd-anchor"></a>
+					<h3>keys</h3>
 					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
-						<li class="tsd-signature tsd-kind-icon">serialize<wbr>Changes<span class="tsd-signature-symbol">(</span>changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span></li>
+						<li class="tsd-signature tsd-kind-icon">keys<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></li>
 					</ul>
 					<ul class="tsd-descriptions">
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in changes-serializer.ts:9</li>
+									<li>Defined in keychain.ts:35</li>
 								</ul>
 							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Gets the all document encryption keys in the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>all document encryption keys.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="merge" class="tsd-anchor"></a>
+					<h3>merge</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">merge<span class="tsd-signature-symbol">(</span>change<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in keychain.ts:28</li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography tsd-comment-shorttext">
+								<div class="lead">
+									<p>Merges in a block of change(s) to the keychain.</p>
+								</div>
+							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
-									<h5>changes: <span class="tsd-signature-type">ChangesType</span></h5>
+									<h5>change: <span class="tsd-signature-type">KeychainChange</span></h5>
+									<div class="tsd-comment tsd-typography tsd-comment-text">
+										<p>A block of change(s) to apply.</p>
+									</div>
 								</li>
 							</ul>
-							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Uint8Array</span></h4>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -253,33 +292,36 @@
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="crdtprovider.html" class="tsd-kind-icon">CRDTProvider</a>
 					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter root">
+						<a href="changesserializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface root">
+						<a href="collabswarmconfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
+					</li>
 				</ul>
 				<ul class="current">
 					<li class="current tsd-kind-interface tsd-has-type-parameter root">
-						<a href="changesserializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
+						<a href="keychain.html" class="tsd-kind-icon">Keychain</a>
 						<ul>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#deserializechangeblock" class="tsd-kind-icon">deserialize<wbr>Change<wbr>Block</a>
+								<a href="keychain.html#add" class="tsd-kind-icon">add</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#deserializechanges" class="tsd-kind-icon">deserialize<wbr>Changes</a>
+								<a href="keychain.html#current" class="tsd-kind-icon">current</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#serializechangeblock" class="tsd-kind-icon">serialize<wbr>Change<wbr>Block</a>
+								<a href="keychain.html#history" class="tsd-kind-icon">history</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
-								<a href="changesserializer.html#serializechanges" class="tsd-kind-icon">serialize<wbr>Changes</a>
+								<a href="keychain.html#keys" class="tsd-kind-icon">keys</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="keychain.html#merge" class="tsd-kind-icon">merge</a>
 							</li>
 						</ul>
 					</li>
 				</ul>
 				<ul class="after-current">
-					<li class=" tsd-kind-interface root">
-						<a href="collabswarmconfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
-					</li>
-					<li class=" tsd-kind-interface tsd-has-type-parameter root">
-						<a href="keychain.html" class="tsd-kind-icon">Keychain</a>
-					</li>
 					<li class=" tsd-kind-interface tsd-has-type-parameter root">
 						<a href="keychainprovider.html" class="tsd-kind-icon">Keychain<wbr>Provider</a>
 					</li>
