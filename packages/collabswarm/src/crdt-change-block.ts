@@ -3,6 +3,8 @@
  * and tamper prevention.
  */
 export interface CRDTChangeBlock<ChangesType> {
+  // TODO: Add identifier for document key that should be used to decrypt (or just prepend it to the Uint8Array).
+
   /**
    * Stored nonce for decryption purposes.
    */

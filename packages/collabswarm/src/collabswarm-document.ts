@@ -17,7 +17,14 @@ import {
 } from './utils';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
-import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
+import {
+  CRDTChangeNode,
+  crdtChangeNodeDeferred,
+  CRDTChangeNodeKind,
+  crdtDocumentChangeNode,
+  crdtReaderChangeNode,
+  crdtWriterChangeNode,
+} from './crdt-change-node';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
@@ -103,8 +110,8 @@ export class CollabswarmDocument<
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
-  private _readersHashes = new Set<string>();
-  private _writersHashes = new Set<string>();
+  // private _readersHashes = new Set<string>();
+  // private _writersHashes = new Set<string>();
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
@@ -206,7 +213,9 @@ export class CollabswarmDocument<
   // Helpers ------------------------------------------------------------------
 
   private async _decryptBlock(nonce: Uint8Array, data: Uint8Array) {
-    // TODO: Remove this loop by storing a document public key or some other id for it.
+    // TODO: Replace this loop by storing the document key (hash|public key|id) in the Merkle DAG node.
+    // NOTE: Currently this does not correctly validate that the writer was allowed to write at time
+    //       of modification, but rather than the writer was ever able to write to the document
     for (const key of await this._keychain.keys()) {
       try {
         return this._authProvider.decrypt(data, key, nonce);
@@ -249,7 +258,7 @@ export class CollabswarmDocument<
 
     localRootId: string | undefined,
     localHashes: Set<string>,
-  ): Promise<[string, ChangesType | undefined][]> {
+  ): Promise<[string, CRDTChangeNodeKind, ChangesType | undefined][]> {
     if (remoteRootId === undefined) {
       return [];
     }
@@ -266,14 +275,16 @@ export class CollabswarmDocument<
 
     // If this is a leaf node, return the current node pair.
     if (remoteRoot.children === undefined) {
-      return [[remoteRootId, remoteRoot.change]];
+      return [[remoteRootId, remoteRoot.kind, remoteRoot.change]];
     }
 
     if (remoteRoot.children === crdtChangeNodeDeferred) {
       throw new Error('IPLD dereferencing is not supported yet!');
     }
 
-    const results: Promise<[string, ChangesType | undefined][]>[] = [];
+    const results: Promise<
+      [string, CRDTChangeNodeKind, ChangesType | undefined][]
+    >[] = [];
     for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
       results.push(
         this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
@@ -318,14 +329,34 @@ export class CollabswarmDocument<
     // First apply changes that were sent directly.
     let newDocument = this.document;
     const newDocumentHashes: string[] = [];
-    const missingDocumentHashes: string[] = [];
-    for (const [sentHash, sentChanges] of newChangeEntries) {
+    const missingDocumentHashes: [string, CRDTChangeNodeKind][] = [];
+    for (const [sentHash, sentChangeKind, sentChanges] of newChangeEntries) {
       if (sentChanges) {
-        // Apply the changes that were sent directly.
-        newDocument = this._crdtProvider.remoteChange(newDocument, sentChanges);
-        newDocumentHashes.push(sentHash);
+        switch (sentChangeKind) {
+          case crdtDocumentChangeNode: {
+            // Apply the changes that were sent directly.
+            newDocument = this._crdtProvider.remoteChange(
+              newDocument,
+              sentChanges,
+            );
+            newDocumentHashes.push(sentHash);
+            break;
+          }
+          case crdtReaderChangeNode: {
+            // Apply the changes that were sent directly.
+            this._readers.merge(sentChanges);
+            newDocumentHashes.push(sentHash);
+            break;
+          }
+          case crdtWriterChangeNode: {
+            // Apply the changes that were sent directly.
+            this._writers.merge(sentChanges);
+            newDocumentHashes.push(sentHash);
+            break;
+          }
+        }
       } else {
-        missingDocumentHashes.push(sentHash);
+        missingDocumentHashes.push([sentHash, sentChangeKind]);
       }
     }
     if (newDocumentHashes.length) {
@@ -337,76 +368,34 @@ export class CollabswarmDocument<
     }
 
     // Then apply missing hashes by fetching them via IPFS.
-    for (const missingHash of missingDocumentHashes) {
+    for (const [missingHash, missingHashKind] of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
       this._getBlock(missingHash)
         .then((missingChanges) => {
           if (missingChanges) {
-            this._document = this._crdtProvider.remoteChange(
-              this._document,
-              missingChanges,
-            );
-            this._hashes.add(missingHash);
-            this._fireRemoteUpdateHandlers([missingHash]);
-          } else {
-            console.error(
-              `'/ipfs/${missingHash}' returned nothing`,
-              missingChanges,
-            );
-          }
-        })
-        .catch((err) => {
-          console.error(
-            'Failed to fetch missing change from ipfs:',
-            missingHash,
-            err,
-          );
-        });
-    }
-  }
-
-  private async _syncACLChanges(
-    changeId: string | undefined,
-    changes: CRDTChangeNode<ChangesType>,
-    acl: ACL<ChangesType, PublicKey>,
-    hashes: Set<string>,
-  ) {
-    // Only process hashes that we haven't seen yet.
-    const newChangeEntries = await this._mergeSyncTree(
-      changeId,
-      changes,
-      this._lastSyncMessage && this._lastSyncMessage.changeId,
-      this._hashes,
-    );
-
-    // First apply changes that were sent directly.
-    const newDocumentHashes: string[] = [];
-    const missingDocumentHashes: string[] = [];
-    for (const [sentHash, sentChanges] of newChangeEntries) {
-      if (sentChanges) {
-        // Apply the changes that were sent directly.
-        acl.merge(sentChanges);
-        newDocumentHashes.push(sentHash);
-      } else {
-        missingDocumentHashes.push(sentHash);
-      }
-    }
-    if (newDocumentHashes.length) {
-      for (const newHash of newDocumentHashes) {
-        hashes.add(newHash);
-      }
-      this._fireRemoteUpdateHandlers(newDocumentHashes);
-    }
-
-    // Then apply missing hashes by fetching them via IPFS.
-    for (const missingHash of missingDocumentHashes) {
-      // Fetch missing hashes using IPFS.
-      this._getBlock(missingHash)
-        .then((missingChanges) => {
-          if (missingChanges) {
-            acl.merge(missingChanges);
-            hashes.add(missingHash);
-            this._fireRemoteUpdateHandlers([missingHash]);
+            switch (missingHashKind) {
+              case crdtDocumentChangeNode: {
+                this._document = this._crdtProvider.remoteChange(
+                  this._document,
+                  missingChanges,
+                );
+                this._hashes.add(missingHash);
+                this._fireRemoteUpdateHandlers([missingHash]);
+                break;
+              }
+              case crdtReaderChangeNode: {
+                this._readers.merge(missingChanges);
+                this._hashes.add(missingHash);
+                this._fireRemoteUpdateHandlers([missingHash]);
+                break;
+              }
+              case crdtWriterChangeNode: {
+                this._writers.merge(missingChanges);
+                this._hashes.add(missingHash);
+                this._fireRemoteUpdateHandlers([missingHash]);
+                break;
+              }
+            }
           } else {
             console.error(
               `'/ipfs/${missingHash}' returned nothing`,
@@ -470,6 +459,51 @@ export class CollabswarmDocument<
 
   private _serializeSignature(signature: Uint8Array): string {
     return btoa(this._decoder.decode(signature));
+  }
+
+  private async _makeChange(changes: ChangesType) {
+    // Store changes in ipfs.
+    const hash = await this._putBlock(changes);
+    this._hashes.add(hash);
+
+    // Send new message.
+    let updateMessage = this._createSyncMessage();
+    const changeNode: CRDTChangeNode<ChangesType> = {
+      kind: crdtDocumentChangeNode,
+      change: changes,
+    };
+    if (updateMessage.changeId && updateMessage.changes) {
+      // TODO: Add links to other part of change tree (See Merkle CRDT paper section VI.B.e).
+      changeNode.children = {};
+      changeNode.children[updateMessage.changeId] = updateMessage.changes;
+    }
+    updateMessage.changeId = hash;
+    updateMessage.changes = changeNode;
+
+    // Sign new message.
+    updateMessage.signature = await this._signAsWriter(updateMessage);
+
+    this._lastSyncMessage = updateMessage;
+    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
+      updateMessage,
+    );
+
+    // Encrypt sync message.
+    const documentKey = await this._keychain.current();
+    if (!documentKey) {
+      throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+    }
+    const { nonce, data } = await this._authProvider.encrypt(
+      serializedUpdate,
+      documentKey,
+    );
+    await this.swarm.ipfsNode.pubsub.publish(
+      this.documentPath,
+      nonce ? concatUint8Arrays(nonce, data) : data,
+    );
+
+    // Fire change handlers.
+    this._fireLocalUpdateHandlers([hash]);
   }
 
   // API Methods --------------------------------------------------------------
@@ -693,28 +727,6 @@ export class CollabswarmDocument<
 
     const syncTasks: Promise<void>[] = [];
 
-    // Apply new ACL changes.
-    if (message.readersChanges) {
-      syncTasks.push(
-        this._syncACLChanges(
-          message.readersChangeId,
-          message.readersChanges,
-          this._readers,
-          this._readersHashes,
-        ),
-      );
-    }
-    if (message.writersChanges) {
-      syncTasks.push(
-        this._syncACLChanges(
-          message.writersChangeId,
-          message.writersChanges,
-          this._writers,
-          this._writersHashes,
-        ),
-      );
-    }
-
     // Update/replace list of document keys (if provided).
     if (message.keychainChanges) {
       this._keychain.merge(message.keychainChanges);
@@ -800,47 +812,45 @@ export class CollabswarmDocument<
     // Apply local change w/ automerge.
     this._document = newDocument;
 
-    // Store changes in ipfs.
-    const hash = await this._putBlock(changes);
-    this._hashes.add(hash);
+    await this._makeChange(changes);
+  }
 
-    // Send new message.
-    let updateMessage = this._createSyncMessage();
-    const changeNode: CRDTChangeNode<ChangesType> = {
-      change: changes,
-    };
-    if (updateMessage.changeId && updateMessage.changes) {
-      // TODO: Add links to other part of change tree (See Merkle CRDT paper section VI.B.e).
-      changeNode.children = {};
-      changeNode.children[updateMessage.changeId] = updateMessage.changes;
+  public async addWriter(writer: PublicKey) {
+    // Check that we are a writer (allowed to write to this document).
+    if (!(await this._writers.check(this._userPublicKey))) {
+      throw new Error(
+        `Current user does not have write permissions for: ${this.documentPath}`,
+      );
     }
-    updateMessage.changeId = hash;
-    updateMessage.changes = changeNode;
 
-    // Sign new message.
-    updateMessage.signature = await this._signAsWriter(updateMessage);
-
-    this._lastSyncMessage = updateMessage;
-    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
-      updateMessage,
-    );
-
-    // Encrypt sync message.
-    const documentKey = await this._keychain.current();
-    if (!documentKey) {
-      throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+    // Check that the writer is not already a writer.
+    if (this._writers.check(writer)) {
+      return;
     }
-    const { nonce, data } = await this._authProvider.encrypt(
-      serializedUpdate,
-      documentKey,
-    );
-    await this.swarm.ipfsNode.pubsub.publish(
-      this.documentPath,
-      nonce ? concatUint8Arrays(nonce, data) : data,
-    );
 
-    // Fire change handlers.
-    this._fireLocalUpdateHandlers([hash]);
+    // Construct a new writer ACL change.
+    const changes = await this._writers.add(writer);
+
+    await this._makeChange(changes);
+  }
+
+  public async removeWriter(writer: PublicKey) {
+    // Check that we are a writer (allowed to write to this document).
+    if (!(await this._writers.check(this._userPublicKey))) {
+      throw new Error(
+        `Current user does not have write permissions for: ${this.documentPath}`,
+      );
+    }
+
+    // Check that the writer is already a writer.
+    if (!this._writers.check(writer)) {
+      return;
+    }
+
+    // Construct a new writer ACL change.
+    const changes = await this._writers.remove(writer);
+
+    await this._makeChange(changes);
   }
 
   // public async pin() {

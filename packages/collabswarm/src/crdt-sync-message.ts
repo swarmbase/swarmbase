@@ -28,28 +28,6 @@ export type CRDTSyncMessage<ChangesType> = {
   changes?: CRDTChangeNode<ChangesType>;
 
   /**
-   * CID of the root readers ACL change node.
-   */
-  readersChangeId?: string;
-
-  /**
-   * An optional block of change(s) made to the reader ACL. `undefined` means no change
-   * was made to the reader ACL.
-   */
-  readersChanges?: CRDTChangeNode<ChangesType>;
-
-  /**
-   * CID of the root readers ACL change node.
-   */
-  writersChangeId?: string;
-
-  /**
-   * An optional block of change(s) made to the writer ACL. `undefined` means no change
-   * was made to the writer ACL.
-   */
-  writersChanges?: CRDTChangeNode<ChangesType>;
-
-  /**
    * Optional document keys list. Only populated while loading and receiving a document
    * key update (due to the removal of an ACL reader).
    *
