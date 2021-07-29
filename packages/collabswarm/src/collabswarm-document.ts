@@ -848,7 +848,7 @@ export class CollabswarmDocument<
     }
 
     // Construct a new writer ACL change.
-    const changes = await this._writers.add(writer);
+    const changes = await this._writers.remove(writer);
 
     await this._makeChange(changes);
   }
