@@ -13,4 +13,9 @@ export interface KeychainProvider<KeychainChange, DocumentKey> {
    * @return A new Keychain object.
    */
   initialize(): Keychain<KeychainChange, DocumentKey>;
+
+  /**
+   * Number of bytes in a document key.
+   */
+  readonly keyIDLength: number;
 }

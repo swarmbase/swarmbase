@@ -19,6 +19,8 @@ import {
   KeychainProvider,
 } from '@collabswarm/collabswarm';
 
+import * as uuid from 'uuid';
+
 export type AutomergeSwarmDocumentChangeHandler<
   T = any
 > = CollabswarmDocumentChangeHandler<Doc<T>>;
@@ -131,7 +133,7 @@ export class AutomergeACLProvider
 }
 
 export type AutomergeKeychainDoc = Doc<{
-  keys: string[];
+  keys: [string, string][];
 }>;
 
 export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
@@ -141,18 +143,29 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     keys: [],
   });
 
-  async add(key: CryptoKey): Promise<BinaryChange[]> {
-    const hash = await serializeKey(key);
-    this._keyCache.set(hash, key);
+  async add(): Promise<[Uint8Array, CryptoKey, BinaryChange[]]> {
+    const keyID = uuid.v4();
+    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    const key = await crypto.subtle.generateKey(
+      {
+        name: 'AES-GCM',
+        length: 256,
+      },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+
+    const serialized = await serializeKey(key);
+    this._keyCache.set(keyID, key);
     const keychainNew = change(this._keychain, (doc) => {
       if (!doc.keys) {
         doc.keys = [];
       }
-      doc.keys.push(hash);
+      doc.keys.push([keyID, serialized]);
     });
     const keychainChanges = getChanges(this._keychain, keychainNew);
     this._keychain = keychainNew;
-    return keychainChanges;
+    return [keyIDBytes, key, keychainChanges];
   }
   history(): BinaryChange[] {
     return getAllChanges(this._keychain);
@@ -161,39 +174,38 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     const [doc] = applyChanges(this._keychain, change);
     this._keychain = doc;
   }
-  async keys(): Promise<CryptoKey[]> {
+  async keys(): Promise<[Uint8Array, CryptoKey][]> {
     if (!this._keychain.keys) {
       return [];
     }
-
     return await Promise.all(
-      this._keychain.keys.map(async (hash) => {
-        let key: CryptoKey | undefined = undefined;
-        if (this._keyCache.has(hash)) {
-          key = this._keyCache.get(hash);
-        }
+      this._keychain.keys.map(async ([keyID, serialized]) => {
+        const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+        let key = this._keyCache.get(keyID);
         if (!key) {
-          key = await deserializeKey(hash);
+          key = await deserializeKey(serialized);
         }
-        return key;
+        return [keyIDBytes, key] as [Uint8Array, CryptoKey];
       }),
     );
   }
-  async current(): Promise<CryptoKey | undefined> {
+  async current(): Promise<[Uint8Array, CryptoKey]> {
     if (!this._keychain.keys) {
-      return;
+      throw new Error("Can't get an empty keychain's current value");
     }
 
-    const hash = this._keychain.keys[this._keychain.keys.length];
+    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length];
+    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
 
-    let key: CryptoKey | undefined = undefined;
-    if (this._keyCache.has(hash)) {
-      key = this._keyCache.get(hash);
-    }
+    let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey(hash);
+      key = await deserializeKey(serialized);
     }
-    return key;
+    return [keyIDBytes, key];
+  }
+  getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
+    const keyID = uuid.stringify(keyIDBytes);
+    return this._keyCache.get(keyID);
   }
 }
 
@@ -202,6 +214,9 @@ export class AutomergeKeychainProvider
   initialize(): AutomergeKeychain {
     return new AutomergeKeychain();
   }
+
+  // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
+  keyIDLength = 16;
 }
 
 export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}

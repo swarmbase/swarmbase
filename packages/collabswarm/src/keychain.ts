@@ -6,12 +6,11 @@
  */
 export interface Keychain<KeychainChange, DocumentKey> {
   /**
-   * Add a document encryption key to the keychain.
+   * Generates and adds a new document encryption key to the keychain.
    *
-   * @param key Document encryption key to add.
-   * @return A block of change(s) describing the keychain addition.
+   * @return The new document key ID, key, and a block of change(s) describing the keychain addition.
    */
-  add(key: DocumentKey): Promise<KeychainChange>;
+  add(): Promise<[Uint8Array, DocumentKey, KeychainChange]>;
 
   /**
    * Gets a block of change(s) describing the whole state of the keychain.
@@ -32,10 +31,18 @@ export interface Keychain<KeychainChange, DocumentKey> {
    *
    * @return all document encryption keys.
    */
-  keys(): Promise<DocumentKey[]>;
+  keys(): Promise<[Uint8Array, DocumentKey][]>;
 
   /**
    * Gets the current encryption key that should be used to encrypt new changes.
    */
-  current(): Promise<DocumentKey | undefined>;
+  current(): Promise<[Uint8Array, DocumentKey]>;
+
+  /**
+   * Looks up a document key by its ID.
+   * 
+   * @param keyID An identifier for a document key.
+   * @return The requested document key.
+   */
+  getKey(keyID: Uint8Array): DocumentKey | undefined;
 }
