@@ -8,5 +8,12 @@
     "packages/collabswarm-redux",
     "examples/browser-test",
     "examples/wiki-swarm"
-  ]
+  ],
+  "scripts": {
+    "collabswarm": "yarn workspace @collabswarm/collabswarm",
+    "automerge": "yarn workspace @collabswarm/collabswarm-automerge",
+    "yjs": "yarn workspace @collabswarm/collabswarm-yjs",
+    "react": "yarn workspace @collabswarm/collabswarm-react",
+    "redux": "yarn workspace @collabswarm/collabswarm-redux"
+  }
 }
