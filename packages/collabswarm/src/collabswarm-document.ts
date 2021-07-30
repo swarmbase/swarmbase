@@ -211,7 +211,11 @@ export class CollabswarmDocument<
 
   // Helpers ------------------------------------------------------------------
 
-  private async _decryptBlock(blockKeyID: Uint8Array, nonce: Uint8Array, data: Uint8Array) {
+  private async _decryptBlock(
+    blockKeyID: Uint8Array,
+    nonce: Uint8Array,
+    data: Uint8Array,
+  ) {
     const key = this._keychain.getKey(blockKeyID);
     if (key) {
       return this._authProvider.decrypt(data, key, nonce);
@@ -221,8 +225,13 @@ export class CollabswarmDocument<
   private async _getBlock(hash: string): Promise<ChangesType> {
     const block = await this.swarm.ipfsNode.block.get(hash);
     const blockKeyID = block.data.slice(0, this._keychainProvider.keyIDLength);
-    const blockNonce = block.data.slice(this._keychainProvider.keyIDLength, this._keychainProvider.keyIDLength + this._authProvider.nonceBits);
-    const blockData = block.data.slice(this._keychainProvider.keyIDLength + this._authProvider.nonceBits);
+    const blockNonce = block.data.slice(
+      this._keychainProvider.keyIDLength,
+      this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+    );
+    const blockData = block.data.slice(
+      this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+    );
     const content = await this._decryptBlock(blockKeyID, blockNonce, blockData);
     if (!content) {
       throw new Error(`Failed to decrypt block (CID: ${hash})`);
@@ -609,20 +618,30 @@ export class CollabswarmDocument<
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
-      const blockKeyID = rawMessage.data.slice(0, this._keychainProvider.keyIDLength);
-      const blockNonce = rawMessage.data.slice(this._keychainProvider.keyIDLength, this._keychainProvider.keyIDLength + this._authProvider.nonceBits);
-      const blockData = rawMessage.data.slice(this._keychainProvider.keyIDLength + this._authProvider.nonceBits);
-      this._decryptBlock(blockKeyID, blockNonce, blockData).then((rawContent) => {
-        if (!rawContent) {
-          throw new Error('Unable to decrypt incoming sync message!');
-        }
+      const blockKeyID = rawMessage.data.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      const blockNonce = rawMessage.data.slice(
+        this._keychainProvider.keyIDLength,
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      const blockData = rawMessage.data.slice(
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      this._decryptBlock(blockKeyID, blockNonce, blockData).then(
+        (rawContent) => {
+          if (!rawContent) {
+            throw new Error('Unable to decrypt incoming sync message!');
+          }
 
-        const message = this._syncMessageSerializer.deserializeSyncMessage(
-          rawContent,
-        );
+          const message = this._syncMessageSerializer.deserializeSyncMessage(
+            rawContent,
+          );
 
-        return this.sync(message);
-      });
+          return this.sync(message);
+        },
+      );
     };
     await this.swarm.ipfsNode.pubsub.subscribe(
       this.documentPath,

@@ -40,7 +40,7 @@ export interface Keychain<KeychainChange, DocumentKey> {
 
   /**
    * Looks up a document key by its ID.
-   * 
+   *
    * @param keyID An identifier for a document key.
    * @return The requested document key.
    */

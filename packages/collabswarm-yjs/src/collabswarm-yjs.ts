@@ -7,11 +7,7 @@ import {
   Keychain,
   KeychainProvider,
 } from '@collabswarm/collabswarm';
-import {
-  applyUpdateV2,
-  Doc,
-  encodeStateAsUpdateV2,
-} from 'yjs';
+import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
 
 import * as uuid from 'uuid';
 
@@ -131,7 +127,9 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 
     this._keyCache.set(keyID, key);
     const serialized = await serializeKey(key);
-    this._keychain.getArray<[string, string]>('keys').push([[keyID, serialized]]);
+    this._keychain
+      .getArray<[string, string]>('keys')
+      .push([[keyID, serialized]]);
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
     const keychainChanges = encodeStateAsUpdateV2(this._keychain);
     return [keyIDBytes, key, keychainChanges];
