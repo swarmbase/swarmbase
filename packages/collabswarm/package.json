@@ -3,7 +3,7 @@
   "description": "",
   "version": "0.1.0",
   "scripts": {
-    "tsc": "tsc -p tsconfig.json",
+    "tsc": "tsc -b",
     "prepublishOnly": "npm run tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
