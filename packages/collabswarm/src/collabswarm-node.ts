@@ -194,12 +194,6 @@ export class CollabswarmNode<
             if (message.changeId && message.changes) {
               this._pinNewCIDs(message.changeId, message.changes);
             }
-            if (message.readersChangeId && message.readersChanges) {
-              this._pinNewCIDs(message.readersChangeId, message.readersChanges);
-            }
-            if (message.writersChangeId && message.writersChanges) {
-              this._pinNewCIDs(message.writersChangeId, message.writersChanges);
-            }
           } else {
             console.warn(
               'Failed to process incoming document pin message:',
