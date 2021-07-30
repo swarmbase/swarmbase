@@ -1,6 +1,6 @@
 # Double-check errors on each commit for main workspaces
 # caching: https://github.com/actions/setup-node
-name: check typescript
+name: tsc
 on:
   push:
     branches-ignore:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '16'
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm tsc
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '16'
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-automerge tsc
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '16'
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-react tsc
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '16'
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-redux tsc
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '16'
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-yjs tsc
