@@ -476,7 +476,10 @@ export class CollabswarmDocument<
     return btoa(this._decoder.decode(signature));
   }
 
-  private async _makeChange(changes: ChangesType, kind: CRDTChangeNodeKind = crdtDocumentChangeNode) {
+  private async _makeChange(
+    changes: ChangesType,
+    kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
+  ) {
     // Store changes in ipfs.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
@@ -706,7 +709,9 @@ export class CollabswarmDocument<
         (rawContent) => {
           if (!rawContent) {
             // If we're unable to decrypt the document, try a fresh document load.
-            console.warn('Trying to re-load document... Unable to decrypt incoming message');
+            console.warn(
+              'Trying to re-load document... Unable to decrypt incoming message',
+            );
             // TODO: Specifically try to load from the sending peer. This peer is the one who created this change, so they should have the document key(s) needed to read it.
             return this.load();
           }
