@@ -31,7 +31,6 @@ import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentLoadV1 } from './wire-protocols';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
-import { ACL } from './acl';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
 
@@ -212,25 +211,28 @@ export class CollabswarmDocument<
 
   // Helpers ------------------------------------------------------------------
 
-  private async _decryptBlock(nonce: Uint8Array, data: Uint8Array) {
-    // TODO: Replace this loop by storing the document key (hash|public key|id) in the Merkle DAG node.
-    // NOTE: Currently this does not correctly validate that the writer was allowed to write at time
-    //       of modification, but rather than the writer was ever able to write to the document
-    for (const key of await this._keychain.keys()) {
-      try {
-        return this._authProvider.decrypt(data, key, nonce);
-      } catch {
-        // No-op, continue loop.
-      }
+  private async _decryptBlock(
+    blockKeyID: Uint8Array,
+    nonce: Uint8Array,
+    data: Uint8Array,
+  ) {
+    const key = this._keychain.getKey(blockKeyID);
+    if (key) {
+      return this._authProvider.decrypt(data, key, nonce);
     }
-    return undefined;
   }
 
   private async _getBlock(hash: string): Promise<ChangesType> {
     const block = await this.swarm.ipfsNode.block.get(hash);
-    const blockNonce = block.data.slice(0, this._authProvider.nonceBits);
-    const blockData = block.data.slice(this._authProvider.nonceBits);
-    const content = await this._decryptBlock(blockNonce, blockData);
+    const blockKeyID = block.data.slice(0, this._keychainProvider.keyIDLength);
+    const blockNonce = block.data.slice(
+      this._keychainProvider.keyIDLength,
+      this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+    );
+    const blockData = block.data.slice(
+      this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+    );
+    const content = await this._decryptBlock(blockKeyID, blockNonce, blockData);
     if (!content) {
       throw new Error(`Failed to decrypt block (CID: ${hash})`);
     }
@@ -238,7 +240,7 @@ export class CollabswarmDocument<
   }
 
   private async _putBlock(block: ChangesType): Promise<string> {
-    const documentKey = await this._keychain.current();
+    const [documentKeyID, documentKey] = await this._keychain.current();
     if (!documentKey) {
       throw new Error(`Document ${this.documentPath} has an empty keychain!`);
     }
@@ -247,7 +249,10 @@ export class CollabswarmDocument<
       content,
       documentKey,
     );
-    const blockData = nonce ? concatUint8Arrays(nonce, data) : data;
+    if (!nonce) {
+      throw new Error(`Failed to encrypt change block! Nonce cannot be empty`);
+    }
+    const blockData = concatUint8Arrays(documentKeyID, nonce, data);
     const newFileResult = await this.swarm.ipfsNode.block.put(blockData);
     return newFileResult.cid.toString();
   }
@@ -489,7 +494,7 @@ export class CollabswarmDocument<
     );
 
     // Encrypt sync message.
-    const documentKey = await this._keychain.current();
+    const [documentKeyID, documentKey] = await this._keychain.current();
     if (!documentKey) {
       throw new Error(`Document ${this.documentPath} has an empty keychain!`);
     }
@@ -497,9 +502,12 @@ export class CollabswarmDocument<
       serializedUpdate,
       documentKey,
     );
+    if (!nonce) {
+      throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+    }
     await this.swarm.ipfsNode.pubsub.publish(
       this.documentPath,
-      nonce ? concatUint8Arrays(nonce, data) : data,
+      concatUint8Arrays(documentKeyID, nonce, data),
     );
 
     // Fire change handlers.
@@ -610,19 +618,30 @@ export class CollabswarmDocument<
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
-      const blockNonce = rawMessage.data.slice(0, this._authProvider.nonceBits);
-      const blockData = rawMessage.data.slice(this._authProvider.nonceBits);
-      this._decryptBlock(blockNonce, blockData).then((rawContent) => {
-        if (!rawContent) {
-          throw new Error('Unable to decrypt incoming sync message!');
-        }
+      const blockKeyID = rawMessage.data.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      const blockNonce = rawMessage.data.slice(
+        this._keychainProvider.keyIDLength,
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      const blockData = rawMessage.data.slice(
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      this._decryptBlock(blockKeyID, blockNonce, blockData).then(
+        (rawContent) => {
+          if (!rawContent) {
+            throw new Error('Unable to decrypt incoming sync message!');
+          }
 
-        const message = this._syncMessageSerializer.deserializeSyncMessage(
-          rawContent,
-        );
+          const message = this._syncMessageSerializer.deserializeSyncMessage(
+            rawContent,
+          );
 
-        return this.sync(message);
-      });
+          return this.sync(message);
+        },
+      );
     };
     await this.swarm.ipfsNode.pubsub.subscribe(
       this.documentPath,

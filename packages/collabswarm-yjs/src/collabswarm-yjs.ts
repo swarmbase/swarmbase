@@ -1,22 +1,15 @@
 import {
   ACL,
   ACLProvider,
-  Collabswarm,
-  CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
   CRDTProvider,
-  CRDTSyncMessage,
   JSONSerializer,
   Keychain,
   KeychainProvider,
 } from '@collabswarm/collabswarm';
-import {
-  applyUpdateV2,
-  Doc,
-  Map as YMap,
-  Array as YArray,
-  encodeStateAsUpdateV2,
-} from 'yjs';
+import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
+
+import * as uuid from 'uuid';
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
 
@@ -120,13 +113,26 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   private readonly _keyCache = new Map<string, CryptoKey>();
   private readonly _keychain = new Doc();
 
-  async add(key: CryptoKey): Promise<Uint8Array> {
-    const hash = await serializeKey(key);
-    this._keyCache.set(hash, key);
-    this._keychain.getArray<string>('keys').push([hash]);
+  async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {
+    const keyID = uuid.v4();
+    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    const key = await crypto.subtle.generateKey(
+      {
+        name: 'AES-GCM',
+        length: 256,
+      },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+
+    this._keyCache.set(keyID, key);
+    const serialized = await serializeKey(key);
+    this._keychain
+      .getArray<[string, string]>('keys')
+      .push([[keyID, serialized]]);
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
     const keychainChanges = encodeStateAsUpdateV2(this._keychain);
-    return keychainChanges;
+    return [keyIDBytes, key, keychainChanges];
   }
   history(): Uint8Array {
     return encodeStateAsUpdateV2(this._keychain);
@@ -134,43 +140,43 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   merge(change: Uint8Array): void {
     applyUpdateV2(this._keychain, change);
   }
-  async keys(): Promise<CryptoKey[]> {
-    const yarr = this._keychain.getArray<string>('keys');
-    const promises: Promise<CryptoKey>[] = [];
+  async keys(): Promise<[Uint8Array, CryptoKey][]> {
+    const yarr = this._keychain.getArray<[string, string]>('keys');
+    const promises: Promise<[Uint8Array, CryptoKey]>[] = [];
     for (let i = 0; i < yarr.length; i++) {
-      const hash = yarr.get(i);
+      const [keyID, serialized] = yarr.get(i);
+      const keyIDBytes = new Uint8Array(uuid.parse(keyID));
       promises.push(
         (async () => {
-          let key: CryptoKey | undefined = undefined;
-          if (this._keyCache.has(hash)) {
-            key = this._keyCache.get(hash);
-          }
+          let key = this._keyCache.get(keyID);
           if (!key) {
-            key = await deserializeKey(hash);
+            key = await deserializeKey(serialized);
           }
-          return key;
+          return [keyIDBytes, key] as [Uint8Array, CryptoKey];
         })(),
       );
     }
 
     return await Promise.all(promises);
   }
-  async current(): Promise<CryptoKey | undefined> {
+  async current(): Promise<[Uint8Array, CryptoKey]> {
     const yarr = this._keychain.getArray<string>('keys');
     if (yarr.length === 0) {
-      return;
+      throw new Error("Can't get an empty keychain's current value");
     }
 
-    const hash = yarr.get(yarr.length);
+    const [keyID, serialized] = yarr.get(yarr.length);
+    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
 
-    let key: CryptoKey | undefined = undefined;
-    if (this._keyCache.has(hash)) {
-      key = this._keyCache.get(hash);
-    }
+    let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey(hash);
+      key = await deserializeKey(serialized);
     }
-    return key;
+    return [keyIDBytes, key];
+  }
+  getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
+    const keyID = uuid.stringify(keyIDBytes);
+    return this._keyCache.get(keyID);
   }
 }
 
@@ -179,6 +185,9 @@ export class YjsKeychainProvider
   initialize(): YjsKeychain {
     return new YjsKeychain();
   }
+
+  // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
+  keyIDLength = 16;
 }
 
 export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}
