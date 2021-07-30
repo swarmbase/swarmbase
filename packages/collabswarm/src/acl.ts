@@ -2,8 +2,8 @@
  * An ACL keeps track of a list of user's public keys and produces changes that
  * can be sent to other swarm peers.
  *
- * @tparam ChangesType A block of CRDT change(s).
- * @tparam PublicKey Type of a user's public key.
+ * @typeParam ChangesType A block of CRDT change(s).
+ * @typeParam PublicKey Type of a user's public key.
  */
 export interface ACL<ChangesType, PublicKey> {
   /**

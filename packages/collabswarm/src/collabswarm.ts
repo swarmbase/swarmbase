@@ -53,9 +53,9 @@ export type CollabswarmPeersHandler = (
  *
  * // Open a document.
  * const doc1 = collabswarm.doc("/my-doc1-path");
- * @tparam DocType The CRDT document type
- * @tparam ChangesType A block of CRDT change(s)
- * @tparam ChangeFnType A function for applying changes to a document
+ * @typeParam DocType The CRDT document type
+ * @typeParam ChangesType A block of CRDT change(s)
+ * @typeParam ChangeFnType A function for applying changes to a document
  */
 export class Collabswarm<
   DocType,

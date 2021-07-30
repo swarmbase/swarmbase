@@ -73,12 +73,12 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
  *   // to all peers connected to the document.
  *   doc.field1 = "new-value";
  * });
- * @tparam DocType The CRDT document type
- * @tparam ChangesType A block of CRDT change(s)
- * @tparam ChangeFnType A function for applying changes to a document
- * @tparam PrivateKey The type of secret key used to identify a user (for writing)
- * @tparam PublicKey The type of key used to identify a user publicly
- * @tparam DocumentKey The type of key used to encrypt/decrypt document changes
+ * @typeParam DocType The CRDT document type
+ * @typeParam ChangesType A block of CRDT change(s)
+ * @typeParam ChangeFnType A function for applying changes to a document
+ * @typeParam PrivateKey The type of secret key used to identify a user (for writing)
+ * @typeParam PublicKey The type of key used to identify a user publicly
+ * @typeParam DocumentKey The type of key used to encrypt/decrypt document changes
  */
 export class CollabswarmDocument<
   DocType,

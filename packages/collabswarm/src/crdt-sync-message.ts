@@ -4,7 +4,7 @@ import { CRDTChangeNode } from './crdt-change-node';
  * CRDTSyncMessage is the message sent over both IPFS pubsub topics and in response to
  * load document requests.
  *
- * @tparam ChangesType A block of CRDT change(s).
+ * @typeParam ChangesType A block of CRDT change(s).
  */
 export type CRDTSyncMessage<ChangesType> = {
   /**
