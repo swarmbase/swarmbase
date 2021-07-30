@@ -1,9 +1,8 @@
-# Use gh pages for generated docs, maintained in dedicated branch on updates to main.
+# Generate docs and deploy to gh pages on updates to `main`
+
 name: docs
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 jobs:
   build-and-deploy-docs:
