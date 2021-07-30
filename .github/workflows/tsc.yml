@@ -1,10 +1,10 @@
-#  Double-check errors on each commit
+#  Double-check errors on each commit for main workspaces
 name: check typescript
 on:
   push:
   pull_request:
 jobs:
-  tsc:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -13,10 +13,28 @@ jobs:
           node-version: '14'
           cache: 'yarn'
       - run: yarn install
+  collabswarm:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
       - run: yarn workspace @collabswarm/collabswarm doc
-      - run: yarn workspace @collabswarm/collabswarm-automerge tsc
-      - run: yarn workspace @collabswarm/collabswarm-react tsc
-      - run: yarn workspace @collabswarm/collabswarm-redux tsc
-      - run: yarn workspace @collabswarm/collabswarm-yjs tsc
-      # - run: yarn workspace @collabswarm/browser-test tsc
-      # - run: yarn workspace @collabswarm/wiki-swarm tsc
+  collabswarm-automerge:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: yarn workspace @collabswarm/collabswarm-automerge doc
+  collabswarm-react:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: yarn workspace @collabswarm/collabswarm-react doc
+  collabswarm-redux:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: yarn workspace @collabswarm/collabswarm-redux doc
+  collabswarm-yjs:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: yarn workspace @collabswarm/collabswarm-yjs doc
