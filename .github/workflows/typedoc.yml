@@ -1,8 +1,8 @@
+# Use gh pages for generated docs, maintained in dedicated branch on updates to main.
 name: docs
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [main, build-docs]
+    branches: [main]
   pull_request:
     branches: [main]
 jobs:
@@ -11,12 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
-        run: |
-          npm install -g yarn
-          yarn set version berry
-          yarn install
-          yarn workspace @collabswarm/collabswarm doc
+        with:
+          node-version: '14'
+      - run: yarn install
+      - run: yarn workspace @collabswarm/collabswarm doc
       - uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
-          branch: gh-pages # The branch the action should deploy to.
+          branch: docs-web-source # The branch the action should deploy to.
           folder: docs # The folder the action should deploy.
