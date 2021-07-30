@@ -4,37 +4,53 @@ on:
   push:
   pull_request:
 jobs:
-  setup:
+  collabswarm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn'
+          cache: 'yarn' # https://github.com/actions/setup-node
       - run: yarn install
-  collabswarm:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
       - run: yarn workspace @collabswarm/collabswarm doc
   collabswarm-automerge:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'yarn' # https://github.com/actions/setup-node
+      - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-automerge doc
   collabswarm-react:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'yarn' # https://github.com/actions/setup-node
+      - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-react doc
   collabswarm-redux:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'yarn' # https://github.com/actions/setup-node
+      - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-redux doc
   collabswarm-yjs:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'yarn' # https://github.com/actions/setup-node
+      - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-yjs doc
