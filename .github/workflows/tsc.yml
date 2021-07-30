@@ -1,0 +1,22 @@
+#  Double-check errors on each commit
+name: check typescript
+on:
+  push:
+  pull_request:
+jobs:
+  tsc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'yarn'
+      - run: yarn install
+      - run: yarn workspace @collabswarm/collabswarm doc
+      - run: yarn workspace @collabswarm/collabswarm-automerge tsc
+      - run: yarn workspace @collabswarm/collabswarm-react tsc
+      - run: yarn workspace @collabswarm/collabswarm-redux tsc
+      - run: yarn workspace @collabswarm/collabswarm-yjs tsc
+      # - run: yarn workspace @collabswarm/browser-test tsc
+      # - run: yarn workspace @collabswarm/wiki-swarm tsc
