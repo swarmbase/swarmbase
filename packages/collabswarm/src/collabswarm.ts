@@ -53,9 +53,9 @@ export type CollabswarmPeersHandler = (
  *
  * // Open a document.
  * const doc1 = collabswarm.doc("/my-doc1-path");
- * @tparam DocType The CRDT document type
- * @tparam ChangesType A block of CRDT change(s)
- * @tparam ChangeFnType A function for applying changes to a document
+ * @typeParam DocType The CRDT document type
+ * @typeParam ChangesType A block of CRDT change(s)
+ * @typeParam ChangeFnType A function for applying changes to a document
  */
 export class Collabswarm<
   DocType,
@@ -63,7 +63,7 @@ export class Collabswarm<
   ChangeFnType,
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   constructor(
     private readonly _userKey: PrivateKey,
@@ -97,10 +97,8 @@ export class Collabswarm<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<
-    string,
-    CollabswarmPeersHandler
-  > = new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
+    new Map<string, CollabswarmPeersHandler>();
 
   /**
    * Gets the current libp2p node instance.

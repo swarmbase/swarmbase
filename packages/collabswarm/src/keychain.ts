@@ -1,8 +1,8 @@
 /**
  * A keychain contains a CollabswarmDocument's encryption keys.
  *
- * @tparam KeychainChange Type of a block of change(s) describing edits made to the document keychain.
- * @tparam DocumentKey Type of a document encryption key.
+ * @typeParam KeychainChange Type of a block of change(s) describing edits made to the document keychain.
+ * @typeParam DocumentKey Type of a document encryption key.
  */
 export interface Keychain<KeychainChange, DocumentKey> {
   /**

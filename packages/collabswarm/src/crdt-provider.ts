@@ -7,10 +7,10 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 /**
  * CRDTProvider is an interface with a set of methods for manipulating CRDT documents.
  *
- * @tparam DocType The CRDT document type
- * @tparam ChangesType A block of CRDT change(s)
- * @tparam ChangeFnType A function for applying changes to a document
- * @tparam MessageType The sync message that gets sent when changes are made to a document
+ * @typeParam DocType The CRDT document type
+ * @typeParam ChangesType A block of CRDT change(s)
+ * @typeParam ChangeFnType A function for applying changes to a document
+ * @typeParam MessageType The sync message that gets sent when changes are made to a document
  */
 export interface CRDTProvider<DocType, ChangesType, ChangeFnType> {
   /**

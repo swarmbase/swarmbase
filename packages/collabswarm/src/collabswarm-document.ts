@@ -73,12 +73,12 @@ export type CollabswarmDocumentChangeHandler<DocType> = (
  *   // to all peers connected to the document.
  *   doc.field1 = "new-value";
  * });
- * @tparam DocType The CRDT document type
- * @tparam ChangesType A block of CRDT change(s)
- * @tparam ChangeFnType A function for applying changes to a document
- * @tparam PrivateKey The type of secret key used to identify a user (for writing)
- * @tparam PublicKey The type of key used to identify a user publicly
- * @tparam DocumentKey The type of key used to encrypt/decrypt document changes
+ * @typeParam DocType The CRDT document type
+ * @typeParam ChangesType A block of CRDT change(s)
+ * @typeParam ChangeFnType A function for applying changes to a document
+ * @typeParam PrivateKey The type of secret key used to identify a user (for writing)
+ * @typeParam PublicKey The type of key used to identify a user publicly
+ * @typeParam DocumentKey The type of key used to encrypt/decrypt document changes
  */
 export class CollabswarmDocument<
   DocType,
@@ -86,7 +86,7 @@ export class CollabswarmDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
@@ -489,9 +489,8 @@ export class CollabswarmDocument<
     updateMessage.signature = await this._signAsWriter(updateMessage);
 
     this._lastSyncMessage = updateMessage;
-    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
-      updateMessage,
-    );
+    const serializedUpdate =
+      this._syncMessageSerializer.serializeSyncMessage(updateMessage);
 
     // Encrypt sync message.
     const [documentKeyID, documentKey] = await this._keychain.current();
@@ -581,9 +580,8 @@ export class CollabswarmDocument<
         stream,
         async (source: any) => {
           const assembled = await readUint8Iterable(source);
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            assembled,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(assembled);
           console.log(
             `received ${this.protocolLoadV1} response:`,
             assembled,
@@ -635,9 +633,8 @@ export class CollabswarmDocument<
             throw new Error('Unable to decrypt incoming sync message!');
           }
 
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            rawContent,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
           return this.sync(message);
         },
@@ -655,9 +652,8 @@ export class CollabswarmDocument<
       console.log(`received ${this.protocolLoadV1} dial`);
       pipe(stream, async (source) => {
         const assembledRequest = await readUint8Iterable(source);
-        const message = this._loadMessageSerializer.deserializeLoadRequest(
-          assembledRequest,
-        );
+        const message =
+          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
         console.log(
           `received ${this.protocolLoadV1} response:`,
           assembledRequest,
@@ -698,9 +694,8 @@ export class CollabswarmDocument<
         const loadMessage = this._createSyncMessage();
         loadMessage.keychainChanges = this._keychain.history();
 
-        const assembled = this._syncMessageSerializer.serializeSyncMessage(
-          loadMessage,
-        );
+        const assembled =
+          this._syncMessageSerializer.serializeSyncMessage(loadMessage);
         console.log(
           `sending ${this.protocolLoadV1} response:`,
           assembled,
