@@ -86,7 +86,7 @@ export class CollabswarmDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey,
+  DocumentKey
 > {
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
@@ -489,8 +489,9 @@ export class CollabswarmDocument<
     updateMessage.signature = await this._signAsWriter(updateMessage);
 
     this._lastSyncMessage = updateMessage;
-    const serializedUpdate =
-      this._syncMessageSerializer.serializeSyncMessage(updateMessage);
+    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
+      updateMessage,
+    );
 
     // Encrypt sync message.
     const [documentKeyID, documentKey] = await this._keychain.current();
@@ -580,8 +581,9 @@ export class CollabswarmDocument<
         stream,
         async (source: any) => {
           const assembled = await readUint8Iterable(source);
-          const message =
-            this._syncMessageSerializer.deserializeSyncMessage(assembled);
+          const message = this._syncMessageSerializer.deserializeSyncMessage(
+            assembled,
+          );
           console.log(
             `received ${this.protocolLoadV1} response:`,
             assembled,
@@ -633,8 +635,9 @@ export class CollabswarmDocument<
             throw new Error('Unable to decrypt incoming sync message!');
           }
 
-          const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+          const message = this._syncMessageSerializer.deserializeSyncMessage(
+            rawContent,
+          );
 
           return this.sync(message);
         },
@@ -652,8 +655,9 @@ export class CollabswarmDocument<
       console.log(`received ${this.protocolLoadV1} dial`);
       pipe(stream, async (source) => {
         const assembledRequest = await readUint8Iterable(source);
-        const message =
-          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+        const message = this._loadMessageSerializer.deserializeLoadRequest(
+          assembledRequest,
+        );
         console.log(
           `received ${this.protocolLoadV1} response:`,
           assembledRequest,
@@ -694,8 +698,9 @@ export class CollabswarmDocument<
         const loadMessage = this._createSyncMessage();
         loadMessage.keychainChanges = this._keychain.history();
 
-        const assembled =
-          this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+        const assembled = this._syncMessageSerializer.serializeSyncMessage(
+          loadMessage,
+        );
         console.log(
           `sending ${this.protocolLoadV1} response:`,
           assembled,
