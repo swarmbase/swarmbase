@@ -1,4 +1,5 @@
-#  Double-check errors on each commit for main workspaces
+# Double-check errors on each commit for main workspaces
+# caching: https://github.com/actions/setup-node
 name: check typescript
 on:
   push:
@@ -11,9 +12,9 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn' # https://github.com/actions/setup-node
+          cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm doc
+      - run: yarn workspace @collabswarm/collabswarm tsc
   collabswarm-automerge:
     runs-on: ubuntu-latest
     steps:
@@ -21,9 +22,9 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn' # https://github.com/actions/setup-node
+          cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm-automerge doc
+      - run: yarn workspace @collabswarm/collabswarm-automerge tsc
   collabswarm-react:
     runs-on: ubuntu-latest
     steps:
@@ -31,9 +32,9 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn' # https://github.com/actions/setup-node
+          cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm-react doc
+      - run: yarn workspace @collabswarm/collabswarm-react tsc
   collabswarm-redux:
     runs-on: ubuntu-latest
     steps:
@@ -41,9 +42,9 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn' # https://github.com/actions/setup-node
+          cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm-redux doc
+      - run: yarn workspace @collabswarm/collabswarm-redux tsc
   collabswarm-yjs:
     runs-on: ubuntu-latest
     steps:
@@ -51,6 +52,6 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
-          cache: 'yarn' # https://github.com/actions/setup-node
+          cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm-yjs doc
+      - run: yarn workspace @collabswarm/collabswarm-yjs tsc
