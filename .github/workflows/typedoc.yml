@@ -17,5 +17,5 @@ jobs:
       - run: yarn workspace @collabswarm/collabswarm doc
       - uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
-          branch: docs-web-source # The branch the action should deploy to.
+          branch: docs # The branch the action should deploy to.
           folder: docs # The folder the action should deploy.
