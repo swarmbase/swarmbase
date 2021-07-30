@@ -3,7 +3,7 @@
   "description": "Redux bindings for collabswarm",
   "version": "0.1.0",
   "scripts": {
-    "tsc": "tsc -p tsconfig.json",
+    "tsc": "tsc -b",
     "prepublishOnly": "npm run tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "tsc-watch": "tsc -w -p tsconfig.json"

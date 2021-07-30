@@ -1,5 +1,7 @@
-# Double-check errors on each commit for main workspaces
-# caching: https://github.com/actions/setup-node
+# Confirm no typescript errors are introduced
+# gh node yarn caching: https://github.com/actions/setup-node
+# tsc 3.0 build mode: https://www.typescriptlang.org/docs/handbook/project-references.html#build-mode-for-typescript
+
 name: tsc
 on:
   push:
