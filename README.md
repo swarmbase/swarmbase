@@ -1,6 +1,14 @@
 # SwarmDB
 
+## A distributed web document database with dynamic access control and strong eventual consistency.
+
+![tsc workflow](https://github.com/collabswarm/collabswarm/actions/workflows/tsc.yml/badge.svg)
+![test workflow](https://github.com/collabswarm/collabswarm/actions/workflows/test.yml/badge.svg)
+![docs workflow](https://github.com/collabswarm/collabswarm/actions/workflows/typedoc.yml/badge.svg)
+
 (for bookmarking please use: https://swarmdb.dev which we will keep up to date even if the repo name changes)
+
+---
 
 ## What is SwarmDB?
 
