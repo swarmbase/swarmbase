@@ -1,695 +1,401 @@
-<!DOCTYPE html>
+<!doctype html>
 <html class="default no-js">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Keychain | @collabswarm/collabswarm</title>
-    <meta
-      name="description"
-      content="Documentation for @collabswarm/collabswarm"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="../assets/css/main.css" />
-    <script async src="../assets/js/search.js" id="search-script"></script>
-  </head>
-  <body>
-    <header>
-      <div class="tsd-page-toolbar">
-        <div class="container">
-          <div class="table-wrap">
-            <div
-              class="table-cell"
-              id="tsd-search"
-              data-index="../assets/js/search.json"
-              data-base=".."
-            >
-              <div class="field">
-                <label
-                  for="tsd-search-field"
-                  class="tsd-widget search no-caption"
-                  >Search</label
-                >
-                <input id="tsd-search-field" type="text" />
-              </div>
-              <ul class="results">
-                <li class="state loading">Preparing search index...</li>
-                <li class="state failure">The search index is not available</li>
-              </ul>
-              <a href="../index.html" class="title">@collabswarm/collabswarm</a>
-            </div>
-            <div class="table-cell" id="tsd-widgets">
-              <div id="tsd-filter">
-                <a
-                  href="#"
-                  class="tsd-widget options no-caption"
-                  data-toggle="options"
-                  >Options</a
-                >
-                <div class="tsd-filter-group">
-                  <div class="tsd-select" id="tsd-filter-visibility">
-                    <span class="tsd-select-label">All</span>
-                    <ul class="tsd-select-list">
-                      <li data-value="public">Public</li>
-                      <li data-value="protected">Public/Protected</li>
-                      <li data-value="private" class="selected">All</li>
-                    </ul>
-                  </div>
-                  <input type="checkbox" id="tsd-filter-inherited" checked />
-                  <label class="tsd-widget" for="tsd-filter-inherited"
-                    >Inherited</label
-                  >
-                  <input type="checkbox" id="tsd-filter-externals" checked />
-                  <label class="tsd-widget" for="tsd-filter-externals"
-                    >Externals</label
-                  >
-                </div>
-              </div>
-              <a href="#" class="tsd-widget menu no-caption" data-toggle="menu"
-                >Menu</a
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="tsd-page-title">
-        <div class="container">
-          <ul class="tsd-breadcrumb">
-            <li>
-              <a href="../modules.html">@collabswarm/collabswarm</a>
-            </li>
-            <li>
-              <a href="Keychain.html">Keychain</a>
-            </li>
-          </ul>
-          <h1>Interface Keychain&lt;KeychainChange, DocumentKey&gt;</h1>
-        </div>
-      </div>
-    </header>
-    <div class="container container-main">
-      <div class="row">
-        <div class="col-8 col-content">
-          <section class="tsd-panel tsd-comment">
-            <div class="tsd-comment tsd-typography">
-              <div class="lead">
-                <p>
-                  A keychain contains a CollabswarmDocument&#39;s encryption
-                  keys.
-                </p>
-              </div>
-            </div>
-          </section>
-          <section class="tsd-panel tsd-type-parameters">
-            <h3>Type parameters</h3>
-            <ul class="tsd-type-parameters">
-              <li>
-                <h4>KeychainChange</h4>
-                <div class="tsd-comment tsd-typography">
-                  <div class="lead">
-                    <p>
-                      Type of a block of change(s) describing edits made to the
-                      document keychain.
-                    </p>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <h4>DocumentKey</h4>
-                <div class="tsd-comment tsd-typography">
-                  <div class="lead">
-                    <p>Type of a document encryption key.</p>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel tsd-hierarchy">
-            <h3>Hierarchy</h3>
-            <ul class="tsd-hierarchy">
-              <li>
-                <span class="target">Keychain</span>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel-group tsd-index-group">
-            <h2>Index</h2>
-            <section class="tsd-panel tsd-index-panel">
-              <div class="tsd-index-content">
-                <section class="tsd-index-section">
-                  <h3>Methods</h3>
-                  <ul class="tsd-index-list">
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#add" class="tsd-kind-icon">add</a>
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#current" class="tsd-kind-icon"
-                        >current</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#getKey" class="tsd-kind-icon"
-                        >get<wbr />Key</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#history" class="tsd-kind-icon"
-                        >history</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#keys" class="tsd-kind-icon"
-                        >keys</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a href="Keychain.html#merge" class="tsd-kind-icon"
-                        >merge</a
-                      >
-                    </li>
-                  </ul>
-                </section>
-              </div>
-            </section>
-          </section>
-          <section class="tsd-panel-group tsd-member-group">
-            <h2>Methods</h2>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="add" class="tsd-anchor"></a>
-              <h3>add</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  add<span class="tsd-signature-symbol">(</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-symbol">[</span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">DocumentKey</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">KeychainChange</span
-                  ><span class="tsd-signature-symbol">]</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L13"
-                          >keychain.ts:13</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Generates and adds a new document encryption key to the
-                        keychain.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-symbol">[</span
-                    ><span class="tsd-signature-type">Uint8Array</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">DocumentKey</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">KeychainChange</span
-                    ><span class="tsd-signature-symbol">]</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>
-                    The new document key ID, key, and a block of change(s)
-                    describing the keychain addition.
-                  </p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="current" class="tsd-anchor"></a>
-              <h3>current</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  current<span class="tsd-signature-symbol">(</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-symbol">[</span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">DocumentKey</span
-                  ><span class="tsd-signature-symbol">]</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L39"
-                          >keychain.ts:39</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Gets the current encryption key that should be used to
-                        encrypt new changes.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-symbol">[</span
-                    ><span class="tsd-signature-type">Uint8Array</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">DocumentKey</span
-                    ><span class="tsd-signature-symbol">]</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="getKey" class="tsd-anchor"></a>
-              <h3>get<wbr />Key</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  get<wbr />Key<span class="tsd-signature-symbol">(</span
-                  >keyID<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">undefined</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">DocumentKey</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L47"
-                          >keychain.ts:47</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>Looks up a document key by its ID.</p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        keyID:
-                        <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>An identifier for a document key.</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">undefined</span
-                    ><span class="tsd-signature-symbol"> | </span
-                    ><span class="tsd-signature-type">DocumentKey</span>
-                  </h4>
-                  <p>The requested document key.</p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="history" class="tsd-anchor"></a>
-              <h3>history</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  history<span class="tsd-signature-symbol">(</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">KeychainChange</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L20"
-                          >keychain.ts:20</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Gets a block of change(s) describing the whole state of
-                        the keychain.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-returns-title">
-                    Returns
-                    <span class="tsd-signature-type">KeychainChange</span>
-                  </h4>
-                  <p>A block of change(s) describing the keychain.</p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="keys" class="tsd-anchor"></a>
-              <h3>keys</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  keys<span class="tsd-signature-symbol">(</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-symbol">[</span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">DocumentKey</span
-                  ><span class="tsd-signature-symbol">]</span
-                  ><span class="tsd-signature-symbol">[]</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L34"
-                          >keychain.ts:34</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Gets the all document encryption keys in the keychain.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-symbol">[</span
-                    ><span class="tsd-signature-type">Uint8Array</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">DocumentKey</span
-                    ><span class="tsd-signature-symbol">]</span
-                    ><span class="tsd-signature-symbol">[]</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>all document encryption keys.</p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="merge" class="tsd-anchor"></a>
-              <h3>merge</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  merge<span class="tsd-signature-symbol">(</span>change<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">KeychainChange</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">void</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/53ca819/packages/collabswarm/src/keychain.ts#L27"
-                          >keychain.ts:27</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>Merges in a block of change(s) to the keychain.</p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        change:
-                        <span class="tsd-signature-type">KeychainChange</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>A block of change(s) to apply.</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">void</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-          </section>
-        </div>
-        <div class="col-4 col-menu menu-sticky-wrap menu-highlight">
-          <nav class="tsd-navigation primary">
-            <ul>
-              <li class=" ">
-                <a href="../modules.html">Exports</a>
-              </li>
-            </ul>
-          </nav>
-          <nav class="tsd-navigation secondary menu-sticky">
-            <ul class="before-current">
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/Collabswarm.html" class="tsd-kind-icon"
-                  >Collabswarm</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a
-                  href="../classes/CollabswarmDocument.html"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/CollabswarmNode.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Node</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/JSONSerializer.html" class="tsd-kind-icon"
-                  >JSONSerializer</a
-                >
-              </li>
-              <li class="tsd-kind-class">
-                <a href="../classes/SubtleCrypto.html" class="tsd-kind-icon"
-                  >Subtle<wbr />Crypto</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ACL.html" class="tsd-kind-icon">ACL</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ACLProvider.html" class="tsd-kind-icon">ACLProvider</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="AuthProvider.html" class="tsd-kind-icon"
-                  >Auth<wbr />Provider</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="CRDTProvider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ChangesSerializer.html" class="tsd-kind-icon"
-                  >Changes<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a href="CollabswarmConfig.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Config</a
-                >
-              </li>
-            </ul>
-            <ul class="current">
-              <li class="current tsd-kind-interface tsd-has-type-parameter">
-                <a href="Keychain.html" class="tsd-kind-icon">Keychain</a>
-                <ul>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#add" class="tsd-kind-icon">add</a>
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#current" class="tsd-kind-icon"
-                      >current</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#getKey" class="tsd-kind-icon"
-                      >get<wbr />Key</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#history" class="tsd-kind-icon"
-                      >history</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#keys" class="tsd-kind-icon">keys</a>
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="Keychain.html#merge" class="tsd-kind-icon"
-                      >merge</a
-                    >
-                  </li>
-                </ul>
-              </li>
-            </ul>
-            <ul class="after-current">
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="KeychainProvider.html" class="tsd-kind-icon"
-                  >Keychain<wbr />Provider</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a href="LoadMessageSerializer.html" class="tsd-kind-icon"
-                  >Load<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="SyncMessageSerializer.html" class="tsd-kind-icon"
-                  >Sync<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a
-                  href="../modules.html#CollabswarmDocumentChangeHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document<wbr />Change<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias">
-                <a
-                  href="../modules.html#CollabswarmPeersHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Peers<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon"
-                  >DEFAULT_<wbr />CONFIG</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a
-                  href="../modules.html#DEFAULT_NODE_CONFIG"
-                  class="tsd-kind-icon"
-                  >DEFAULT_<wbr />NODE_<wbr />CONFIG</a
-                >
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
-    </div>
-    <footer class="with-border-bottom">
-      <div class="container">
-        <h2>Legend</h2>
-        <div class="tsd-legend-group">
-          <ul class="tsd-legend">
-            <li class="tsd-kind-constructor tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Constructor</span>
-            </li>
-            <li class="tsd-kind-property tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-          <ul class="tsd-legend">
-            <li class="tsd-kind-property tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </footer>
-    <div class="container tsd-generator">
-      <p>
-        Generated using
-        <a href="https://typedoc.org/" target="_blank">TypeDoc</a>
-      </p>
-    </div>
-    <div class="overlay"></div>
-    <script src="../assets/js/main.js"></script>
-  </body>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Keychain | @collabswarm/collabswarm</title>
+	<meta name="description" content="Documentation for @collabswarm/collabswarm">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="../assets/css/main.css">
+	<script async src="../assets/js/search.js" id="search-script"></script>
+</head>
+<body>
+<header>
+	<div class="tsd-page-toolbar">
+		<div class="container">
+			<div class="table-wrap">
+				<div class="table-cell" id="tsd-search" data-index="../assets/js/search.json" data-base="..">
+					<div class="field">
+						<label for="tsd-search-field" class="tsd-widget search no-caption">Search</label>
+						<input id="tsd-search-field" type="text" />
+					</div>
+					<ul class="results">
+						<li class="state loading">Preparing search index...</li>
+						<li class="state failure">The search index is not available</li>
+					</ul>
+					<a href="../index.html" class="title">@collabswarm/collabswarm</a>
+				</div>
+				<div class="table-cell" id="tsd-widgets">
+					<div id="tsd-filter">
+						<a href="#" class="tsd-widget options no-caption" data-toggle="options">Options</a>
+						<div class="tsd-filter-group">
+							<div class="tsd-select" id="tsd-filter-visibility">
+								<span class="tsd-select-label">All</span>
+								<ul class="tsd-select-list">
+									<li data-value="public">Public</li>
+									<li data-value="protected">Public/Protected</li>
+									<li data-value="private" class="selected">All</li>
+								</ul>
+							</div>
+							<input type="checkbox" id="tsd-filter-inherited" checked />
+							<label class="tsd-widget" for="tsd-filter-inherited">Inherited</label>
+							<input type="checkbox" id="tsd-filter-externals" checked />
+							<label class="tsd-widget" for="tsd-filter-externals">Externals</label>
+						</div>
+					</div>
+					<a href="#" class="tsd-widget menu no-caption" data-toggle="menu">Menu</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="tsd-page-title">
+		<div class="container">
+			<ul class="tsd-breadcrumb">
+				<li>
+					<a href="../modules.html">@collabswarm/collabswarm</a>
+				</li>
+				<li>
+					<a href="Keychain.html">Keychain</a>
+				</li>
+			</ul>
+			<h1>Interface Keychain&lt;KeychainChange, DocumentKey&gt;</h1>
+		</div>
+	</div>
+</header>
+<div class="container container-main">
+	<div class="row">
+		<div class="col-8 col-content">
+			<section class="tsd-panel tsd-comment">
+				<div class="tsd-comment tsd-typography">
+					<div class="lead">
+						<p>A keychain contains a CollabswarmDocument&#39;s encryption keys.</p>
+					</div>
+				</div>
+			</section>
+			<section class="tsd-panel tsd-type-parameters">
+				<h3>Type parameters</h3>
+				<ul class="tsd-type-parameters">
+					<li>
+						<h4>KeychainChange</h4>
+						<div class="tsd-comment tsd-typography">
+							<div class="lead">
+								<p>Type of a block of change(s) describing edits made to the document keychain.</p>
+							</div>
+						</div>
+					</li>
+					<li>
+						<h4>DocumentKey</h4>
+						<div class="tsd-comment tsd-typography">
+							<div class="lead">
+								<p>Type of a document encryption key.</p>
+							</div>
+						</div>
+					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel tsd-hierarchy">
+				<h3>Hierarchy</h3>
+				<ul class="tsd-hierarchy">
+					<li>
+						<span class="target">Keychain</span>
+					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel-group tsd-index-group">
+				<h2>Index</h2>
+				<section class="tsd-panel tsd-index-panel">
+					<div class="tsd-index-content">
+						<section class="tsd-index-section ">
+							<h3>Methods</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#add" class="tsd-kind-icon">add</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#current" class="tsd-kind-icon">current</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#getKey" class="tsd-kind-icon">get<wbr>Key</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#history" class="tsd-kind-icon">history</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#keys" class="tsd-kind-icon">keys</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="Keychain.html#merge" class="tsd-kind-icon">merge</a></li>
+							</ul>
+						</section>
+					</div>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="add" class="tsd-anchor"></a>
+					<h3>add</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">add<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L13">keychain.ts:13</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Generates and adds a new document encryption key to the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>The new document key ID, key, and a block of change(s) describing the keychain addition.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="current" class="tsd-anchor"></a>
+					<h3>current</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">current<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L39">keychain.ts:39</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Gets the current encryption key that should be used to encrypt new changes.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">&gt;</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="getKey" class="tsd-anchor"></a>
+					<h3>get<wbr>Key</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>Key<span class="tsd-signature-symbol">(</span>keyID<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">DocumentKey</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L47">keychain.ts:47</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Looks up a document key by its ID.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>keyID: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>An identifier for a document key.</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">DocumentKey</span></h4>
+							<p>The requested document key.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="history" class="tsd-anchor"></a>
+					<h3>history</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">history<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">KeychainChange</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L20">keychain.ts:20</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Gets a block of change(s) describing the whole state of the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">KeychainChange</span></h4>
+							<p>A block of change(s) describing the keychain.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="keys" class="tsd-anchor"></a>
+					<h3>keys</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">keys<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L34">keychain.ts:34</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Gets the all document encryption keys in the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">DocumentKey</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>all document encryption keys.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="merge" class="tsd-anchor"></a>
+					<h3>merge</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">merge<span class="tsd-signature-symbol">(</span>change<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">KeychainChange</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/keychain.ts#L27">keychain.ts:27</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Merges in a block of change(s) to the keychain.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>change: <span class="tsd-signature-type">KeychainChange</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>A block of change(s) to apply.</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+						</li>
+					</ul>
+				</section>
+			</section>
+		</div>
+		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
+			<nav class="tsd-navigation primary">
+				<ul>
+					<li class=" ">
+						<a href="../modules.html">Exports</a>
+					</li>
+				</ul>
+			</nav>
+			<nav class="tsd-navigation secondary menu-sticky">
+				<ul class="before-current">
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/Collabswarm.html" class="tsd-kind-icon">Collabswarm</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/CollabswarmDocument.html" class="tsd-kind-icon">Collabswarm<wbr>Document</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/CollabswarmNode.html" class="tsd-kind-icon">Collabswarm<wbr>Node</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/JSONSerializer.html" class="tsd-kind-icon">JSONSerializer</a>
+					</li>
+					<li class=" tsd-kind-class">
+						<a href="../classes/SubtleCrypto.html" class="tsd-kind-icon">Subtle<wbr>Crypto</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ACL.html" class="tsd-kind-icon">ACL</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ACLProvider.html" class="tsd-kind-icon">ACLProvider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="AuthProvider.html" class="tsd-kind-icon">Auth<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="CRDTProvider.html" class="tsd-kind-icon">CRDTProvider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ChangesSerializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="CollabswarmConfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
+					</li>
+				</ul>
+				<ul class="current">
+					<li class="current tsd-kind-interface tsd-has-type-parameter">
+						<a href="Keychain.html" class="tsd-kind-icon">Keychain</a>
+						<ul>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#add" class="tsd-kind-icon">add</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#current" class="tsd-kind-icon">current</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#getKey" class="tsd-kind-icon">get<wbr>Key</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#history" class="tsd-kind-icon">history</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#keys" class="tsd-kind-icon">keys</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="Keychain.html#merge" class="tsd-kind-icon">merge</a>
+							</li>
+						</ul>
+					</li>
+				</ul>
+				<ul class="after-current">
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="KeychainProvider.html" class="tsd-kind-icon">Keychain<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="LoadMessageSerializer.html" class="tsd-kind-icon">Load<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="SyncMessageSerializer.html" class="tsd-kind-icon">Sync<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon">CRDTSync<wbr>Message</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CollabswarmDocumentChangeHandler" class="tsd-kind-icon">Collabswarm<wbr>Document<wbr>Change<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CollabswarmPeersHandler" class="tsd-kind-icon">Collabswarm<wbr>Peers<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>CONFIG</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_NODE_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>NODE_<wbr>CONFIG</a>
+					</li>
+				</ul>
+			</nav>
+		</div>
+	</div>
+</div>
+<footer class="with-border-bottom">
+	<div class="container">
+		<h2>Legend</h2>
+		<div class="tsd-legend-group">
+			<ul class="tsd-legend">
+				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+			<ul class="tsd-legend">
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+		</div>
+	</div>
+</footer>
+<div class="container tsd-generator">
+	<p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p>
+</div>
+<div class="overlay"></div>
+<script src="../assets/js/main.js"></script>
+</body>
 </html>
