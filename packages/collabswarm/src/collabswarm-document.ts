@@ -28,7 +28,7 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentLoadV1 } from './wire-protocols';
+import { documentKeyUpdateV1, documentLoadV1 } from './wire-protocols';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -134,6 +134,10 @@ export class CollabswarmDocument<
     return `${documentLoadV1}/${this.documentPath}`;
   }
 
+  public get protocolKeyUpdateV1() {
+    return `${documentKeyUpdateV1}/${this.documentPath}`;
+  }
+
   constructor(
     /**
      * Collabswarm swarm that this document belongs to.
@@ -211,14 +215,30 @@ export class CollabswarmDocument<
 
   // Helpers ------------------------------------------------------------------
 
+  private async _shuffledPeers() {
+    const peers = await this.swarm.ipfsNode.swarm.peers();
+    if (peers.length === 0) {
+      return peers;
+    }
+
+    // Shuffle peer array.
+    const shuffledPeers = [...peers];
+    shuffleArray(shuffledPeers);
+    return shuffledPeers;
+  }
+
   private async _decryptBlock(
     blockKeyID: Uint8Array,
     nonce: Uint8Array,
     data: Uint8Array,
   ) {
-    const key = this._keychain.getKey(blockKeyID);
-    if (key) {
-      return this._authProvider.decrypt(data, key, nonce);
+    try {
+      const key = this._keychain.getKey(blockKeyID);
+      if (key) {
+        return this._authProvider.decrypt(data, key, nonce);
+      }
+    } catch (e) {
+      console.warn(`Failed to decrypt block!`, e);
     }
   }
 
@@ -418,18 +438,8 @@ export class CollabswarmDocument<
     }
   }
 
-  private async _verifyWriterSignature(message: CRDTSyncMessage<ChangesType>) {
-    const { signature, ...messageWithoutSignature } = message;
-    if (!signature) {
-      return false;
-    }
-
-    // TODO: Is there a way to avoid this serialization step:
-    const raw = this._syncMessageSerializer.serializeSyncMessage(
-      messageWithoutSignature,
-    );
-
-    // TODO: Is there a way to speedup this loop?
+  private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
+    // TODO: Cache list of current writers per dag node for now.
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
       verificationTasks.push(
@@ -466,17 +476,17 @@ export class CollabswarmDocument<
     return btoa(this._decoder.decode(signature));
   }
 
-  private async _makeChange(changes: ChangesType) {
+  private async _makeChange(
+    changes: ChangesType,
+    kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
+  ) {
     // Store changes in ipfs.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
 
     // Send new message.
     let updateMessage = this._createSyncMessage();
-    const changeNode: CRDTChangeNode<ChangesType> = {
-      kind: crdtDocumentChangeNode,
-      change: changes,
-    };
+    const changeNode: CRDTChangeNode<ChangesType> = { kind, change: changes };
     if (updateMessage.changeId && updateMessage.changes) {
       // TODO: Add links to other part of change tree (See Merkle CRDT paper section VI.B.e).
       changeNode.children = {};
@@ -514,6 +524,76 @@ export class CollabswarmDocument<
     this._fireLocalUpdateHandlers([hash]);
   }
 
+  private _handleLoadRequest({ stream }: Libp2p.HandlerProps) {
+    console.log(`received ${this.protocolLoadV1} dial`);
+    pipe(stream, async (source) => {
+      const assembledRequest = await readUint8Iterable(source);
+      const message = this._loadMessageSerializer.deserializeLoadRequest(
+        assembledRequest,
+      );
+      console.log(
+        `received ${this.protocolLoadV1} request:`,
+        assembledRequest,
+        message,
+      );
+
+      if (message.documentId === this.documentPath) {
+        console.warn(
+          `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        return [];
+      }
+
+      // Verify that this user is a reader.
+      let requestor: PublicKey | undefined;
+      for (const reader of await this._readers.users()) {
+        // TODO: Is this secure? Do we need a salt added to the signed payload?
+        if (
+          await this._authProvider.verify(
+            this._encoder.encode(message.documentId),
+            reader,
+            this._deserializeSignature(message.signature),
+          )
+        ) {
+          requestor = reader;
+          break;
+        }
+      }
+
+      if (!requestor) {
+        console.warn(
+          `Detected an unauthorized load request for ${message.documentId}`,
+        );
+        return [];
+      }
+
+      // Since this is a load request, send document keys.
+      const loadMessage = this._createSyncMessage();
+      loadMessage.keychainChanges = this._keychain.history();
+
+      const assembled = this._syncMessageSerializer.serializeSyncMessage(
+        loadMessage,
+      );
+      console.log(
+        `sending ${this.protocolLoadV1} response:`,
+        assembled,
+        loadMessage,
+      );
+
+      // Return a sync message.
+      return [this._syncMessageSerializer.serializeSyncMessage(loadMessage)];
+    });
+  }
+
+  private async _ensureCurrentUserCanWrite() {
+    // Check that we are a writer (allowed to write to this document).
+    if (!(await this._writers.check(this._userPublicKey))) {
+      throw new Error(
+        `Current user does not have write permissions for: ${this.documentPath}`,
+      );
+    }
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -530,14 +610,10 @@ export class CollabswarmDocument<
   public async load(): Promise<boolean> {
     // Pick a peer.
     // TODO: In the future, try to re-use connections that already are open.
-    const peers = await this.swarm.ipfsNode.swarm.peers();
-    if (peers.length === 0) {
+    const shuffledPeers = await this._shuffledPeers();
+    if (shuffledPeers.length === 0) {
       return false;
     }
-
-    // Shuffle peer array.
-    const shuffledPeers = [...peers];
-    shuffleArray(shuffledPeers);
 
     const stream = await (async () => {
       for (const peer of shuffledPeers) {
@@ -632,7 +708,12 @@ export class CollabswarmDocument<
       this._decryptBlock(blockKeyID, blockNonce, blockData).then(
         (rawContent) => {
           if (!rawContent) {
-            throw new Error('Unable to decrypt incoming sync message!');
+            // If we're unable to decrypt the document, try a fresh document load.
+            console.warn(
+              'Trying to re-load document... Unable to decrypt incoming message',
+            );
+            // TODO: Specifically try to load from the sending peer. This peer is the one who created this change, so they should have the document key(s) needed to read it.
+            return this.load();
           }
 
           const message = this._syncMessageSerializer.deserializeSyncMessage(
@@ -651,66 +732,7 @@ export class CollabswarmDocument<
     // For now we support multiple protocols, one per document path.
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
     //       right document. This should be more efficient.
-    this.libp2p.handle(this.protocolLoadV1, ({ stream }) => {
-      console.log(`received ${this.protocolLoadV1} dial`);
-      pipe(stream, async (source) => {
-        const assembledRequest = await readUint8Iterable(source);
-        const message = this._loadMessageSerializer.deserializeLoadRequest(
-          assembledRequest,
-        );
-        console.log(
-          `received ${this.protocolLoadV1} response:`,
-          assembledRequest,
-          message,
-        );
-
-        if (message.documentId === this.documentPath) {
-          console.warn(
-            `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
-          );
-          return [];
-        }
-
-        // Verify that this user is a reader.
-        let requestor: PublicKey | undefined;
-        for (const reader of await this._readers.users()) {
-          // TODO: Is this secure? Do we need a salt added to the signed payload?
-          if (
-            await this._authProvider.verify(
-              this._encoder.encode(message.documentId),
-              reader,
-              this._deserializeSignature(message.signature),
-            )
-          ) {
-            requestor = reader;
-            break;
-          }
-        }
-
-        if (!requestor) {
-          console.warn(
-            `Detected an unauthorized load request for ${message.documentId}`,
-          );
-          return [];
-        }
-
-        // Since this is a load request, send document keys.
-        const loadMessage = this._createSyncMessage();
-        loadMessage.keychainChanges = this._keychain.history();
-
-        const assembled = this._syncMessageSerializer.serializeSyncMessage(
-          loadMessage,
-        );
-        console.log(
-          `sending ${this.protocolLoadV1} response:`,
-          assembled,
-          loadMessage,
-        );
-
-        // Return a sync message.
-        return [this._syncMessageSerializer.serializeSyncMessage(loadMessage)];
-      });
-    });
+    this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
 
     // Load initial document from peers.
     return await this.load(); // new document would return false; then a key is needed
@@ -737,7 +759,17 @@ export class CollabswarmDocument<
    * @param message A sync message to apply.
    */
   public async sync(message: CRDTSyncMessage<ChangesType>) {
-    if (!(await this._verifyWriterSignature(message))) {
+    const { signature, ...messageWithoutSignature } = message;
+    if (!signature) {
+      return false;
+    }
+
+    // TODO: Is there a way to avoid this serialization step:
+    const raw = this._syncMessageSerializer.serializeSyncMessage(
+      messageWithoutSignature,
+    );
+
+    if (!(await this._verifyWriterSignature(raw, signature))) {
       console.warn(
         `Received a sync message with an invalid signature for ${message.documentId}`,
       );
@@ -816,12 +848,7 @@ export class CollabswarmDocument<
    * @param message An optional change message/description to include.
    */
   public async change(changeFn: ChangeFnType, message?: string) {
-    // Check that we are a writer (allowed to write to this document).
-    if (!(await this._writers.check(this._userPublicKey))) {
-      throw new Error(
-        `Current user does not have write permissions for: ${this.documentPath}`,
-      );
-    }
+    await this._ensureCurrentUserCanWrite();
 
     const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
@@ -835,12 +862,7 @@ export class CollabswarmDocument<
   }
 
   public async addWriter(writer: PublicKey) {
-    // Check that we are a writer (allowed to write to this document).
-    if (!(await this._writers.check(this._userPublicKey))) {
-      throw new Error(
-        `Current user does not have write permissions for: ${this.documentPath}`,
-      );
-    }
+    await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is not already a writer.
     if (this._writers.check(writer)) {
@@ -850,16 +872,11 @@ export class CollabswarmDocument<
     // Construct a new writer ACL change.
     const changes = await this._writers.add(writer);
 
-    await this._makeChange(changes);
+    await this._makeChange(changes, crdtWriterChangeNode);
   }
 
   public async removeWriter(writer: PublicKey) {
-    // Check that we are a writer (allowed to write to this document).
-    if (!(await this._writers.check(this._userPublicKey))) {
-      throw new Error(
-        `Current user does not have write permissions for: ${this.documentPath}`,
-      );
-    }
+    await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is already a writer.
     if (!this._writers.check(writer)) {
@@ -869,7 +886,40 @@ export class CollabswarmDocument<
     // Construct a new writer ACL change.
     const changes = await this._writers.remove(writer);
 
-    await this._makeChange(changes);
+    await this._makeChange(changes, crdtWriterChangeNode);
+  }
+
+  public async addReader(reader: PublicKey) {
+    await this._ensureCurrentUserCanWrite();
+
+    // Check that the reader is not already a reader.
+    if (this._readers.check(reader)) {
+      return;
+    }
+
+    // Send change over network.
+    const changes = await this._readers.add(reader);
+    await this._makeChange(changes, crdtReaderChangeNode);
+
+    // TODO: Consider sending document key to the new reader as a speedup.
+  }
+
+  public async removeReader(reader: PublicKey) {
+    await this._ensureCurrentUserCanWrite();
+
+    // Check that the reader is already a reader.
+    if (!this._readers.check(reader)) {
+      return;
+    }
+
+    // Send change over network.
+    const changes = await this._readers.remove(reader);
+    await this._makeChange(changes, crdtReaderChangeNode);
+
+    // Create a new document key
+    const [keyID, key, keychainChanges] = await this._keychain.add();
+
+    // TODO: Consider sending keychain changes to all remaining readers on secure overlay.
   }
 
   // public async pin() {
