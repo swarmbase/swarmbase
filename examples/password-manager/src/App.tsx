@@ -30,16 +30,15 @@ const examplePasswords = [
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
-  const [passwords, setPasswords] = React.useState<PasswordItem[]>(
-    examplePasswords,
-  );
+  const [passwords, setPasswords] =
+    React.useState<PasswordItem[]>(examplePasswords);
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 
   return (
     <Router>
       <Container>
-        <Nav>
+        <Nav variant="tabs" defaultActiveKey="/login">
           <Nav.Item>
             <LinkContainer to="/login">
               <Nav.Link>Login</Nav.Link>
