@@ -1725,9 +1725,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/collabswarm-react@workspace:packages/collabswarm-react"
   dependencies:
-    "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
+    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@types/react": ^17.0.11
-    automerge: ^1.0.1-preview.3
     eslint: ^7.31.0
     react: ^17.0.2
     redux: ^4.1.0
@@ -1786,6 +1785,7 @@ __metadata:
   resolution: "@collabswarm/password-manager@workspace:examples/password-manager"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+    "@collabswarm/collabswarm-react": "workspace:packages/collabswarm-react"
     "@collabswarm/collabswarm-yjs": "workspace:packages/collabswarm-yjs"
     "@testing-library/jest-dom": ^5.11.4
     "@testing-library/react": ^11.1.0
@@ -1800,6 +1800,7 @@ __metadata:
     "@types/testing-library__jest-dom": ^5
     "@types/uuid": ^8.3.1
     bootstrap: ^5.1.0
+    quill-delta: ^4.2.2
     react: ^17.0.2
     react-bootstrap: ^1.6.1
     react-dom: ^17.0.2
@@ -9105,6 +9106,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fast-diff@npm:1.2.0":
+  version: 1.2.0
+  resolution: "fast-diff@npm:1.2.0"
+  checksum: 9c5407d9c4869407854fe8838b8d9d26065ca747c9b80697957ae37482e982e880de823efa2c97ea1cba05dc06fce853a005e7557d10550c64c052cf7021ba9e
+  languageName: node
+  linkType: hard
+
 "fast-fifo@npm:^1.0.0":
   version: 1.0.0
   resolution: "fast-fifo@npm:1.0.0"
@@ -14245,6 +14253,13 @@ fsevents@^1.2.7:
   languageName: node
   linkType: hard
 
+"lodash.isequal@npm:^4.5.0":
+  version: 4.5.0
+  resolution: "lodash.isequal@npm:4.5.0"
+  checksum: 5b47e094641c18a915497343894c66f7da6aebb9aaa2a3fcc5643455aaf29d19df60ebbed664c8374fb959c8b4ce96810ee6becd8a71ac58c6c2ca8d29762947
+  languageName: node
+  linkType: hard
+
 "lodash.memoize@npm:^4.1.2":
   version: 4.1.2
   resolution: "lodash.memoize@npm:4.1.2"
@@ -17992,6 +18007,17 @@ fsevents@^1.2.7:
   version: 4.0.3
   resolution: "quick-format-unescaped@npm:4.0.3"
   checksum: 08bbbe4937df113082fcc42dfbdb75df7e5291df805cd25347e0241f2f97bfb8368899dfbece10b79411249f81196b268ad1a36cc42208e4074cf89d27c3d055
+  languageName: node
+  linkType: hard
+
+"quill-delta@npm:^4.2.2":
+  version: 4.2.2
+  resolution: "quill-delta@npm:4.2.2"
+  dependencies:
+    fast-diff: 1.2.0
+    lodash.clonedeep: ^4.5.0
+    lodash.isequal: ^4.5.0
+  checksum: b95e77cb222ea486ea72749ac0d3f2950fb24eedf46ea44295cc782a976604ae5c13e38e2dab3efa56ce1c419bd73f54f2b8092997f410e07472cd1a4e99d8e6
   languageName: node
   linkType: hard
 

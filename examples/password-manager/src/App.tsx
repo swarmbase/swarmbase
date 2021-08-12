@@ -3,13 +3,15 @@ import {
   BrowserRouter as Router,
   Switch,
   Route,
-  Link,
   Redirect,
 } from 'react-router-dom';
 import { Container, Nav } from 'react-bootstrap';
 import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { SubtleCrypto } from '@collabswarm/collabswarm';
+import { useCollabswarm } from '@collabswarm/collabswarm-react';
+import { YjsProvider, YjsJSONSerializer, YjsKeychainProvider, YjsACLProvider } from '@collabswarm/collabswarm-yjs';
 import { Login } from './Login';
 import { PasswordList } from './PasswordList';
 import { PasswordItem } from './PasswordItem';
@@ -26,6 +28,11 @@ const examplePasswords = [
     value: 'password2',
   },
 ];
+const crdt = new YjsProvider();
+const serializer = new YjsJSONSerializer();
+const auth = new SubtleCrypto();
+const acl = new YjsACLProvider();
+const keychain = new YjsKeychainProvider();
 
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
@@ -33,6 +40,7 @@ function App() {
   const [passwords, setPasswords] = React.useState<PasswordItem[]>(
     examplePasswords,
   );
+  const collabswarm = useCollabswarm(privateKey, publicKey, crdt, serializer, serializer, serializer, auth, acl, keychain);
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 
@@ -63,7 +71,11 @@ function App() {
           </Route>
           <Route path="/secrets">
             {loggedIn ? (
-              <PasswordList passwords={passwords} setPasswords={setPasswords} />
+              collabswarm ? (
+                <PasswordList collabswarm={collabswarm} />
+              ) : (
+                <i>Loading collabswarm...</i>
+              )
             ) : (
               <Redirect to="/login" />
             )}

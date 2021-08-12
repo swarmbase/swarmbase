@@ -5,26 +5,23 @@ import {
   Container,
   Col,
   Row,
-  Form,
-  Table,
 } from 'react-bootstrap';
-import { PasswordItem } from './PasswordItem';
-import { PermissionsTable } from './PermissionsTable';
+import { useCollabswarmDocumentState } from '@collabswarm/collabswarm-react';
 import * as uuid from 'uuid';
+import { YjsCollabswarm } from './utils';
+import * as Y from 'yjs';
+import { PasswordEditor } from './PasswordEditor';
 
 export function PasswordList({
-  passwords,
-  setPasswords,
+  collabswarm
 }: {
-  passwords?: PasswordItem[];
-  setPasswords?: (passwords: PasswordItem[]) => void;
+  collabswarm: YjsCollabswarm;
 }) {
-  const [currentPassword, setCurrentPassword] = React.useState<
-    PasswordItem | undefined
-  >();
-  const [changedPasswords, setChangedPasswords] = React.useState<{
-    [id: string]: PasswordItem;
-  }>({});
+  const [currentPassword, setCurrentPassword] = React.useState<Y.Map<Y.Text> | undefined>();
+  const [passwords, changePasswords] = useCollabswarmDocumentState(collabswarm, "passwords-index");
+
+  const currentPasswordIdRef = currentPassword && currentPassword.get("id");
+  const currentPasswordId = currentPasswordIdRef && currentPasswordIdRef.toString();
 
   return (
     <Container>
@@ -34,8 +31,10 @@ export function PasswordList({
             <ListGroup.Item>
               <Button
                 onClick={() => {
-                  setCurrentPassword({
-                    id: uuid.v4(),
+                  changePasswords(current => {
+                    current.getArray<Y.Map<Y.Text>>("passwords").push([new Y.Map<Y.Text>(Object.entries({
+                      id: new Y.Text(uuid.v4()),
+                    }))]);
                   });
                 }}
               >
@@ -44,161 +43,41 @@ export function PasswordList({
             </ListGroup.Item>
           </ListGroup>
           <ListGroup defaultActiveKey="#link1">
-            {passwords &&
-              passwords.map((password) => (
-                <ListGroup.Item
-                  key={password.id}
+            {passwords && passwords.getArray<Y.Map<Y.Text>>("passwords").map<Y.Map<Y.Text>, JSX.Element>((password) => {
+              const idRef = password.get("id");
+              const id = idRef && idRef.toString();
+              return <ListGroup.Item
+                  key={id}
                   action
                   onClick={() => setCurrentPassword(password)}
                 >
-                  {password.name}
+                  {password.get("name")}
                 </ListGroup.Item>
-              ))}
+              })}
           </ListGroup>
         </Col>
         <Col xs={6}>
           {currentPassword && (
-            <Form>
-              <Form.Label column="lg">
-                {(currentPassword.id && currentPassword.name) || ''}
-              </Form.Label>
-              <Form.Group
-                className="mb-3"
-                controlId="exampleForm.ControlInput1"
-              >
-                <Form.Label column="sm">Name</Form.Label>
-                <Form.Control
-                  placeholder="Enter a name"
-                  value={
-                    (currentPassword.id &&
-                      changedPasswords[currentPassword.id] &&
-                      changedPasswords[currentPassword.id].name) ||
-                    currentPassword.name ||
-                    ''
-                  }
-                  onChange={(e) => {
-                    if (!currentPassword.id) {
-                      return;
+            <PasswordEditor
+              collabswarm={collabswarm}
+              passwordId={currentPasswordId}
+              upsertPasswordStub={(id, nameChanges) => {
+                changePasswords(current => {
+                  current.getArray<Y.Map<Y.Text>>("passwords").forEach(ymap => {
+                    const tIdRef = ymap.get("id");
+                    const tId = tIdRef && tIdRef.toString();
+                    if (tId === id) {
+                      const tRef = ymap.get("name");
+                      tRef && tRef.applyDelta(nameChanges);
                     }
-                    const newChangedPasswords = { ...changedPasswords };
-                    newChangedPasswords[currentPassword.id] = {
-                      ...(changedPasswords[currentPassword.id] ||
-                        currentPassword),
-                      name: e.target.value,
-                    };
-                    setChangedPasswords(newChangedPasswords);
-                  }}
-                />
-              </Form.Group>
-              <Form.Group
-                className="mb-3"
-                controlId="exampleForm.ControlTextarea1"
-              >
-                <Form.Label column="sm">Value</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  placeholder="Enter a secret here..."
-                  value={
-                    (currentPassword.id &&
-                      changedPasswords[currentPassword.id] &&
-                      changedPasswords[currentPassword.id].value) ||
-                    currentPassword.value ||
-                    ''
-                  }
-                  onChange={(e) => {
-                    if (!currentPassword.id) {
-                      return;
-                    }
-                    const newChangedPasswords = { ...changedPasswords };
-                    newChangedPasswords[currentPassword.id] = {
-                      ...(changedPasswords[currentPassword.id] ||
-                        currentPassword),
-                      value: e.target.value,
-                    };
-                    setChangedPasswords(newChangedPasswords);
-                  }}
-                />
-              </Form.Group>
-              {/* Sharing Controls */}
-              <Form.Label column="sm">Permissions</Form.Label>
-              <PermissionsTable
-                permissions={(currentPassword.id &&
-                  changedPasswords[currentPassword.id] &&
-                  changedPasswords[currentPassword.id].permissions) ||
-                  currentPassword.permissions
-                }
-                setPermissions={permissions => {
-                  if (!currentPassword.id) {
-                    return;
-                  }
-                  const newChangedPasswords = { ...changedPasswords };
-                  newChangedPasswords[currentPassword.id] = {
-                    ...(changedPasswords[currentPassword.id] ||
-                      currentPassword),
-                    permissions,
-                  };
-                  setChangedPasswords(newChangedPasswords);
-                }}
-              />
-              {/* Action Buttons */}
-              <Button
-                variant="secondary"
-                disabled={
-                  !currentPassword.id || !changedPasswords[currentPassword.id]
-                }
-                onClick={() => {
-                  setChangedPasswords({});
-                }}
-              >
-                Cancel
-              </Button>{' '}
-              <Button
-                variant="success"
-                disabled={
-                  !currentPassword.id || !changedPasswords[currentPassword.id]
-                }
-                onClick={() => {
-                  if (
-                    !currentPassword.id ||
-                    !changedPasswords[currentPassword.id] ||
-                    !setPasswords
-                  ) {
-                    return;
-                  }
-
-                  const changedPassword = changedPasswords[currentPassword.id];
-                  const currentPasswordIds = new Set(
-                    (passwords || []).map((password) => password.id),
-                  );
-                  const isNewPassword = !currentPasswordIds.has(
-                    changedPassword.id,
-                  );
-
-                  const newPasswords: PasswordItem[] = [];
-                  for (const password of passwords || []) {
-                    if (password.id === currentPassword.id) {
-                      newPasswords.push(changedPassword);
-                    } else {
-                      newPasswords.push(password);
-                    }
-                  }
-
-                  if (isNewPassword) {
-                    newPasswords.push(changedPassword);
-                  }
-
-                  setPasswords(newPasswords);
-                  setChangedPasswords({});
-                  setCurrentPassword(changedPassword);
-                }}
-              >
-                Save
-              </Button>
-            </Form>
+                  });
+                });
+              }}
+            />
           )}
         </Col>
       </Row>
     </Container>
   );
 }
+

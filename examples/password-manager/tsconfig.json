@@ -16,5 +16,16 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../packages/collabswarm"
+    },
+    {
+      "path": "../../packages/collabswarm-yjs"
+    },
+    {
+      "path": "../../packages/collabswarm-react"
+    }
+  ]
 }

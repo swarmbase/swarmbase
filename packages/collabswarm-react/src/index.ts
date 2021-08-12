@@ -1,6 +1,7 @@
-import { useCollabswarm } from "./hooks";
+import { useCollabswarm, useCollabswarmDocumentState } from "./hooks";
 
 
 export {
   useCollabswarm,
+  useCollabswarmDocumentState,
 };

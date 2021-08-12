@@ -1,10 +1,10 @@
 import { Button, Form, Table } from "react-bootstrap";
-import { PasswordItemPermission } from "./PasswordItem";
 import * as uuid from "uuid";
+import * as Y from "yjs";
 
-export function PermissionsTable({permissions, setPermissions}: {
-  permissions?: PasswordItemPermission[];
-  setPermissions?: (permissions: PasswordItemPermission[]) => void;
+export function PermissionsTable({permissions, changePermissions}: {
+  permissions?: Y.Array<Y.Map<string>>;
+  changePermissions?: (changeFn: (permissions: Y.Array<Y.Map<string>>) => void) => void;
 }) {
   return (
     <Table striped bordered hover>
@@ -15,27 +15,27 @@ export function PermissionsTable({permissions, setPermissions}: {
         </tr>
       </thead>
       <tbody>
-        {permissions && permissions.map((permission, i) => (
-          <tr key={permission.id}>
+        {permissions && permissions.map<Y.Map<string>, JSX.Element>((permission, i) => (
+          <tr key={permission.get("id")}>
             <td>
               <Form.Control
-                value={permission.userId}
+                value={permission.get("userId")}
                 placeholder="Undefined User ID"
                 onChange={(e) => {
-                  const newPermissions = [...(permissions || [])];
-                  newPermissions[i] = {...newPermissions[i], userId: e.target.value};
-                  setPermissions && setPermissions(newPermissions);
+                  changePermissions && changePermissions(current => {
+                    current.get(i).set("userId", e.target.value);
+                  });
                 }}
               />
             </td>
             <td>
               <Form.Control
                 as="select"
-                defaultValue={permission.permission || 'r'}
+                defaultValue={permission.get("permission") || 'r'}
                 onChange={e => {
-                  const newPermissions = [...(permissions || [])];
-                  newPermissions[i] = {...newPermissions[i], permission: e.target.value as 'r' | 'rw'};
-                  setPermissions && setPermissions(newPermissions);
+                  changePermissions && changePermissions(current => {
+                    current.get(i).set("permission", e.target.value);
+                  });
                 }}
               >
                 <option value="r">Read</option>
@@ -44,9 +44,9 @@ export function PermissionsTable({permissions, setPermissions}: {
             </td>
             <td>
               <Button variant="danger" onClick={() => {
-                const newPermissions = [...(permissions || [])];
-                newPermissions.splice(i, 1);
-                setPermissions && setPermissions(newPermissions);
+                changePermissions && changePermissions(current => {
+                  current.delete(i);
+                });
               }}>
                 Remove
               </Button>
@@ -59,13 +59,13 @@ export function PermissionsTable({permissions, setPermissions}: {
           </tr>
         )}
         <Button variant="success" onClick={() => {
-          const newPermissions = [...(permissions || [])];
-          newPermissions.push({
-            id: uuid.v4(),
-            userId: '',
-            permission: 'r'
+          changePermissions && changePermissions(current => {
+            current.push([new Y.Map(Object.entries({
+              id: uuid.v4(),
+              userId: "",
+              permission: "r"
+            }))]);
           });
-          setPermissions && setPermissions(newPermissions);
         }}>
           Add Permission
         </Button>

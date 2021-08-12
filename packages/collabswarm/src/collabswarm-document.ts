@@ -840,6 +840,8 @@ export class CollabswarmDocument<
     }
   }
 
+  // TODO: Add a startChange() method that starts a change "transaction" block.
+
   /**
    * Applies a new local change (defined by `changeFn`) to the collabswarm document and updates
    * all peers.
