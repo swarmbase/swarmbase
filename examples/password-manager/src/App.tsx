@@ -5,9 +5,9 @@ import {
   Route,
   Link,
   Redirect,
-} from "react-router-dom";
-import { Container, Nav } from "react-bootstrap";
-import { LinkContainer } from "react-router-bootstrap";
+} from 'react-router-dom';
+import { Container, Nav } from 'react-bootstrap';
+import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Login } from './Login';
@@ -16,12 +16,12 @@ import { PasswordItem } from './PasswordItem';
 
 const examplePasswords = [
   {
-    id: "1",
+    id: '1',
     name: 'Service 1',
     value: 'password1',
   },
   {
-    id: "2",
+    id: '2',
     name: 'Service 2',
     value: 'password2',
   },
@@ -30,7 +30,9 @@ const examplePasswords = [
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
-  const [passwords, setPasswords] = React.useState<PasswordItem[]>(examplePasswords);
+  const [passwords, setPasswords] = React.useState<PasswordItem[]>(
+    examplePasswords,
+  );
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 
@@ -60,7 +62,11 @@ function App() {
             />
           </Route>
           <Route path="/secrets">
-            {loggedIn ? <PasswordList passwords={passwords} setPasswords={setPasswords} /> : <Redirect to="/login" />}
+            {loggedIn ? (
+              <PasswordList passwords={passwords} setPasswords={setPasswords} />
+            ) : (
+              <Redirect to="/login" />
+            )}
           </Route>
           <Route exact path="/">
             {loggedIn ? <Redirect to="/secrets" /> : <Redirect to="/login" />}
