@@ -29,15 +29,19 @@ export function PasswordList({
     <Container>
       <Row>
         <Col xs={6}>
-          <Button
-            onClick={() => {
-              setCurrentPassword({
-                id: uuid.v4(),
-              });
-            }}
-          >
-            Add New
-          </Button>
+          <ListGroup variant="flush">
+            <ListGroup.Item>
+              <Button
+                onClick={() => {
+                  setCurrentPassword({
+                    id: uuid.v4(),
+                  });
+                }}
+              >
+                +
+              </Button>{' '}
+            </ListGroup.Item>
+          </ListGroup>
           <ListGroup defaultActiveKey="#link1">
             {passwords &&
               passwords.map((password) => (
@@ -54,10 +58,14 @@ export function PasswordList({
         <Col xs={6}>
           {currentPassword && (
             <Form>
+              <Form.Label column="lg">
+                {(currentPassword.id && currentPassword.name) || ''}
+              </Form.Label>
               <Form.Group
                 className="mb-3"
                 controlId="exampleForm.ControlInput1"
               >
+                <Form.Label column="sm">Name</Form.Label>
                 <Form.Control
                   placeholder="Enter a name"
                   value={
@@ -85,7 +93,7 @@ export function PasswordList({
                 className="mb-3"
                 controlId="exampleForm.ControlTextarea1"
               >
-                <Form.Label>Value</Form.Label>
+                <Form.Label column="sm">Value</Form.Label>
                 <Form.Control
                   as="textarea"
                   rows={3}
@@ -112,7 +120,7 @@ export function PasswordList({
                 />
               </Form.Group>
               {/* Sharing Controls */}
-              <div className="mt-1 mb-2">Permissions</div>
+              <Form.Label column="sm">Permissions</Form.Label>
               <Table striped bordered hover>
                 <thead>
                   <tr>
