@@ -1,4 +1,5 @@
 export type PasswordItemPermission = {
+  id?: string; // For React list displying.
   userId?: string;
   permission?: 'r' | 'rw';
 };

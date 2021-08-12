@@ -1785,6 +1785,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/password-manager@workspace:examples/password-manager"
   dependencies:
+    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+    "@collabswarm/collabswarm-yjs": "workspace:packages/collabswarm-yjs"
     "@testing-library/jest-dom": ^5.11.4
     "@testing-library/react": ^11.1.0
     "@testing-library/user-event": ^12.1.10

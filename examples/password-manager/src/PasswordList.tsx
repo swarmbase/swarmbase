@@ -9,6 +9,7 @@ import {
   Table,
 } from 'react-bootstrap';
 import { PasswordItem } from './PasswordItem';
+import { PermissionsTable } from './PermissionsTable';
 import * as uuid from 'uuid';
 
 export function PasswordList({
@@ -121,51 +122,25 @@ export function PasswordList({
               </Form.Group>
               {/* Sharing Controls */}
               <Form.Label column="sm">Permissions</Form.Label>
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th colSpan={2}>Permisssions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* TODO: This is broken: Needs to read from changedPasswords as well. */}
-                  {currentPassword.permissions &&
-                    currentPassword.permissions.map((permission, i) => (
-                      <tr>
-                        <td>{permission.userId || <i>Undefined User ID</i>}</td>
-                        <td>
-                          <Form.Control
-                            as="select"
-                            defaultValue={permission.permission || 'r'}
-                            onChange={(e) => {
-                              // TODO: Finish this.
-                              // if (!currentPassword.id) {
-                              //   return;
-                              // }
-                              // const newPermissions = [...(currentPassword.permissions || [])];
-                              // const newChangedPasswords = {...changedPasswords};
-                              // newChangedPasswords[currentPassword.id] = {...(changedPasswords[currentPassword.id] || currentPassword), permissions: [e.target.value]};
-                              // setChangedPasswords(newChangedPasswords);
-                            }}
-                          >
-                            <option value="r">Read</option>
-                            <option value="rw">Read/Write</option>
-                          </Form.Control>
-                        </td>
-                        <td>
-                          <Button variant="danger">Remove</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  {(!currentPassword.permissions ||
-                    currentPassword.permissions.length === 0) && (
-                    <tr>
-                      <td colSpan={3}>No permissions defined!</td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
+              <PermissionsTable
+                permissions={(currentPassword.id &&
+                  changedPasswords[currentPassword.id] &&
+                  changedPasswords[currentPassword.id].permissions) ||
+                  currentPassword.permissions
+                }
+                setPermissions={permissions => {
+                  if (!currentPassword.id) {
+                    return;
+                  }
+                  const newChangedPasswords = { ...changedPasswords };
+                  newChangedPasswords[currentPassword.id] = {
+                    ...(changedPasswords[currentPassword.id] ||
+                      currentPassword),
+                    permissions,
+                  };
+                  setChangedPasswords(newChangedPasswords);
+                }}
+              />
               {/* Action Buttons */}
               <Button
                 variant="secondary"
