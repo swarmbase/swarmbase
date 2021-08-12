@@ -30,8 +30,9 @@ const examplePasswords = [
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
-  const [passwords, setPasswords] =
-    React.useState<PasswordItem[]>(examplePasswords);
+  const [passwords, setPasswords] = React.useState<PasswordItem[]>(
+    examplePasswords,
+  );
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 
