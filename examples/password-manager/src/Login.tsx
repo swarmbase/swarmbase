@@ -115,18 +115,20 @@ export function Login({
           </Button>
           <Button
             onClick={async () => {
-              const cryptoKey = await genDocumentKey();
+              const cryptoKey: CryptoKey = await genDocumentKey();
               console.log(cryptoKey);
-              const jwk = await exportCryptoKey(cryptoKey);
+              const jwk: JsonWebKey = await exportCryptoKey(cryptoKey);
               console.log(jwk);
               console.log(JSON.stringify(jwk));
-              const andBacktoCryptoKey = await _importJsonKey(jwk);
+              const andBacktoCryptoKey: CryptoKey = await _importJsonKey(jwk);
               console.log(andBacktoCryptoKey);
 
               // with string serialize step
-              const stringKey = JSON.stringify(jwk);
-              const jwkFromString = JSON.parse(stringKey);
-              const cryptoKeyFromString = await _importJsonKey(jwkFromString);
+              const stringKey: string = JSON.stringify(jwk);
+              const jwkFromString: JsonWebKey = JSON.parse(stringKey);
+              const cryptoKeyFromString: CryptoKey = await _importJsonKey(
+                jwkFromString,
+              );
               console.log(cryptoKeyFromString);
             }}
           >
@@ -151,7 +153,7 @@ async function exportCryptoKey(key: CryptoKey) {
 }
 
 function _importJsonKey(jwk: JsonWebKey) {
-  return window.crypto.subtle.importKey(
+  return crypto.subtle.importKey(
     'jwk',
     jwk,
     { name: 'AES-GCM', length: 256 },
