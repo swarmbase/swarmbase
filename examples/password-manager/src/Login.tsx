@@ -113,8 +113,42 @@ export function Login({
           >
             Login
           </Button>
+          <Button
+            onClick={async () => {
+              const cryptoKey = await genDocumentKey();
+              console.log(cryptoKey);
+              const jwk = await exportCryptoKey(cryptoKey);
+              console.log(jwk);
+              const andBacktoCryptoKey = await _importJsonKey(jwk);
+              console.log(andBacktoCryptoKey);
+            }}
+          >
+            Gen AES Key
+          </Button>
         </Form>
       </Row>
     </Container>
+  );
+}
+
+async function genDocumentKey() {
+  return await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+async function exportCryptoKey(key: CryptoKey) {
+  return await crypto.subtle.exportKey('jwk', key);
+}
+
+function _importJsonKey(jwk: JsonWebKey) {
+  return window.crypto.subtle.importKey(
+    'jwk',
+    jwk,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt'],
   );
 }
