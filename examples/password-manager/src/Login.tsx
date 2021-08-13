@@ -119,8 +119,15 @@ export function Login({
               console.log(cryptoKey);
               const jwk = await exportCryptoKey(cryptoKey);
               console.log(jwk);
+              console.log(JSON.stringify(jwk));
               const andBacktoCryptoKey = await _importJsonKey(jwk);
               console.log(andBacktoCryptoKey);
+
+              // with string serialize step
+              const stringKey = JSON.stringify(jwk);
+              const jwkFromString = JSON.parse(stringKey);
+              const cryptoKeyFromString = await _importJsonKey(jwkFromString);
+              console.log(cryptoKeyFromString);
             }}
           >
             Gen AES Key
