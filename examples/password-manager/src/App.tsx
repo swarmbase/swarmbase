@@ -19,20 +19,7 @@ import {
 } from '@collabswarm/collabswarm-yjs';
 import { Login } from './Login';
 import { PasswordList } from './PasswordList';
-import { PasswordItem } from './PasswordItem';
 
-const examplePasswords = [
-  {
-    id: '1',
-    name: 'Service 1',
-    value: 'password1',
-  },
-  {
-    id: '2',
-    name: 'Service 2',
-    value: 'password2',
-  },
-];
 const crdt = new YjsProvider();
 const serializer = new YjsJSONSerializer();
 const auth = new SubtleCrypto();
@@ -42,9 +29,6 @@ const keychain = new YjsKeychainProvider();
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
-  const [passwords, setPasswords] = React.useState<PasswordItem[]>(
-    examplePasswords,
-  );
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,

@@ -42,6 +42,7 @@ export function Login({
   >();
   // Generate a keypair.
   React.useEffect(() => {
+    console.log(`Calling <Login /> init effect`);
     (async () => {
       const keypair = await crypto.subtle.generateKey(
         {
@@ -55,12 +56,8 @@ export function Login({
       // Save these new generated keypairs.
       const exportedPrivateKey = await exportKey(keypair.privateKey);
       const exportedPublicKey = await exportKey(keypair.publicKey);
-      if (!generatedPublicKey) {
-        setGeneratedPublicKey(exportedPublicKey);
-      }
-      if (!generatedPrivateKey) {
-        setGeneratedPrivateKey(exportedPrivateKey);
-      }
+      setGeneratedPublicKey(exportedPublicKey);
+      setGeneratedPrivateKey(exportedPrivateKey);
     })();
 
     return () => {

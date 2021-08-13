@@ -1,6 +1,5 @@
 import { useCollabswarmDocumentState } from '@collabswarm/collabswarm-react';
-import { Form, Button } from 'react-bootstrap';
-import { PasswordItem } from './PasswordItem';
+import { Form } from 'react-bootstrap';
 import { PermissionsTable } from './PermissionsTable';
 import { YjsCollabswarm } from './utils';
 import Delta from 'quill-delta';

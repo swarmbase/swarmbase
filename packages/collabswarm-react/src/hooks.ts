@@ -43,6 +43,7 @@ export function useCollabswarm<
   >();
 
   useEffect(() => {
+    console.log(`Calling useCollabswarm(...) init effect`);
     if (privateKey && publicKey) {
       setCollabswarm(
         new Collabswarm(
@@ -58,7 +59,7 @@ export function useCollabswarm<
         ),
       );
     }
-  }, [privateKey, publicKey, setCollabswarm]);
+  }, [privateKey, publicKey]);
 
   return collabswarm;
 }
@@ -97,6 +98,7 @@ export function useCollabswarmDocumentState<
   }>({});
 
   useEffect(() => {
+    console.log(`Calling useCollabswarmDocumentState(${JSON.stringify(documentPath)}, ${JSON.stringify(originFilter)}) init effect`);
     let newDocCache = docCache;
     let newDocDataCache = docDataCache;
     let docRef: CollabswarmDocument<
@@ -139,7 +141,7 @@ export function useCollabswarmDocumentState<
     if (docDataCache !== newDocDataCache) {
       setDocDataCache(newDocDataCache);
     }
-  }, [documentPath, setDocCache, setDocDataCache]);
+  }, [documentPath]);
 
   return [
     docDataCache[documentPath],
