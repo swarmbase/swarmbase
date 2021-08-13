@@ -64,43 +64,49 @@ export function useCollabswarm<
 }
 
 export function useCollabswarmDocumentState<
-DocType,
-ChangesType,
-ChangeFnType,
-PrivateKey,
-PublicKey,
-DocumentKey
->(collabswarm: Collabswarm<
   DocType,
   ChangesType,
   ChangeFnType,
   PrivateKey,
   PublicKey,
   DocumentKey
->, documentPath: string, originFilter: "all" | "remote" | "local" = "all"): [DocType | undefined, (fn: ChangeFnType, message?: string) => void] {
-  const [docCache, setDocCache] = useState<
-    {
-      [docPath: string]: CollabswarmDocument<
-        DocType,
-        ChangesType,
-        ChangeFnType,
-        PrivateKey,
-        PublicKey,
-        DocumentKey
-      >
-    }
-  >({});
-  const [docDataCache, setDocDataCache] = useState<{[docPath: string]: DocType}>({});
-
-  useEffect(() => {
-    let newDocCache = docCache;
-    let newDocDataCache = docDataCache;
-    let docRef: CollabswarmDocument<DocType,
+>(
+  collabswarm: Collabswarm<
+    DocType,
     ChangesType,
     ChangeFnType,
     PrivateKey,
     PublicKey,
-    DocumentKey> | null = docCache[documentPath];
+    DocumentKey
+  >,
+  documentPath: string,
+  originFilter: 'all' | 'remote' | 'local' = 'all',
+): [DocType | undefined, (fn: ChangeFnType, message?: string) => void] {
+  const [docCache, setDocCache] = useState<{
+    [docPath: string]: CollabswarmDocument<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >;
+  }>({});
+  const [docDataCache, setDocDataCache] = useState<{
+    [docPath: string]: DocType;
+  }>({});
+
+  useEffect(() => {
+    let newDocCache = docCache;
+    let newDocDataCache = docDataCache;
+    let docRef: CollabswarmDocument<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    > | null = docCache[documentPath];
     if (!docRef) {
       docRef = collabswarm.doc(documentPath);
       if (docRef) {
@@ -117,11 +123,15 @@ DocumentKey
     }
 
     // Subscribe to document changes.
-    docRef.subscribe("useCollabswarmDocumentState", (current: DocType) => {
-      const newDocDataCache = { ...docDataCache };
-      newDocDataCache[documentPath] = current;
-      setDocDataCache(newDocDataCache);
-    }, originFilter);
+    docRef.subscribe(
+      'useCollabswarmDocumentState',
+      (current: DocType) => {
+        const newDocDataCache = { ...docDataCache };
+        newDocDataCache[documentPath] = current;
+        setDocDataCache(newDocDataCache);
+      },
+      originFilter,
+    );
 
     if (docCache !== newDocCache) {
       setDocCache(newDocCache);

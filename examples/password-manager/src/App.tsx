@@ -11,7 +11,12 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { SubtleCrypto } from '@collabswarm/collabswarm';
 import { useCollabswarm } from '@collabswarm/collabswarm-react';
-import { YjsProvider, YjsJSONSerializer, YjsKeychainProvider, YjsACLProvider } from '@collabswarm/collabswarm-yjs';
+import {
+  YjsProvider,
+  YjsJSONSerializer,
+  YjsKeychainProvider,
+  YjsACLProvider,
+} from '@collabswarm/collabswarm-yjs';
 import { Login } from './Login';
 import { PasswordList } from './PasswordList';
 import { PasswordItem } from './PasswordItem';
@@ -40,7 +45,17 @@ function App() {
   const [passwords, setPasswords] = React.useState<PasswordItem[]>(
     examplePasswords,
   );
-  const collabswarm = useCollabswarm(privateKey, publicKey, crdt, serializer, serializer, serializer, auth, acl, keychain);
+  const collabswarm = useCollabswarm(
+    privateKey,
+    publicKey,
+    crdt,
+    serializer,
+    serializer,
+    serializer,
+    auth,
+    acl,
+    keychain,
+  );
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 

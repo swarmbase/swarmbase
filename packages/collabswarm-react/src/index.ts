@@ -1,7 +1,3 @@
-import { useCollabswarm, useCollabswarmDocumentState } from "./hooks";
+import { useCollabswarm, useCollabswarmDocumentState } from './hooks';
 
-
-export {
-  useCollabswarm,
-  useCollabswarmDocumentState,
-};
+export { useCollabswarm, useCollabswarmDocumentState };
