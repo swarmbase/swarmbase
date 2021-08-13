@@ -21,7 +21,7 @@ export function PasswordEditor({
     `/passwords/${passwordId}`,
   );
 
-  const id = doc && doc.getText('id').toString();
+  const id = (doc && doc.getText('id').toString()) || passwordId;
   const name = doc && doc.getText('name').toString();
   const value = doc && doc.getText('value').toString();
 
@@ -41,6 +41,7 @@ export function PasswordEditor({
             const a = new Delta().insert(name || '');
             const b = new Delta().insert(e.target.value);
             const diff = a.diff(b);
+            console.log("Got a diff:", diff);
 
             changeDoc((current) => {
               current.getText('name').applyDelta(diff);

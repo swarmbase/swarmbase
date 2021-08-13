@@ -481,6 +481,8 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
+    console.log(`Making changes to ${this.documentPath}`);
+
     // Store changes in ipfs.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
