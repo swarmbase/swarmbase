@@ -137,7 +137,7 @@ export function useCollabswarmDocumentState<
       docRef.subscribe(
         'useCollabswarmDocumentState',
         (current: DocType) => {
-          console.log("Received a document update!", current);
+          console.log('Received a document update!', current);
           const newDocDataCache = { ...docDataCache };
           newDocDataCache[documentPath] = current;
           setDocDataCache(newDocDataCache);

@@ -41,7 +41,7 @@ export function PasswordEditor({
             const a = new Delta().insert(name || '');
             const b = new Delta().insert(e.target.value);
             const diff = a.diff(b);
-            console.log("Got a diff:", diff);
+            console.log('Got a diff:', diff);
 
             changeDoc((current) => {
               current.getText('name').applyDelta(diff);
