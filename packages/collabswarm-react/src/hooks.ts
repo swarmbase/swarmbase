@@ -98,7 +98,11 @@ export function useCollabswarmDocumentState<
   }>({});
 
   useEffect(() => {
-    console.log(`Calling useCollabswarmDocumentState(${JSON.stringify(documentPath)}, ${JSON.stringify(originFilter)}) init effect`);
+    console.log(
+      `Calling useCollabswarmDocumentState(${JSON.stringify(
+        documentPath,
+      )}, ${JSON.stringify(originFilter)}) init effect`,
+    );
     let newDocCache = docCache;
     let newDocDataCache = docDataCache;
     let docRef: CollabswarmDocument<
