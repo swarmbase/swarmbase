@@ -56,12 +56,14 @@ export async function serializeKey(publicKey: CryptoKey): Promise<string> {
   return Base64.fromUint8Array(new Uint8Array(buf));
 }
 
-export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
-  const bytes = Base64.toUint8Array(publicKey);
-  return await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, [
-    'encrypt',
-    'decrypt',
-  ]);
+export function deserializeKey(
+  algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | DhImportKeyParams | AesKeyAlgorithm,
+  keyUsages: KeyUsage[],
+): (publicKey: string) => Promise<CryptoKey> {
+  return (publicKey: string) => {
+    const bytes = Base64.toUint8Array(publicKey);
+    return crypto.subtle.importKey('raw', bytes, algorithm, true, keyUsages);
+  };
 }
 
 export type AutomergeACLDoc = Doc<{
@@ -113,7 +115,10 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   }
   async users(): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
-    return Promise.all(Object.keys(this._acl.users).map(deserializeKey));
+    return Promise.all(Object.keys(this._acl.users).map(deserializeKey({
+      name: 'ECDSA',
+      namedCurve: 'P-384',
+    }, ["verify"])));
   }
 }
 
@@ -175,7 +180,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
         const keyIDBytes = new Uint8Array(uuid.parse(keyID));
         let key = this._keyCache.get(keyID);
         if (!key) {
-          key = await deserializeKey(serialized);
+          key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
         }
         return [keyIDBytes, key] as [Uint8Array, CryptoKey];
       }),
@@ -191,7 +196,7 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
 
     let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey(serialized);
+      key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
     }
     return [keyIDBytes, key];
   }

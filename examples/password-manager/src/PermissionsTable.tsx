@@ -11,7 +11,7 @@ export function PermissionsTable({
     changeFn: (permissions: Y.Array<Y.Map<string>>) => void,
   ) => void;
 }) {
-  return (
+  return <>
     <Table striped bordered hover>
       <thead>
         <tr>
@@ -70,26 +70,26 @@ export function PermissionsTable({
             <td colSpan={3}>No permissions defined!</td>
           </tr>
         )}
-        <Button
-          variant="success"
-          onClick={() => {
-            changePermissions &&
-              changePermissions((current) => {
-                current.push([
-                  new Y.Map(
-                    Object.entries({
-                      id: uuid.v4(),
-                      userId: '',
-                      permission: 'r',
-                    }),
-                  ),
-                ]);
-              });
-          }}
-        >
-          Add Permission
-        </Button>
       </tbody>
     </Table>
-  );
+    <Button
+      variant="success"
+      onClick={() => {
+        changePermissions &&
+          changePermissions((current) => {
+            current.push([
+              new Y.Map(
+                Object.entries({
+                  id: uuid.v4(),
+                  userId: '',
+                  permission: 'r',
+                }),
+              ),
+            ]);
+          });
+      }}
+    >
+      Add Permission
+    </Button>
+  </>;
 }

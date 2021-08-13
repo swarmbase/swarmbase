@@ -8,9 +8,8 @@ import {
   KeychainProvider,
 } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
-import { Base64 } from 'js-base64';
-
 import * as uuid from 'uuid';
+import { Base64 } from 'js-base64';
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
 
@@ -45,36 +44,18 @@ export class YjsProvider
 }
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {
-  // const buf = await crypto.subtle.exportKey('raw', publicKey);
-  // console.log("exporting key data:", new Uint8Array(buf));
-  // return Base64.fromUint8Array(new Uint8Array(buf));
-  // TODO: FIX THIS
-  const jwk = await crypto.subtle.exportKey('jwk', publicKey);
-  return JSON.stringify(jwk);
+  const buf = await crypto.subtle.exportKey('raw', publicKey);
+  return Base64.fromUint8Array(new Uint8Array(buf));
 }
 
-export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
-  // const bytes = Base64.toUint8Array(publicKey);
-  // console.log("importing key data:", bytes);
-  // return await crypto.subtle.importKey('raw', bytes, {
-  //   name: 'AES-GCM',
-  //   length: 256,
-  // }, true, [
-  //   'encrypt',
-  //   'decrypt',
-  // ]);
-  // TODO: FIX THIS
-  const jwk: JsonWebKey = JSON.parse(publicKey);
-  return await crypto.subtle.importKey(
-    'jwk',
-    jwk,
-    {
-      name: 'AES-GCM',
-      length: 256,
-    },
-    true,
-    ['encrypt', 'decrypt'],
-  );
+export function deserializeKey(
+  algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | DhImportKeyParams | AesKeyAlgorithm,
+  keyUsages: KeyUsage[],
+): (publicKey: string) => Promise<CryptoKey> {
+  return (publicKey: string) => {
+    const bytes = Base64.toUint8Array(publicKey);
+    return crypto.subtle.importKey('raw', bytes, algorithm, true, keyUsages);
+  };
 }
 
 export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
@@ -115,7 +96,10 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   users(): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
     return Promise.all(
-      [...this._acl.getMap('users').keys()].map(deserializeKey),
+      [...this._acl.getMap('users').keys()].map(deserializeKey({
+        name: 'ECDSA',
+        namedCurve: 'P-384',
+      }, ["verify"])),
     );
   }
 }
@@ -162,7 +146,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
         (async () => {
           let key = this._keyCache.get(keyID);
           if (!key) {
-            key = await deserializeKey(serialized);
+            key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
           }
           return [keyIDBytes, key] as [Uint8Array, CryptoKey];
         })(),
@@ -182,7 +166,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 
     let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey(serialized);
+      key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
     }
     return [keyIDBytes, key];
   }
