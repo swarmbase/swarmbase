@@ -8,7 +8,7 @@ import {
   KeychainProvider,
 } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
-import { Base64 } from "js-base64";
+import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';
 
@@ -65,13 +65,16 @@ export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
   // ]);
   // TODO: FIX THIS
   const jwk: JsonWebKey = JSON.parse(publicKey);
-  return await crypto.subtle.importKey('jwk', jwk, {
-    name: 'AES-GCM',
-    length: 256,
-  }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
+  return await crypto.subtle.importKey(
+    'jwk',
+    jwk,
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt'],
+  );
 }
 
 export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
