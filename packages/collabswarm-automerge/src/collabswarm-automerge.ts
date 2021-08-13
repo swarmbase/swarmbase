@@ -18,6 +18,7 @@ import {
   Keychain,
   KeychainProvider,
 } from '@collabswarm/collabswarm';
+import { Base64 } from "js-base64";
 
 import * as uuid from 'uuid';
 
@@ -52,20 +53,11 @@ export class AutomergeProvider<T = any>
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {
   const buf = await crypto.subtle.exportKey('raw', publicKey);
-  let binary = '';
-  let bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+  return Base64.fromUint8Array(new Uint8Array(buf));
 }
 
 export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
-  let binaryString = window.atob(publicKey);
-  let bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const bytes = Base64.toUint8Array(publicKey);
   return await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, [
     'encrypt',
     'decrypt',

@@ -33,6 +33,7 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
+import { Base64 } from 'js-base64';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -469,11 +470,11 @@ export class CollabswarmDocument<
   private _encoder = new TextEncoder();
 
   private _deserializeSignature(signature: string): Uint8Array {
-    return this._encoder.encode(atob(signature));
+    return Base64.toUint8Array(signature);
   }
 
   private _serializeSignature(signature: Uint8Array): string {
-    return btoa(this._decoder.decode(signature));
+    return Base64.fromUint8Array(signature);
   }
 
   private async _makeChange(
@@ -735,7 +736,16 @@ export class CollabswarmDocument<
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
 
     // Load initial document from peers.
-    return await this.load(); // new document would return false; then a key is needed
+    const isExisting = await this.load(); // new document would return false; then a key is needed
+    if (!isExisting) {
+      // Add current user as a writer.
+      await this._writers.add(this._userPublicKey);
+
+      // Add initial document key.
+      await this._keychain.add();
+    }
+
+    return isExisting;
   }
 
   /**

@@ -1773,6 +1773,7 @@ __metadata:
     ipfs: ^0.55.4
     it-pipe: ^1.1.0
     jest: 26.6.0
+    js-base64: ^3.6.1
     ts-jest: ^27.0.3
     ts-node: ^10.1.0
     typedoc: ^0.21.4
@@ -13125,6 +13126,13 @@ fsevents@^1.2.7:
   version: 2.2.5
   resolution: "joycon@npm:2.2.5"
   checksum: 7908f551e05aa754d1068053ec1304c12f3abc9c812f7c5a58bef7d35d247c3b1da14e508970bd411191099949756e2190e24c24b3382f818e7cda83e8ea1899
+  languageName: node
+  linkType: hard
+
+"js-base64@npm:^3.6.1":
+  version: 3.6.1
+  resolution: "js-base64@npm:3.6.1"
+  checksum: 9daacf204237cbab09dd7f90529f28e480af0ea67d3146757de9852f4eb27ab26a03a9544a620690f3fa25782f0970e24f4235283275a47d6b128ed722f0b640
   languageName: node
   linkType: hard
 

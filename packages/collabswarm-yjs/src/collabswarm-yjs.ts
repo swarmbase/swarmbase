@@ -8,6 +8,7 @@ import {
   KeychainProvider,
 } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
+import { Base64 } from "js-base64";
 
 import * as uuid from 'uuid';
 
@@ -44,22 +45,30 @@ export class YjsProvider
 }
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {
-  const buf = await crypto.subtle.exportKey('raw', publicKey);
-  let binary = '';
-  let bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+  // const buf = await crypto.subtle.exportKey('raw', publicKey);
+  // console.log("exporting key data:", new Uint8Array(buf));
+  // return Base64.fromUint8Array(new Uint8Array(buf));
+  // TODO: FIX THIS
+  const jwk = await crypto.subtle.exportKey('jwk', publicKey);
+  return JSON.stringify(jwk);
 }
 
 export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
-  let binaryString = window.atob(publicKey);
-  let bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, [
+  // const bytes = Base64.toUint8Array(publicKey);
+  // console.log("importing key data:", bytes);
+  // return await crypto.subtle.importKey('raw', bytes, {
+  //   name: 'AES-GCM',
+  //   length: 256,
+  // }, true, [
+  //   'encrypt',
+  //   'decrypt',
+  // ]);
+  // TODO: FIX THIS
+  const jwk: JsonWebKey = JSON.parse(publicKey);
+  return await crypto.subtle.importKey('jwk', jwk, {
+    name: 'AES-GCM',
+    length: 256,
+  }, true, [
     'encrypt',
     'decrypt',
   ]);
@@ -165,7 +174,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
       throw new Error("Can't get an empty keychain's current value");
     }
 
-    const [keyID, serialized] = yarr.get(yarr.length);
+    const [keyID, serialized] = yarr.get(yarr.length - 1);
     const keyIDBytes = new Uint8Array(uuid.parse(keyID));
 
     let key = this._keyCache.get(keyID);

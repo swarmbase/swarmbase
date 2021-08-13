@@ -8,8 +8,8 @@ import {
   KeychainProvider,
   LoadMessageSerializer,
   CollabswarmDocument,
+  CollabswarmConfig,
 } from '@collabswarm/collabswarm';
-import {} from '@collabswarm/collabswarm/src/load-request-serializer';
 import { useEffect, useState } from 'react';
 
 export function useCollabswarm<
@@ -29,6 +29,7 @@ export function useCollabswarm<
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,
   keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+  config?: CollabswarmConfig,
 ) {
   const [collabswarm, setCollabswarm] = useState<
     | Collabswarm<
@@ -43,10 +44,10 @@ export function useCollabswarm<
   >();
 
   useEffect(() => {
-    console.log(`Calling useCollabswarm(...) init effect`);
-    if (privateKey && publicKey) {
-      setCollabswarm(
-        new Collabswarm(
+    (async () => {
+      console.log(`Calling useCollabswarm(...) init effect`);
+      if (privateKey && publicKey) {
+        const collabswarm = new Collabswarm(
           privateKey,
           publicKey,
           provider,
@@ -56,9 +57,11 @@ export function useCollabswarm<
           authProvider,
           aclProvider,
           keychainProvider,
-        ),
-      );
-    }
+        );
+        await collabswarm.initialize(config);
+        setCollabswarm(collabswarm);
+      }
+    })();
   }, [privateKey, publicKey]);
 
   return collabswarm;
@@ -98,53 +101,56 @@ export function useCollabswarmDocumentState<
   }>({});
 
   useEffect(() => {
-    console.log(
-      `Calling useCollabswarmDocumentState(${JSON.stringify(
-        documentPath,
-      )}, ${JSON.stringify(originFilter)}) init effect`,
-    );
-    let newDocCache = docCache;
-    let newDocDataCache = docDataCache;
-    let docRef: CollabswarmDocument<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    > | null = docCache[documentPath];
-    if (!docRef) {
-      docRef = collabswarm.doc(documentPath);
-      if (docRef) {
-        newDocCache = { ...docCache };
-        newDocDataCache = { ...docDataCache };
-        newDocCache[documentPath] = docRef;
-        newDocDataCache[documentPath] = docRef.document;
+    (async () => {
+      console.log(
+        `Calling useCollabswarmDocumentState(${JSON.stringify(
+          documentPath,
+        )}, ${JSON.stringify(originFilter)}) init effect`,
+      );
+      let newDocCache = docCache;
+      let newDocDataCache = docDataCache;
+      let docRef: CollabswarmDocument<
+        DocType,
+        ChangesType,
+        ChangeFnType,
+        PrivateKey,
+        PublicKey,
+        DocumentKey
+      > | null = docCache[documentPath];
+      if (!docRef) {
+        docRef = collabswarm.doc(documentPath);
+        if (docRef) {
+          await docRef.open();
+          newDocCache = { ...docCache };
+          newDocDataCache = { ...docDataCache };
+          newDocCache[documentPath] = docRef;
+          newDocDataCache[documentPath] = docRef.document;
+        }
       }
-    }
 
-    if (!docRef) {
-      console.warn(`Failed to open/find document: ${documentPath}`);
-      return;
-    }
+      if (!docRef) {
+        console.warn(`Failed to open/find document: ${documentPath}`);
+        return;
+      }
 
-    // Subscribe to document changes.
-    docRef.subscribe(
-      'useCollabswarmDocumentState',
-      (current: DocType) => {
-        const newDocDataCache = { ...docDataCache };
-        newDocDataCache[documentPath] = current;
+      // Subscribe to document changes.
+      docRef.subscribe(
+        'useCollabswarmDocumentState',
+        (current: DocType) => {
+          const newDocDataCache = { ...docDataCache };
+          newDocDataCache[documentPath] = current;
+          setDocDataCache(newDocDataCache);
+        },
+        originFilter,
+      );
+
+      if (docCache !== newDocCache) {
+        setDocCache(newDocCache);
+      }
+      if (docDataCache !== newDocDataCache) {
         setDocDataCache(newDocDataCache);
-      },
-      originFilter,
-    );
-
-    if (docCache !== newDocCache) {
-      setDocCache(newDocCache);
-    }
-    if (docDataCache !== newDocDataCache) {
-      setDocDataCache(newDocDataCache);
-    }
+      }
+    })();
   }, [documentPath]);
 
   return [
