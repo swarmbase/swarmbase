@@ -1,4 +1,8 @@
-Shared secrets with item-specific access control.
+# swarmDB password manager
+
+## Shared secrets with item-specific access control.
+
+This is a demo application implementing swarmDB. Think of 1 password without a central server, where secrets can be shared among one person's devices, and with other people. Where secrets, and read/write permissions to each secret, can be dynamically modified.
 
 # Install
 

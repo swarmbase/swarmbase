@@ -5,6 +5,10 @@ import { YjsCollabswarm } from './utils';
 import Delta from 'quill-delta';
 import * as Y from 'yjs';
 
+export type PasswordItem = {
+  // whatever
+};
+
 export function PasswordEditor({
   passwordId,
   collabswarm,
@@ -16,7 +20,11 @@ export function PasswordEditor({
   upsertPasswordStub: (id: string, name: Delta) => void;
 }) {
   // TODO: Subscribe to a collabswarm document.
-  const [doc, changeDoc] = useCollabswarmDocumentState(
+  const [
+    passwordItem,
+    setPasswordItem,
+    { reader, writers, setReader, setWriters },
+  ] = useCollabswarmDocumentState<PasswordItem>(
     collabswarm,
     `/passwords/${passwordId}`,
   );

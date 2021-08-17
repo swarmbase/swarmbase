@@ -6,13 +6,41 @@
 ![test workflow](https://github.com/collabswarm/collabswarm/actions/workflows/test.yml/badge.svg)
 ![docs workflow](https://github.com/collabswarm/collabswarm/actions/workflows/typedoc.yml/badge.svg)
 
-(for bookmarking please use: https://swarmdb.dev which we will keep up to date even if the repo name changes)
+(for bookmarking please use: https://swarmdb.dev)
 
 ---
 
 ## What is SwarmDB?
 
-SwarmDB is an open-source JavaScript language library that implements a distributed web (dweb) document database with dynamic access control and encryption, providing conflict-free strong eventual consistency, able to run in the browser.
+SwarmDB is an open-source JavaScript library that implements a distributed web document database with dynamic access control and encryption, providing conflict-free strong eventual consistency and able to run in the browser.
+
+## Why use SwarmDB?
+
+Responsive user experience because data is stored locally first and synced asynchronously as peers appears.
+
+No need to code a back end server because data is stored and synced among peers as part of the library.
+
+## How to use
+
+Coming soon: password manager.
+
+## Install
+
+Install and set up workspaces.
+
+```sh
+yarn install
+yarn workspace @collabswarm/collabswarm tsc
+yarn workspace @collabswarm/collabswarm-yjs tsc
+yarn workspace @collabswarm/collabswarm-react tsc
+```
+
+See working example password manager:
+`yarn workspace @collabswarm/password-manager start`
+
+#
+
+# Move to Docs from Readme
 
 Designed as a dweb database means SwarmDB will work with data distributed over many nodes with varying connectivity, allow asynchronous updates without conflict, and be able to operate on untrusted networks or with the assistance of unknown or untrusted peers. It does not require centralized servers or a private intranet.
 
