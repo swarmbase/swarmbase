@@ -73,7 +73,13 @@ export function PermissionsTable({
           {permissions &&
             permissions.map((permission, i) => (
               <tr key={permission.publicKey}>
-                <td>{permission.publicKey}</td>
+                <td>
+                  <Form.Control
+                    as="textarea"
+                    rows={5}
+                    value={permission.publicKey}
+                  />
+                </td>
                 <td>{permission.permissions}</td>
                 <td>
                   <Button
