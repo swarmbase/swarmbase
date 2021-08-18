@@ -27,6 +27,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
           <ListGroup variant="flush">
             <ListGroup.Item>
               <Button
+                variant="primary"
                 onClick={() => {
                   changePasswords((current) => {
                     current.getArray<Y.Map<Y.Text>>('passwords').push([
@@ -39,7 +40,23 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
                   });
                 }}
               >
-                +
+                New Secret
+              </Button>{' '}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  changePasswords((current) => {
+                    current.getArray<Y.Map<Y.Text>>('passwords').push([
+                      new Y.Map<Y.Text>(
+                        Object.entries({
+                          id: new Y.Text(uuid.v4()),
+                        }),
+                      ),
+                    ]);
+                  });
+                }}
+              >
+                Add Existing Secret
               </Button>{' '}
             </ListGroup.Item>
           </ListGroup>

@@ -63,7 +63,7 @@ export class Collabswarm<
   ChangeFnType,
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   constructor(
     private readonly _userKey: PrivateKey,
@@ -97,10 +97,8 @@ export class Collabswarm<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<
-    string,
-    CollabswarmPeersHandler
-  > = new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
+    new Map<string, CollabswarmPeersHandler>();
 
   /**
    * Gets the current libp2p node instance.

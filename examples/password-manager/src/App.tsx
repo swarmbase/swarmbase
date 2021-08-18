@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   BrowserRouter as Router,
   Switch,
@@ -29,6 +29,9 @@ const keychain = new YjsKeychainProvider();
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
+  const [bootstrapPeers, setBootstrapPeers] = React.useState<
+    string[] | undefined
+  >();
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,
@@ -40,6 +43,14 @@ function App() {
     acl,
     keychain,
   );
+  // Calls connect whenever bootstrap peers changes.
+  useEffect(() => {
+    if (collabswarm && bootstrapPeers) {
+      collabswarm.connect(bootstrapPeers);
+    } else {
+      console.warn(`Skipping collabswarm.connect(${bootstrapPeers})`);
+    }
+  }, [bootstrapPeers, collabswarm]);
 
   const loggedIn = (privateKey && publicKey) !== undefined;
 
@@ -57,6 +68,12 @@ function App() {
               <Nav.Link>Secrets</Nav.Link>
             </LinkContainer>
           </Nav.Item>
+          {collabswarm &&
+            collabswarm.ipfsInfo &&
+            collabswarm.ipfsInfo.id &&
+            'Your Peer ID: '}
+
+          {collabswarm && collabswarm.ipfsInfo && collabswarm.ipfsInfo.id}
         </Nav>
 
         <Switch>
@@ -66,6 +83,8 @@ function App() {
               setPrivateKey={setPrivateKey}
               publicKey={publicKey}
               setPublicKey={setPublicKey}
+              bootstrapPeers={bootstrapPeers}
+              setBootstrapPeers={setBootstrapPeers}
             />
           </Route>
           <Route path="/secrets">

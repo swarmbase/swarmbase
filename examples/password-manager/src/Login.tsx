@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Container, Row, Form } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
+import { bootstrapNode } from './constants';
 
 async function exportKey(key: CryptoKey): Promise<string> {
   const jwk = await crypto.subtle.exportKey('jwk', key);
@@ -27,11 +28,14 @@ async function importKey(
 export function Login({
   setPublicKey,
   setPrivateKey,
+  setBootstrapPeers,
 }: {
   publicKey?: CryptoKey;
   setPublicKey?: (publicKey: CryptoKey) => void;
   privateKey?: CryptoKey;
   setPrivateKey?: (privateKey: CryptoKey) => void;
+  bootstrapPeers?: string[];
+  setBootstrapPeers?: (peers: string[]) => void;
 }) {
   const history = useHistory();
   const [generatedPrivateKey, setGeneratedPrivateKey] = React.useState<
@@ -40,6 +44,7 @@ export function Login({
   const [generatedPublicKey, setGeneratedPublicKey] = React.useState<
     string | undefined
   >();
+  const [draftBootstrapPeers, setDraftBootstrapPeers] = React.useState('');
   // Generate a keypair.
   React.useEffect(() => {
     console.log(`Calling <Login /> init effect`);
@@ -98,6 +103,18 @@ export function Login({
               key (must be in JWK format).
             </Form.Text>
           </Form.Group>
+
+          <Form.Group className="mb-3" controlId="formBootstrapPeers">
+            <Form.Label>Bootstrap Peers</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={6}
+              placeholder="Enter a list of (line separated) Peer IDs"
+              value={draftBootstrapPeers || bootstrapNode}
+              onChange={(e) => setDraftBootstrapPeers(e.target.value)}
+            />
+          </Form.Group>
+
           <Button
             variant="primary"
             onClick={async () => {
@@ -107,6 +124,9 @@ export function Login({
               setPrivateKey &&
                 generatedPrivateKey &&
                 setPrivateKey(await importKey(generatedPrivateKey, ['sign']));
+              setBootstrapPeers &&
+                draftBootstrapPeers &&
+                setBootstrapPeers(draftBootstrapPeers.split('\n'));
               // Redirct to the /secrets page.
               history.push('/secrets');
             }}
