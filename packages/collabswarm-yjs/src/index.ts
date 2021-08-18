@@ -6,6 +6,8 @@ import {
   YjsACLProvider,
   YjsKeychain,
   YjsKeychainProvider,
+  serializeKey,
+  deserializeKey,
 } from './collabswarm-yjs';
 
 export {
@@ -16,4 +18,6 @@ export {
   YjsKeychain,
   YjsKeychainProvider,
   YjsJSONSerializer,
+  serializeKey,
+  deserializeKey,
 };

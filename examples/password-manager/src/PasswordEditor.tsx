@@ -4,18 +4,19 @@ import { PermissionsTable } from './PermissionsTable';
 import { YjsCollabswarm } from './utils';
 import Delta from 'quill-delta';
 import * as Y from 'yjs';
+import { indexDocPath } from './constants';
 
 export function PasswordEditor({
   passwordId,
   collabswarm,
-  upsertPasswordStub,
 }: {
   passwordId?: string;
   collabswarm: YjsCollabswarm;
-
-  upsertPasswordStub: (id: string, name: Delta) => void;
 }) {
-  // TODO: Subscribe to a collabswarm document.
+  const [, changePasswords] = useCollabswarmDocumentState(
+    collabswarm,
+    indexDocPath,
+  );
   const [doc, changeDoc] = useCollabswarmDocumentState(
     collabswarm,
     `/passwords/${passwordId}`,
@@ -34,19 +35,33 @@ export function PasswordEditor({
           placeholder="Enter a name"
           value={name || ''}
           onChange={(e) => {
+            // Skip making changes if `id` is missing (invalid state)
             if (!id) {
               return;
             }
 
+            // Calculate operations that were performed on the text.
             const a = new Delta().insert(name || '');
             const b = new Delta().insert(e.target.value);
             const diff = a.diff(b);
             console.log('Got a diff:', diff);
 
+            // Apply diffs calculated on text.
             changeDoc((current) => {
               current.getText('name').applyDelta(diff);
             });
-            upsertPasswordStub(id, diff);
+            changePasswords((currentIndex) => {
+              currentIndex
+                .getArray<Y.Map<Y.Text>>('passwords')
+                .forEach((ymap) => {
+                  const tIdRef = ymap.get('id');
+                  const tId = tIdRef && tIdRef.toString();
+                  if (tId === id) {
+                    const tRef = ymap.get('name');
+                    tRef && tRef.applyDelta(diff);
+                  }
+                });
+            });
           }}
         />
       </Form.Group>
@@ -75,14 +90,7 @@ export function PasswordEditor({
       </Form.Group>
       {/* Sharing Controls */}
       <Form.Label column="sm">Permissions</Form.Label>
-      <PermissionsTable
-        permissions={doc && doc.getArray<Y.Map<string>>('permissions')}
-        changePermissions={(changeFn) => {
-          changeDoc((current) => {
-            changeFn(current.getArray<Y.Map<string>>('permissions'));
-          });
-        }}
-      />
+      <PermissionsTable passwordId={passwordId} collabswarm={collabswarm} />
     </Form>
   );
 }

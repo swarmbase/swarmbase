@@ -40,8 +40,10 @@ import { Base64 } from 'js-base64';
  *
  * Subscribe functions that match this type signature to track local-change/remote-change events.
  */
-export type CollabswarmDocumentChangeHandler<DocType> = (
+export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
   current: DocType,
+  readers: PublicKey[],
+  writers: PublicKey[],
   hashes: string[],
 ) => void;
 
@@ -87,16 +89,17 @@ export class CollabswarmDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
+  /**
+   * CORE STATE ===============================================================
+   */
+
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
     return this._document;
   }
-
-  // Last sync message (for populating load requests).
-  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
 
   // Document readers ACL.
   private _readers = this._aclProvider.initialize();
@@ -107,6 +110,13 @@ export class CollabswarmDocument<
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain = this._keychainProvider.initialize();
+
+  /**
+   * /CORE STATE ==============================================================
+   */
+
+  // Last sync message (for populating load requests).
+  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
@@ -119,12 +129,12 @@ export class CollabswarmDocument<
 
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
-    [id: string]: CollabswarmDocumentChangeHandler<DocType>;
+    [id: string]: CollabswarmDocumentChangeHandler<DocType, PublicKey>;
   } = {};
 
   // Handlers registered by users of `CollabswarmDocument` that fire on local changes.
   private _localHandlers: {
-    [id: string]: CollabswarmDocumentChangeHandler<DocType>;
+    [id: string]: CollabswarmDocumentChangeHandler<DocType, PublicKey>;
   } = {};
 
   public get libp2p(): Libp2p {
@@ -320,14 +330,24 @@ export class CollabswarmDocument<
     return (await Promise.all(results)).flat(1);
   }
 
-  private _fireRemoteUpdateHandlers(hashes: string[]) {
+  private async _fireRemoteUpdateHandlers(hashes: string[]) {
     for (const handler of Object.values(this._remoteHandlers)) {
-      handler(this.document, hashes);
+      handler(
+        this.document,
+        await this.getReaders(),
+        await this.getWriters(),
+        hashes,
+      );
     }
   }
-  private _fireLocalUpdateHandlers(hashes: string[]) {
+  private async _fireLocalUpdateHandlers(hashes: string[]) {
     for (const handler of Object.values(this._localHandlers)) {
-      handler(this.document, hashes);
+      handler(
+        this.document,
+        await this.getReaders(),
+        await this.getWriters(),
+        hashes,
+      );
     }
   }
 
@@ -390,7 +410,7 @@ export class CollabswarmDocument<
       for (const newHash of newDocumentHashes) {
         this._hashes.add(newHash);
       }
-      this._fireRemoteUpdateHandlers(newDocumentHashes);
+      await this._fireRemoteUpdateHandlers(newDocumentHashes);
     }
 
     // Then apply missing hashes by fetching them via IPFS.
@@ -406,20 +426,17 @@ export class CollabswarmDocument<
                   missingChanges,
                 );
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtReaderChangeNode: {
                 this._readers.merge(missingChanges);
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtWriterChangeNode: {
                 this._writers.merge(missingChanges);
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
             }
           } else {
@@ -502,9 +519,8 @@ export class CollabswarmDocument<
     updateMessage.signature = await this._signAsWriter(updateMessage);
 
     this._lastSyncMessage = updateMessage;
-    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
-      updateMessage,
-    );
+    const serializedUpdate =
+      this._syncMessageSerializer.serializeSyncMessage(updateMessage);
 
     // Encrypt sync message.
     const [documentKeyID, documentKey] = await this._keychain.current();
@@ -524,16 +540,15 @@ export class CollabswarmDocument<
     );
 
     // Fire change handlers.
-    this._fireLocalUpdateHandlers([hash]);
+    await this._fireLocalUpdateHandlers([hash]);
   }
 
   private _handleLoadRequest({ stream }: Libp2p.HandlerProps) {
     console.log(`received ${this.protocolLoadV1} dial`);
     pipe(stream, async (source) => {
       const assembledRequest = await readUint8Iterable(source);
-      const message = this._loadMessageSerializer.deserializeLoadRequest(
-        assembledRequest,
-      );
+      const message =
+        this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
       console.log(
         `received ${this.protocolLoadV1} request:`,
         assembledRequest,
@@ -574,9 +589,8 @@ export class CollabswarmDocument<
       const loadMessage = this._createSyncMessage();
       loadMessage.keychainChanges = this._keychain.history();
 
-      const assembled = this._syncMessageSerializer.serializeSyncMessage(
-        loadMessage,
-      );
+      const assembled =
+        this._syncMessageSerializer.serializeSyncMessage(loadMessage);
       console.log(
         `sending ${this.protocolLoadV1} response:`,
         assembled,
@@ -660,9 +674,8 @@ export class CollabswarmDocument<
         stream,
         async (source: any) => {
           const assembled = await readUint8Iterable(source);
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            assembled,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(assembled);
           console.log(
             `received ${this.protocolLoadV1} response:`,
             assembled,
@@ -719,9 +732,8 @@ export class CollabswarmDocument<
             return this.load();
           }
 
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            rawContent,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
           return this.sync(message);
         },
@@ -818,7 +830,7 @@ export class CollabswarmDocument<
    */
   public subscribe(
     id: string,
-    handler: CollabswarmDocumentChangeHandler<DocType>,
+    handler: CollabswarmDocumentChangeHandler<DocType, PublicKey>,
     originFilter: 'all' | 'remote' | 'local' = 'all',
   ) {
     switch (originFilter) {
@@ -875,6 +887,20 @@ export class CollabswarmDocument<
     await this._makeChange(changes);
   }
 
+  /**
+   * Get list of writers.
+   *
+   * @return List of public keys with write access.
+   */
+  public async getWriters(): Promise<PublicKey[]> {
+    return await this._writers.users();
+  }
+
+  /**
+   * Add a new user as a valid writer. Users are identified by their public keys
+   *
+   * @param writer User's public key
+   */
   public async addWriter(writer: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
@@ -889,6 +915,11 @@ export class CollabswarmDocument<
     await this._makeChange(changes, crdtWriterChangeNode);
   }
 
+  /**
+   * Remove a user as a valid writer. Users are identified by their public keys
+   *
+   * @param writer User's public key
+   */
   public async removeWriter(writer: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
@@ -903,6 +934,25 @@ export class CollabswarmDocument<
     await this._makeChange(changes, crdtWriterChangeNode);
   }
 
+  /**
+   * Returns a list of all public keys with read access.
+   *
+   * Note: expects readers and writers are disjoint.
+   *
+   * @return List of public keys with read access.
+   */
+  public async getReaders(): Promise<PublicKey[]> {
+    // TODO: This breaks if there are duplicate entries in reader/writer ACL. This case may occur if
+    //       the user is manually added to both or due to simultaneous editing this results in a merge
+    //       state result with a user in both acls.
+    return [...(await this._readers.users()), ...(await this._writers.users())];
+  }
+
+  /**
+   * Add a new user as a valid reader. Users are identified by their public keys
+   *
+   * @param reader User's public key
+   */
   public async addReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
@@ -918,6 +968,11 @@ export class CollabswarmDocument<
     // TODO: Consider sending document key to the new reader as a speedup.
   }
 
+  /**
+   * Remove a user as a valid reader. Users are identified by their public keys
+   *
+   * @param reader User's public key
+   */
   public async removeReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 

@@ -18,7 +18,7 @@ export function useCollabswarm<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 >(
   privateKey: PrivateKey | undefined,
   publicKey: PublicKey | undefined,
@@ -73,7 +73,7 @@ export function useCollabswarmDocumentState<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 >(
   collabswarm: Collabswarm<
     DocType,
@@ -85,7 +85,19 @@ export function useCollabswarmDocumentState<
   >,
   documentPath: string,
   originFilter: 'all' | 'remote' | 'local' = 'all',
-): [DocType | undefined, (fn: ChangeFnType, message?: string) => void] {
+): [
+  DocType | undefined,
+  (fn: ChangeFnType, message?: string) => void,
+  {
+    readers: PublicKey[];
+    addReader: (user: PublicKey) => Promise<void>;
+    removeReader: (user: PublicKey) => Promise<void>;
+    writers: PublicKey[];
+    addWriter: (user: PublicKey) => Promise<void>;
+    removeWriter: (user: PublicKey) => Promise<void>;
+  },
+] {
+  // TODO: These caches grow infinitely.
   const [docCache, setDocCache] = useState<{
     [docPath: string]: CollabswarmDocument<
       DocType,
@@ -99,6 +111,12 @@ export function useCollabswarmDocumentState<
   const [docDataCache, setDocDataCache] = useState<{
     [docPath: string]: DocType;
   }>({});
+  const [docReadersCache, setDocReadersCache] = useState<{
+    [docPath: string]: PublicKey[];
+  }>({});
+  const [docWritersCache, setDocWritersCache] = useState<{
+    [docPath: string]: PublicKey[];
+  }>({});
 
   useEffect(() => {
     (async () => {
@@ -109,6 +127,8 @@ export function useCollabswarmDocumentState<
       );
       let newDocCache = docCache;
       let newDocDataCache = docDataCache;
+      let newDocReadersCache = docReadersCache;
+      let newDocWritersCache = docWritersCache;
       let docRef: CollabswarmDocument<
         DocType,
         ChangesType,
@@ -123,8 +143,12 @@ export function useCollabswarmDocumentState<
           await docRef.open();
           newDocCache = { ...docCache };
           newDocDataCache = { ...docDataCache };
+          newDocReadersCache = { ...docReadersCache };
+          newDocWritersCache = { ...docWritersCache };
           newDocCache[documentPath] = docRef;
           newDocDataCache[documentPath] = docRef.document;
+          newDocReadersCache[documentPath] = await docRef.getReaders();
+          newDocWritersCache[documentPath] = await docRef.getWriters();
         }
       }
 
@@ -136,11 +160,17 @@ export function useCollabswarmDocumentState<
       // Subscribe to document changes.
       docRef.subscribe(
         'useCollabswarmDocumentState',
-        (current: DocType) => {
+        (current, readers, writers) => {
           console.log('Received a document update!', current);
           const newDocDataCache = { ...docDataCache };
+          const newDocReadersCache = { ...docReadersCache };
+          const newDocWritersCache = { ...docWritersCache };
           newDocDataCache[documentPath] = current;
+          newDocReadersCache[documentPath] = readers;
+          newDocWritersCache[documentPath] = writers;
           setDocDataCache(newDocDataCache);
+          setDocReadersCache(newDocReadersCache);
+          setDocWritersCache(newDocWritersCache);
         },
         originFilter,
       );
@@ -151,6 +181,12 @@ export function useCollabswarmDocumentState<
       if (docDataCache !== newDocDataCache) {
         setDocDataCache(newDocDataCache);
       }
+      if (docReadersCache !== newDocReadersCache) {
+        setDocReadersCache(newDocReadersCache);
+      }
+      if (docWritersCache !== newDocWritersCache) {
+        setDocWritersCache(newDocWritersCache);
+      }
     })();
   }, [documentPath]);
 
@@ -159,6 +195,26 @@ export function useCollabswarmDocumentState<
     (fn: ChangeFnType, message?: string) => {
       const docRef = docCache[documentPath];
       docRef && docRef.change(fn, message);
+    },
+    {
+      readers: docReadersCache[documentPath],
+      addReader: async (user: PublicKey) => {
+        const docRef = docCache[documentPath];
+        await docRef.addReader(user);
+      },
+      removeReader: async (user: PublicKey) => {
+        const docRef = docCache[documentPath];
+        await docRef.removeReader(user);
+      },
+      writers: docWritersCache[documentPath],
+      addWriter: async (user: PublicKey) => {
+        const docRef = docCache[documentPath];
+        await docRef.addWriter(user);
+      },
+      removeWriter: async (user: PublicKey) => {
+        const docRef = docCache[documentPath];
+        await docRef.removeWriter(user);
+      },
     },
   ];
 }

@@ -5,6 +5,7 @@ import * as uuid from 'uuid';
 import { YjsCollabswarm } from './utils';
 import * as Y from 'yjs';
 import { PasswordEditor } from './PasswordEditor';
+import { indexDocPath } from './constants';
 
 export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
   const [currentPassword, setCurrentPassword] = React.useState<
@@ -12,7 +13,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
   >();
   const [passwords, changePasswords] = useCollabswarmDocumentState(
     collabswarm,
-    'passwords-index',
+    indexDocPath,
   );
 
   const currentPasswordIdRef = currentPassword && currentPassword.get('id');
@@ -67,20 +68,6 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
             <PasswordEditor
               collabswarm={collabswarm}
               passwordId={currentPasswordId}
-              upsertPasswordStub={(id, nameChanges) => {
-                changePasswords((current) => {
-                  current
-                    .getArray<Y.Map<Y.Text>>('passwords')
-                    .forEach((ymap) => {
-                      const tIdRef = ymap.get('id');
-                      const tId = tIdRef && tIdRef.toString();
-                      if (tId === id) {
-                        const tRef = ymap.get('name');
-                        tRef && tRef.applyDelta(nameChanges);
-                      }
-                    });
-                });
-              }}
             />
           )}
         </Col>

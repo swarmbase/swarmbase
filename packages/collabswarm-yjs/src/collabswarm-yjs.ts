@@ -11,10 +11,14 @@ import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
-export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<Doc>;
+export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<
+  Doc,
+  CryptoKey
+>;
 
 export class YjsProvider
-  implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void> {
+  implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void>
+{
   newDocument(): Doc {
     return new Doc();
   }
@@ -49,7 +53,13 @@ export async function serializeKey(publicKey: CryptoKey): Promise<string> {
 }
 
 export function deserializeKey(
-  algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | DhImportKeyParams | AesKeyAlgorithm,
+  algorithm:
+    | AlgorithmIdentifier
+    | RsaHashedImportParams
+    | EcKeyImportParams
+    | HmacImportParams
+    | DhImportKeyParams
+    | AesKeyAlgorithm,
   keyUsages: KeyUsage[],
 ): (publicKey: string) => Promise<CryptoKey> {
   return (publicKey: string) => {
@@ -96,10 +106,15 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   users(): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
     return Promise.all(
-      [...this._acl.getMap('users').keys()].map(deserializeKey({
-        name: 'ECDSA',
-        namedCurve: 'P-384',
-      }, ["verify"])),
+      [...this._acl.getMap('users').keys()].map(
+        deserializeKey(
+          {
+            name: 'ECDSA',
+            namedCurve: 'P-384',
+          },
+          ['verify'],
+        ),
+      ),
     );
   }
 }
@@ -146,7 +161,10 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
         (async () => {
           let key = this._keyCache.get(keyID);
           if (!key) {
-            key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
+            key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
+              'encrypt',
+              'decrypt',
+            ])(serialized);
           }
           return [keyIDBytes, key] as [Uint8Array, CryptoKey];
         })(),
@@ -166,7 +184,10 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 
     let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey({name: 'AES-GCM', length: 256}, ["encrypt", "decrypt"])(serialized);
+      key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
+        'encrypt',
+        'decrypt',
+      ])(serialized);
     }
     return [keyIDBytes, key];
   }
@@ -177,7 +198,8 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 }
 
 export class YjsKeychainProvider
-  implements KeychainProvider<Uint8Array, CryptoKey> {
+  implements KeychainProvider<Uint8Array, CryptoKey>
+{
   initialize(): YjsKeychain {
     return new YjsKeychain();
   }
