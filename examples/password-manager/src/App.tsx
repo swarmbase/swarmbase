@@ -19,6 +19,7 @@ import {
 } from '@collabswarm/collabswarm-yjs';
 import { Login } from './Login';
 import { PasswordList } from './PasswordList';
+import { Settings } from './Settings';
 
 const crdt = new YjsProvider();
 const serializer = new YjsJSONSerializer();
@@ -68,12 +69,11 @@ function App() {
               <Nav.Link>Secrets</Nav.Link>
             </LinkContainer>
           </Nav.Item>
-          {collabswarm &&
-            collabswarm.ipfsInfo &&
-            collabswarm.ipfsInfo.id &&
-            'Your Peer ID: '}
-
-          {collabswarm && collabswarm.ipfsInfo && collabswarm.ipfsInfo.id}
+          <Nav.Item>
+            <LinkContainer to="/settings">
+              <Nav.Link>Settings</Nav.Link>
+            </LinkContainer>
+          </Nav.Item>
         </Nav>
 
         <Switch>
@@ -91,6 +91,17 @@ function App() {
             {loggedIn ? (
               collabswarm ? (
                 <PasswordList collabswarm={collabswarm} />
+              ) : (
+                <i>Loading collabswarm...</i>
+              )
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
+          <Route path="/settings">
+            {loggedIn ? (
+              collabswarm ? (
+                <Settings collabswarm={collabswarm} publicKey={publicKey} />
               ) : (
                 <i>Loading collabswarm...</i>
               )
