@@ -10,7 +10,10 @@ import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { CollabswarmDocument, SubtleCrypto } from '@collabswarm/collabswarm';
-import { CollabswarmContext, useCollabswarm } from '@collabswarm/collabswarm-react';
+import {
+  CollabswarmContext,
+  useCollabswarm,
+} from '@collabswarm/collabswarm-react';
 import {
   YjsProvider,
   YjsJSONSerializer,
@@ -33,10 +36,18 @@ function App() {
   const [bootstrapPeers, setBootstrapPeers] = React.useState<
     string[] | undefined
   >();
-  const [docCache, setDocCache] = React.useState<{ [docPath: string]: CollabswarmDocument<any, any, any, any, any, any> }>({});
-  const [docDataCache, setDocDataCache] = React.useState<{ [docPath: string]: any }>({});
-  const [docReadersCache, setDocReadersCache] = React.useState<{ [docPath: string]: any[] }>({});
-  const [docWritersCache, setDocWritersCache] = React.useState<{ [docPath: string]: any[] }>({});
+  const [docCache, setDocCache] = React.useState<{
+    [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
+  }>({});
+  const [docDataCache, setDocDataCache] = React.useState<{
+    [docPath: string]: any;
+  }>({});
+  const [docReadersCache, setDocReadersCache] = React.useState<{
+    [docPath: string]: any[];
+  }>({});
+  const [docWritersCache, setDocWritersCache] = React.useState<{
+    [docPath: string]: any[];
+  }>({});
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,
@@ -60,16 +71,18 @@ function App() {
   const loggedIn = (privateKey && publicKey) !== undefined;
 
   return (
-    <CollabswarmContext.Provider value={{
-      docCache,
-      docDataCache,
-      docReadersCache,
-      docWritersCache,
-      setDocCache,
-      setDocDataCache,
-      setDocReadersCache,
-      setDocWritersCache,
-    }}>
+    <CollabswarmContext.Provider
+      value={{
+        docCache,
+        docDataCache,
+        docReadersCache,
+        docWritersCache,
+        setDocCache,
+        setDocDataCache,
+        setDocReadersCache,
+        setDocWritersCache,
+      }}
+    >
       <Router>
         <Container>
           <Nav variant="tabs" defaultActiveKey="/login">

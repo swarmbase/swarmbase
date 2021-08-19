@@ -18,23 +18,40 @@ export type CollabswarmContextOpenResult<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey,
-  > = {
-    docRef?: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>;
-    readers?: PublicKey[];
-    writers?: PublicKey[];
-  };
+  DocumentKey
+> = {
+  docRef?: CollabswarmDocument<
+    DocType,
+    ChangesType,
+    ChangeFnType,
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >;
+  readers?: PublicKey[];
+  writers?: PublicKey[];
+};
 
-const openTasks = new Map<string, Promise<CollabswarmContextOpenResult<any, any, any, any, any, any>>>();
-const openTaskResults = new Map<string, CollabswarmContextOpenResult<any, any, any, any, any, any>>();
+const openTasks = new Map<
+  string,
+  Promise<CollabswarmContextOpenResult<any, any, any, any, any, any>>
+>();
+const openTaskResults = new Map<
+  string,
+  CollabswarmContextOpenResult<any, any, any, any, any, any>
+>();
 
 export const CollabswarmContext = createContext<{
   // TODO: These caches grow infinitely.
-  docCache: { [docPath: string]: CollabswarmDocument<any, any, any, any, any, any> };
+  docCache: {
+    [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
+  };
   docDataCache: { [docPath: string]: any };
   docReadersCache: { [docPath: string]: any[] };
   docWritersCache: { [docPath: string]: any[] };
-  setDocCache: (docCache: { [docPath: string]: CollabswarmDocument<any, any, any, any, any, any> }) => void;
+  setDocCache: (docCache: {
+    [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
+  }) => void;
   setDocDataCache: (docDataCache: { [docPath: string]: any }) => void;
   setDocReadersCache: (docReadersCache: { [docPath: string]: any[] }) => void;
   setDocWritersCache: (docWritersCache: { [docPath: string]: any[] }) => void;
@@ -44,10 +61,12 @@ export const CollabswarmContext = createContext<{
   docDataCache: {},
   docReadersCache: {},
   docWritersCache: {},
-  setDocCache: (docCache: { [docPath: string]: CollabswarmDocument<any, any, any, any, any, any> }) => { },
-  setDocDataCache: (docDataCache: { [docPath: string]: any }) => { },
-  setDocReadersCache: (docReadersCache: { [docPath: string]: any[] }) => { },
-  setDocWritersCache: (docWritersCache: { [docPath: string]: any[] }) => { },
+  setDocCache: (docCache: {
+    [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
+  }) => {},
+  setDocDataCache: (docDataCache: { [docPath: string]: any }) => {},
+  setDocReadersCache: (docReadersCache: { [docPath: string]: any[] }) => {},
+  setDocWritersCache: (docWritersCache: { [docPath: string]: any[] }) => {},
 });
 
 export function useCollabswarm<
@@ -56,28 +75,28 @@ export function useCollabswarm<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey,
-  >(
-    privateKey: PrivateKey | undefined,
-    publicKey: PublicKey | undefined,
-    provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
-    changesSerializer: ChangesSerializer<ChangesType>,
-    syncMessageSerializer: SyncMessageSerializer<ChangesType>,
-    loadMessageSerializer: LoadMessageSerializer,
-    authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
-    aclProvider: ACLProvider<ChangesType, PublicKey>,
-    keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
-    config?: CollabswarmConfig,
+  DocumentKey
+>(
+  privateKey: PrivateKey | undefined,
+  publicKey: PublicKey | undefined,
+  provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
+  changesSerializer: ChangesSerializer<ChangesType>,
+  syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+  loadMessageSerializer: LoadMessageSerializer,
+  authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
+  aclProvider: ACLProvider<ChangesType, PublicKey>,
+  keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
+  config?: CollabswarmConfig,
 ) {
   const [collabswarm, setCollabswarm] = useState<
     | Collabswarm<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >
+        DocType,
+        ChangesType,
+        ChangeFnType,
+        PrivateKey,
+        PublicKey,
+        DocumentKey
+      >
     | undefined
   >();
 
@@ -111,31 +130,30 @@ export function useCollabswarmDocumentState<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey,
-  >(
-    collabswarm: Collabswarm<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
-    documentPath: string,
-    originFilter: 'all' | 'remote' | 'local' = 'all',
+  DocumentKey
+>(
+  collabswarm: Collabswarm<
+    DocType,
+    ChangesType,
+    ChangeFnType,
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >,
+  documentPath: string,
+  originFilter: 'all' | 'remote' | 'local' = 'all',
 ): [
-    DocType | undefined,
-    (fn: ChangeFnType, message?: string) => void,
-    {
-      readers: PublicKey[];
-      addReader: (user: PublicKey) => Promise<void>;
-      removeReader: (user: PublicKey) => Promise<void>;
-      writers: PublicKey[];
-      addWriter: (user: PublicKey) => Promise<void>;
-      removeWriter: (user: PublicKey) => Promise<void>;
-    },
-  ] {
-
+  DocType | undefined,
+  (fn: ChangeFnType, message?: string) => void,
+  {
+    readers: PublicKey[];
+    addReader: (user: PublicKey) => Promise<void>;
+    removeReader: (user: PublicKey) => Promise<void>;
+    writers: PublicKey[];
+    addWriter: (user: PublicKey) => Promise<void>;
+    removeWriter: (user: PublicKey) => Promise<void>;
+  },
+] {
   const {
     docCache,
     docDataCache,
@@ -149,10 +167,23 @@ export function useCollabswarmDocumentState<
 
   useEffect(() => {
     (async () => {
-      let newDocCache: { [docPath: string]: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> } = docCache;
+      let newDocCache: {
+        [docPath: string]: CollabswarmDocument<
+          DocType,
+          ChangesType,
+          ChangeFnType,
+          PrivateKey,
+          PublicKey,
+          DocumentKey
+        >;
+      } = docCache;
       let newDocDataCache: { [docPath: string]: DocType } = docDataCache;
-      let newDocReadersCache: { [docPath: string]: PublicKey[] } = docReadersCache;
-      let newDocWritersCache: { [docPath: string]: PublicKey[] } = docWritersCache;
+      let newDocReadersCache: {
+        [docPath: string]: PublicKey[];
+      } = docReadersCache;
+      let newDocWritersCache: {
+        [docPath: string]: PublicKey[];
+      } = docWritersCache;
       let docRef: CollabswarmDocument<
         DocType,
         ChangesType,
@@ -165,7 +196,9 @@ export function useCollabswarmDocumentState<
       if (!docRef) {
         if (!taskExists) {
           docRef = collabswarm.doc(documentPath);
-          const openPromise: Promise<CollabswarmContextOpenResult<any, any, any, any, any, any>> = (async () => {
+          const openPromise: Promise<
+            CollabswarmContextOpenResult<any, any, any, any, any, any>
+          > = (async () => {
             if (docRef) {
               await docRef.open();
               const readers = await docRef.getReaders();
@@ -175,7 +208,14 @@ export function useCollabswarmDocumentState<
             return {};
           })();
           openTasks.set(documentPath, openPromise);
-          const openTaskResult: CollabswarmContextOpenResult<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> = await openPromise;
+          const openTaskResult: CollabswarmContextOpenResult<
+            DocType,
+            ChangesType,
+            ChangeFnType,
+            PrivateKey,
+            PublicKey,
+            DocumentKey
+          > = await openPromise;
           openTaskResults.set(documentPath, openTaskResult);
           const { docRef: currentDocRef, readers, writers } = openTaskResult;
           if (currentDocRef) {
@@ -185,18 +225,30 @@ export function useCollabswarmDocumentState<
             newDocDataCache = {};
             newDocReadersCache = {};
             newDocWritersCache = {};
-            openTaskResults.forEach((openTaskResult: CollabswarmContextOpenResult<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>, path) => {
-              if (openTaskResult.docRef) {
-                newDocCache[path] = openTaskResult.docRef;
-                newDocDataCache[path] = openTaskResult.docRef.document;
-              }
-              if (openTaskResult.readers) {
-                newDocReadersCache[path] = openTaskResult.readers;
-              }
-              if (openTaskResult.writers) {
-                newDocWritersCache[path] = openTaskResult.writers;
-              }
-            });
+            openTaskResults.forEach(
+              (
+                openTaskResult: CollabswarmContextOpenResult<
+                  DocType,
+                  ChangesType,
+                  ChangeFnType,
+                  PrivateKey,
+                  PublicKey,
+                  DocumentKey
+                >,
+                path,
+              ) => {
+                if (openTaskResult.docRef) {
+                  newDocCache[path] = openTaskResult.docRef;
+                  newDocDataCache[path] = openTaskResult.docRef.document;
+                }
+                if (openTaskResult.readers) {
+                  newDocReadersCache[path] = openTaskResult.readers;
+                }
+                if (openTaskResult.writers) {
+                  newDocWritersCache[path] = openTaskResult.writers;
+                }
+              },
+            );
 
             // Subscribe to document changes.
             currentDocRef.subscribe(
@@ -208,24 +260,40 @@ export function useCollabswarmDocumentState<
                 const newResults = { ...currentResults, readers, writers };
                 openTaskResults.set(documentPath, newResults);
                 const newDocDataCache: { [docPath: string]: DocType } = {};
-                const newDocReadersCache: { [docPath: string]: PublicKey[] } = {};
-                const newDocWritersCache: { [docPath: string]: PublicKey[] } = {};
-                openTaskResults.forEach((openTaskResult: CollabswarmContextOpenResult<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>, path) => {
-                  if (openTaskResult.docRef) {
-                    newDocCache[path] = openTaskResult.docRef;
-                    if (path === documentPath) {
-                      newDocDataCache[path] = current;
-                    } else {
-                      newDocDataCache[path] = openTaskResult.docRef.document;
+                const newDocReadersCache: {
+                  [docPath: string]: PublicKey[];
+                } = {};
+                const newDocWritersCache: {
+                  [docPath: string]: PublicKey[];
+                } = {};
+                openTaskResults.forEach(
+                  (
+                    openTaskResult: CollabswarmContextOpenResult<
+                      DocType,
+                      ChangesType,
+                      ChangeFnType,
+                      PrivateKey,
+                      PublicKey,
+                      DocumentKey
+                    >,
+                    path,
+                  ) => {
+                    if (openTaskResult.docRef) {
+                      newDocCache[path] = openTaskResult.docRef;
+                      if (path === documentPath) {
+                        newDocDataCache[path] = current;
+                      } else {
+                        newDocDataCache[path] = openTaskResult.docRef.document;
+                      }
                     }
-                  }
-                  if (openTaskResult.readers) {
-                    newDocReadersCache[path] = openTaskResult.readers;
-                  }
-                  if (openTaskResult.writers) {
-                    newDocWritersCache[path] = openTaskResult.writers;
-                  }
-                });
+                    if (openTaskResult.readers) {
+                      newDocReadersCache[path] = openTaskResult.readers;
+                    }
+                    if (openTaskResult.writers) {
+                      newDocWritersCache[path] = openTaskResult.writers;
+                    }
+                  },
+                );
                 setDocDataCache(newDocDataCache);
                 setDocReadersCache(newDocReadersCache);
                 setDocWritersCache(newDocWritersCache);

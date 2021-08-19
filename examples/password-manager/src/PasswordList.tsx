@@ -75,8 +75,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
                       action
                       onClick={() => setCurrentPassword(password)}
                     >
-                      {name ||
-                        `Untitled Secret (id: ${id})`}
+                      {name || `Untitled Secret (id: ${id})`}
                     </ListGroup.Item>
                   );
                 })}

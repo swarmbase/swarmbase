@@ -62,7 +62,11 @@ export function PasswordEditor({
                       tRef = new Y.Text();
                       ymap.set('name', tRef);
                     }
-                    console.log('Updating index password name entry', tId, tRef);
+                    console.log(
+                      'Updating index password name entry',
+                      tId,
+                      tRef,
+                    );
                     tRef && tRef.applyDelta(diff.ops);
                   }
                 });

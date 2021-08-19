@@ -17,8 +17,7 @@ export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<
 >;
 
 export class YjsProvider
-  implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void>
-{
+  implements CRDTProvider<Doc, Uint8Array, (doc: Doc) => void> {
   newDocument(): Doc {
     return new Doc();
   }
@@ -205,8 +204,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 }
 
 export class YjsKeychainProvider
-  implements KeychainProvider<Uint8Array, CryptoKey>
-{
+  implements KeychainProvider<Uint8Array, CryptoKey> {
   initialize(): YjsKeychain {
     return new YjsKeychain();
   }
@@ -215,4 +213,4 @@ export class YjsKeychainProvider
   keyIDLength = 16;
 }
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> { }
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}
