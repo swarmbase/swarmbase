@@ -80,7 +80,21 @@ export function PermissionsTable({
                     value={permission.publicKey}
                   />
                 </td>
-                <td>{permission.permissions}</td>
+                <td>
+                  {permission.permissions}
+                  {/* TODO: show Read for 'r', Read/Write for 'rw' */}
+                  {() => {
+                    return `Hello`;
+                  }}
+                  {() => {
+                    if (permission.permissions === 'rw') {
+                      return <td>Read</td>;
+                    }
+                    if (permission.permissions === 'r') {
+                      return 'Read/Write';
+                    }
+                  }}
+                </td>
                 <td>
                   <Button
                     variant="danger"
