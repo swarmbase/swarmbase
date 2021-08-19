@@ -44,11 +44,11 @@ export function PasswordEditor({
             const a = new Delta().insert(name || '');
             const b = new Delta().insert(e.target.value);
             const diff = a.diff(b);
-            console.log('Got a diff:', diff);
 
             // Apply diffs calculated on text.
             changeDoc((current) => {
-              current.getText('name').applyDelta(diff);
+              current.getText('name').applyDelta(diff.ops);
+              console.log('Applied diff:', diff, current);
             });
             changePasswords((currentIndex) => {
               currentIndex
@@ -57,8 +57,13 @@ export function PasswordEditor({
                   const tIdRef = ymap.get('id');
                   const tId = tIdRef && tIdRef.toString();
                   if (tId === id) {
-                    const tRef = ymap.get('name');
-                    tRef && tRef.applyDelta(diff);
+                    let tRef = ymap.get('name');
+                    if (!tRef) {
+                      tRef = new Y.Text();
+                      ymap.set('name', tRef);
+                    }
+                    console.log('Updating index password name entry', tId, tRef);
+                    tRef && tRef.applyDelta(diff.ops);
                   }
                 });
             });
@@ -83,7 +88,7 @@ export function PasswordEditor({
             const diff = a.diff(b);
 
             changeDoc((current) => {
-              current.getText('value').applyDelta(diff);
+              current.getText('value').applyDelta(diff.ops);
             });
           }}
         />

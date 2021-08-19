@@ -1,3 +1,3 @@
-import { useCollabswarm, useCollabswarmDocumentState } from './hooks';
+import { useCollabswarm, useCollabswarmDocumentState, CollabswarmContext, CollabswarmContextOpenResult } from './hooks';
 
-export { useCollabswarm, useCollabswarmDocumentState };
+export { useCollabswarm, useCollabswarmDocumentState, CollabswarmContext, CollabswarmContextOpenResult };

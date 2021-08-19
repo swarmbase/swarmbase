@@ -35,6 +35,8 @@ import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
 
+import * as uuid from 'uuid';
+
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
  *
@@ -90,7 +92,7 @@ export class CollabswarmDocument<
   PrivateKey,
   PublicKey,
   DocumentKey,
-> {
+  > {
   /**
    * CORE STATE ===============================================================
    */
@@ -222,7 +224,7 @@ export class CollabswarmDocument<
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
-  ) {}
+  ) { }
 
   // Helpers ------------------------------------------------------------------
 
@@ -247,6 +249,8 @@ export class CollabswarmDocument<
       const key = this._keychain.getKey(blockKeyID);
       if (key) {
         return this._authProvider.decrypt(data, key, nonce);
+      } else {
+        console.warn(`Failed to find document key!`, uuid.stringify(blockKeyID), this._keychain);
       }
     } catch (e) {
       console.warn(`Failed to decrypt block!`, e);
@@ -498,8 +502,6 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
-    console.log(`Making changes to ${this.documentPath}`);
-
     // Store changes in ipfs.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
@@ -756,6 +758,7 @@ export class CollabswarmDocument<
       await this._writers.add(this._userPublicKey);
 
       // Add initial document key.
+      console.log(`Adding a key to ${this.documentPath}`);
       await this._keychain.add();
     }
 

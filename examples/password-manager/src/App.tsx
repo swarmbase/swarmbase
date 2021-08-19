@@ -9,8 +9,8 @@ import { Container, Nav } from 'react-bootstrap';
 import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { SubtleCrypto } from '@collabswarm/collabswarm';
-import { useCollabswarm } from '@collabswarm/collabswarm-react';
+import { CollabswarmDocument, SubtleCrypto } from '@collabswarm/collabswarm';
+import { CollabswarmContext, useCollabswarm } from '@collabswarm/collabswarm-react';
 import {
   YjsProvider,
   YjsJSONSerializer,
@@ -32,6 +32,10 @@ function App() {
   const [bootstrapPeers, setBootstrapPeers] = React.useState<
     string[] | undefined
   >();
+  const [docCache, setDocCache] = React.useState<{ [docPath: string]: CollabswarmDocument<any, any, any, any, any, any> }>({});
+  const [docDataCache, setDocDataCache] = React.useState<{ [docPath: string]: any }>({});
+  const [docReadersCache, setDocReadersCache] = React.useState<{ [docPath: string]: any[] }>({});
+  const [docWritersCache, setDocWritersCache] = React.useState<{ [docPath: string]: any[] }>({});
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,
@@ -55,55 +59,66 @@ function App() {
   const loggedIn = (privateKey && publicKey) !== undefined;
 
   return (
-    <Router>
-      <Container>
-        <Nav variant="tabs" defaultActiveKey="/login">
-          <Nav.Item>
-            <LinkContainer to="/login">
-              <Nav.Link>Login</Nav.Link>
-            </LinkContainer>
-          </Nav.Item>
-          <Nav.Item>
-            <LinkContainer to="/secrets">
-              <Nav.Link>Secrets</Nav.Link>
-            </LinkContainer>
-          </Nav.Item>
-          {collabswarm &&
-            collabswarm.ipfsInfo &&
-            collabswarm.ipfsInfo.id &&
-            'Your Peer ID: '}
+    <CollabswarmContext.Provider value={{
+      docCache,
+      docDataCache,
+      docReadersCache,
+      docWritersCache,
+      setDocCache,
+      setDocDataCache,
+      setDocReadersCache,
+      setDocWritersCache,
+    }}>
+      <Router>
+        <Container>
+          <Nav variant="tabs" defaultActiveKey="/login">
+            <Nav.Item>
+              <LinkContainer to="/login">
+                <Nav.Link>Login</Nav.Link>
+              </LinkContainer>
+            </Nav.Item>
+            <Nav.Item>
+              <LinkContainer to="/secrets">
+                <Nav.Link>Secrets</Nav.Link>
+              </LinkContainer>
+            </Nav.Item>
+            {collabswarm &&
+              collabswarm.ipfsInfo &&
+              collabswarm.ipfsInfo.id &&
+              'Your Peer ID: '}
 
-          {collabswarm && collabswarm.ipfsInfo && collabswarm.ipfsInfo.id}
-        </Nav>
+            {collabswarm && collabswarm.ipfsInfo && collabswarm.ipfsInfo.id}
+          </Nav>
 
-        <Switch>
-          <Route path="/login">
-            <Login
-              privateKey={privateKey}
-              setPrivateKey={setPrivateKey}
-              publicKey={publicKey}
-              setPublicKey={setPublicKey}
-              bootstrapPeers={bootstrapPeers}
-              setBootstrapPeers={setBootstrapPeers}
-            />
-          </Route>
-          <Route path="/secrets">
-            {loggedIn ? (
-              collabswarm ? (
-                <PasswordList collabswarm={collabswarm} />
+          <Switch>
+            <Route path="/login">
+              <Login
+                privateKey={privateKey}
+                setPrivateKey={setPrivateKey}
+                publicKey={publicKey}
+                setPublicKey={setPublicKey}
+                bootstrapPeers={bootstrapPeers}
+                setBootstrapPeers={setBootstrapPeers}
+              />
+            </Route>
+            <Route path="/secrets">
+              {loggedIn ? (
+                collabswarm ? (
+                  <PasswordList collabswarm={collabswarm} />
+                ) : (
+                  <i>Loading collabswarm...</i>
+                )
               ) : (
-                <i>Loading collabswarm...</i>
-              )
-            ) : (
-              <Redirect to="/login" />
-            )}
-          </Route>
-          <Route exact path="/">
-            {loggedIn ? <Redirect to="/secrets" /> : <Redirect to="/login" />}
-          </Route>
-        </Switch>
-      </Container>
-    </Router>
+                <Redirect to="/login" />
+              )}
+            </Route>
+            <Route exact path="/">
+              {loggedIn ? <Redirect to="/secrets" /> : <Redirect to="/login" />}
+            </Route>
+          </Switch>
+        </Container>
+      </Router>
+    </CollabswarmContext.Provider>
   );
 }
 

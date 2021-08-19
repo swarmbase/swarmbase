@@ -127,6 +127,13 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {
     const keyID = uuid.v4();
     const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+
+    const keyIDBytesID = uuid.stringify(keyIDBytes);
+    if (keyID !== keyIDBytesID) {
+      console.error(`Key ID ${keyID} is not equal to ${keyIDBytesID}`);
+      throw new Error(`Key ID ${keyID} is not equal to ${keyIDBytesID}`);
+    }
+
     const key = await crypto.subtle.generateKey(
       {
         name: 'AES-GCM',
@@ -208,4 +215,4 @@ export class YjsKeychainProvider
   keyIDLength = 16;
 }
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array> { }
