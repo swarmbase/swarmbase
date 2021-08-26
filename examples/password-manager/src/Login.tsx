@@ -1,8 +1,7 @@
 import React from 'react';
 import { Button, Container, Row, Form } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
-import { exportKey, importKey } from './utils'
-
+import { exportKey, importKey } from './utils';
 
 export function Login({
   setUserId,
@@ -29,7 +28,10 @@ export function Login({
   const [generatedPublicKey, setGeneratedPublicKey] = React.useState<
     string | undefined
   >();
-  const [draftSignalingServerAddr, setDraftSignalingServerAddr] = React.useState('/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star');
+  const [
+    draftSignalingServerAddr,
+    setDraftSignalingServerAddr,
+  ] = React.useState('/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star');
   const [draftBootstrapPeers, setDraftBootstrapPeers] = React.useState('');
   // Generate a keypair.
   React.useEffect(() => {
@@ -125,9 +127,7 @@ export function Login({
               setSignalingServerAddr &&
                 draftSignalingServerAddr &&
                 setSignalingServerAddr(draftSignalingServerAddr);
-              setUserId &&
-                generatedPublicKey &&
-                setUserId(generatedPublicKey);
+              setUserId && generatedPublicKey && setUserId(generatedPublicKey);
               // Redirct to the /secrets page.
               history.push('/secrets');
             }}

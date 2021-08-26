@@ -6,8 +6,13 @@ import { YjsCollabswarm } from './utils';
 import * as Y from 'yjs';
 import { PasswordEditor } from './PasswordEditor';
 
-
-export function PasswordList({ userId, collabswarm }: { userId: string, collabswarm: YjsCollabswarm }) {
+export function PasswordList({
+  userId,
+  collabswarm,
+}: {
+  userId: string;
+  collabswarm: YjsCollabswarm;
+}) {
   const [currentPassword, setCurrentPassword] = React.useState<
     Y.Map<Y.Text> | undefined
   >();

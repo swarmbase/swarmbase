@@ -9,7 +9,11 @@ import { Container, Nav } from 'react-bootstrap';
 import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { CollabswarmDocument, DEFAULT_CONFIG, SubtleCrypto } from '@collabswarm/collabswarm';
+import {
+  CollabswarmDocument,
+  DEFAULT_CONFIG,
+  SubtleCrypto,
+} from '@collabswarm/collabswarm';
 import {
   CollabswarmContext,
   useCollabswarm,
@@ -53,9 +57,15 @@ function App() {
     [docPath: string]: any[];
   }>({});
   const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); // use copy
-  config && config.ipfs && config.ipfs.config && config.ipfs.config.Addresses && config.ipfs.config.Addresses.Swarm && config.ipfs.config.Addresses.Swarm.push(
-    process.env.REACT_APP_SIGNALING_SERVER || '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
-  );
+  config &&
+    config.ipfs &&
+    config.ipfs.config &&
+    config.ipfs.config.Addresses &&
+    config.ipfs.config.Addresses.Swarm &&
+    config.ipfs.config.Addresses.Swarm.push(
+      process.env.REACT_APP_SIGNALING_SERVER ||
+        '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
+    );
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,
@@ -130,7 +140,7 @@ function App() {
             </Route>
             <Route path="/secrets">
               {loggedIn ? (
-                (collabswarm && userId) ? (
+                collabswarm && userId ? (
                   <PasswordList userId={userId} collabswarm={collabswarm} />
                 ) : (
                   <i>Loading collabswarm...</i>

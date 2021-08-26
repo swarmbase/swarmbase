@@ -22,11 +22,11 @@ export function Settings({
   //     key: 'IPFS Public Key',
   //     value: collabswarm.ipfsInfo.publicKey,
   //   },
-    //  TODO: shows as [object CryptoKey]
-    // {
-    //   key: 'Public Key',
-    //   value: String(publicKey),
-    // },
+  //  TODO: shows as [object CryptoKey]
+  // {
+  //   key: 'Public Key',
+  //   value: String(publicKey),
+  // },
   // );
 
   return (

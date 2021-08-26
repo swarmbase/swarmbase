@@ -81,7 +81,7 @@ export function PermissionsTable({
                   {permission.publicKey}
                 </td>
                 <td>
-                  {(permission.permissions === 'rw') ? 'Read/Write' : 'Read'}
+                  {permission.permissions === 'rw' ? 'Read/Write' : 'Read'}
                 </td>
                 <td>
                   <Button
