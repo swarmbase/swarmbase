@@ -152,7 +152,11 @@ function App() {
             <Route path="/settings">
               {loggedIn ? (
                 collabswarm ? (
-                  <Settings collabswarm={collabswarm} publicKey={publicKey} />
+                  <Settings
+                    collabswarm={collabswarm}
+                    publicKey={publicKey}
+                    userId={userId}
+                  />
                 ) : (
                   <i>Loading collabswarm...</i>
                 )

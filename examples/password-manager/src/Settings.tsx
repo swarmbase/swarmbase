@@ -1,33 +1,42 @@
+import { useEffect } from 'react';
 import { Button, Table, Row, Container } from 'react-bootstrap';
-import { YjsCollabswarm } from './utils';
+import { YjsCollabswarm, importKey } from './utils';
+import { serializeKey } from '@collabswarm/collabswarm-yjs';
 
 type Setting = {
   key: string; // id
-  value: string;
+  value?: string | Promise<string | undefined>;
 };
 
 export function Settings({
   collabswarm,
   publicKey,
+  userId,
 }: {
   collabswarm: YjsCollabswarm;
   publicKey?: CryptoKey;
+  userId?: string;
 }) {
   const settings: Setting[] = collabswarm.ipfsInfo.addresses.map((a, i) => ({
     key: `Peer ID ${i + 1}`,
     value: a.toString(),
   }));
-  // settings.push(
-  //   {
-  //     key: 'IPFS Public Key',
-  //     value: collabswarm.ipfsInfo.publicKey,
-  //   },
-  //  TODO: shows as [object CryptoKey]
-  // {
-  //   key: 'Public Key',
-  //   value: String(publicKey),
-  // },
-  // );
+
+  // TODO: display in settings table; does print to console
+  useEffect(() => {
+    (async () => {
+      if (!userId) {
+        return;
+      }
+      const key: CryptoKey = await importKey(userId, []);
+      const serializedKey: string = await serializeKey(key);
+      console.log(`Settings#userId: ${serializedKey}`);
+      settings.push({
+        key: 'Public Key',
+        value: serializedKey,
+      });
+    })();
+  }, []);
 
   return (
     <Container className="ml-auto mr-auto mt-5">
@@ -68,6 +77,7 @@ export function Settings({
                   </td>
                 </tr>
               ))}
+
             {(!settings || settings.length === 0) && (
               <tr>
                 <td colSpan={3}>No settings found!</td>
