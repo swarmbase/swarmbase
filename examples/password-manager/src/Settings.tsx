@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Table, Row, Container } from 'react-bootstrap';
 import { YjsCollabswarm, importKey } from './utils';
 import { serializeKey } from '@collabswarm/collabswarm-yjs';
@@ -17,10 +17,10 @@ export function Settings({
   publicKey?: CryptoKey;
   userId?: string;
 }) {
-  const settings: Setting[] = collabswarm.ipfsInfo.addresses.map((a, i) => ({
+  const [settings, setSettings] = useState<Setting[]>(collabswarm.ipfsInfo.addresses.map((a, i) => ({
     key: `Peer ID ${i + 1}`,
     value: a.toString(),
-  }));
+  })));
 
   // TODO: display in settings table; does print to console
   useEffect(() => {
@@ -31,12 +31,12 @@ export function Settings({
       const key: CryptoKey = await importKey(userId, []);
       const serializedKey: string = await serializeKey(key);
       console.log(`Settings#userId: ${serializedKey}`);
-      settings.push({
+      setSettings(s => [...s, {
         key: 'Public Key',
         value: serializedKey,
-      });
+      }]);
     })();
-  }, []);
+  }, [userId]);
 
   return (
     <Container className="ml-auto mr-auto mt-5">

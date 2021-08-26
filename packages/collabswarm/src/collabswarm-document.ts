@@ -701,6 +701,7 @@ export class CollabswarmDocument<
         [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
         stream,
         async (source: any) => {
+          console.log(`awaiting ${this.protocolLoadV1} response...`);
           const assembled = await readUint8Iterable(source);
           const message = this._syncMessageSerializer.deserializeSyncMessage(
             assembled,
