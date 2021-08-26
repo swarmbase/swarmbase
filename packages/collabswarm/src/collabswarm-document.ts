@@ -571,8 +571,12 @@ export class CollabswarmDocument<
       }
 
       // Verify that this user is a reader.
+      const readers = (await Promise.all([
+        this._readers.users(),
+        this._writers.users(),
+      ])).flat();
       let requestor: PublicKey | undefined;
-      for (const reader of await this._readers.users()) {
+      for (const reader of readers) {
         // TODO: Is this secure? Do we need a salt added to the signed payload?
         if (
           await this._authProvider.verify(
@@ -597,9 +601,24 @@ export class CollabswarmDocument<
       const loadMessage = this._createSyncMessage();
       loadMessage.keychainChanges = this._keychain.history();
 
-      const assembled = this._syncMessageSerializer.serializeSyncMessage(
-        loadMessage,
+      // Sign new message.
+      loadMessage.signature = await this._signAsWriter(loadMessage);
+
+      const serializedLoad = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+
+      // Encrypt sync message.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serializedLoad,
+        documentKey,
       );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
       console.log(
         `sending ${this.protocolLoadV1} response:`,
         assembled,
@@ -607,7 +626,7 @@ export class CollabswarmDocument<
       );
 
       // Return a sync message.
-      return [this._syncMessageSerializer.serializeSyncMessage(loadMessage)];
+      return [assembled];
     });
   }
 
