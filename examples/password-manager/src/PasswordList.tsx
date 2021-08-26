@@ -5,15 +5,15 @@ import * as uuid from 'uuid';
 import { YjsCollabswarm } from './utils';
 import * as Y from 'yjs';
 import { PasswordEditor } from './PasswordEditor';
-import { indexDocPath } from './constants';
 
-export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
+
+export function PasswordList({ userId, collabswarm }: { userId: string, collabswarm: YjsCollabswarm }) {
   const [currentPassword, setCurrentPassword] = React.useState<
     Y.Map<Y.Text> | undefined
   >();
   const [passwords, changePasswords] = useCollabswarmDocumentState(
     collabswarm,
-    indexDocPath,
+    `/${userId}/passwords-index`,
   );
   const [importingPassword, setImportingPassword] = React.useState(false);
   const [importPasswordId, setImportPasswordId] = React.useState('');
@@ -68,7 +68,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
                         current.getArray<Y.Map<Y.Text>>('passwords').push([
                           new Y.Map<Y.Text>(
                             Object.entries({
-                              id: new Y.Text(currentPasswordId),
+                              id: new Y.Text(importPasswordId),
                               // TODO: Populate name field.
                             }),
                           ),
@@ -98,7 +98,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
                       action
                       onClick={() => setCurrentPassword(password)}
                     >
-                      {name || `Untitled Secret (id: ${id})`}
+                      {name || `Unnamed Secret (id: ${id})`}
                     </ListGroup.Item>
                   );
                 })}
@@ -107,6 +107,7 @@ export function PasswordList({ collabswarm }: { collabswarm: YjsCollabswarm }) {
         <Col xs={6}>
           {currentPassword && (
             <PasswordEditor
+              userId={userId}
               collabswarm={collabswarm}
               passwordId={currentPasswordId}
             />

@@ -9,7 +9,7 @@ import { Container, Nav } from 'react-bootstrap';
 import { LinkContainer } from 'react-router-bootstrap';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { CollabswarmDocument, SubtleCrypto } from '@collabswarm/collabswarm';
+import { CollabswarmDocument, DEFAULT_CONFIG, SubtleCrypto } from '@collabswarm/collabswarm';
 import {
   CollabswarmContext,
   useCollabswarm,
@@ -33,8 +33,12 @@ const keychain = new YjsKeychainProvider();
 function App() {
   const [privateKey, setPrivateKey] = React.useState<CryptoKey | undefined>();
   const [publicKey, setPublicKey] = React.useState<CryptoKey | undefined>();
+  const [userId, setUserId] = React.useState<string | undefined>();
   const [bootstrapPeers, setBootstrapPeers] = React.useState<
     string[] | undefined
+  >();
+  const [signalingServerAddr, setSignalingServerAddr] = React.useState<
+    string | undefined
   >();
   const [docCache, setDocCache] = React.useState<{
     [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
@@ -48,6 +52,10 @@ function App() {
   const [docWritersCache, setDocWritersCache] = React.useState<{
     [docPath: string]: any[];
   }>({});
+  const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); // use copy
+  config && config.ipfs && config.ipfs.config && config.ipfs.config.Addresses && config.ipfs.config.Addresses.Swarm && config.ipfs.config.Addresses.Swarm.push(
+    process.env.REACT_APP_SIGNALING_SERVER || '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
+  );
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,
@@ -58,10 +66,12 @@ function App() {
     auth,
     acl,
     keychain,
+    config,
   );
   // Calls connect whenever bootstrap peers changes.
   useEffect(() => {
     if (collabswarm && bootstrapPeers) {
+      console.log(`Connecting to peers: ${bootstrapPeers}`);
       collabswarm.connect(bootstrapPeers);
     } else {
       console.warn(`Skipping collabswarm.connect(${bootstrapPeers})`);
@@ -110,14 +120,18 @@ function App() {
                 setPrivateKey={setPrivateKey}
                 publicKey={publicKey}
                 setPublicKey={setPublicKey}
+                userId={userId}
+                setUserId={setUserId}
+                signalingServerAddr={signalingServerAddr}
+                setSignalingServerAddr={setSignalingServerAddr}
                 bootstrapPeers={bootstrapPeers}
                 setBootstrapPeers={setBootstrapPeers}
               />
             </Route>
             <Route path="/secrets">
               {loggedIn ? (
-                collabswarm ? (
-                  <PasswordList collabswarm={collabswarm} />
+                (collabswarm && userId) ? (
+                  <PasswordList userId={userId} collabswarm={collabswarm} />
                 ) : (
                   <i>Loading collabswarm...</i>
                 )

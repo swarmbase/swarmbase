@@ -4,18 +4,19 @@ import { PermissionsTable } from './PermissionsTable';
 import { YjsCollabswarm } from './utils';
 import Delta from 'quill-delta';
 import * as Y from 'yjs';
-import { indexDocPath } from './constants';
 
 export function PasswordEditor({
+  userId,
   passwordId,
   collabswarm,
 }: {
+  userId: string;
   passwordId?: string;
   collabswarm: YjsCollabswarm;
 }) {
   const [, changePasswords] = useCollabswarmDocumentState(
     collabswarm,
-    indexDocPath,
+    `/${userId}/passwords-index`,
   );
   const [doc, changeDoc] = useCollabswarmDocumentState(
     collabswarm,
@@ -28,11 +29,11 @@ export function PasswordEditor({
 
   return (
     <Form>
-      <Form.Label column="lg">{(id && name) || ''}</Form.Label>
+      <Form.Label column="sm">ID: {id}</Form.Label>
       <Form.Group className="mb-3" controlId="exampleForm.ControlInput1">
         <Form.Label column="sm">Name</Form.Label>
         <Form.Control
-          placeholder="Enter a name"
+          placeholder="Enter a name here..."
           value={name || ''}
           onChange={(e) => {
             // Skip making changes if `id` is missing (invalid state)

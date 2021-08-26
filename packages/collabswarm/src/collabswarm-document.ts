@@ -144,11 +144,11 @@ export class CollabswarmDocument<
   }
 
   public get protocolLoadV1() {
-    return `${documentLoadV1}/${this.documentPath}`;
+    return `${documentLoadV1}${this.documentPath}`;
   }
 
   public get protocolKeyUpdateV1() {
-    return `${documentKeyUpdateV1}/${this.documentPath}`;
+    return `${documentKeyUpdateV1}${this.documentPath}`;
   }
 
   constructor(
@@ -563,7 +563,7 @@ export class CollabswarmDocument<
         message,
       );
 
-      if (message.documentId === this.documentPath) {
+      if (message.documentId !== this.documentPath) {
         console.warn(
           `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
         );
@@ -652,7 +652,7 @@ export class CollabswarmDocument<
           return docLoadConnection.stream;
         } catch (err) {
           console.warn(
-            'Failed to load document from:',
+            `Failed to load document from (${this.protocolLoadV1}): `,
             peer.addr.toString(),
             err,
           );
@@ -917,7 +917,7 @@ export class CollabswarmDocument<
     await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is not already a writer.
-    if (this._writers.check(writer)) {
+    if (await this._writers.check(writer)) {
       return;
     }
 
@@ -936,7 +936,7 @@ export class CollabswarmDocument<
     await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is already a writer.
-    if (!this._writers.check(writer)) {
+    if (!(await this._writers.check(writer))) {
       return;
     }
 
@@ -969,7 +969,7 @@ export class CollabswarmDocument<
     await this._ensureCurrentUserCanWrite();
 
     // Check that the reader is not already a reader.
-    if (this._readers.check(reader)) {
+    if (await this._readers.check(reader)) {
       return;
     }
 
@@ -989,7 +989,7 @@ export class CollabswarmDocument<
     await this._ensureCurrentUserCanWrite();
 
     // Check that the reader is already a reader.
-    if (!this._readers.check(reader)) {
+    if (!(await this._readers.check(reader))) {
       return;
     }
 

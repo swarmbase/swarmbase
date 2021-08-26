@@ -1,39 +1,24 @@
 import React from 'react';
 import { Button, Container, Row, Form } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
-import { bootstrapNode } from './constants';
+import { exportKey, importKey } from './utils'
 
-async function exportKey(key: CryptoKey): Promise<string> {
-  const jwk = await crypto.subtle.exportKey('jwk', key);
-  return JSON.stringify(jwk);
-}
-
-async function importKey(
-  keyData: string,
-  keyUsage: KeyUsage[],
-): Promise<CryptoKey> {
-  const jwk = JSON.parse(keyData) as JsonWebKey;
-  return await crypto.subtle.importKey(
-    'jwk',
-    jwk,
-    {
-      name: 'ECDSA',
-      namedCurve: 'P-384',
-    },
-    true,
-    keyUsage,
-  );
-}
 
 export function Login({
+  setUserId,
   setPublicKey,
   setPrivateKey,
   setBootstrapPeers,
+  setSignalingServerAddr,
 }: {
+  userId?: string;
+  setUserId?: (userId: string) => void;
   publicKey?: CryptoKey;
   setPublicKey?: (publicKey: CryptoKey) => void;
   privateKey?: CryptoKey;
   setPrivateKey?: (privateKey: CryptoKey) => void;
+  signalingServerAddr?: string;
+  setSignalingServerAddr?: (signalingServerAddr: string) => void;
   bootstrapPeers?: string[];
   setBootstrapPeers?: (peers: string[]) => void;
 }) {
@@ -44,6 +29,7 @@ export function Login({
   const [generatedPublicKey, setGeneratedPublicKey] = React.useState<
     string | undefined
   >();
+  const [draftSignalingServerAddr, setDraftSignalingServerAddr] = React.useState('/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star');
   const [draftBootstrapPeers, setDraftBootstrapPeers] = React.useState('');
   // Generate a keypair.
   React.useEffect(() => {
@@ -104,13 +90,22 @@ export function Login({
             </Form.Text>
           </Form.Group>
 
+          <Form.Group className="mb-3" controlId="formSignalingServer">
+            <Form.Label>Star Signal Server</Form.Label>
+            <Form.Control
+              placeholder="Enter the address of the webRTC signaling server"
+              value={draftSignalingServerAddr || ''}
+              onChange={(e) => setDraftSignalingServerAddr(e.target.value)}
+            />
+          </Form.Group>
+
           <Form.Group className="mb-3" controlId="formBootstrapPeers">
             <Form.Label>Bootstrap Peers</Form.Label>
             <Form.Control
               as="textarea"
               rows={6}
               placeholder="Enter a list of (line separated) Peer IDs"
-              value={draftBootstrapPeers || bootstrapNode}
+              value={draftBootstrapPeers || ''}
               onChange={(e) => setDraftBootstrapPeers(e.target.value)}
             />
           </Form.Group>
@@ -127,6 +122,12 @@ export function Login({
               setBootstrapPeers &&
                 draftBootstrapPeers &&
                 setBootstrapPeers(draftBootstrapPeers.split('\n'));
+              setSignalingServerAddr &&
+                draftSignalingServerAddr &&
+                setSignalingServerAddr(draftSignalingServerAddr);
+              setUserId &&
+                generatedPublicKey &&
+                setUserId(generatedPublicKey);
               // Redirct to the /secrets page.
               history.push('/secrets');
             }}

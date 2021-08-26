@@ -81,19 +81,7 @@ export function PermissionsTable({
                   {permission.publicKey}
                 </td>
                 <td>
-                  {permission.permissions}
-                  {/* TODO: show Read for 'r', Read/Write for 'rw' */}
-                  {() => {
-                    return `Hello`;
-                  }}
-                  {() => {
-                    if (permission.permissions === 'rw') {
-                      return <td>Read</td>;
-                    }
-                    if (permission.permissions === 'r') {
-                      return 'Read/Write';
-                    }
-                  }}
+                  {(permission.permissions === 'rw') ? 'Read/Write' : 'Read'}
                 </td>
                 <td>
                   <Button
@@ -195,7 +183,7 @@ export function PermissionsTable({
                   })();
                 }}
               >
-                Save
+                Add
               </Button>
             </td>
           </tr>

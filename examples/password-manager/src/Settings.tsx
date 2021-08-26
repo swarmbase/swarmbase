@@ -13,21 +13,21 @@ export function Settings({
   collabswarm: YjsCollabswarm;
   publicKey?: CryptoKey;
 }) {
-  const settings: Setting[] = [
-    {
-      key: 'Peer ID',
-      value: String(collabswarm.ipfsInfo.id),
-    },
-    {
-      key: 'IPFS Public Key',
-      value: String(collabswarm.ipfsInfo.publicKey),
-    },
+  const settings: Setting[] = collabswarm.ipfsInfo.addresses.map((a, i) => ({
+    key: `Peer ID ${i + 1}`,
+    value: a.toString(),
+  }));
+  // settings.push(
+  //   {
+  //     key: 'IPFS Public Key',
+  //     value: collabswarm.ipfsInfo.publicKey,
+  //   },
     //  TODO: shows as [object CryptoKey]
     // {
     //   key: 'Public Key',
     //   value: String(publicKey),
     // },
-  ];
+  // );
 
   return (
     <Container className="ml-auto mr-auto mt-5">
