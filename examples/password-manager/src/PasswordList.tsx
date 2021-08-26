@@ -26,11 +26,36 @@ export function PasswordList({
   const currentPasswordIdRef = currentPassword && currentPassword.get('id');
   const currentPasswordId =
     currentPasswordIdRef && currentPasswordIdRef.toString();
+  let importButtonDisabled: boolean = true;
+  if (importPasswordId) {
+    importButtonDisabled = false;
+  }
 
   return (
     <Container>
       <Row>
         <Col xs={6}>
+          <Row className="mt-4" />
+          <ListGroup defaultActiveKey="#link1">
+            {passwords &&
+              passwords
+                .getArray<Y.Map<Y.Text>>('passwords')
+                .map<Y.Map<Y.Text>, JSX.Element>((password) => {
+                  const idRef = password.get('id');
+                  const nameRef = password.get('name');
+                  const id = idRef && idRef.toString();
+                  const name = nameRef && nameRef.toString();
+                  return (
+                    <ListGroup.Item
+                      key={id}
+                      action
+                      onClick={() => setCurrentPassword(password)}
+                    >
+                      {name || `Unnamed Secret (id: ${id})`}
+                    </ListGroup.Item>
+                  );
+                })}
+          </ListGroup>
           <ListGroup variant="flush">
             <ListGroup.Item>
               <Button
@@ -68,6 +93,7 @@ export function PasswordList({
                   ></Form.Control>
                   <Button
                     variant="success"
+                    disabled={importButtonDisabled}
                     onClick={() => {
                       changePasswords((current) => {
                         current.getArray<Y.Map<Y.Text>>('passwords').push([
@@ -88,28 +114,10 @@ export function PasswordList({
               )}
             </ListGroup.Item>
           </ListGroup>
-          <ListGroup defaultActiveKey="#link1">
-            {passwords &&
-              passwords
-                .getArray<Y.Map<Y.Text>>('passwords')
-                .map<Y.Map<Y.Text>, JSX.Element>((password) => {
-                  const idRef = password.get('id');
-                  const nameRef = password.get('name');
-                  const id = idRef && idRef.toString();
-                  const name = nameRef && nameRef.toString();
-                  return (
-                    <ListGroup.Item
-                      key={id}
-                      action
-                      onClick={() => setCurrentPassword(password)}
-                    >
-                      {name || `Unnamed Secret (id: ${id})`}
-                    </ListGroup.Item>
-                  );
-                })}
-          </ListGroup>
         </Col>
         <Col xs={6}>
+          <Row className="mt-4" />
+
           {currentPassword && (
             <PasswordEditor
               userId={userId}

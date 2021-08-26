@@ -14,4 +14,7 @@ yarn install
 
 # Usage
 
-`yarn workspace @collabswarm/password-manager start`
+```sh
+npx star-signal
+yarn workspace @collabswarm/password-manager start
+```
