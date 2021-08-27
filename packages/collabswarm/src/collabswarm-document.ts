@@ -304,6 +304,7 @@ export class CollabswarmDocument<
     localRootId: string | undefined,
     localHashes: Set<string>,
   ): Promise<[string, CRDTChangeNodeKind, ChangesType | undefined][]> {
+    console.log('Processing change node: ', remoteRootId, remoteRoot, localRootId, localHashes);
     if (remoteRootId === undefined) {
       return [];
     }
@@ -319,17 +320,16 @@ export class CollabswarmDocument<
     }
 
     // If this is a leaf node, return the current node pair.
+    const results: Promise<
+      [string, CRDTChangeNodeKind, ChangesType | undefined][]
+    >[] = [Promise.resolve([[remoteRootId, remoteRoot.kind, remoteRoot.change]] as [string, CRDTChangeNodeKind, ChangesType | undefined][])];
     if (remoteRoot.children === undefined) {
-      return [[remoteRootId, remoteRoot.kind, remoteRoot.change]];
+      return (await Promise.all(results)).flat(1);
     }
 
     if (remoteRoot.children === crdtChangeNodeDeferred) {
       throw new Error('IPLD dereferencing is not supported yet!');
     }
-
-    const results: Promise<
-      [string, CRDTChangeNodeKind, ChangesType | undefined][]
-    >[] = [];
     for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
       results.push(
         this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
