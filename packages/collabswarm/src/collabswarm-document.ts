@@ -304,7 +304,6 @@ export class CollabswarmDocument<
     localRootId: string | undefined,
     localHashes: Set<string>,
   ): Promise<[string, CRDTChangeNodeKind, ChangesType | undefined][]> {
-    console.log('Processing change node: ', remoteRootId, remoteRoot, localRootId, localHashes);
     if (remoteRootId === undefined) {
       return [];
     }
@@ -853,6 +852,7 @@ export class CollabswarmDocument<
     if (message.keychainChanges) {
       try {
         this._keychain.merge(message.keychainChanges);
+        console.log(`Updated keychain in ${this.documentPath}: `, this._keychain);
       } catch (e) {
         console.error('Failed to merge in keychain changes', this._keychain, message, e);
         throw e;
