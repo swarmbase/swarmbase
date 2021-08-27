@@ -2,7 +2,13 @@ import {
   ACL,
   ACLProvider,
   CollabswarmDocumentChangeHandler,
+  CRDTChangeBlock,
+  CRDTChangeNode,
+  CRDTChangeNodeDeferred,
+  crdtChangeNodeDeferred,
+  CRDTChangeNodeKind,
   CRDTProvider,
+  CRDTSyncMessage,
   JSONSerializer,
   Keychain,
   KeychainProvider,
@@ -10,6 +16,99 @@ import {
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
+
+
+
+type iCRDTChangeNode = {
+  kind: CRDTChangeNodeKind;
+  // TODO: Change this to something more efficient.
+  change?: string;
+  children?:
+    | { [hash: string]: iCRDTChangeNode }
+    | CRDTChangeNodeDeferred;
+};
+
+function serializeUint8ArrayInMerkleDAG(node: CRDTChangeNode<Uint8Array>): iCRDTChangeNode {
+  const change = node.change ? Base64.fromUint8Array(node.change) : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: iCRDTChangeNode } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = serializeUint8ArrayInMerkleDAG(child);
+    }
+    return {
+      ...node,
+      change,
+      children,
+    };
+  } else {
+    return {
+      ...node,
+      change,
+      children: node.children,
+    };
+  }
+}
+
+function deserializeUint8ArrayInMerkleDAG(node: iCRDTChangeNode): CRDTChangeNode<Uint8Array> {
+  const change = node.change ? Base64.toUint8Array(node.change) : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: CRDTChangeNode<Uint8Array> } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = deserializeUint8ArrayInMerkleDAG(child);
+    }
+    return {
+      ...node,
+      change,
+      children,
+    };
+  } else {
+    return {
+      ...node,
+      change,
+      children: node.children,
+    };
+  }
+}
+
+export class YjsJSONSerializer
+  extends JSONSerializer<Uint8Array> {
+  
+  serializeChanges(changes: Uint8Array): Uint8Array {
+    return changes;
+  }
+  deserializeChanges(changes: Uint8Array): Uint8Array {
+    return changes;
+  }
+
+  serializeChangeBlock(changes: CRDTChangeBlock<Uint8Array>): string {
+    return this.serialize({
+      changes: Base64.fromUint8Array(changes.changes),
+      nonce: Base64.fromUint8Array(changes.nonce),
+    });
+  }
+  deserializeChangeBlock(changes: string): CRDTChangeBlock<Uint8Array> {
+    const deserialized = this.deserialize(changes);
+    return {
+      changes: Base64.toUint8Array(deserialized.changes),
+      nonce: Base64.toUint8Array(deserialized.nonce),
+    };
+  }
+  serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {
+    return this.encode(this.serialize({
+      ...message,
+      changes: message.changes && serializeUint8ArrayInMerkleDAG(message.changes),
+      keychainChanges: message.keychainChanges && Base64.fromUint8Array(message.keychainChanges),
+    }));
+  }
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
+    const deserialized = this.deserialize(this.decode(message));
+    return {
+      ...deserialized,
+      changes: deserialized.changes && deserializeUint8ArrayInMerkleDAG(deserialized.changes),
+      keychainChanges: deserialized.keychainChanges && Base64.toUint8Array(deserialized.keychainChanges),
+    };
+  }
+}
 
 export type YjsSwarmDocumentChangeHandler = CollabswarmDocumentChangeHandler<
   Doc,
@@ -212,5 +311,3 @@ export class YjsKeychainProvider
   // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
   keyIDLength = 16;
 }
-
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {}

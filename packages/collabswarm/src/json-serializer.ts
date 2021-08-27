@@ -1,5 +1,7 @@
+import { Base64 } from 'js-base64';
 import { ChangesSerializer } from './changes-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTChangeNode, crdtChangeNodeDeferred, CRDTChangeNodeDeferred, CRDTChangeNodeKind } from './crdt-change-node';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -38,10 +40,17 @@ export class JSONSerializer<ChangesType>
     return this.deserialize(this.decode(changes));
   }
   serializeChangeBlock(changes: CRDTChangeBlock<ChangesType>): string {
-    return this.serialize(changes);
+    return this.serialize({
+      changes: changes.changes,
+      nonce: Base64.fromUint8Array(changes.nonce),
+    });
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<ChangesType> {
-    return this.deserialize(changes);
+    const deserialized = this.deserialize(changes);
+    return {
+      ...deserialized,
+      nonce: Base64.toUint8Array(deserialized.nonce),
+    };
   }
   serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
     return this.encode(this.serialize(message));

@@ -3,6 +3,8 @@ import { Button, Container, Row, Form } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
 import { exportKey, importKey } from './utils';
 
+export const passwordManagerNamespace = '/password-manager';
+
 export function Login({
   setUserId,
   setPublicKey,
@@ -127,7 +129,7 @@ export function Login({
               setSignalingServerAddr &&
                 draftSignalingServerAddr &&
                 setSignalingServerAddr(draftSignalingServerAddr);
-              setUserId && generatedPublicKey && setUserId(generatedPublicKey);
+              setUserId && generatedPublicKey && setUserId(btoa(generatedPublicKey));
               // Redirct to the /secrets page.
               history.push('/secrets');
             }}

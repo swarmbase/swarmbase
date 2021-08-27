@@ -155,7 +155,6 @@ function App() {
                   <Settings
                     collabswarm={collabswarm}
                     publicKey={publicKey}
-                    userId={userId}
                   />
                 ) : (
                   <i>Loading collabswarm...</i>

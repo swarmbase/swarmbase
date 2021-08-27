@@ -36,6 +36,7 @@ import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';
+import BufferList from 'bl';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -491,7 +492,6 @@ export class CollabswarmDocument<
     return this._serializeSignature(rawSignature);
   }
 
-  private _decoder = new TextDecoder();
   private _encoder = new TextEncoder();
 
   private _deserializeSignature(signature: string): Uint8Array {
@@ -552,7 +552,7 @@ export class CollabswarmDocument<
 
   private _handleLoadRequest({ stream }: Libp2p.HandlerProps) {
     console.log(`received ${this.protocolLoadV1} dial`);
-    pipe(stream, async (source) => {
+    pipe(stream.source, async (source: AsyncIterable<Uint8Array | BufferList>) => {
       const assembledRequest = await readUint8Iterable(source);
       const message = this._loadMessageSerializer.deserializeLoadRequest(
         assembledRequest,
@@ -607,26 +607,32 @@ export class CollabswarmDocument<
       const serializedLoad = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
 
       // Encrypt sync message.
-      const [documentKeyID, documentKey] = await this._keychain.current();
-      if (!documentKey) {
-        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-      }
-      const { nonce, data } = await this._authProvider.encrypt(
-        serializedLoad,
-        documentKey,
-      );
-      if (!nonce) {
-        throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
-      }
-      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      // const [documentKeyID, documentKey] = await this._keychain.current();
+      // if (!documentKey) {
+      //   throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      // }
+      // const { nonce, data } = await this._authProvider.encrypt(
+      //   serializedLoad,
+      //   documentKey,
+      // );
+      // if (!nonce) {
+      //   throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+      // }
+      // const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      const assembled = serializedLoad;
       console.log(
         `sending ${this.protocolLoadV1} response:`,
         assembled,
         loadMessage,
+        stream.sink,
       );
 
       // Return a sync message.
-      return [assembled];
+      // return [assembled];
+      // await stream.sink(assembled);
+      await stream.sink([assembled] as any);
+    // }, stream.sink);
+      return [];
     });
   }
 
@@ -699,9 +705,12 @@ export class CollabswarmDocument<
       // Immediately send a load request.
       await pipe(
         [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-        stream,
-        async (source: any) => {
-          console.log(`awaiting ${this.protocolLoadV1} response...`);
+        stream.sink,
+      );
+      await pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8Array | BufferList>) => {
+          console.log(`awaiting ${this.protocolLoadV1} response...`, source);
           const assembled = await readUint8Iterable(source);
           const message = this._syncMessageSerializer.deserializeSyncMessage(
             assembled,
@@ -713,13 +722,17 @@ export class CollabswarmDocument<
           );
 
           if (message.documentId === this.documentPath) {
-            await this.sync(message);
+            await this.sync(message, false);
           }
 
           // Return an ACK.
           return [];
         },
       );
+      // await pipe(
+      //   [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
+      //   stream.sink,
+      // );
       return true;
     } else {
       // Assume new document
@@ -814,7 +827,7 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: CRDTSyncMessage<ChangesType>) {
+  public async sync(message: CRDTSyncMessage<ChangesType>, verifySignature = true) {
     const { signature, ...messageWithoutSignature } = message;
     if (!signature) {
       return false;
@@ -825,9 +838,11 @@ export class CollabswarmDocument<
       messageWithoutSignature,
     );
 
-    if (!(await this._verifyWriterSignature(raw, signature))) {
+    if (verifySignature && !(await this._verifyWriterSignature(raw, signature))) {
       console.warn(
         `Received a sync message with an invalid signature for ${message.documentId}`,
+        signature,
+        messageWithoutSignature,
       );
       return;
     }
@@ -836,7 +851,12 @@ export class CollabswarmDocument<
 
     // Update/replace list of document keys (if provided).
     if (message.keychainChanges) {
-      this._keychain.merge(message.keychainChanges);
+      try {
+        this._keychain.merge(message.keychainChanges);
+      } catch (e) {
+        console.error('Failed to merge in keychain changes', this._keychain, message, e);
+        throw e;
+      }
     }
 
     // Sync document changes.

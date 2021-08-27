@@ -1,42 +1,52 @@
 import { useEffect, useState } from 'react';
 import { Button, Table, Row, Container } from 'react-bootstrap';
-import { YjsCollabswarm, importKey } from './utils';
+import { YjsCollabswarm } from './utils';
 import { serializeKey } from '@collabswarm/collabswarm-yjs';
 
-type Setting = {
-  key: string; // id
-  value?: string | Promise<string | undefined>;
-};
+function KeyCell({children}: {children?: React.ReactNode}) {
+  return <td>
+    {children}
+  </td>;
+}
+
+function ValueCell({children}: {children?: React.ReactNode}) {
+  return <td style={{ wordBreak: 'break-all' }}>
+    {children}
+  </td>;
+}
+
+function ActionCell({value}: {value: string}) {
+  return <td>
+    <Button
+      variant="secondary"
+      onClick={async () => {
+        await navigator.clipboard.writeText(
+          String(value),
+        );
+      }}
+    >
+      Copy
+    </Button>
+  </td>;
+}
 
 export function Settings({
   collabswarm,
   publicKey,
-  userId,
 }: {
   collabswarm: YjsCollabswarm;
   publicKey?: CryptoKey;
-  userId?: string;
 }) {
-  const [settings, setSettings] = useState<Setting[]>(collabswarm.ipfsInfo.addresses.map((a, i) => ({
-    key: `Peer ID ${i + 1}`,
-    value: a.toString(),
-  })));
+  const [serializedKey, setSerializedKey] = useState<string | undefined>();
 
-  // TODO: display in settings table; does print to console
   useEffect(() => {
     (async () => {
-      if (!userId) {
+      if (!publicKey) {
         return;
       }
-      const key: CryptoKey = await importKey(userId, []);
-      const serializedKey: string = await serializeKey(key);
-      console.log(`Settings#userId: ${serializedKey}`);
-      setSettings(s => [...s, {
-        key: 'Public Key',
-        value: serializedKey,
-      }]);
+      setSerializedKey(await serializeKey(publicKey));
     })();
-  }, [userId]);
+  }, [publicKey]);
 
   return (
     <Container className="ml-auto mr-auto mt-5">
@@ -49,36 +59,18 @@ export function Settings({
             </tr>
           </thead>
           <tbody>
-            {settings &&
-              settings.map((setting, i) => (
-                <tr key={setting.key}>
-                  <td>{setting.key}</td>
-                  <td
-                    style={{
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {setting.value}
-                  </td>
-                  <td>
-                    <Button
-                      variant="secondary"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(
-                          String(setting.value),
-                        );
-                        // TODO: use https://react-bootstrap-v4.netlify.app/components/alerts/
-                        alert('Copied to Clipboard!');
-                        console.log('Did copy to clipboard:', setting.key);
-                      }}
-                    >
-                      Copy
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+            {collabswarm.ipfsInfo.addresses.map((addr, i) => <tr key={addr.toString()}>
+              <KeyCell>Peer ID {i+1}</KeyCell>
+              <ValueCell>{addr.toString()}</ValueCell>
+              <ActionCell value={addr.toString()}></ActionCell>
+            </tr>)}
+            {serializedKey && <tr>
+              <KeyCell>Public Key</KeyCell>
+              <ValueCell>{serializedKey}</ValueCell>
+              <ActionCell value={serializedKey}></ActionCell>
+            </tr>}
 
-            {(!settings || settings.length === 0) && (
+            {!serializeKey && (collabswarm.ipfsInfo.addresses.length === 0) && (
               <tr>
                 <td colSpan={3}>No settings found!</td>
               </tr>
