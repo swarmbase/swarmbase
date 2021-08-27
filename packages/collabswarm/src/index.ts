@@ -17,6 +17,8 @@ import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
 import { Keychain } from './keychain';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTChangeNodeKind, CRDTChangeNodeDeferred, CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
 
 export {
   ACL,
@@ -29,6 +31,11 @@ export {
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
   CollabswarmNode,
+  CRDTChangeBlock,
+  CRDTChangeNodeKind,
+  CRDTChangeNodeDeferred,
+  CRDTChangeNode,
+  crdtChangeNodeDeferred,
   CRDTSyncMessage,
   CRDTProvider,
   ChangesSerializer,

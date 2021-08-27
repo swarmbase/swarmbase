@@ -47,7 +47,7 @@ export class CollabswarmNode<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   private _swarm = new Collabswarm(
     this.nodeKey,
@@ -177,15 +177,18 @@ export class CollabswarmNode<
           if (docRef) {
             // Also add a subscription that pins new received files.
             this._subscriptions.set(message.documentId, docRef);
-            docRef.subscribe('pinning-handler', (doc, hashes) => {
-              for (const cid of hashes) {
-                if (!this._seenCids.has(cid)) {
-                  // TODO: Handle this operation failing (retry).
-                  this.swarm.ipfsNode.pin.add(cid);
-                  this._seenCids.add(cid);
+            docRef.subscribe(
+              'pinning-handler',
+              (doc, readers, writers, hashes) => {
+                for (const cid of hashes) {
+                  if (!this._seenCids.has(cid)) {
+                    // TODO: Handle this operation failing (retry).
+                    this.swarm.ipfsNode.pin.add(cid);
+                    this._seenCids.add(cid);
+                  }
                 }
-              }
-            });
+              },
+            );
 
             // Listen to the file.
             docRef.open();

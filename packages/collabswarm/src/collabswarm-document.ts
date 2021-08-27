@@ -33,14 +33,20 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
+import { Base64 } from 'js-base64';
+
+import * as uuid from 'uuid';
+import BufferList from 'bl';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
  *
  * Subscribe functions that match this type signature to track local-change/remote-change events.
  */
-export type CollabswarmDocumentChangeHandler<DocType> = (
+export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
   current: DocType,
+  readers: PublicKey[],
+  writers: PublicKey[],
   hashes: string[],
 ) => void;
 
@@ -88,14 +94,15 @@ export class CollabswarmDocument<
   PublicKey,
   DocumentKey
 > {
+  /**
+   * CORE STATE ===============================================================
+   */
+
   // Only store/cache the full automerge document.
   private _document: DocType = this._crdtProvider.newDocument();
   get document(): DocType {
     return this._document;
   }
-
-  // Last sync message (for populating load requests).
-  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
 
   // Document readers ACL.
   private _readers = this._aclProvider.initialize();
@@ -106,6 +113,13 @@ export class CollabswarmDocument<
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain = this._keychainProvider.initialize();
+
+  /**
+   * /CORE STATE ==============================================================
+   */
+
+  // Last sync message (for populating load requests).
+  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
@@ -118,12 +132,12 @@ export class CollabswarmDocument<
 
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
-    [id: string]: CollabswarmDocumentChangeHandler<DocType>;
+    [id: string]: CollabswarmDocumentChangeHandler<DocType, PublicKey>;
   } = {};
 
   // Handlers registered by users of `CollabswarmDocument` that fire on local changes.
   private _localHandlers: {
-    [id: string]: CollabswarmDocumentChangeHandler<DocType>;
+    [id: string]: CollabswarmDocumentChangeHandler<DocType, PublicKey>;
   } = {};
 
   public get libp2p(): Libp2p {
@@ -131,11 +145,11 @@ export class CollabswarmDocument<
   }
 
   public get protocolLoadV1() {
-    return `${documentLoadV1}/${this.documentPath}`;
+    return `${documentLoadV1}${this.documentPath}`;
   }
 
   public get protocolKeyUpdateV1() {
-    return `${documentKeyUpdateV1}/${this.documentPath}`;
+    return `${documentKeyUpdateV1}${this.documentPath}`;
   }
 
   constructor(
@@ -236,6 +250,12 @@ export class CollabswarmDocument<
       const key = this._keychain.getKey(blockKeyID);
       if (key) {
         return this._authProvider.decrypt(data, key, nonce);
+      } else {
+        console.warn(
+          `Failed to find document key!`,
+          uuid.stringify(blockKeyID),
+          this._keychain,
+        );
       }
     } catch (e) {
       console.warn(`Failed to decrypt block!`, e);
@@ -299,17 +319,16 @@ export class CollabswarmDocument<
     }
 
     // If this is a leaf node, return the current node pair.
+    const results: Promise<
+      [string, CRDTChangeNodeKind, ChangesType | undefined][]
+    >[] = [Promise.resolve([[remoteRootId, remoteRoot.kind, remoteRoot.change]] as [string, CRDTChangeNodeKind, ChangesType | undefined][])];
     if (remoteRoot.children === undefined) {
-      return [[remoteRootId, remoteRoot.kind, remoteRoot.change]];
+      return (await Promise.all(results)).flat(1);
     }
 
     if (remoteRoot.children === crdtChangeNodeDeferred) {
       throw new Error('IPLD dereferencing is not supported yet!');
     }
-
-    const results: Promise<
-      [string, CRDTChangeNodeKind, ChangesType | undefined][]
-    >[] = [];
     for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
       results.push(
         this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
@@ -319,14 +338,24 @@ export class CollabswarmDocument<
     return (await Promise.all(results)).flat(1);
   }
 
-  private _fireRemoteUpdateHandlers(hashes: string[]) {
+  private async _fireRemoteUpdateHandlers(hashes: string[]) {
     for (const handler of Object.values(this._remoteHandlers)) {
-      handler(this.document, hashes);
+      handler(
+        this.document,
+        await this.getReaders(),
+        await this.getWriters(),
+        hashes,
+      );
     }
   }
-  private _fireLocalUpdateHandlers(hashes: string[]) {
+  private async _fireLocalUpdateHandlers(hashes: string[]) {
     for (const handler of Object.values(this._localHandlers)) {
-      handler(this.document, hashes);
+      handler(
+        this.document,
+        await this.getReaders(),
+        await this.getWriters(),
+        hashes,
+      );
     }
   }
 
@@ -389,7 +418,7 @@ export class CollabswarmDocument<
       for (const newHash of newDocumentHashes) {
         this._hashes.add(newHash);
       }
-      this._fireRemoteUpdateHandlers(newDocumentHashes);
+      await this._fireRemoteUpdateHandlers(newDocumentHashes);
     }
 
     // Then apply missing hashes by fetching them via IPFS.
@@ -405,20 +434,17 @@ export class CollabswarmDocument<
                   missingChanges,
                 );
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtReaderChangeNode: {
                 this._readers.merge(missingChanges);
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtWriterChangeNode: {
                 this._writers.merge(missingChanges);
                 this._hashes.add(missingHash);
-                this._fireRemoteUpdateHandlers([missingHash]);
-                break;
+                return this._fireRemoteUpdateHandlers([missingHash]);
               }
             }
           } else {
@@ -465,15 +491,14 @@ export class CollabswarmDocument<
     return this._serializeSignature(rawSignature);
   }
 
-  private _decoder = new TextDecoder();
   private _encoder = new TextEncoder();
 
   private _deserializeSignature(signature: string): Uint8Array {
-    return this._encoder.encode(atob(signature));
+    return Base64.toUint8Array(signature);
   }
 
   private _serializeSignature(signature: Uint8Array): string {
-    return btoa(this._decoder.decode(signature));
+    return Base64.fromUint8Array(signature);
   }
 
   private async _makeChange(
@@ -521,12 +546,12 @@ export class CollabswarmDocument<
     );
 
     // Fire change handlers.
-    this._fireLocalUpdateHandlers([hash]);
+    await this._fireLocalUpdateHandlers([hash]);
   }
 
   private _handleLoadRequest({ stream }: Libp2p.HandlerProps) {
     console.log(`received ${this.protocolLoadV1} dial`);
-    pipe(stream, async (source) => {
+    pipe(stream.source, async (source: AsyncIterable<Uint8Array | BufferList>) => {
       const assembledRequest = await readUint8Iterable(source);
       const message = this._loadMessageSerializer.deserializeLoadRequest(
         assembledRequest,
@@ -537,7 +562,7 @@ export class CollabswarmDocument<
         message,
       );
 
-      if (message.documentId === this.documentPath) {
+      if (message.documentId !== this.documentPath) {
         console.warn(
           `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
         );
@@ -545,8 +570,12 @@ export class CollabswarmDocument<
       }
 
       // Verify that this user is a reader.
+      const readers = (await Promise.all([
+        this._readers.users(),
+        this._writers.users(),
+      ])).flat();
       let requestor: PublicKey | undefined;
-      for (const reader of await this._readers.users()) {
+      for (const reader of readers) {
         // TODO: Is this secure? Do we need a salt added to the signed payload?
         if (
           await this._authProvider.verify(
@@ -571,17 +600,38 @@ export class CollabswarmDocument<
       const loadMessage = this._createSyncMessage();
       loadMessage.keychainChanges = this._keychain.history();
 
-      const assembled = this._syncMessageSerializer.serializeSyncMessage(
-        loadMessage,
-      );
+      // Sign new message.
+      loadMessage.signature = await this._signAsWriter(loadMessage);
+
+      const serializedLoad = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+
+      // Encrypt sync message.
+      // const [documentKeyID, documentKey] = await this._keychain.current();
+      // if (!documentKey) {
+      //   throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      // }
+      // const { nonce, data } = await this._authProvider.encrypt(
+      //   serializedLoad,
+      //   documentKey,
+      // );
+      // if (!nonce) {
+      //   throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+      // }
+      // const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      const assembled = serializedLoad;
       console.log(
         `sending ${this.protocolLoadV1} response:`,
         assembled,
         loadMessage,
+        stream.sink,
       );
 
       // Return a sync message.
-      return [this._syncMessageSerializer.serializeSyncMessage(loadMessage)];
+      // return [assembled];
+      // await stream.sink(assembled);
+      await stream.sink([assembled] as any);
+    // }, stream.sink);
+      return [];
     });
   }
 
@@ -626,7 +676,7 @@ export class CollabswarmDocument<
           return docLoadConnection.stream;
         } catch (err) {
           console.warn(
-            'Failed to load document from:',
+            `Failed to load document from (${this.protocolLoadV1}): `,
             peer.addr.toString(),
             err,
           );
@@ -654,8 +704,12 @@ export class CollabswarmDocument<
       // Immediately send a load request.
       await pipe(
         [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-        stream,
-        async (source: any) => {
+        stream.sink,
+      );
+      await pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8Array | BufferList>) => {
+          console.log(`awaiting ${this.protocolLoadV1} response...`, source);
           const assembled = await readUint8Iterable(source);
           const message = this._syncMessageSerializer.deserializeSyncMessage(
             assembled,
@@ -667,13 +721,17 @@ export class CollabswarmDocument<
           );
 
           if (message.documentId === this.documentPath) {
-            await this.sync(message);
+            await this.sync(message, false);
           }
 
           // Return an ACK.
           return [];
         },
       );
+      // await pipe(
+      //   [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
+      //   stream.sink,
+      // );
       return true;
     } else {
       // Assume new document
@@ -735,7 +793,17 @@ export class CollabswarmDocument<
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
 
     // Load initial document from peers.
-    return await this.load(); // new document would return false; then a key is needed
+    const isExisting = await this.load(); // new document would return false; then a key is needed
+    if (!isExisting) {
+      // Add current user as a writer.
+      await this._writers.add(this._userPublicKey);
+
+      // Add initial document key.
+      console.log(`Adding a key to ${this.documentPath}`);
+      await this._keychain.add();
+    }
+
+    return isExisting;
   }
 
   /**
@@ -758,7 +826,7 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: CRDTSyncMessage<ChangesType>) {
+  public async sync(message: CRDTSyncMessage<ChangesType>, verifySignature = true) {
     const { signature, ...messageWithoutSignature } = message;
     if (!signature) {
       return false;
@@ -769,9 +837,11 @@ export class CollabswarmDocument<
       messageWithoutSignature,
     );
 
-    if (!(await this._verifyWriterSignature(raw, signature))) {
+    if (verifySignature && !(await this._verifyWriterSignature(raw, signature))) {
       console.warn(
         `Received a sync message with an invalid signature for ${message.documentId}`,
+        signature,
+        messageWithoutSignature,
       );
       return;
     }
@@ -780,7 +850,13 @@ export class CollabswarmDocument<
 
     // Update/replace list of document keys (if provided).
     if (message.keychainChanges) {
-      this._keychain.merge(message.keychainChanges);
+      try {
+        this._keychain.merge(message.keychainChanges);
+        console.log(`Updated keychain in ${this.documentPath}: `, this._keychain);
+      } catch (e) {
+        console.error('Failed to merge in keychain changes', this._keychain, message, e);
+        throw e;
+      }
     }
 
     // Sync document changes.
@@ -806,7 +882,7 @@ export class CollabswarmDocument<
    */
   public subscribe(
     id: string,
-    handler: CollabswarmDocumentChangeHandler<DocType>,
+    handler: CollabswarmDocumentChangeHandler<DocType, PublicKey>,
     originFilter: 'all' | 'remote' | 'local' = 'all',
   ) {
     switch (originFilter) {
@@ -840,6 +916,8 @@ export class CollabswarmDocument<
     }
   }
 
+  // TODO: Add a startChange() method that starts a change "transaction" block.
+
   /**
    * Applies a new local change (defined by `changeFn`) to the collabswarm document and updates
    * all peers.
@@ -861,11 +939,25 @@ export class CollabswarmDocument<
     await this._makeChange(changes);
   }
 
+  /**
+   * Get list of writers.
+   *
+   * @return List of public keys with write access.
+   */
+  public async getWriters(): Promise<PublicKey[]> {
+    return await this._writers.users();
+  }
+
+  /**
+   * Add a new user as a valid writer. Users are identified by their public keys
+   *
+   * @param writer User's public key
+   */
   public async addWriter(writer: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is not already a writer.
-    if (this._writers.check(writer)) {
+    if (await this._writers.check(writer)) {
       return;
     }
 
@@ -875,11 +967,16 @@ export class CollabswarmDocument<
     await this._makeChange(changes, crdtWriterChangeNode);
   }
 
+  /**
+   * Remove a user as a valid writer. Users are identified by their public keys
+   *
+   * @param writer User's public key
+   */
   public async removeWriter(writer: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
     // Check that the writer is already a writer.
-    if (!this._writers.check(writer)) {
+    if (!(await this._writers.check(writer))) {
       return;
     }
 
@@ -889,11 +986,30 @@ export class CollabswarmDocument<
     await this._makeChange(changes, crdtWriterChangeNode);
   }
 
+  /**
+   * Returns a list of all public keys with read access.
+   *
+   * Note: expects readers and writers are disjoint.
+   *
+   * @return List of public keys with read access.
+   */
+  public async getReaders(): Promise<PublicKey[]> {
+    // TODO: This breaks if there are duplicate entries in reader/writer ACL. This case may occur if
+    //       the user is manually added to both or due to simultaneous editing this results in a merge
+    //       state result with a user in both acls.
+    return [...(await this._readers.users()), ...(await this._writers.users())];
+  }
+
+  /**
+   * Add a new user as a valid reader. Users are identified by their public keys
+   *
+   * @param reader User's public key
+   */
   public async addReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
     // Check that the reader is not already a reader.
-    if (this._readers.check(reader)) {
+    if (await this._readers.check(reader)) {
       return;
     }
 
@@ -904,11 +1020,16 @@ export class CollabswarmDocument<
     // TODO: Consider sending document key to the new reader as a speedup.
   }
 
+  /**
+   * Remove a user as a valid reader. Users are identified by their public keys
+   *
+   * @param reader User's public key
+   */
   public async removeReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
 
     // Check that the reader is already a reader.
-    if (!this._readers.check(reader)) {
+    if (!(await this._readers.check(reader))) {
       return;
     }
 

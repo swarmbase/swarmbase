@@ -18,15 +18,16 @@ import {
   Keychain,
   KeychainProvider,
 } from '@collabswarm/collabswarm';
+import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';
 
-export type AutomergeSwarmDocumentChangeHandler<
-  T = any
-> = CollabswarmDocumentChangeHandler<Doc<T>>;
+export type AutomergeSwarmDocumentChangeHandler<T = any> =
+  CollabswarmDocumentChangeHandler<Doc<T>, CryptoKey>;
 
 export class AutomergeProvider<T = any>
-  implements CRDTProvider<Doc<T>, BinaryChange[], (doc: T) => void> {
+  implements CRDTProvider<Doc<T>, BinaryChange[], (doc: T) => void>
+{
   newDocument(): Doc<T> {
     return init();
   }
@@ -52,24 +53,23 @@ export class AutomergeProvider<T = any>
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {
   const buf = await crypto.subtle.exportKey('raw', publicKey);
-  let binary = '';
-  let bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+  return Base64.fromUint8Array(new Uint8Array(buf));
 }
 
-export async function deserializeKey(publicKey: string): Promise<CryptoKey> {
-  let binaryString = window.atob(publicKey);
-  let bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, [
-    'encrypt',
-    'decrypt',
-  ]);
+export function deserializeKey(
+  algorithm:
+    | AlgorithmIdentifier
+    | RsaHashedImportParams
+    | EcKeyImportParams
+    | HmacImportParams
+    | DhImportKeyParams
+    | AesKeyAlgorithm,
+  keyUsages: KeyUsage[],
+): (publicKey: string) => Promise<CryptoKey> {
+  return (publicKey: string) => {
+    const bytes = Base64.toUint8Array(publicKey);
+    return crypto.subtle.importKey('raw', bytes, algorithm, true, keyUsages);
+  };
 }
 
 export type AutomergeACLDoc = Doc<{
@@ -121,12 +121,23 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   }
   async users(): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
-    return Promise.all(Object.keys(this._acl.users).map(deserializeKey));
+    return Promise.all(
+      Object.keys(this._acl.users).map(
+        deserializeKey(
+          {
+            name: 'ECDSA',
+            namedCurve: 'P-384',
+          },
+          ['verify'],
+        ),
+      ),
+    );
   }
 }
 
 export class AutomergeACLProvider
-  implements ACLProvider<BinaryChange[], CryptoKey> {
+  implements ACLProvider<BinaryChange[], CryptoKey>
+{
   initialize(): AutomergeACL {
     return new AutomergeACL();
   }
@@ -183,7 +194,10 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
         const keyIDBytes = new Uint8Array(uuid.parse(keyID));
         let key = this._keyCache.get(keyID);
         if (!key) {
-          key = await deserializeKey(serialized);
+          key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
+            'encrypt',
+            'decrypt',
+          ])(serialized);
         }
         return [keyIDBytes, key] as [Uint8Array, CryptoKey];
       }),
@@ -199,7 +213,10 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
 
     let key = this._keyCache.get(keyID);
     if (!key) {
-      key = await deserializeKey(serialized);
+      key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
+        'encrypt',
+        'decrypt',
+      ])(serialized);
     }
     return [keyIDBytes, key];
   }
@@ -210,7 +227,8 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
 }
 
 export class AutomergeKeychainProvider
-  implements KeychainProvider<BinaryChange[], CryptoKey> {
+  implements KeychainProvider<BinaryChange[], CryptoKey>
+{
   initialize(): AutomergeKeychain {
     return new AutomergeKeychain();
   }

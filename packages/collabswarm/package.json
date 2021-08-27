@@ -20,7 +20,7 @@
     "@peculiar/webcrypto": "^1.1.7",
     "@types/node": "^16.4.0",
     "eslint": "^7.31.0",
-    "jest": "^27.0.4",
+    "jest": "26.6.0",
     "ts-jest": "^27.0.3",
     "ts-node": "^10.1.0",
     "typedoc": "^0.21.4",
@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "ipfs": "^0.55.4",
-    "it-pipe": "^1.1.0"
+    "it-pipe": "^1.1.0",
+    "js-base64": "^3.6.1"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
