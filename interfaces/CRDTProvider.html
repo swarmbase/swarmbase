@@ -1,631 +1,401 @@
-<!DOCTYPE html>
+<!doctype html>
 <html class="default no-js">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>CRDTProvider | @collabswarm/collabswarm</title>
-    <meta
-      name="description"
-      content="Documentation for @collabswarm/collabswarm"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="../assets/css/main.css" />
-    <script async src="../assets/js/search.js" id="search-script"></script>
-  </head>
-  <body>
-    <header>
-      <div class="tsd-page-toolbar">
-        <div class="container">
-          <div class="table-wrap">
-            <div
-              class="table-cell"
-              id="tsd-search"
-              data-index="../assets/js/search.json"
-              data-base=".."
-            >
-              <div class="field">
-                <label
-                  for="tsd-search-field"
-                  class="tsd-widget search no-caption"
-                  >Search</label
-                >
-                <input id="tsd-search-field" type="text" />
-              </div>
-              <ul class="results">
-                <li class="state loading">Preparing search index...</li>
-                <li class="state failure">The search index is not available</li>
-              </ul>
-              <a href="../index.html" class="title">@collabswarm/collabswarm</a>
-            </div>
-            <div class="table-cell" id="tsd-widgets">
-              <div id="tsd-filter">
-                <a
-                  href="#"
-                  class="tsd-widget options no-caption"
-                  data-toggle="options"
-                  >Options</a
-                >
-                <div class="tsd-filter-group">
-                  <div class="tsd-select" id="tsd-filter-visibility">
-                    <span class="tsd-select-label">All</span>
-                    <ul class="tsd-select-list">
-                      <li data-value="public">Public</li>
-                      <li data-value="protected">Public/Protected</li>
-                      <li data-value="private" class="selected">All</li>
-                    </ul>
-                  </div>
-                  <input type="checkbox" id="tsd-filter-inherited" checked />
-                  <label class="tsd-widget" for="tsd-filter-inherited"
-                    >Inherited</label
-                  >
-                  <input type="checkbox" id="tsd-filter-externals" checked />
-                  <label class="tsd-widget" for="tsd-filter-externals"
-                    >Externals</label
-                  >
-                </div>
-              </div>
-              <a href="#" class="tsd-widget menu no-caption" data-toggle="menu"
-                >Menu</a
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="tsd-page-title">
-        <div class="container">
-          <ul class="tsd-breadcrumb">
-            <li>
-              <a href="../modules.html">@collabswarm/collabswarm</a>
-            </li>
-            <li>
-              <a href="CRDTProvider.html">CRDTProvider</a>
-            </li>
-          </ul>
-          <h1>
-            Interface CRDTProvider&lt;DocType, ChangesType, ChangeFnType&gt;
-          </h1>
-        </div>
-      </div>
-    </header>
-    <div class="container container-main">
-      <div class="row">
-        <div class="col-8 col-content">
-          <section class="tsd-panel tsd-comment">
-            <div class="tsd-comment tsd-typography">
-              <div class="lead">
-                <p>
-                  CRDTProvider is an interface with a set of methods for
-                  manipulating CRDT documents.
-                </p>
-              </div>
-              <dl class="tsd-comment-tags">
-                <dt>typeparam</dt>
-                <dd>
-                  <p>
-                    The sync message that gets sent when changes are made to a
-                    document
-                  </p>
-                </dd>
-              </dl>
-            </div>
-          </section>
-          <section class="tsd-panel tsd-type-parameters">
-            <h3>Type parameters</h3>
-            <ul class="tsd-type-parameters">
-              <li>
-                <h4>DocType</h4>
-                <div class="tsd-comment tsd-typography">
-                  <div class="lead">
-                    <p>The CRDT document type</p>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <h4>ChangesType</h4>
-                <div class="tsd-comment tsd-typography">
-                  <div class="lead">
-                    <p>A block of CRDT change(s)</p>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <h4>ChangeFnType</h4>
-                <div class="tsd-comment tsd-typography">
-                  <div class="lead">
-                    <p>A function for applying changes to a document</p>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel tsd-hierarchy">
-            <h3>Hierarchy</h3>
-            <ul class="tsd-hierarchy">
-              <li>
-                <span class="target">CRDTProvider</span>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel-group tsd-index-group">
-            <h2>Index</h2>
-            <section class="tsd-panel tsd-index-panel">
-              <div class="tsd-index-content">
-                <section class="tsd-index-section">
-                  <h3>Methods</h3>
-                  <ul class="tsd-index-list">
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="CRDTProvider.html#getHistory"
-                        class="tsd-kind-icon"
-                        >get<wbr />History</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="CRDTProvider.html#localChange"
-                        class="tsd-kind-icon"
-                        >local<wbr />Change</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="CRDTProvider.html#newDocument"
-                        class="tsd-kind-icon"
-                        >new<wbr />Document</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-interface">
-                      <a
-                        href="CRDTProvider.html#remoteChange"
-                        class="tsd-kind-icon"
-                        >remote<wbr />Change</a
-                      >
-                    </li>
-                  </ul>
-                </section>
-              </div>
-            </section>
-          </section>
-          <section class="tsd-panel-group tsd-member-group">
-            <h2>Methods</h2>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="getHistory" class="tsd-anchor"></a>
-              <h3>get<wbr />History</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  get<wbr />History<span class="tsd-signature-symbol">(</span
-                  >document<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">DocType</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">ChangesType</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/crdt-provider.ts#L48"
-                          >crdt-provider.ts:48</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>Gets all changes for the document.</p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        document:
-                        <span class="tsd-signature-type">DocType</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>CRDT document to inspect.</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">ChangesType</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="localChange" class="tsd-anchor"></a>
-              <h3>local<wbr />Change</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  local<wbr />Change<span class="tsd-signature-symbol">(</span
-                  >document<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">DocType</span>, message<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">string</span>, changeFn<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">ChangeFnType</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-symbol">[</span
-                  ><span class="tsd-signature-type">DocType</span
-                  ><span class="tsd-signature-symbol">, </span
-                  ><span class="tsd-signature-type">ChangesType</span
-                  ><span class="tsd-signature-symbol">]</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/crdt-provider.ts#L29"
-                          >crdt-provider.ts:29</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Apply locally made changes to provided CRDT document as
-                        defined by <code>changeFn</code>.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        document:
-                        <span class="tsd-signature-type">DocType</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>CRDT document to change.</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        message: <span class="tsd-signature-type">string</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>A description of the change made.</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        changeFn:
-                        <span class="tsd-signature-type">ChangeFnType</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>
-                          A function that modifies a CRDT document (provided as
-                          a parameter). This function will be run as a part of
-                          <code>.localChange(...)</code>
-                        </p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-symbol">[</span
-                    ><span class="tsd-signature-type">DocType</span
-                    ><span class="tsd-signature-symbol">, </span
-                    ><span class="tsd-signature-type">ChangesType</span
-                    ><span class="tsd-signature-symbol">]</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="newDocument" class="tsd-anchor"></a>
-              <h3>new<wbr />Document</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  new<wbr />Document<span class="tsd-signature-symbol">(</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">DocType</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/crdt-provider.ts#L19"
-                          >crdt-provider.ts:19</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Create a new empty (contains the equivalent of
-                        <code>{}</code>) CRDT document.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">DocType</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface"
-            >
-              <a name="remoteChange" class="tsd-anchor"></a>
-              <h3>remote<wbr />Change</h3>
-              <ul
-                class="tsd-signatures tsd-kind-method tsd-parent-kind-interface"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  remote<wbr />Change<span class="tsd-signature-symbol">(</span
-                  >document<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">DocType</span>, changes<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">ChangesType</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">DocType</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/crdt-provider.ts#L41"
-                          >crdt-provider.ts:41</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>Apply CRDT document changes made by a remote peer.</p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        document:
-                        <span class="tsd-signature-type">DocType</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>CRDT document to update.</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        changes:
-                        <span class="tsd-signature-type">ChangesType</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>
-                          An object describing changes made by a peer.
-                          CRDT-specific.
-                        </p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">DocType</span>
-                  </h4>
-                </li>
-              </ul>
-            </section>
-          </section>
-        </div>
-        <div class="col-4 col-menu menu-sticky-wrap menu-highlight">
-          <nav class="tsd-navigation primary">
-            <ul>
-              <li class=" ">
-                <a href="../modules.html">Exports</a>
-              </li>
-            </ul>
-          </nav>
-          <nav class="tsd-navigation secondary menu-sticky">
-            <ul class="before-current">
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/Collabswarm.html" class="tsd-kind-icon"
-                  >Collabswarm</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a
-                  href="../classes/CollabswarmDocument.html"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/CollabswarmNode.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Node</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="../classes/JSONSerializer.html" class="tsd-kind-icon"
-                  >JSONSerializer</a
-                >
-              </li>
-              <li class="tsd-kind-class">
-                <a href="../classes/SubtleCrypto.html" class="tsd-kind-icon"
-                  >Subtle<wbr />Crypto</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ACL.html" class="tsd-kind-icon">ACL</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ACLProvider.html" class="tsd-kind-icon">ACLProvider</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="AuthProvider.html" class="tsd-kind-icon"
-                  >Auth<wbr />Provider</a
-                >
-              </li>
-            </ul>
-            <ul class="current">
-              <li class="current tsd-kind-interface tsd-has-type-parameter">
-                <a href="CRDTProvider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
-                >
-                <ul>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a href="CRDTProvider.html#getHistory" class="tsd-kind-icon"
-                      >get<wbr />History</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="CRDTProvider.html#localChange"
-                      class="tsd-kind-icon"
-                      >local<wbr />Change</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="CRDTProvider.html#newDocument"
-                      class="tsd-kind-icon"
-                      >new<wbr />Document</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-interface">
-                    <a
-                      href="CRDTProvider.html#remoteChange"
-                      class="tsd-kind-icon"
-                      >remote<wbr />Change</a
-                    >
-                  </li>
-                </ul>
-              </li>
-            </ul>
-            <ul class="after-current">
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="ChangesSerializer.html" class="tsd-kind-icon"
-                  >Changes<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a href="CollabswarmConfig.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Config</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="Keychain.html" class="tsd-kind-icon">Keychain</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="KeychainProvider.html" class="tsd-kind-icon"
-                  >Keychain<wbr />Provider</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a href="LoadMessageSerializer.html" class="tsd-kind-icon"
-                  >Load<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="SyncMessageSerializer.html" class="tsd-kind-icon"
-                  >Sync<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a
-                  href="../modules.html#CollabswarmDocumentChangeHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document<wbr />Change<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias">
-                <a
-                  href="../modules.html#CollabswarmPeersHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Peers<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon"
-                  >DEFAULT_<wbr />CONFIG</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a
-                  href="../modules.html#DEFAULT_NODE_CONFIG"
-                  class="tsd-kind-icon"
-                  >DEFAULT_<wbr />NODE_<wbr />CONFIG</a
-                >
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
-    </div>
-    <footer class="with-border-bottom">
-      <div class="container">
-        <h2>Legend</h2>
-        <div class="tsd-legend-group">
-          <ul class="tsd-legend">
-            <li class="tsd-kind-constructor tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Constructor</span>
-            </li>
-            <li class="tsd-kind-property tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-          <ul class="tsd-legend">
-            <li class="tsd-kind-property tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </footer>
-    <div class="container tsd-generator">
-      <p>
-        Generated using
-        <a href="https://typedoc.org/" target="_blank">TypeDoc</a>
-      </p>
-    </div>
-    <div class="overlay"></div>
-    <script src="../assets/js/main.js"></script>
-  </body>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>CRDTProvider | @collabswarm/collabswarm</title>
+	<meta name="description" content="Documentation for @collabswarm/collabswarm">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="../assets/css/main.css">
+	<script async src="../assets/js/search.js" id="search-script"></script>
+</head>
+<body>
+<header>
+	<div class="tsd-page-toolbar">
+		<div class="container">
+			<div class="table-wrap">
+				<div class="table-cell" id="tsd-search" data-index="../assets/js/search.json" data-base="..">
+					<div class="field">
+						<label for="tsd-search-field" class="tsd-widget search no-caption">Search</label>
+						<input id="tsd-search-field" type="text" />
+					</div>
+					<ul class="results">
+						<li class="state loading">Preparing search index...</li>
+						<li class="state failure">The search index is not available</li>
+					</ul>
+					<a href="../index.html" class="title">@collabswarm/collabswarm</a>
+				</div>
+				<div class="table-cell" id="tsd-widgets">
+					<div id="tsd-filter">
+						<a href="#" class="tsd-widget options no-caption" data-toggle="options">Options</a>
+						<div class="tsd-filter-group">
+							<div class="tsd-select" id="tsd-filter-visibility">
+								<span class="tsd-select-label">All</span>
+								<ul class="tsd-select-list">
+									<li data-value="public">Public</li>
+									<li data-value="protected">Public/Protected</li>
+									<li data-value="private" class="selected">All</li>
+								</ul>
+							</div>
+							<input type="checkbox" id="tsd-filter-inherited" checked />
+							<label class="tsd-widget" for="tsd-filter-inherited">Inherited</label>
+							<input type="checkbox" id="tsd-filter-externals" checked />
+							<label class="tsd-widget" for="tsd-filter-externals">Externals</label>
+						</div>
+					</div>
+					<a href="#" class="tsd-widget menu no-caption" data-toggle="menu">Menu</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="tsd-page-title">
+		<div class="container">
+			<ul class="tsd-breadcrumb">
+				<li>
+					<a href="../modules.html">@collabswarm/collabswarm</a>
+				</li>
+				<li>
+					<a href="CRDTProvider.html">CRDTProvider</a>
+				</li>
+			</ul>
+			<h1>Interface CRDTProvider&lt;DocType, ChangesType, ChangeFnType&gt;</h1>
+		</div>
+	</div>
+</header>
+<div class="container container-main">
+	<div class="row">
+		<div class="col-8 col-content">
+			<section class="tsd-panel tsd-comment">
+				<div class="tsd-comment tsd-typography">
+					<div class="lead">
+						<p>CRDTProvider is an interface with a set of methods for manipulating CRDT documents.</p>
+					</div>
+					<dl class="tsd-comment-tags">
+						<dt>typeparam</dt>
+						<dd><p>The sync message that gets sent when changes are made to a document</p>
+						</dd>
+					</dl>
+				</div>
+			</section>
+			<section class="tsd-panel tsd-type-parameters">
+				<h3>Type parameters</h3>
+				<ul class="tsd-type-parameters">
+					<li>
+						<h4>DocType</h4>
+						<div class="tsd-comment tsd-typography">
+							<div class="lead">
+								<p>The CRDT document type</p>
+							</div>
+						</div>
+					</li>
+					<li>
+						<h4>ChangesType</h4>
+						<div class="tsd-comment tsd-typography">
+							<div class="lead">
+								<p>A block of CRDT change(s)</p>
+							</div>
+						</div>
+					</li>
+					<li>
+						<h4>ChangeFnType</h4>
+						<div class="tsd-comment tsd-typography">
+							<div class="lead">
+								<p>A function for applying changes to a document</p>
+							</div>
+						</div>
+					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel tsd-hierarchy">
+				<h3>Hierarchy</h3>
+				<ul class="tsd-hierarchy">
+					<li>
+						<span class="target">CRDTProvider</span>
+					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel-group tsd-index-group">
+				<h2>Index</h2>
+				<section class="tsd-panel tsd-index-panel">
+					<div class="tsd-index-content">
+						<section class="tsd-index-section ">
+							<h3>Methods</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="CRDTProvider.html#getHistory" class="tsd-kind-icon">get<wbr>History</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="CRDTProvider.html#localChange" class="tsd-kind-icon">local<wbr>Change</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="CRDTProvider.html#newDocument" class="tsd-kind-icon">new<wbr>Document</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="CRDTProvider.html#remoteChange" class="tsd-kind-icon">remote<wbr>Change</a></li>
+							</ul>
+						</section>
+					</div>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="getHistory" class="tsd-anchor"></a>
+					<h3>get<wbr>History</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">get<wbr>History<span class="tsd-signature-symbol">(</span>document<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/crdt-provider.ts#L48">crdt-provider.ts:48</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Gets all changes for the document.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>document: <span class="tsd-signature-type">DocType</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>CRDT document to inspect.</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">ChangesType</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="localChange" class="tsd-anchor"></a>
+					<h3>local<wbr>Change</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">local<wbr>Change<span class="tsd-signature-symbol">(</span>document<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocType</span>, message<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, changeFn<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangeFnType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">DocType</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">]</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/crdt-provider.ts#L29">crdt-provider.ts:29</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Apply locally made changes to provided CRDT document as defined by <code>changeFn</code>.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>document: <span class="tsd-signature-type">DocType</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>CRDT document to change.</p>
+									</div>
+								</li>
+								<li>
+									<h5>message: <span class="tsd-signature-type">string</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>A description of the change made.</p>
+									</div>
+								</li>
+								<li>
+									<h5>changeFn: <span class="tsd-signature-type">ChangeFnType</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>A function that modifies a CRDT document (provided as a parameter).
+										This function will be run as a part of <code>.localChange(...)</code></p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">DocType</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">]</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="newDocument" class="tsd-anchor"></a>
+					<h3>new<wbr>Document</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">new<wbr>Document<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocType</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/crdt-provider.ts#L19">crdt-provider.ts:19</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Create a new empty (contains the equivalent of <code>{}</code>) CRDT document.</p>
+								</div>
+							</div>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">DocType</span></h4>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="remoteChange" class="tsd-anchor"></a>
+					<h3>remote<wbr>Change</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">remote<wbr>Change<span class="tsd-signature-symbol">(</span>document<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocType</span>, changes<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">ChangesType</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">DocType</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/crdt-provider.ts#L41">crdt-provider.ts:41</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Apply CRDT document changes made by a remote peer.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>document: <span class="tsd-signature-type">DocType</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>CRDT document to update.</p>
+									</div>
+								</li>
+								<li>
+									<h5>changes: <span class="tsd-signature-type">ChangesType</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>An object describing changes made by a peer. CRDT-specific.</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">DocType</span></h4>
+						</li>
+					</ul>
+				</section>
+			</section>
+		</div>
+		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
+			<nav class="tsd-navigation primary">
+				<ul>
+					<li class=" ">
+						<a href="../modules.html">Exports</a>
+					</li>
+				</ul>
+			</nav>
+			<nav class="tsd-navigation secondary menu-sticky">
+				<ul class="before-current">
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/Collabswarm.html" class="tsd-kind-icon">Collabswarm</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/CollabswarmDocument.html" class="tsd-kind-icon">Collabswarm<wbr>Document</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/CollabswarmNode.html" class="tsd-kind-icon">Collabswarm<wbr>Node</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="../classes/JSONSerializer.html" class="tsd-kind-icon">JSONSerializer</a>
+					</li>
+					<li class=" tsd-kind-class">
+						<a href="../classes/SubtleCrypto.html" class="tsd-kind-icon">Subtle<wbr>Crypto</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ACL.html" class="tsd-kind-icon">ACL</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ACLProvider.html" class="tsd-kind-icon">ACLProvider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="AuthProvider.html" class="tsd-kind-icon">Auth<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="CRDTChangeBlock.html" class="tsd-kind-icon">CRDTChange<wbr>Block</a>
+					</li>
+				</ul>
+				<ul class="current">
+					<li class="current tsd-kind-interface tsd-has-type-parameter">
+						<a href="CRDTProvider.html" class="tsd-kind-icon">CRDTProvider</a>
+						<ul>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="CRDTProvider.html#getHistory" class="tsd-kind-icon">get<wbr>History</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="CRDTProvider.html#localChange" class="tsd-kind-icon">local<wbr>Change</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="CRDTProvider.html#newDocument" class="tsd-kind-icon">new<wbr>Document</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="CRDTProvider.html#remoteChange" class="tsd-kind-icon">remote<wbr>Change</a>
+							</li>
+						</ul>
+					</li>
+				</ul>
+				<ul class="after-current">
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="ChangesSerializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="CollabswarmConfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="Keychain.html" class="tsd-kind-icon">Keychain</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="KeychainProvider.html" class="tsd-kind-icon">Keychain<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="LoadMessageSerializer.html" class="tsd-kind-icon">Load<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="SyncMessageSerializer.html" class="tsd-kind-icon">Sync<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CRDTChangeNode" class="tsd-kind-icon">CRDTChange<wbr>Node</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CRDTChangeNodeDeferred" class="tsd-kind-icon">CRDTChange<wbr>Node<wbr>Deferred</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CRDTChangeNodeKind" class="tsd-kind-icon">CRDTChange<wbr>Node<wbr>Kind</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon">CRDTSync<wbr>Message</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CollabswarmDocumentChangeHandler" class="tsd-kind-icon">Collabswarm<wbr>Document<wbr>Change<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CollabswarmPeersHandler" class="tsd-kind-icon">Collabswarm<wbr>Peers<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>CONFIG</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_NODE_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>NODE_<wbr>CONFIG</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#crdtChangeNodeDeferred" class="tsd-kind-icon">crdt<wbr>Change<wbr>Node<wbr>Deferred</a>
+					</li>
+				</ul>
+			</nav>
+		</div>
+	</div>
+</div>
+<footer class="with-border-bottom">
+	<div class="container">
+		<h2>Legend</h2>
+		<div class="tsd-legend-group">
+			<ul class="tsd-legend">
+				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+			<ul class="tsd-legend">
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+		</div>
+	</div>
+</footer>
+<div class="container tsd-generator">
+	<p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p>
+</div>
+<div class="overlay"></div>
+<script src="../assets/js/main.js"></script>
+</body>
 </html>

@@ -1,1046 +1,540 @@
-<!DOCTYPE html>
+<!doctype html>
 <html class="default no-js">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>SubtleCrypto | @collabswarm/collabswarm</title>
-    <meta
-      name="description"
-      content="Documentation for @collabswarm/collabswarm"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="../assets/css/main.css" />
-    <script async src="../assets/js/search.js" id="search-script"></script>
-  </head>
-  <body>
-    <header>
-      <div class="tsd-page-toolbar">
-        <div class="container">
-          <div class="table-wrap">
-            <div
-              class="table-cell"
-              id="tsd-search"
-              data-index="../assets/js/search.json"
-              data-base=".."
-            >
-              <div class="field">
-                <label
-                  for="tsd-search-field"
-                  class="tsd-widget search no-caption"
-                  >Search</label
-                >
-                <input id="tsd-search-field" type="text" />
-              </div>
-              <ul class="results">
-                <li class="state loading">Preparing search index...</li>
-                <li class="state failure">The search index is not available</li>
-              </ul>
-              <a href="../index.html" class="title">@collabswarm/collabswarm</a>
-            </div>
-            <div class="table-cell" id="tsd-widgets">
-              <div id="tsd-filter">
-                <a
-                  href="#"
-                  class="tsd-widget options no-caption"
-                  data-toggle="options"
-                  >Options</a
-                >
-                <div class="tsd-filter-group">
-                  <div class="tsd-select" id="tsd-filter-visibility">
-                    <span class="tsd-select-label">All</span>
-                    <ul class="tsd-select-list">
-                      <li data-value="public">Public</li>
-                      <li data-value="protected">Public/Protected</li>
-                      <li data-value="private" class="selected">All</li>
-                    </ul>
-                  </div>
-                  <input type="checkbox" id="tsd-filter-inherited" checked />
-                  <label class="tsd-widget" for="tsd-filter-inherited"
-                    >Inherited</label
-                  >
-                  <input type="checkbox" id="tsd-filter-externals" checked />
-                  <label class="tsd-widget" for="tsd-filter-externals"
-                    >Externals</label
-                  >
-                </div>
-              </div>
-              <a href="#" class="tsd-widget menu no-caption" data-toggle="menu"
-                >Menu</a
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="tsd-page-title">
-        <div class="container">
-          <ul class="tsd-breadcrumb">
-            <li>
-              <a href="../modules.html">@collabswarm/collabswarm</a>
-            </li>
-            <li>
-              <a href="SubtleCrypto.html">SubtleCrypto</a>
-            </li>
-          </ul>
-          <h1>Class SubtleCrypto</h1>
-        </div>
-      </div>
-    </header>
-    <div class="container container-main">
-      <div class="row">
-        <div class="col-8 col-content">
-          <section class="tsd-panel tsd-comment">
-            <div class="tsd-comment tsd-typography">
-              <div class="lead">
-                <p>
-                  SubtleCrypto implements <code>AuthProvider</code> using
-                  WebCrypto&#39;s Subtle API.
-                </p>
-              </div>
-              <p>The base keytype is <code>CryptoKey</code>.</p>
-            </div>
-          </section>
-          <section class="tsd-panel tsd-hierarchy">
-            <h3>Hierarchy</h3>
-            <ul class="tsd-hierarchy">
-              <li>
-                <span class="target">SubtleCrypto</span>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel">
-            <h3>Implements</h3>
-            <ul class="tsd-hierarchy">
-              <li>
-                <a
-                  href="../interfaces/AuthProvider.html"
-                  class="tsd-signature-type"
-                  data-tsd-kind="Interface"
-                  >AuthProvider</a
-                ><span class="tsd-signature-symbol">&lt;</span
-                ><span class="tsd-signature-type">CryptoKey</span
-                ><span class="tsd-signature-symbol">, </span
-                ><span class="tsd-signature-type">CryptoKey</span
-                ><span class="tsd-signature-symbol">, </span
-                ><span class="tsd-signature-type">CryptoKey</span
-                ><span class="tsd-signature-symbol">&gt;</span>
-              </li>
-            </ul>
-          </section>
-          <section class="tsd-panel-group tsd-index-group">
-            <h2>Index</h2>
-            <section class="tsd-panel tsd-index-panel">
-              <div class="tsd-index-content">
-                <section class="tsd-index-section">
-                  <h3>Constructors</h3>
-                  <ul class="tsd-index-list">
-                    <li class="tsd-kind-constructor tsd-parent-kind-class">
-                      <a
-                        href="SubtleCrypto.html#constructor"
-                        class="tsd-kind-icon"
-                        >constructor</a
-                      >
-                    </li>
-                  </ul>
-                </section>
-                <section class="tsd-index-section">
-                  <h3>Properties</h3>
-                  <ul class="tsd-index-list">
-                    <li class="tsd-kind-property tsd-parent-kind-class">
-                      <a
-                        href="SubtleCrypto.html#_encryptionAlgorithmName"
-                        class="tsd-kind-icon"
-                        >_encryption<wbr />Algorithm<wbr />Name</a
-                      >
-                    </li>
-                    <li class="tsd-kind-property tsd-parent-kind-class">
-                      <a
-                        href="SubtleCrypto.html#nonceBits"
-                        class="tsd-kind-icon"
-                        >nonce<wbr />Bits</a
-                      >
-                    </li>
-                    <li class="tsd-kind-property tsd-parent-kind-class">
-                      <a
-                        href="SubtleCrypto.html#signingAlgorithm"
-                        class="tsd-kind-icon"
-                        >signing<wbr />Algorithm</a
-                      >
-                    </li>
-                  </ul>
-                </section>
-                <section class="tsd-index-section">
-                  <h3>Methods</h3>
-                  <ul class="tsd-index-list">
-                    <li class="tsd-kind-method tsd-parent-kind-class">
-                      <a
-                        href="SubtleCrypto.html#_encryptionAlgorithmParams"
-                        class="tsd-kind-icon"
-                        >_encryption<wbr />Algorithm<wbr />Params</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-class">
-                      <a href="SubtleCrypto.html#decrypt" class="tsd-kind-icon"
-                        >decrypt</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-class">
-                      <a href="SubtleCrypto.html#encrypt" class="tsd-kind-icon"
-                        >encrypt</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-class">
-                      <a href="SubtleCrypto.html#sign" class="tsd-kind-icon"
-                        >sign</a
-                      >
-                    </li>
-                    <li class="tsd-kind-method tsd-parent-kind-class">
-                      <a href="SubtleCrypto.html#verify" class="tsd-kind-icon"
-                        >verify</a
-                      >
-                    </li>
-                  </ul>
-                </section>
-              </div>
-            </section>
-          </section>
-          <section class="tsd-panel-group tsd-member-group">
-            <h2>Constructors</h2>
-            <section
-              class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class"
-            >
-              <a name="constructor" class="tsd-anchor"></a>
-              <h3>constructor</h3>
-              <ul
-                class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class"
-              >
-                <li class="tsd-signature tsd-kind-icon">
-                  new <wbr />Subtle<wbr />Crypto<span
-                    class="tsd-signature-symbol"
-                    >(</span
-                  >nonceBits<span class="tsd-signature-symbol">?: </span
-                  ><span class="tsd-signature-type">number</span>,
-                  signingAlgorithm<span class="tsd-signature-symbol">?: </span
-                  ><span class="tsd-signature-type">AlgorithmIdentifier</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">RsaPssParams</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">EcdsaParams</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">AesCmacParams</span>,
-                  _encryptionAlgorithmName<span class="tsd-signature-symbol"
-                    >?: </span
-                  ><span class="tsd-signature-type">&quot;AES-GCM&quot;</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">&quot;AES-CTR&quot;</span
-                  ><span class="tsd-signature-symbol"> | </span
-                  ><span class="tsd-signature-type">&quot;AES-CBC&quot;</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><a
-                    href="SubtleCrypto.html"
-                    class="tsd-signature-type"
-                    data-tsd-kind="Class"
-                    >SubtleCrypto</a
-                  >
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L22"
-                          >auth-subtlecrypto.ts:22</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        nonceBits: <span class="tsd-signature-type">number</span
-                        ><span class="tsd-signature-symbol"> = 96</span>
-                      </h5>
-                    </li>
-                    <li>
-                      <h5>
-                        signingAlgorithm:
-                        <span class="tsd-signature-type"
-                          >AlgorithmIdentifier</span
-                        ><span class="tsd-signature-symbol"> | </span
-                        ><span class="tsd-signature-type">RsaPssParams</span
-                        ><span class="tsd-signature-symbol"> | </span
-                        ><span class="tsd-signature-type">EcdsaParams</span
-                        ><span class="tsd-signature-symbol"> | </span
-                        ><span class="tsd-signature-type">AesCmacParams</span
-                        ><span class="tsd-signature-symbol"> = ...</span>
-                      </h5>
-                    </li>
-                    <li>
-                      <h5>
-                        _encryptionAlgorithmName:
-                        <span class="tsd-signature-type"
-                          >&quot;AES-GCM&quot;</span
-                        ><span class="tsd-signature-symbol"> | </span
-                        ><span class="tsd-signature-type"
-                          >&quot;AES-CTR&quot;</span
-                        ><span class="tsd-signature-symbol"> | </span
-                        ><span class="tsd-signature-type"
-                          >&quot;AES-CBC&quot;</span
-                        ><span class="tsd-signature-symbol">
-                          = &#x27;AES-GCM&#x27;</span
-                        >
-                      </h5>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns
-                    <a
-                      href="SubtleCrypto.html"
-                      class="tsd-signature-type"
-                      data-tsd-kind="Class"
-                      >SubtleCrypto</a
-                    >
-                  </h4>
-                </li>
-              </ul>
-            </section>
-          </section>
-          <section class="tsd-panel-group tsd-member-group">
-            <h2>Properties</h2>
-            <section
-              class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
-            >
-              <a name="_encryptionAlgorithmName" class="tsd-anchor"></a>
-              <h3>
-                <span class="tsd-flag ts-flagReadonly">Readonly</span>
-                _encryption<wbr />Algorithm<wbr />Name
-              </h3>
-              <div class="tsd-signature tsd-kind-icon">
-                _encryption<wbr />Algorithm<wbr />Name<span
-                  class="tsd-signature-symbol"
-                  >:</span
-                >
-                <span class="tsd-signature-type">&quot;AES-GCM&quot;</span
-                ><span class="tsd-signature-symbol"> | </span
-                ><span class="tsd-signature-type">&quot;AES-CTR&quot;</span
-                ><span class="tsd-signature-symbol"> | </span
-                ><span class="tsd-signature-type">&quot;AES-CBC&quot;</span
-                ><span class="tsd-signature-symbol">
-                  = &#x27;AES-GCM&#x27;</span
-                >
-              </div>
-              <aside class="tsd-sources"></aside>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
-            >
-              <a name="nonceBits" class="tsd-anchor"></a>
-              <h3>
-                <span class="tsd-flag ts-flagReadonly">Readonly</span>
-                nonce<wbr />Bits
-              </h3>
-              <div class="tsd-signature tsd-kind-icon">
-                nonce<wbr />Bits<span class="tsd-signature-symbol">:</span>
-                <span class="tsd-signature-type">number</span
-                ><span class="tsd-signature-symbol"> = 96</span>
-              </div>
-              <aside class="tsd-sources">
-                <p>
-                  Implementation of
-                  <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a
-                    href="../interfaces/AuthProvider.html#nonceBits"
-                    >nonceBits</a
-                  >
-                </p>
-              </aside>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"
-            >
-              <a name="signingAlgorithm" class="tsd-anchor"></a>
-              <h3>
-                <span class="tsd-flag ts-flagReadonly">Readonly</span>
-                signing<wbr />Algorithm
-              </h3>
-              <div class="tsd-signature tsd-kind-icon">
-                signing<wbr />Algorithm<span class="tsd-signature-symbol"
-                  >:</span
-                >
-                <span class="tsd-signature-type">AlgorithmIdentifier</span
-                ><span class="tsd-signature-symbol"> | </span
-                ><span class="tsd-signature-type">RsaPssParams</span
-                ><span class="tsd-signature-symbol"> | </span
-                ><span class="tsd-signature-type">EcdsaParams</span
-                ><span class="tsd-signature-symbol"> | </span
-                ><span class="tsd-signature-type">AesCmacParams</span
-                ><span class="tsd-signature-symbol"> = ...</span>
-              </div>
-              <aside class="tsd-sources"></aside>
-            </section>
-          </section>
-          <section class="tsd-panel-group tsd-member-group">
-            <h2>Methods</h2>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
-            >
-              <a name="_encryptionAlgorithmParams" class="tsd-anchor"></a>
-              <h3>_encryption<wbr />Algorithm<wbr />Params</h3>
-              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-                <li class="tsd-signature tsd-kind-icon">
-                  _encryption<wbr />Algorithm<wbr />Params<span
-                    class="tsd-signature-symbol"
-                    >(</span
-                  >nonce<span class="tsd-signature-symbol">?: </span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">AesGcmParams</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L71"
-                          >auth-subtlecrypto.ts:71</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        An internal function used to generate a new initialized
-                        vector / counter for each encryption.
-                      </p>
-                    </div>
-                    <dl class="tsd-comment-tags">
-                      <dt>remarks</dt>
-                      <dd>
-                        <p>
-                          Currently, only supports AesGcmParams. Reference:
-                          <a
-                            href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
-                            >https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt</a
-                          >
-                        </p>
-                      </dd>
-                    </dl>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        <span class="tsd-flag ts-flagOptional">Optional</span>
-                        nonce:
-                        <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>
-                          unique value generated during encryption and used
-                          during decryption
-                        </p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">AesGcmParams</span>
-                  </h4>
-                  <p>
-                    a parameter object to be used directly in the encrypt
-                    function.
-                  </p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
-            >
-              <a name="decrypt" class="tsd-anchor"></a>
-              <h3>decrypt</h3>
-              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-                <li class="tsd-signature tsd-kind-icon">
-                  decrypt<span class="tsd-signature-symbol">(</span>data<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">Uint8Array</span>,
-                  documentKey<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CryptoKey</span>, nonce<span
-                    class="tsd-signature-symbol"
-                    >?: </span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <p>
-                      Implementation of
-                      <a href="../interfaces/AuthProvider.html">AuthProvider</a
-                      >.<a href="../interfaces/AuthProvider.html#decrypt"
-                        >decrypt</a
-                      >
-                    </p>
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L136"
-                          >auth-subtlecrypto.ts:136</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Given encrypted data, the nonce used for encryption, and
-                        a document key return the decrypted data or throw an
-                        error
-                      </p>
-                    </div>
-                    <dl class="tsd-comment-tags">
-                      <dt>remarks</dt>
-                      <dd>
-                        <p>
-                          Recommend getting parameters from
-                          SubtleCryptoEncryptionResult.
-                        </p>
-                      </dd>
-                    </dl>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        data: <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>encrypted data, not including nonce</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        documentKey:
-                        <span class="tsd-signature-type">CryptoKey</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>symmetric key associated with document</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        <span class="tsd-flag ts-flagOptional">Optional</span>
-                        nonce:
-                        <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>unique value used during encryption</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-type">Uint8Array</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>
-                    a Promise that fulfills with an array if the key and nonce
-                    are valid or throws an error
-                  </p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
-            >
-              <a name="encrypt" class="tsd-anchor"></a>
-              <h3>encrypt</h3>
-              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-                <li class="tsd-signature tsd-kind-icon">
-                  encrypt<span class="tsd-signature-symbol">(</span>data<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">Uint8Array</span>,
-                  documentKey<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CryptoKey</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type"
-                    >SubtleCryptoEncryptionResult</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <p>
-                      Implementation of
-                      <a href="../interfaces/AuthProvider.html">AuthProvider</a
-                      >.<a href="../interfaces/AuthProvider.html#encrypt"
-                        >encrypt</a
-                      >
-                    </p>
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L163"
-                          >auth-subtlecrypto.ts:163</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Given data to encrypt and a key object, return the
-                        decrypted data or throw an error
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        data: <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>data to be encrypted</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        documentKey:
-                        <span class="tsd-signature-type">CryptoKey</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>symmetric key associated and stored with document</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-type"
-                      >SubtleCryptoEncryptionResult</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>
-                    a Promise that fulfills with a SubtleCryptoEncryptionResult
-                    or throws an error
-                  </p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
-            >
-              <a name="sign" class="tsd-anchor"></a>
-              <h3>sign</h3>
-              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-                <li class="tsd-signature tsd-kind-icon">
-                  sign<span class="tsd-signature-symbol">(</span>data<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">Uint8Array</span>,
-                  privateKey<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CryptoKey</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <p>
-                      Implementation of
-                      <a href="../interfaces/AuthProvider.html">AuthProvider</a
-                      >.<a href="../interfaces/AuthProvider.html#sign">sign</a>
-                    </p>
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L93"
-                          >auth-subtlecrypto.ts:93</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Given encrypted changes and a private key, returns a
-                        signature.
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        data: <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>encrypted data to be signed</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        privateKey:
-                        <span class="tsd-signature-type">CryptoKey</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>part of key pair used to sign and verify</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-type">Uint8Array</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>signature for use in a CRDTChangeBlock</p>
-                </li>
-              </ul>
-            </section>
-            <section
-              class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"
-            >
-              <a name="verify" class="tsd-anchor"></a>
-              <h3>verify</h3>
-              <ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-                <li class="tsd-signature tsd-kind-icon">
-                  verify<span class="tsd-signature-symbol">(</span>data<span
-                    class="tsd-signature-symbol"
-                    >: </span
-                  ><span class="tsd-signature-type">Uint8Array</span>,
-                  publicKey<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">CryptoKey</span>,
-                  signature<span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Uint8Array</span
-                  ><span class="tsd-signature-symbol">)</span
-                  ><span class="tsd-signature-symbol">: </span
-                  ><span class="tsd-signature-type">Promise</span
-                  ><span class="tsd-signature-symbol">&lt;</span
-                  ><span class="tsd-signature-type">boolean</span
-                  ><span class="tsd-signature-symbol">&gt;</span>
-                </li>
-              </ul>
-              <ul class="tsd-descriptions">
-                <li class="tsd-description">
-                  <aside class="tsd-sources">
-                    <p>
-                      Implementation of
-                      <a href="../interfaces/AuthProvider.html">AuthProvider</a
-                      >.<a href="../interfaces/AuthProvider.html#verify"
-                        >verify</a
-                      >
-                    </p>
-                    <ul>
-                      <li>
-                        Defined in
-                        <a
-                          href="https://github.com/collabswarm/collabswarm/blob/ee83cba/packages/collabswarm/src/auth-subtlecrypto.ts#L110"
-                          >auth-subtlecrypto.ts:110</a
-                        >
-                      </li>
-                    </ul>
-                  </aside>
-                  <div class="tsd-comment tsd-typography">
-                    <div class="lead">
-                      <p>
-                        Given a signature and data (from a CRDTChangeBlock), a
-                        Promise that fulfills with true if the signature is
-                        valid, false otherwise
-                      </p>
-                    </div>
-                  </div>
-                  <h4 class="tsd-parameters-title">Parameters</h4>
-                  <ul class="tsd-parameters">
-                    <li>
-                      <h5>
-                        data: <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>data that was signed</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        publicKey:
-                        <span class="tsd-signature-type">CryptoKey</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>part of key pair used to sign and verify</p>
-                      </div>
-                    </li>
-                    <li>
-                      <h5>
-                        signature:
-                        <span class="tsd-signature-type">Uint8Array</span>
-                      </h5>
-                      <div class="tsd-comment tsd-typography">
-                        <p>signature to verify</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <h4 class="tsd-returns-title">
-                    Returns <span class="tsd-signature-type">Promise</span
-                    ><span class="tsd-signature-symbol">&lt;</span
-                    ><span class="tsd-signature-type">boolean</span
-                    ><span class="tsd-signature-symbol">&gt;</span>
-                  </h4>
-                  <p>
-                    a Promise that fulfills with true if the signature is valid,
-                    false otherwise
-                  </p>
-                </li>
-              </ul>
-            </section>
-          </section>
-        </div>
-        <div class="col-4 col-menu menu-sticky-wrap menu-highlight">
-          <nav class="tsd-navigation primary">
-            <ul>
-              <li class=" ">
-                <a href="../modules.html">Exports</a>
-              </li>
-            </ul>
-          </nav>
-          <nav class="tsd-navigation secondary menu-sticky">
-            <ul class="before-current">
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="Collabswarm.html" class="tsd-kind-icon">Collabswarm</a>
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="CollabswarmDocument.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="CollabswarmNode.html" class="tsd-kind-icon"
-                  >Collabswarm<wbr />Node</a
-                >
-              </li>
-              <li class="tsd-kind-class tsd-has-type-parameter">
-                <a href="JSONSerializer.html" class="tsd-kind-icon"
-                  >JSONSerializer</a
-                >
-              </li>
-            </ul>
-            <ul class="current">
-              <li class="current tsd-kind-class">
-                <a href="SubtleCrypto.html" class="tsd-kind-icon"
-                  >Subtle<wbr />Crypto</a
-                >
-                <ul>
-                  <li class="tsd-kind-constructor tsd-parent-kind-class">
-                    <a
-                      href="SubtleCrypto.html#constructor"
-                      class="tsd-kind-icon"
-                      >constructor</a
-                    >
-                  </li>
-                  <li class="tsd-kind-property tsd-parent-kind-class">
-                    <a
-                      href="SubtleCrypto.html#_encryptionAlgorithmName"
-                      class="tsd-kind-icon"
-                      >_encryption<wbr />Algorithm<wbr />Name</a
-                    >
-                  </li>
-                  <li class="tsd-kind-property tsd-parent-kind-class">
-                    <a href="SubtleCrypto.html#nonceBits" class="tsd-kind-icon"
-                      >nonce<wbr />Bits</a
-                    >
-                  </li>
-                  <li class="tsd-kind-property tsd-parent-kind-class">
-                    <a
-                      href="SubtleCrypto.html#signingAlgorithm"
-                      class="tsd-kind-icon"
-                      >signing<wbr />Algorithm</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-class">
-                    <a
-                      href="SubtleCrypto.html#_encryptionAlgorithmParams"
-                      class="tsd-kind-icon"
-                      >_encryption<wbr />Algorithm<wbr />Params</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-class">
-                    <a href="SubtleCrypto.html#decrypt" class="tsd-kind-icon"
-                      >decrypt</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-class">
-                    <a href="SubtleCrypto.html#encrypt" class="tsd-kind-icon"
-                      >encrypt</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-class">
-                    <a href="SubtleCrypto.html#sign" class="tsd-kind-icon"
-                      >sign</a
-                    >
-                  </li>
-                  <li class="tsd-kind-method tsd-parent-kind-class">
-                    <a href="SubtleCrypto.html#verify" class="tsd-kind-icon"
-                      >verify</a
-                    >
-                  </li>
-                </ul>
-              </li>
-            </ul>
-            <ul class="after-current">
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="../interfaces/ACL.html" class="tsd-kind-icon">ACL</a>
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="../interfaces/ACLProvider.html" class="tsd-kind-icon"
-                  >ACLProvider</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="../interfaces/AuthProvider.html" class="tsd-kind-icon"
-                  >Auth<wbr />Provider</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="../interfaces/CRDTProvider.html" class="tsd-kind-icon"
-                  >CRDTProvider</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a
-                  href="../interfaces/ChangesSerializer.html"
-                  class="tsd-kind-icon"
-                  >Changes<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a
-                  href="../interfaces/CollabswarmConfig.html"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Config</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a href="../interfaces/Keychain.html" class="tsd-kind-icon"
-                  >Keychain</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a
-                  href="../interfaces/KeychainProvider.html"
-                  class="tsd-kind-icon"
-                  >Keychain<wbr />Provider</a
-                >
-              </li>
-              <li class="tsd-kind-interface">
-                <a
-                  href="../interfaces/LoadMessageSerializer.html"
-                  class="tsd-kind-icon"
-                  >Load<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-interface tsd-has-type-parameter">
-                <a
-                  href="../interfaces/SyncMessageSerializer.html"
-                  class="tsd-kind-icon"
-                  >Sync<wbr />Message<wbr />Serializer</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon"
-                  >CRDTSync<wbr />Message</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias tsd-has-type-parameter">
-                <a
-                  href="../modules.html#CollabswarmDocumentChangeHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Document<wbr />Change<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-type-alias">
-                <a
-                  href="../modules.html#CollabswarmPeersHandler"
-                  class="tsd-kind-icon"
-                  >Collabswarm<wbr />Peers<wbr />Handler</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon"
-                  >DEFAULT_<wbr />CONFIG</a
-                >
-              </li>
-              <li class="tsd-kind-variable">
-                <a
-                  href="../modules.html#DEFAULT_NODE_CONFIG"
-                  class="tsd-kind-icon"
-                  >DEFAULT_<wbr />NODE_<wbr />CONFIG</a
-                >
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
-    </div>
-    <footer class="with-border-bottom">
-      <div class="container">
-        <h2>Legend</h2>
-        <div class="tsd-legend-group">
-          <ul class="tsd-legend">
-            <li class="tsd-kind-constructor tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Constructor</span>
-            </li>
-            <li class="tsd-kind-property tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-class">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-          <ul class="tsd-legend">
-            <li class="tsd-kind-property tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Property</span>
-            </li>
-            <li class="tsd-kind-method tsd-parent-kind-interface">
-              <span class="tsd-kind-icon">Method</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </footer>
-    <div class="container tsd-generator">
-      <p>
-        Generated using
-        <a href="https://typedoc.org/" target="_blank">TypeDoc</a>
-      </p>
-    </div>
-    <div class="overlay"></div>
-    <script src="../assets/js/main.js"></script>
-  </body>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>SubtleCrypto | @collabswarm/collabswarm</title>
+	<meta name="description" content="Documentation for @collabswarm/collabswarm">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="../assets/css/main.css">
+	<script async src="../assets/js/search.js" id="search-script"></script>
+</head>
+<body>
+<header>
+	<div class="tsd-page-toolbar">
+		<div class="container">
+			<div class="table-wrap">
+				<div class="table-cell" id="tsd-search" data-index="../assets/js/search.json" data-base="..">
+					<div class="field">
+						<label for="tsd-search-field" class="tsd-widget search no-caption">Search</label>
+						<input id="tsd-search-field" type="text" />
+					</div>
+					<ul class="results">
+						<li class="state loading">Preparing search index...</li>
+						<li class="state failure">The search index is not available</li>
+					</ul>
+					<a href="../index.html" class="title">@collabswarm/collabswarm</a>
+				</div>
+				<div class="table-cell" id="tsd-widgets">
+					<div id="tsd-filter">
+						<a href="#" class="tsd-widget options no-caption" data-toggle="options">Options</a>
+						<div class="tsd-filter-group">
+							<div class="tsd-select" id="tsd-filter-visibility">
+								<span class="tsd-select-label">All</span>
+								<ul class="tsd-select-list">
+									<li data-value="public">Public</li>
+									<li data-value="protected">Public/Protected</li>
+									<li data-value="private" class="selected">All</li>
+								</ul>
+							</div>
+							<input type="checkbox" id="tsd-filter-inherited" checked />
+							<label class="tsd-widget" for="tsd-filter-inherited">Inherited</label>
+							<input type="checkbox" id="tsd-filter-externals" checked />
+							<label class="tsd-widget" for="tsd-filter-externals">Externals</label>
+						</div>
+					</div>
+					<a href="#" class="tsd-widget menu no-caption" data-toggle="menu">Menu</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="tsd-page-title">
+		<div class="container">
+			<ul class="tsd-breadcrumb">
+				<li>
+					<a href="../modules.html">@collabswarm/collabswarm</a>
+				</li>
+				<li>
+					<a href="SubtleCrypto.html">SubtleCrypto</a>
+				</li>
+			</ul>
+			<h1>Class SubtleCrypto</h1>
+		</div>
+	</div>
+</header>
+<div class="container container-main">
+	<div class="row">
+		<div class="col-8 col-content">
+			<section class="tsd-panel tsd-comment">
+				<div class="tsd-comment tsd-typography">
+					<div class="lead">
+						<p>SubtleCrypto implements <code>AuthProvider</code> using WebCrypto&#39;s Subtle API.</p>
+					</div>
+					<p>The base keytype is <code>CryptoKey</code>.</p>
+				</div>
+			</section>
+			<section class="tsd-panel tsd-hierarchy">
+				<h3>Hierarchy</h3>
+				<ul class="tsd-hierarchy">
+					<li>
+						<span class="target">SubtleCrypto</span>
+					</li>
+				</ul>
+			</section>
+			<section class="tsd-panel">
+				<h3>Implements</h3>
+				<ul class="tsd-hierarchy">
+					<li><a href="../interfaces/AuthProvider.html" class="tsd-signature-type" data-tsd-kind="Interface">AuthProvider</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">CryptoKey</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">CryptoKey</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">CryptoKey</span><span class="tsd-signature-symbol">&gt;</span></li>
+				</ul>
+			</section>
+			<section class="tsd-panel-group tsd-index-group">
+				<h2>Index</h2>
+				<section class="tsd-panel tsd-index-panel">
+					<div class="tsd-index-content">
+						<section class="tsd-index-section ">
+							<h3>Constructors</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-constructor tsd-parent-kind-class"><a href="SubtleCrypto.html#constructor" class="tsd-kind-icon">constructor</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section ">
+							<h3>Properties</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-property tsd-parent-kind-class"><a href="SubtleCrypto.html#_encryptionAlgorithmName" class="tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Name</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class"><a href="SubtleCrypto.html#nonceBits" class="tsd-kind-icon">nonce<wbr>Bits</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class"><a href="SubtleCrypto.html#signingAlgorithm" class="tsd-kind-icon">signing<wbr>Algorithm</a></li>
+							</ul>
+						</section>
+						<section class="tsd-index-section ">
+							<h3>Methods</h3>
+							<ul class="tsd-index-list">
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="SubtleCrypto.html#_encryptionAlgorithmParams" class="tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Params</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="SubtleCrypto.html#decrypt" class="tsd-kind-icon">decrypt</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="SubtleCrypto.html#encrypt" class="tsd-kind-icon">encrypt</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="SubtleCrypto.html#sign" class="tsd-kind-icon">sign</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-class"><a href="SubtleCrypto.html#verify" class="tsd-kind-icon">verify</a></li>
+							</ul>
+						</section>
+					</div>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Constructors</h2>
+				<section class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class">
+					<a name="constructor" class="tsd-anchor"></a>
+					<h3>constructor</h3>
+					<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">new <wbr>Subtle<wbr>Crypto<span class="tsd-signature-symbol">(</span>nonceBits<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span>, signingAlgorithm<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">AlgorithmIdentifier</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">RsaPssParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EcdsaParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">AesCmacParams</span>, _encryptionAlgorithmName<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">&quot;AES-GCM&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CTR&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CBC&quot;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="SubtleCrypto.html" class="tsd-signature-type" data-tsd-kind="Class">SubtleCrypto</a></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L22">auth-subtlecrypto.ts:22</a></li>
+								</ul>
+							</aside>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>nonceBits: <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 96</span></h5>
+								</li>
+								<li>
+									<h5>signingAlgorithm: <span class="tsd-signature-type">AlgorithmIdentifier</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">RsaPssParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EcdsaParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">AesCmacParams</span><span class="tsd-signature-symbol"> = ...</span></h5>
+								</li>
+								<li>
+									<h5>_encryptionAlgorithmName: <span class="tsd-signature-type">&quot;AES-GCM&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CTR&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CBC&quot;</span><span class="tsd-signature-symbol"> = &#x27;AES-GCM&#x27;</span></h5>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <a href="SubtleCrypto.html" class="tsd-signature-type" data-tsd-kind="Class">SubtleCrypto</a></h4>
+						</li>
+					</ul>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Properties</h2>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class">
+					<a name="_encryptionAlgorithmName" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagReadonly">Readonly</span> _encryption<wbr>Algorithm<wbr>Name</h3>
+					<div class="tsd-signature tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Name<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;AES-GCM&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CTR&quot;</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">&quot;AES-CBC&quot;</span><span class="tsd-signature-symbol"> = &#x27;AES-GCM&#x27;</span></div>
+					<aside class="tsd-sources">
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class">
+					<a name="nonceBits" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagReadonly">Readonly</span> nonce<wbr>Bits</h3>
+					<div class="tsd-signature tsd-kind-icon">nonce<wbr>Bits<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 96</span></div>
+					<aside class="tsd-sources">
+						<p>Implementation of <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a href="../interfaces/AuthProvider.html#nonceBits">nonceBits</a></p>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class">
+					<a name="signingAlgorithm" class="tsd-anchor"></a>
+					<h3><span class="tsd-flag ts-flagReadonly">Readonly</span> signing<wbr>Algorithm</h3>
+					<div class="tsd-signature tsd-kind-icon">signing<wbr>Algorithm<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">AlgorithmIdentifier</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">RsaPssParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EcdsaParams</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">AesCmacParams</span><span class="tsd-signature-symbol"> = ...</span></div>
+					<aside class="tsd-sources">
+					</aside>
+				</section>
+			</section>
+			<section class="tsd-panel-group tsd-member-group ">
+				<h2>Methods</h2>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="_encryptionAlgorithmParams" class="tsd-anchor"></a>
+					<h3>_encryption<wbr>Algorithm<wbr>Params</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Params<span class="tsd-signature-symbol">(</span>nonce<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">AesGcmParams</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L71">auth-subtlecrypto.ts:71</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>An internal function used to generate a new initialized vector / counter for each encryption.</p>
+								</div>
+								<dl class="tsd-comment-tags">
+									<dt>remarks</dt>
+									<dd><p>Currently, only supports AesGcmParams.
+										Reference: <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt">https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt</a></p>
+									</dd>
+								</dl>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> nonce: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>unique value generated during encryption and used during decryption</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">AesGcmParams</span></h4>
+							<p>a parameter object to be used directly in the encrypt function.</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="decrypt" class="tsd-anchor"></a>
+					<h3>decrypt</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">decrypt<span class="tsd-signature-symbol">(</span>data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span>, documentKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CryptoKey</span>, nonce<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<p>Implementation of <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a href="../interfaces/AuthProvider.html#decrypt">decrypt</a></p>
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L136">auth-subtlecrypto.ts:136</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Given encrypted data, the nonce used for encryption, and a document key
+									return the decrypted data or throw an error</p>
+								</div>
+								<dl class="tsd-comment-tags">
+									<dt>remarks</dt>
+									<dd><p>Recommend getting parameters from SubtleCryptoEncryptionResult.</p>
+									</dd>
+								</dl>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>data: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>encrypted data, not including nonce</p>
+									</div>
+								</li>
+								<li>
+									<h5>documentKey: <span class="tsd-signature-type">CryptoKey</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>symmetric key associated with document</p>
+									</div>
+								</li>
+								<li>
+									<h5><span class="tsd-flag ts-flagOptional">Optional</span> nonce: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>unique value used during encryption</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>a Promise that fulfills with an array if the key and nonce are valid or throws an error</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="encrypt" class="tsd-anchor"></a>
+					<h3>encrypt</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">encrypt<span class="tsd-signature-symbol">(</span>data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span>, documentKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CryptoKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">SubtleCryptoEncryptionResult</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<p>Implementation of <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a href="../interfaces/AuthProvider.html#encrypt">encrypt</a></p>
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L163">auth-subtlecrypto.ts:163</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Given data to encrypt and a key object,
+									return the decrypted data or throw an error</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>data: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>data to be encrypted</p>
+									</div>
+								</li>
+								<li>
+									<h5>documentKey: <span class="tsd-signature-type">CryptoKey</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>symmetric key associated and stored with document</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">SubtleCryptoEncryptionResult</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>a Promise that fulfills with a SubtleCryptoEncryptionResult or throws an error</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="sign" class="tsd-anchor"></a>
+					<h3>sign</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">sign<span class="tsd-signature-symbol">(</span>data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span>, privateKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CryptoKey</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<p>Implementation of <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a href="../interfaces/AuthProvider.html#sign">sign</a></p>
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L93">auth-subtlecrypto.ts:93</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Given encrypted changes and a private key, returns a signature.</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>data: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>encrypted data to be signed</p>
+									</div>
+								</li>
+								<li>
+									<h5>privateKey: <span class="tsd-signature-type">CryptoKey</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>part of key pair used to sign and verify</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>signature for use in a CRDTChangeBlock</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class">
+					<a name="verify" class="tsd-anchor"></a>
+					<h3>verify</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
+						<li class="tsd-signature tsd-kind-icon">verify<span class="tsd-signature-symbol">(</span>data<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span>, publicKey<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">CryptoKey</span>, signature<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+								<p>Implementation of <a href="../interfaces/AuthProvider.html">AuthProvider</a>.<a href="../interfaces/AuthProvider.html#verify">verify</a></p>
+								<ul>
+									<li>Defined in <a href="https://github.com/swarmbase/swarmbase/blob/812e8c2/packages/collabswarm/src/auth-subtlecrypto.ts#L110">auth-subtlecrypto.ts:110</a></li>
+								</ul>
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>Given a signature and data (from a CRDTChangeBlock), a Promise that fulfills with true if the signature is valid, false otherwise</p>
+								</div>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>data: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>data that was signed</p>
+									</div>
+								</li>
+								<li>
+									<h5>publicKey: <span class="tsd-signature-type">CryptoKey</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>part of key pair used to sign and verify</p>
+									</div>
+								</li>
+								<li>
+									<h5>signature: <span class="tsd-signature-type">Uint8Array</span></h5>
+									<div class="tsd-comment tsd-typography">
+										<p>signature to verify</p>
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">&gt;</span></h4>
+							<p>a Promise that fulfills with true if the signature is valid, false otherwise</p>
+						</li>
+					</ul>
+				</section>
+			</section>
+		</div>
+		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
+			<nav class="tsd-navigation primary">
+				<ul>
+					<li class=" ">
+						<a href="../modules.html">Exports</a>
+					</li>
+				</ul>
+			</nav>
+			<nav class="tsd-navigation secondary menu-sticky">
+				<ul class="before-current">
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="Collabswarm.html" class="tsd-kind-icon">Collabswarm</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="CollabswarmDocument.html" class="tsd-kind-icon">Collabswarm<wbr>Document</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="CollabswarmNode.html" class="tsd-kind-icon">Collabswarm<wbr>Node</a>
+					</li>
+					<li class=" tsd-kind-class tsd-has-type-parameter">
+						<a href="JSONSerializer.html" class="tsd-kind-icon">JSONSerializer</a>
+					</li>
+				</ul>
+				<ul class="current">
+					<li class="current tsd-kind-class">
+						<a href="SubtleCrypto.html" class="tsd-kind-icon">Subtle<wbr>Crypto</a>
+						<ul>
+							<li class=" tsd-kind-constructor tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#constructor" class="tsd-kind-icon">constructor</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#_encryptionAlgorithmName" class="tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Name</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#nonceBits" class="tsd-kind-icon">nonce<wbr>Bits</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#signingAlgorithm" class="tsd-kind-icon">signing<wbr>Algorithm</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#_encryptionAlgorithmParams" class="tsd-kind-icon">_encryption<wbr>Algorithm<wbr>Params</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#decrypt" class="tsd-kind-icon">decrypt</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#encrypt" class="tsd-kind-icon">encrypt</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#sign" class="tsd-kind-icon">sign</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-class">
+								<a href="SubtleCrypto.html#verify" class="tsd-kind-icon">verify</a>
+							</li>
+						</ul>
+					</li>
+				</ul>
+				<ul class="after-current">
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/ACL.html" class="tsd-kind-icon">ACL</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/ACLProvider.html" class="tsd-kind-icon">ACLProvider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/AuthProvider.html" class="tsd-kind-icon">Auth<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/CRDTChangeBlock.html" class="tsd-kind-icon">CRDTChange<wbr>Block</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/CRDTProvider.html" class="tsd-kind-icon">CRDTProvider</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/ChangesSerializer.html" class="tsd-kind-icon">Changes<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="../interfaces/CollabswarmConfig.html" class="tsd-kind-icon">Collabswarm<wbr>Config</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/Keychain.html" class="tsd-kind-icon">Keychain</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/KeychainProvider.html" class="tsd-kind-icon">Keychain<wbr>Provider</a>
+					</li>
+					<li class=" tsd-kind-interface">
+						<a href="../interfaces/LoadMessageSerializer.html" class="tsd-kind-icon">Load<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-interface tsd-has-type-parameter">
+						<a href="../interfaces/SyncMessageSerializer.html" class="tsd-kind-icon">Sync<wbr>Message<wbr>Serializer</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CRDTChangeNode" class="tsd-kind-icon">CRDTChange<wbr>Node</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CRDTChangeNodeDeferred" class="tsd-kind-icon">CRDTChange<wbr>Node<wbr>Deferred</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CRDTChangeNodeKind" class="tsd-kind-icon">CRDTChange<wbr>Node<wbr>Kind</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CRDTSyncMessage" class="tsd-kind-icon">CRDTSync<wbr>Message</a>
+					</li>
+					<li class=" tsd-kind-type-alias tsd-has-type-parameter">
+						<a href="../modules.html#CollabswarmDocumentChangeHandler" class="tsd-kind-icon">Collabswarm<wbr>Document<wbr>Change<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-type-alias">
+						<a href="../modules.html#CollabswarmPeersHandler" class="tsd-kind-icon">Collabswarm<wbr>Peers<wbr>Handler</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>CONFIG</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#DEFAULT_NODE_CONFIG" class="tsd-kind-icon">DEFAULT_<wbr>NODE_<wbr>CONFIG</a>
+					</li>
+					<li class=" tsd-kind-variable">
+						<a href="../modules.html#crdtChangeNodeDeferred" class="tsd-kind-icon">crdt<wbr>Change<wbr>Node<wbr>Deferred</a>
+					</li>
+				</ul>
+			</nav>
+		</div>
+	</div>
+</div>
+<footer class="with-border-bottom">
+	<div class="container">
+		<h2>Legend</h2>
+		<div class="tsd-legend-group">
+			<ul class="tsd-legend">
+				<li class="tsd-kind-constructor tsd-parent-kind-class"><span class="tsd-kind-icon">Constructor</span></li>
+				<li class="tsd-kind-property tsd-parent-kind-class"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-class"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+			<ul class="tsd-legend">
+				<li class="tsd-kind-property tsd-parent-kind-interface"><span class="tsd-kind-icon">Property</span></li>
+				<li class="tsd-kind-method tsd-parent-kind-interface"><span class="tsd-kind-icon">Method</span></li>
+			</ul>
+		</div>
+	</div>
+</footer>
+<div class="container tsd-generator">
+	<p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p>
+</div>
+<div class="overlay"></div>
+<script src="../assets/js/main.js"></script>
+</body>
 </html>
