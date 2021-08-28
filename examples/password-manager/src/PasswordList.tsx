@@ -42,16 +42,14 @@ export function PasswordList({
                 .getArray<Y.Map<Y.Text>>('passwords')
                 .map<Y.Map<Y.Text>, JSX.Element>((password) => {
                   const idRef = password.get('id');
-                  const nameRef = password.get('name');
                   const id = idRef && idRef.toString();
-                  const name = nameRef && nameRef.toString();
                   return (
                     <ListGroup.Item
                       key={id}
                       action
                       onClick={() => setCurrentPassword(password)}
                     >
-                      {name || `Unnamed Secret (id: ${id})`}
+                      {id}
                     </ListGroup.Item>
                   );
                 })}
