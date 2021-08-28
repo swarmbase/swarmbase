@@ -9,5 +9,8 @@
     "examples/browser-test",
     "examples/wiki-swarm",
     "examples/password-manager"
-  ]
+  ],
+  "devDependencies": {
+    "nocuous": "^0.4.0"
+  }
 }
