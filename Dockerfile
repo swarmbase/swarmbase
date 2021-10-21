@@ -2,7 +2,6 @@ FROM node:16-alpine AS builder
 
 RUN apk update && apk add dos2unix
 
-RUN mkdir -p /app
 WORKDIR /app
 
 # Setup package dependencies
@@ -30,7 +29,6 @@ RUN yarn install
 
 FROM node:16-alpine
 ENV SKIP_PREFLIGHT_CHECK=true
-RUN mkdir -p /app
 COPY --from=builder /app /app
 WORKDIR /app
 
