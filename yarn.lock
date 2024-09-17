@@ -1687,14 +1687,14 @@ __metadata:
     "@types/jest": ^26.0.23
     "@types/jsoneditor": ^8.6.0
     "@types/node": ^22.5.5
-    "@types/react": ^17.0.11
+    "@types/react": ^18.3.7
     "@types/react-dom": ^17.0.8
     "@types/react-redux": ^7.1.16
     jsondiffpatch: ^0.4.1
     jsoneditor: ^9.5.0
     jsoneditor-react: ^3.1.1
     libp2p-webrtc-star: ^0.22.4
-    react: ^17.0.2
+    react: ^18.3.1
     react-dom: ^17.0.2
     react-redux: ^7.2.4
     react-scripts: ^4.0.3
@@ -1726,9 +1726,9 @@ __metadata:
   resolution: "@collabswarm/collabswarm-react@workspace:packages/collabswarm-react"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/react": ^17.0.11
+    "@types/react": ^18.3.7
     eslint: ^7.31.0
-    react: ^17.0.2
+    react: ^18.3.1
     redux: ^4.1.0
     redux-thunk: ^2.3.0
     typescript: ^4.3.5
@@ -1793,7 +1793,7 @@ __metadata:
     "@testing-library/user-event": ^12.1.10
     "@types/bootstrap": ^5
     "@types/node": ^22.5.5
-    "@types/react": ^17.0.11
+    "@types/react": ^18.3.7
     "@types/react-bootstrap": ^0.32.26
     "@types/react-dom": ^17.0.2
     "@types/react-router-bootstrap": ^0.24.5
@@ -1802,7 +1802,7 @@ __metadata:
     "@types/uuid": ^8.3.1
     bootstrap: ^5.1.0
     quill-delta: ^4.2.2
-    react: ^17.0.2
+    react: ^18.3.1
     react-bootstrap: ^1.6.1
     react-dom: ^17.0.2
     react-router-bootstrap: ^0.25.0
@@ -1828,7 +1828,7 @@ __metadata:
     "@testing-library/user-event": ^13.1.9
     "@types/jest": ^26.0.23
     "@types/node": ^22.5.5
-    "@types/react": ^17.0.11
+    "@types/react": ^18.3.7
     "@types/react-bootstrap": ^0.32.25
     "@types/react-dom": ^17.0.8
     "@types/react-redux": ^7.1.16
@@ -1839,7 +1839,7 @@ __metadata:
     bootstrap: ^5.0.1
     dayjs: ^1.10.5
     libp2p-webrtc-star: ^0.22.4
-    react: ^17.0.2
+    react: ^18.3.1
     react-bootstrap: ^1.6.1
     react-bootstrap-icons: ^1.5.0
     react-dom: ^17.0.2
@@ -3739,7 +3739,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:*, @types/react@npm:>=16.14.8, @types/react@npm:>=16.9.11, @types/react@npm:^17.0.11":
+"@types/react@npm:*, @types/react@npm:>=16.14.8, @types/react@npm:>=16.9.11":
   version: 17.0.11
   resolution: "@types/react@npm:17.0.11"
   dependencies:
@@ -3747,6 +3747,16 @@ __metadata:
     "@types/scheduler": "*"
     csstype: ^3.0.2
   checksum: ed2b57e44e8da99b13a7b0cd7d9d9159e3113a5160e25c9deae4f577cfb87f05103b54bb0e9722f48a7db3ddb3a836ade12b971bbc338d397b719886fb81efff
+  languageName: node
+  linkType: hard
+
+"@types/react@npm:^18.3.7":
+  version: 18.3.7
+  resolution: "@types/react@npm:18.3.7"
+  dependencies:
+    "@types/prop-types": "*"
+    csstype: ^3.0.2
+  checksum: bba3968bed66f06777ecd56c95e1254d74cd24a82e85248d01c57c41fd4214c0a8fd9d8883ff24ad3cc57d7eff0b444ba2dd229ca6573a41eb2f33e59b75ac1c
   languageName: node
   linkType: hard
 
@@ -18427,13 +18437,12 @@ fsevents@^1.2.7:
   languageName: node
   linkType: hard
 
-"react@npm:^17.0.2":
-  version: 17.0.2
-  resolution: "react@npm:17.0.2"
+"react@npm:^18.3.1":
+  version: 18.3.1
+  resolution: "react@npm:18.3.1"
   dependencies:
     loose-envify: ^1.1.0
-    object-assign: ^4.1.1
-  checksum: 7d0dfebafe1d297503157abb2e9acdb49852185deb8700c16f4a6faad87642f84903ab18cfc16f40b9a0dfe97540f99834982ee953e6d48b39c41608dc3e4b29
+  checksum: d815f84a173627922e34f13d52ca8de726b41f3d0be499e5041f15e1df1b9e499772fca8fb2d1b126da241d9f7233dde40a7ed77480b1c894fdc46fe075e7588
   languageName: node
   linkType: hard
 

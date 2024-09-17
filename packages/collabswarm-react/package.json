@@ -16,7 +16,7 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/react": "^17.0.11",
+    "@types/react": "^18.3.7",
     "eslint": "^7.31.0",
     "redux": "^4.1.0",
     "redux-thunk": "^2.3.0",
@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
-    "react": "^17.0.2"
+    "react": "^18.3.1"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
