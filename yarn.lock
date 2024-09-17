@@ -1686,7 +1686,7 @@ __metadata:
     "@testing-library/user-event": ^13.1.9
     "@types/jest": ^26.0.23
     "@types/jsoneditor": ^8.6.0
-    "@types/node": ^16.4.0
+    "@types/node": ^22.5.5
     "@types/react": ^17.0.11
     "@types/react-dom": ^17.0.8
     "@types/react-redux": ^7.1.16
@@ -1709,7 +1709,7 @@ __metadata:
   resolution: "@collabswarm/collabswarm-automerge@workspace:packages/collabswarm-automerge"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": ^16.4.0
+    "@types/node": ^22.5.5
     "@types/uuid": ^8
     automerge: ^1.0.1-preview.3
     eslint: ^7.31.0
@@ -1753,7 +1753,7 @@ __metadata:
   resolution: "@collabswarm/collabswarm-yjs@workspace:packages/collabswarm-yjs"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": ^16.4.0
+    "@types/node": ^22.5.5
     eslint: ^7.31.0
     ts-node: ^10.1.0
     typescript: ^4.3.5
@@ -1768,7 +1768,7 @@ __metadata:
   resolution: "@collabswarm/collabswarm@workspace:packages/collabswarm"
   dependencies:
     "@peculiar/webcrypto": ^1.1.7
-    "@types/node": ^16.4.0
+    "@types/node": ^22.5.5
     eslint: ^7.31.0
     ipfs: ^0.55.4
     it-pipe: ^1.1.0
@@ -1792,7 +1792,7 @@ __metadata:
     "@testing-library/react": ^11.1.0
     "@testing-library/user-event": ^12.1.10
     "@types/bootstrap": ^5
-    "@types/node": ^12.0.0
+    "@types/node": ^22.5.5
     "@types/react": ^17.0.11
     "@types/react-bootstrap": ^0.32.26
     "@types/react-dom": ^17.0.2
@@ -1827,7 +1827,7 @@ __metadata:
     "@testing-library/react": ^11.2.7
     "@testing-library/user-event": ^13.1.9
     "@types/jest": ^26.0.23
-    "@types/node": ^16.4.0
+    "@types/node": ^22.5.5
     "@types/react": ^17.0.11
     "@types/react-bootstrap": ^0.32.25
     "@types/react-dom": ^17.0.8
@@ -3600,17 +3600,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^12.0.0":
-  version: 12.20.19
-  resolution: "@types/node@npm:12.20.19"
-  checksum: 6cb723e8e601a884e5eaba6a3d93edf21843cf8afedb6878731813fd9da16d999e0dfddef29a8391f6d3380428cc60ae523a125054be2f95fb540c67c31a2994
-  languageName: node
-  linkType: hard
-
-"@types/node@npm:^16.4.0":
-  version: 16.4.1
-  resolution: "@types/node@npm:16.4.1"
-  checksum: 8b9fda74322631febbf084e3c7a26b799a3a1b8f45d6bbaedfb8943c7b3eb743aa2e41c04de6f5f87f63c99451f3ed0b37822614cbd42ed55c8c9c8f9462d231
+"@types/node@npm:^22.5.5":
+  version: 22.5.5
+  resolution: "@types/node@npm:22.5.5"
+  dependencies:
+    undici-types: ~6.19.2
+  checksum: afdc5b89a14b17611473541692088d9440d0d71ec71c77ba6f1cb07c223c39111d2662cef43f66f7dedef3251825a86a9813d29caaa47b2768d26f8aa54a44a9
   languageName: node
   linkType: hard
 
@@ -21378,6 +21373,13 @@ typescript@^4.3.5:
   peerDependencies:
     react: ">=15.0.0"
   checksum: 13d0eb20a7e14532c0983d5803b9e81dc9e1d0f2cf9fdc2df5c5cf36e1742a9928ec82837b46c3047a378c8cb96963bcdc0255836d70fc9be04152e6fcb85247
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~6.19.2":
+  version: 6.19.8
+  resolution: "undici-types@npm:6.19.8"
+  checksum: 07ebd41f597a67de7c9aec8b9eb7085a971dc179db4a409b7b35be4ce2ed1cd94db6f7615b1b3753f1f1373670884749afcbc459272a18a953bae9ba14cb7d30
   languageName: node
   linkType: hard
 
