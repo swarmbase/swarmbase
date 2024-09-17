@@ -18,7 +18,7 @@
   "license": "ISC",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.1.7",
-    "@types/node": "^16.4.0",
+    "@types/node": "^22.5.5",
     "eslint": "^7.31.0",
     "jest": "26.6.0",
     "ts-jest": "^27.0.3",
