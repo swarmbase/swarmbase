@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
-import { CollabswarmNode, SubtleCrypto } from '@collabswarm/collabswarm';
+import {
+  CollabswarmNode,
+  defaultBootstrapConfig,
+  defaultNodeConfig,
+  SubtleCrypto,
+} from '@collabswarm/collabswarm';
 import { AutomergeJSONSerializer, AutomergeProvider } from '../src';
 import {
   AutomergeACLProvider,
@@ -36,6 +41,7 @@ crypto.subtle
       auth,
       acl,
       keychain,
+      defaultNodeConfig(defaultBootstrapConfig([])),
     );
     console.log('Starting node...');
     swarmNode.start();

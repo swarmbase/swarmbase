@@ -4,10 +4,10 @@ import {
   change,
   getChanges,
   applyChanges,
-  BinaryChange,
+  Change as BinaryChange,
   getAllChanges,
   from,
-} from 'automerge';
+} from '@automerge/automerge';
 
 import {
   ACL,
@@ -43,7 +43,7 @@ export class AutomergeProvider<T = any>
     return [newDocument, changes];
   }
   remoteChange(document: Doc<T>, changes: BinaryChange[]): Doc<T> {
-    const [newDoc, patch] = applyChanges(document, changes);
+    const [newDoc] = applyChanges(document, changes);
     return newDoc;
   }
   getHistory(document: Doc<T>): BinaryChange[] {
@@ -62,7 +62,6 @@ export function deserializeKey(
     | RsaHashedImportParams
     | EcKeyImportParams
     | HmacImportParams
-    | DhImportKeyParams
     | AesKeyAlgorithm,
   keyUsages: KeyUsage[],
 ): (publicKey: string) => Promise<CryptoKey> {

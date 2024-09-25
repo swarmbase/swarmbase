@@ -5,7 +5,8 @@ import {
   Collabswarm,
   CollabswarmDocument,
   CollabswarmConfig,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
 
 // TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
@@ -24,9 +25,9 @@ export function initializeAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  >
+  >,
 >(
-  config: CollabswarmConfig = DEFAULT_CONFIG,
+  config: CollabswarmConfig | undefined = undefined,
   selectCollabswarmState: (
     rootState: RootStateType,
   ) => CollabswarmState<
@@ -61,6 +62,9 @@ export function initializeAsync<
   | PeerConnectAction
   | PeerDisconnectAction
 > {
+  if (!config) {
+    config = defaultConfig(defaultBootstrapConfig([]));
+  }
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
@@ -83,7 +87,7 @@ export interface InitializeAction<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > extends Action<typeof INITIALIZE> {
   node: Collabswarm<
     DocType,
@@ -100,7 +104,7 @@ export function initialize<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 >(
   node: Collabswarm<
     DocType,
@@ -135,7 +139,7 @@ export function connectAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  >
+  >,
 >(
   addresses: string[],
   selectCollabswarmState: (
@@ -187,7 +191,7 @@ export function openDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  >
+  >,
 >(
   documentId: string,
   selectCollabswarmState: (
@@ -265,7 +269,7 @@ export interface OpenDocumentAction<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > extends Action<typeof OPEN_DOCUMENT> {
   documentId: string;
   documentRef: CollabswarmDocument<
@@ -283,7 +287,7 @@ export function openDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 >(
   documentId: string,
   documentRef: CollabswarmDocument<
@@ -319,7 +323,7 @@ export function closeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  >
+  >,
 >(
   documentId: string,
   selectCollabswarmState: (
@@ -386,7 +390,7 @@ export function changeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  >
+  >,
 >(
   documentId: string,
   changeFn: ChangeFnType,
@@ -458,7 +462,7 @@ export type CollabswarmActions<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > =
   | InitializeAction<
       DocType,
