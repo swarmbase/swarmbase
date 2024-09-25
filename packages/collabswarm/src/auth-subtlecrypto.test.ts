@@ -1,55 +1,55 @@
-import { it, beforeAll, describe, expect, test } from "@jest/globals";
-import { SubtleCrypto } from "./auth-subtlecrypto";
+import { describe, expect, test } from '@jest/globals';
+import { SubtleCrypto } from './auth-subtlecrypto';
 
 const auth = new SubtleCrypto();
 
 const privateKeyData1 = {
-  key_ops: ["sign"],
+  key_ops: ['sign'],
   ext: true,
-  kty: "EC",
-  x: "iV0DESMDz3fcubTpUCMK4YLWbU9gDslDgdflc5OGrQVII_wCViDdqGbMTOmQLY0F",
-  y: "CQyfju2lK2mT0TIVDI-olIqFC3m3AayX0deHkw4JPCU-GwzV9k0BT295OSQ495kK",
-  d: "kr28U5k3zRtFMXAQuoUZgmqnpI0w01p9sh0spOXZBnkc6Ez6rdbN2W6ZcAJBXxge",
-  crv: "P-384",
+  kty: 'EC',
+  x: 'iV0DESMDz3fcubTpUCMK4YLWbU9gDslDgdflc5OGrQVII_wCViDdqGbMTOmQLY0F',
+  y: 'CQyfju2lK2mT0TIVDI-olIqFC3m3AayX0deHkw4JPCU-GwzV9k0BT295OSQ495kK',
+  d: 'kr28U5k3zRtFMXAQuoUZgmqnpI0w01p9sh0spOXZBnkc6Ez6rdbN2W6ZcAJBXxge',
+  crv: 'P-384',
 };
 const publicKeyData1 = {
-  key_ops: ["verify"],
+  key_ops: ['verify'],
   ext: true,
-  kty: "EC",
-  x: "iV0DESMDz3fcubTpUCMK4YLWbU9gDslDgdflc5OGrQVII_wCViDdqGbMTOmQLY0F",
-  y: "CQyfju2lK2mT0TIVDI-olIqFC3m3AayX0deHkw4JPCU-GwzV9k0BT295OSQ495kK",
-  crv: "P-384",
+  kty: 'EC',
+  x: 'iV0DESMDz3fcubTpUCMK4YLWbU9gDslDgdflc5OGrQVII_wCViDdqGbMTOmQLY0F',
+  y: 'CQyfju2lK2mT0TIVDI-olIqFC3m3AayX0deHkw4JPCU-GwzV9k0BT295OSQ495kK',
+  crv: 'P-384',
 };
 const privateKeyData2 = {
-  key_ops: ["sign"],
+  key_ops: ['sign'],
   ext: true,
-  kty: "EC",
-  x: "oodHRfDRDsXcpe2FvwctaK1y4pt8Lhx5tmiXZ-35vzXuDUD5zWhzPxgC8FZvyY0K",
-  y: "KhgG-mU2-mNbhgdK9_8nEMwPa2_bWWl_zlqY6Q4xuXYMOjhSLGydbFIDSAGBaNaJ",
-  d: "ZtP5zRvBLPK82BAwNs49-Y9227v2vtSdwhgUgH965LTdyZ-9R3qTQEPS7F6vwhyM",
-  crv: "P-384",
+  kty: 'EC',
+  x: 'oodHRfDRDsXcpe2FvwctaK1y4pt8Lhx5tmiXZ-35vzXuDUD5zWhzPxgC8FZvyY0K',
+  y: 'KhgG-mU2-mNbhgdK9_8nEMwPa2_bWWl_zlqY6Q4xuXYMOjhSLGydbFIDSAGBaNaJ',
+  d: 'ZtP5zRvBLPK82BAwNs49-Y9227v2vtSdwhgUgH965LTdyZ-9R3qTQEPS7F6vwhyM',
+  crv: 'P-384',
 };
 const publicKeyData2 = {
-  key_ops: ["verify"],
+  key_ops: ['verify'],
   ext: true,
-  kty: "EC",
-  x: "oodHRfDRDsXcpe2FvwctaK1y4pt8Lhx5tmiXZ-35vzXuDUD5zWhzPxgC8FZvyY0K",
-  y: "KhgG-mU2-mNbhgdK9_8nEMwPa2_bWWl_zlqY6Q4xuXYMOjhSLGydbFIDSAGBaNaJ",
-  crv: "P-384",
+  kty: 'EC',
+  x: 'oodHRfDRDsXcpe2FvwctaK1y4pt8Lhx5tmiXZ-35vzXuDUD5zWhzPxgC8FZvyY0K',
+  y: 'KhgG-mU2-mNbhgdK9_8nEMwPa2_bWWl_zlqY6Q4xuXYMOjhSLGydbFIDSAGBaNaJ',
+  crv: 'P-384',
 };
 const docKeyData1 = {
-  key_ops: ["encrypt", "decrypt"],
+  key_ops: ['encrypt', 'decrypt'],
   ext: true,
-  kty: "oct",
-  k: "LMP1XEE0zwpmZF0XXwFg5MYr_o5ZVpJ7vyVRyPXLC1o",
-  alg: "A256GCM",
+  kty: 'oct',
+  k: 'LMP1XEE0zwpmZF0XXwFg5MYr_o5ZVpJ7vyVRyPXLC1o',
+  alg: 'A256GCM',
 };
 const docKeyData2 = {
-  key_ops: ["encrypt", "decrypt"],
+  key_ops: ['encrypt', 'decrypt'],
   ext: true,
-  kty: "oct",
-  k: "3TX-u2qZ6XAdIXL31LYVdUnspykU6J4DbQtYssWswKs",
-  alg: "A256GCM",
+  kty: 'oct',
+  k: '3TX-u2qZ6XAdIXL31LYVdUnspykU6J4DbQtYssWswKs',
+  alg: 'A256GCM',
 };
 
 /**
@@ -59,45 +59,47 @@ const docKeyData2 = {
 async function importKey(
   keyData: JsonWebKey,
   usage: KeyUsage[],
-  algorithmName = "ECDSA",
-  format = "jwk"
+  algorithmName = 'ECDSA',
+  format: KeyFormat = 'jwk',
 ) {
   let algorithm:
     | AlgorithmIdentifier
     | RsaHashedImportParams
     | EcKeyImportParams
     | HmacImportParams
-    | DhImportKeyParams
     | AesKeyAlgorithm;
   switch (algorithmName) {
-    case "ECDSA": {
+    case 'ECDSA': {
       algorithm = {
         name: algorithmName,
-        namedCurve: "P-384",
+        namedCurve: 'P-384',
       };
       break;
     }
-    case "AES-GCM": {
+    case 'AES-GCM': {
       algorithm = {
         name: algorithmName,
       };
       break;
     }
     default: {
-      throw "Error in key import. Is algorithm type supported?"!;
+      throw 'Error in key import. Is algorithm type supported?'!;
     }
   }
+  if (format !== 'jwk') {
+    console.warn('Warning: key import format is not jwk.');
+  }
   const key = await crypto.subtle.importKey(
-    format,
+    format as 'jwk',
     keyData,
     algorithm,
     true,
-    usage
+    usage,
   );
   return key;
 }
 
-describe("sign and verify", () => {
+describe('sign and verify', () => {
   test.each([
     [
       new Uint8Array([11, 12, 250]),
@@ -139,10 +141,10 @@ describe("sign and verify", () => {
       publicKeyData: JsonWebKey,
       success: boolean,
       expectedSignCrashed: boolean,
-      expectedVerifyCrashed: boolean
+      expectedVerifyCrashed: boolean,
     ) => {
-      const privateKey = await importKey(privateKeyData, ["sign"]);
-      const publicKey = await importKey(publicKeyData, ["verify"]);
+      const privateKey = await importKey(privateKeyData, ['sign']);
+      const publicKey = await importKey(publicKeyData, ['verify']);
       let signCrashed = false;
       let sig: Uint8Array | undefined;
       try {
@@ -164,13 +166,13 @@ describe("sign and verify", () => {
           expect(result).toStrictEqual(success);
         }
       }
-    }
+    },
   );
 });
 
 async function tryEncrypt(
   data: Uint8Array,
-  documentKey: CryptoKey
+  documentKey: CryptoKey,
 ): Promise<{
   data?: Uint8Array;
   nonce?: Uint8Array;
@@ -181,11 +183,11 @@ async function tryEncrypt(
     return {
       data: res.data,
       nonce: res.nonce,
-      crashed: true,
+      crashed: false,
     };
   } catch {
     return {
-      crashed: false,
+      crashed: true,
     };
   }
 }
@@ -195,22 +197,22 @@ async function tryEncrypt(
  * Use static keys.
  * Confirm type expectations.
  */
-describe("encrypt and decrypt", () => {
+describe('encrypt and decrypt', () => {
   test.each([
     [new Uint8Array([43, 99, 250, 83]), docKeyData1, false, false],
     [new Uint8Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, false, false],
   ])(
-    "encrypt and decrypt",
+    'encrypt and decrypt',
     async (
       data: Uint8Array,
       documentKeyData: JsonWebKey,
       expectedEncryptCrashed: boolean,
-      expectedDecryptCrashed: boolean
+      expectedDecryptCrashed: boolean,
     ) => {
       const documentKey = await importKey(
         documentKeyData,
-        ["encrypt", "decrypt"],
-        "AES-GCM"
+        ['encrypt', 'decrypt'],
+        'AES-GCM',
       );
       const {
         data: encrypted,
@@ -231,6 +233,6 @@ describe("encrypt and decrypt", () => {
           expect(decrypted).toStrictEqual(data);
         }
       }
-    }
+    },
   );
 });

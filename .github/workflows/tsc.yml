@@ -12,9 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm tsc
@@ -22,9 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-automerge tsc
@@ -32,9 +38,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-react tsc
@@ -42,9 +51,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-redux tsc
@@ -52,9 +64,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm-yjs tsc

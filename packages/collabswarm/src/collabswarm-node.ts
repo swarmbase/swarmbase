@@ -1,10 +1,8 @@
-import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
 import * as fs from 'fs';
 import {
-  addBootstrapAddr,
-  addSwarmAddr,
   CollabswarmConfig,
-  DEFAULT_CONFIG,
+  defaultBootstrapConfig,
+  defaultConfig,
 } from './collabswarm-config';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
@@ -16,30 +14,92 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
+import { CID } from 'multiformats';
+import { EventHandler, Message } from '@libp2p/interface';
+import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { autoNAT } from '@libp2p/autonat';
+import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
+import { identify } from '@libp2p/identify';
+import { kadDHT } from '@libp2p/kad-dht';
+import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
+import { webRTC, webRTCDirect } from '@libp2p/webrtc';
+import { webSockets } from '@libp2p/websockets';
+import { all } from '@libp2p/websockets/filters';
+import { webTransport } from '@libp2p/webtransport';
+import { IDBBlockstore } from 'blockstore-idb';
+import { IDBDatastore } from 'datastore-idb';
+import { ipnsSelector } from 'ipns/dist/src/selector';
+import { ipnsValidator } from 'ipns/dist/src/validator';
+import { bitswap } from '@helia/block-brokers';
+import { yamux } from '@chainsafe/libp2p-yamux';
+import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 
-export const DEFAULT_NODE_CONFIG: CollabswarmConfig = {
-  ipfs: {
-    relay: {
-      enabled: true, // enable circuit relay dialer and listener
-      hop: {
-        enabled: true, // enable circuit relay HOP (make this node a relay)
-      },
-    },
-    config: {
-      Addresses: {
-        Swarm: [
-          '/ip4/0.0.0.0/tcp/4003/ws',
-          '/ip4/0.0.0.0/tcp/4001',
-          '/ip6/::/tcp/4002',
+export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
+  ({
+    ipfs: {
+      blockstore: new IDBBlockstore('/collabswarm-blocks'),
+      datastore: new IDBDatastore('/collabswarm-data'),
+      blockBrokers: [bitswap()],
+      libp2p: {
+        // https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
+        addresses: {
+          listen: ['/webrtc', '/wss', '/ws'],
+        },
+        transports: [
+          circuitRelayTransport({
+            discoverRelays: 1,
+          }),
+          webSockets({ filter: all }),
+          webRTC(),
+          webRTCDirect(),
+          webTransport(),
+          // https://github.com/libp2p/js-libp2p-websockets#libp2p-usage-example
+          // circuitRelayTransport({ discoverRelays: 3 }),
         ],
+        //streamMuxers: [mplex()],
+        streamMuxers: [yamux()],
+        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
+        services: {
+          identify: identify(),
+          autoNAT: autoNAT(),
+          pubsub: gossipsub({
+            allowPublishToZeroTopicPeers: true,
+            emitSelf: false,
+            canRelayMessage: true,
+            globalSignaturePolicy: 'StrictSign',
+          }),
+          dht: kadDHT({
+            clientMode: true,
+            validators: { ipns: ipnsValidator },
+            selectors: { ipns: ipnsSelector },
+          }),
+        },
+        // https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md#configuring-connection-gater
+        connectionGater: { denyDialMultiaddr: async (...args) => false },
       },
-      Bootstrap: [],
     },
-  },
+    // ipfs: {
+    //   relay: {
+    //     enabled: true, // enable circuit relay dialer and listener
+    //     hop: {
+    //       enabled: true, // enable circuit relay HOP (make this node a relay)
+    //     },
+    //   },
+    //   config: {
+    //     Addresses: {
+    //       Swarm: [
+    //         '/ip4/0.0.0.0/tcp/4003/ws',
+    //         '/ip4/0.0.0.0/tcp/4001',
+    //         '/ip6/::/tcp/4002',
+    //       ],
+    //     },
+    //     Bootstrap: [],
+    //   },
+    // },
 
-  pubsubDocumentPrefix: '/document/',
-  pubsubDocumentPublishPath: '/documents',
-};
+    pubsubDocumentPrefix: '/document/',
+    pubsubDocumentPublishPath: '/documents',
+  } as CollabswarmConfig);
 
 export class CollabswarmNode<
   DocType,
@@ -49,17 +109,14 @@ export class CollabswarmNode<
   PublicKey,
   DocumentKey,
 > {
-  private _swarm = new Collabswarm(
-    this.nodeKey,
-    this.nodePublicKey,
-    this.provider,
-    this.changesSerializer,
-    this.syncMessageSerializer,
-    this.loadMessageSerializer,
-    this.authProvider,
-    this.aclProvider,
-    this.keychainProvider,
-  );
+  private _swarm: Collabswarm<
+    DocType,
+    ChangesType,
+    ChangeFnType,
+    PrivateKey,
+    PublicKey,
+    DocumentKey
+  >;
   public get swarm(): Collabswarm<
     DocType,
     ChangesType,
@@ -84,7 +141,7 @@ export class CollabswarmNode<
   >();
   private readonly _seenCids = new Set<string>();
 
-  private _docPublishHandler: MessageHandlerFn | null = null;
+  private _docPublishHandler: EventHandler<CustomEvent<Message>> | null = null;
 
   constructor(
     private readonly nodeKey: PrivateKey,
@@ -103,14 +160,27 @@ export class CollabswarmNode<
       ChangesType,
       DocumentKey
     >,
-    public readonly config: CollabswarmConfig = DEFAULT_NODE_CONFIG,
-  ) {}
+    public readonly config: CollabswarmConfig,
+  ) {
+    this._swarm = new Collabswarm(
+      this.nodeKey,
+      this.nodePublicKey,
+      this.provider,
+      this.changesSerializer,
+      this.syncMessageSerializer,
+      this.loadMessageSerializer,
+      this.authProvider,
+      this.aclProvider,
+      this.keychainProvider,
+    );
+  }
 
   private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
     if (!this._seenCids.has(cid)) {
       // TODO: Handle this operation failing (retry).
       // TODO: Does this need to be converted to a `CID` from a string first?
-      this.swarm.ipfsNode.pin.add(cid);
+      const cidParsed = CID.parse(cid);
+      this.swarm.ipfsNode.pins.add(cidParsed);
       this._seenCids.add(cid);
     }
 
@@ -128,24 +198,16 @@ export class CollabswarmNode<
   }
 
   // Start
-  public async start() {
+  public async start(boostrapAddresses?: string[]) {
     await this.swarm.initialize(this.config);
-    // console.log('Node Addresses:', this.swarm.ipfsInfo.addresses);
-    const websocketAddress = this.swarm.ipfsInfo.addresses.find(
-      (address: any) => address.toString().includes('/ws/'),
+    const clientConfig = defaultConfig(
+      defaultBootstrapConfig(boostrapAddresses ?? []),
     );
-    let clientConfig = DEFAULT_CONFIG;
-    if (websocketAddress) {
-      clientConfig = addBootstrapAddr(
-        clientConfig,
-        websocketAddress.toString(),
-      );
-    }
-    // TODO: Make this automatically generated by webrtc-star-signal (and integrate that into this).
-    const starSignalAddress = '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star';
-    if (starSignalAddress) {
-      clientConfig = addSwarmAddr(clientConfig, starSignalAddress.toString());
-    }
+    // // TODO: Make this automatically generated by webrtc-star-signal (and integrate that into this).
+    // const starSignalAddress = '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star';
+    // if (starSignalAddress) {
+    //   clientConfig = addSwarmAddr(clientConfig, starSignalAddress.toString());
+    // }
     const clientConfigFile =
       process.env.REACT_APP_CLIENT_CONFIG_FILE || 'client-config.env';
     fs.writeFile(
@@ -164,12 +226,20 @@ export class CollabswarmNode<
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage) => {
       try {
-        const thisNodeId = this.swarm.ipfsInfo.id.toString();
-        const senderNodeId = rawMessage.from;
+        const thisNodeId = this.swarm.ipfsInfo.toString();
+        // const senderNodeId = rawMessage.from;
+        const senderNodeId = (() => {
+          switch (rawMessage.detail.type) {
+            case 'signed':
+              return rawMessage.detail.from.toString();
+            default:
+              return undefined;
+          }
+        })();
 
         if (thisNodeId !== senderNodeId) {
           const message = this.syncMessageSerializer.deserializeSyncMessage(
-            rawMessage.data,
+            rawMessage.detail.data,
           );
           console.log('Received Document Publish message:', rawMessage);
           const docRef = this.swarm.doc(message.documentId);
@@ -183,7 +253,8 @@ export class CollabswarmNode<
                 for (const cid of hashes) {
                   if (!this._seenCids.has(cid)) {
                     // TODO: Handle this operation failing (retry).
-                    this.swarm.ipfsNode.pin.add(cid);
+                    const parsedCid = CID.parse(cid);
+                    this.swarm.ipfsNode.pins.add(parsedCid);
                     this._seenCids.add(cid);
                   }
                 }
@@ -215,9 +286,12 @@ export class CollabswarmNode<
         console.error('Error:', err);
       }
     };
-    await this.swarm.ipfsNode.pubsub.subscribe(
-      this.config.pubsubDocumentPublishPath,
+    this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
+      'message',
       this._docPublishHandler,
+    );
+    this.swarm.ipfsNode.libp2p.services.pubsub.subscribe(
+      this.config.pubsubDocumentPublishPath,
     );
     console.log(
       `Listening for pinning requests on: ${this.config.pubsubDocumentPublishPath}`,
@@ -226,8 +300,11 @@ export class CollabswarmNode<
 
   public stop() {
     if (this._docPublishHandler) {
-      this.swarm.ipfsNode.pubsub.unsubscribe(
+      this.swarm.ipfsNode.libp2p.services.pubsub.unsubscribe(
         this.config.pubsubDocumentPublishPath,
+      );
+      this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
+        'message',
         this._docPublishHandler,
       );
     }

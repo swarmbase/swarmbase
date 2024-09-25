@@ -6,8 +6,7 @@
  */
 
 import pipe from 'it-pipe';
-import Libp2p from 'libp2p';
-import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
+import { Libp2p } from 'libp2p';
 import { Collabswarm } from './collabswarm';
 import {
   concatUint8Arrays,
@@ -34,9 +33,12 @@ import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
-
 import * as uuid from 'uuid';
 import BufferList from 'bl';
+import { CID } from 'multiformats';
+import { UnixFS, unixfs } from '@helia/unixfs';
+import { PubSubBaseProtocol } from '@libp2p/pubsub';
+import { EventHandler, Message, StreamHandler } from '@libp2p/interface';
 
 /**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
@@ -92,27 +94,27 @@ export class CollabswarmDocument<
   ChangeFnType,
   PrivateKey,
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   /**
    * CORE STATE ===============================================================
    */
 
   // Only store/cache the full automerge document.
-  private _document: DocType = this._crdtProvider.newDocument();
+  private _document: DocType;
   get document(): DocType {
     return this._document;
   }
 
   // Document readers ACL.
-  private _readers = this._aclProvider.initialize();
+  private _readers;
 
   // Document writers ACL.
-  private _writers = this._aclProvider.initialize();
+  private _writers;
 
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
-  private _keychain = this._keychainProvider.initialize();
+  private _keychain;
 
   /**
    * /CORE STATE ==============================================================
@@ -128,7 +130,7 @@ export class CollabswarmDocument<
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
-  private _pubsubHandler: MessageHandlerFn | undefined;
+  private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
@@ -151,6 +153,8 @@ export class CollabswarmDocument<
   public get protocolKeyUpdateV1() {
     return `${documentKeyUpdateV1}${this.documentPath}`;
   }
+
+  private heliaFs: UnixFS;
 
   constructor(
     /**
@@ -225,12 +229,21 @@ export class CollabswarmDocument<
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
-  ) {}
+  ) {
+    this.heliaFs = unixfs(this.swarm.ipfsNode);
+
+    this._document = this._crdtProvider.newDocument();
+    this._readers = this._aclProvider.initialize();
+    this._writers = this._aclProvider.initialize();
+    this._keychain = this._keychainProvider.initialize();
+  }
 
   // Helpers ------------------------------------------------------------------
 
   private async _shuffledPeers() {
-    const peers = await this.swarm.ipfsNode.swarm.peers();
+    const peers = this.swarm.ipfsNode.libp2p
+      .getConnections()
+      ?.map((x) => x.remoteAddr);
     if (peers.length === 0) {
       return peers;
     }
@@ -262,14 +275,14 @@ export class CollabswarmDocument<
     }
   }
 
-  private async _getBlock(hash: string): Promise<ChangesType> {
-    const block = await this.swarm.ipfsNode.block.get(hash);
-    const blockKeyID = block.data.slice(0, this._keychainProvider.keyIDLength);
-    const blockNonce = block.data.slice(
+  private async _getBlock(hash: CID): Promise<ChangesType> {
+    const block = await this.swarm.ipfsNode.blockstore.get(hash);
+    const blockKeyID = block.slice(0, this._keychainProvider.keyIDLength);
+    const blockNonce = block.slice(
       this._keychainProvider.keyIDLength,
       this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
     );
-    const blockData = block.data.slice(
+    const blockData = block.slice(
       this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
     );
     const content = await this._decryptBlock(blockKeyID, blockNonce, blockData);
@@ -293,8 +306,8 @@ export class CollabswarmDocument<
       throw new Error(`Failed to encrypt change block! Nonce cannot be empty`);
     }
     const blockData = concatUint8Arrays(documentKeyID, nonce, data);
-    const newFileResult = await this.swarm.ipfsNode.block.put(blockData);
-    return newFileResult.cid.toString();
+    const newFileResult = await this.heliaFs.addBytes(blockData);
+    return newFileResult.toString();
   }
 
   private async _mergeSyncTree(
@@ -321,7 +334,13 @@ export class CollabswarmDocument<
     // If this is a leaf node, return the current node pair.
     const results: Promise<
       [string, CRDTChangeNodeKind, ChangesType | undefined][]
-    >[] = [Promise.resolve([[remoteRootId, remoteRoot.kind, remoteRoot.change]] as [string, CRDTChangeNodeKind, ChangesType | undefined][])];
+    >[] = [
+      Promise.resolve([[remoteRootId, remoteRoot.kind, remoteRoot.change]] as [
+        string,
+        CRDTChangeNodeKind,
+        ChangesType | undefined,
+      ][]),
+    ];
     if (remoteRoot.children === undefined) {
       return (await Promise.all(results)).flat(1);
     }
@@ -424,7 +443,8 @@ export class CollabswarmDocument<
     // Then apply missing hashes by fetching them via IPFS.
     for (const [missingHash, missingHashKind] of missingDocumentHashes) {
       // Fetch missing hashes using IPFS.
-      this._getBlock(missingHash)
+      const cid = CID.parse(missingHash);
+      this._getBlock(cid)
         .then((missingChanges) => {
           if (missingChanges) {
             switch (missingHashKind) {
@@ -524,9 +544,8 @@ export class CollabswarmDocument<
     updateMessage.signature = await this._signAsWriter(updateMessage);
 
     this._lastSyncMessage = updateMessage;
-    const serializedUpdate = this._syncMessageSerializer.serializeSyncMessage(
-      updateMessage,
-    );
+    const serializedUpdate =
+      this._syncMessageSerializer.serializeSyncMessage(updateMessage);
 
     // Encrypt sync message.
     const [documentKeyID, documentKey] = await this._keychain.current();
@@ -540,7 +559,7 @@ export class CollabswarmDocument<
     if (!nonce) {
       throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
     }
-    await this.swarm.ipfsNode.pubsub.publish(
+    await this.swarm.ipfsNode.libp2p.services.pubsub.publish(
       this.documentPath,
       concatUint8Arrays(documentKeyID, nonce, data),
     );
@@ -549,91 +568,93 @@ export class CollabswarmDocument<
     await this._fireLocalUpdateHandlers([hash]);
   }
 
-  private _handleLoadRequest({ stream }: Libp2p.HandlerProps) {
+  private _handleLoadRequest: StreamHandler = ({ stream }) => {
     console.log(`received ${this.protocolLoadV1} dial`);
-    pipe(stream.source, async (source: AsyncIterable<Uint8Array | BufferList>) => {
-      const assembledRequest = await readUint8Iterable(source);
-      const message = this._loadMessageSerializer.deserializeLoadRequest(
-        assembledRequest,
-      );
-      console.log(
-        `received ${this.protocolLoadV1} request:`,
-        assembledRequest,
-        message,
-      );
-
-      if (message.documentId !== this.documentPath) {
-        console.warn(
-          `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+    pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8Array | BufferList>) => {
+        const assembledRequest = await readUint8Iterable(source);
+        const message =
+          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+        console.log(
+          `received ${this.protocolLoadV1} request:`,
+          assembledRequest,
+          message,
         );
-        return [];
-      }
 
-      // Verify that this user is a reader.
-      const readers = (await Promise.all([
-        this._readers.users(),
-        this._writers.users(),
-      ])).flat();
-      let requestor: PublicKey | undefined;
-      for (const reader of readers) {
-        // TODO: Is this secure? Do we need a salt added to the signed payload?
-        if (
-          await this._authProvider.verify(
-            this._encoder.encode(message.documentId),
-            reader,
-            this._deserializeSignature(message.signature),
-          )
-        ) {
-          requestor = reader;
-          break;
+        if (message.documentId !== this.documentPath) {
+          console.warn(
+            `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+          );
+          return [];
         }
-      }
 
-      if (!requestor) {
-        console.warn(
-          `Detected an unauthorized load request for ${message.documentId}`,
+        // Verify that this user is a reader.
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        let requestor: PublicKey | undefined;
+        for (const reader of readers) {
+          // TODO: Is this secure? Do we need a salt added to the signed payload?
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            requestor = reader;
+            break;
+          }
+        }
+
+        if (!requestor) {
+          console.warn(
+            `Detected an unauthorized load request for ${message.documentId}`,
+          );
+          return [];
+        }
+
+        // Since this is a load request, send document keys.
+        const loadMessage = this._createSyncMessage();
+        loadMessage.keychainChanges = this._keychain.history();
+
+        // Sign new message.
+        loadMessage.signature = await this._signAsWriter(loadMessage);
+
+        const serializedLoad =
+          this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+
+        // Encrypt sync message.
+        // const [documentKeyID, documentKey] = await this._keychain.current();
+        // if (!documentKey) {
+        //   throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+        // }
+        // const { nonce, data } = await this._authProvider.encrypt(
+        //   serializedLoad,
+        //   documentKey,
+        // );
+        // if (!nonce) {
+        //   throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+        // }
+        // const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+        const assembled = serializedLoad;
+        console.log(
+          `sending ${this.protocolLoadV1} response:`,
+          assembled,
+          loadMessage,
+          stream.sink,
         );
+
+        // Return a sync message.
+        // return [assembled];
+        // await stream.sink(assembled);
+        await stream.sink([assembled] as any);
+        // }, stream.sink);
         return [];
-      }
-
-      // Since this is a load request, send document keys.
-      const loadMessage = this._createSyncMessage();
-      loadMessage.keychainChanges = this._keychain.history();
-
-      // Sign new message.
-      loadMessage.signature = await this._signAsWriter(loadMessage);
-
-      const serializedLoad = this._syncMessageSerializer.serializeSyncMessage(loadMessage);
-
-      // Encrypt sync message.
-      // const [documentKeyID, documentKey] = await this._keychain.current();
-      // if (!documentKey) {
-      //   throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-      // }
-      // const { nonce, data } = await this._authProvider.encrypt(
-      //   serializedLoad,
-      //   documentKey,
-      // );
-      // if (!nonce) {
-      //   throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
-      // }
-      // const assembled = concatUint8Arrays(documentKeyID, nonce, data);
-      const assembled = serializedLoad;
-      console.log(
-        `sending ${this.protocolLoadV1} response:`,
-        assembled,
-        loadMessage,
-        stream.sink,
-      );
-
-      // Return a sync message.
-      // return [assembled];
-      // await stream.sink(assembled);
-      await stream.sink([assembled] as any);
-    // }, stream.sink);
-      return [];
-    });
-  }
+      },
+    );
+  };
 
   private async _ensureCurrentUserCanWrite() {
     // Check that we are a writer (allowed to write to this document).
@@ -668,16 +689,15 @@ export class CollabswarmDocument<
     const stream = await (async () => {
       for (const peer of shuffledPeers) {
         try {
-          console.log('Selected peer addresses:', peer.addr.toString());
-          const docLoadConnection = await this.libp2p.dialProtocol(
-            peer.addr.toString(),
-            [this.protocolLoadV1],
-          );
-          return docLoadConnection.stream;
+          console.log('Selected peer addresses:', peer.toString());
+          const docLoadConnection = await this.libp2p.dialProtocol(peer, [
+            this.protocolLoadV1,
+          ]);
+          return docLoadConnection;
         } catch (err) {
           console.warn(
             `Failed to load document from (${this.protocolLoadV1}): `,
-            peer.addr.toString(),
+            peer.toString(),
             err,
           );
         }
@@ -711,9 +731,8 @@ export class CollabswarmDocument<
         async (source: AsyncIterable<Uint8Array | BufferList>) => {
           console.log(`awaiting ${this.protocolLoadV1} response...`, source);
           const assembled = await readUint8Iterable(source);
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            assembled,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(assembled);
           console.log(
             `received ${this.protocolLoadV1} response:`,
             assembled,
@@ -752,15 +771,15 @@ export class CollabswarmDocument<
     // Open pubsub connection.
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
-      const blockKeyID = rawMessage.data.slice(
+      const blockKeyID = rawMessage.detail.data.slice(
         0,
         this._keychainProvider.keyIDLength,
       );
-      const blockNonce = rawMessage.data.slice(
+      const blockNonce = rawMessage.detail.data.slice(
         this._keychainProvider.keyIDLength,
         this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
       );
-      const blockData = rawMessage.data.slice(
+      const blockData = rawMessage.detail.data.slice(
         this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
       );
       this._decryptBlock(blockKeyID, blockNonce, blockData).then(
@@ -774,18 +793,18 @@ export class CollabswarmDocument<
             return this.load();
           }
 
-          const message = this._syncMessageSerializer.deserializeSyncMessage(
-            rawContent,
-          );
+          const message =
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
           return this.sync(message);
         },
       );
     };
-    await this.swarm.ipfsNode.pubsub.subscribe(
-      this.documentPath,
-      this._pubsubHandler,
-    );
+
+    const pubsub = this.swarm.ipfsNode.libp2p.services
+      .pubsub as PubSubBaseProtocol;
+    pubsub.addEventListener('message', this._pubsubHandler);
+    pubsub.subscribe(this.documentPath);
 
     // For now we support multiple protocols, one per document path.
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
@@ -812,10 +831,10 @@ export class CollabswarmDocument<
    */
   public async close() {
     if (this._pubsubHandler) {
-      await this.swarm.ipfsNode.pubsub.unsubscribe(
-        this.documentPath,
-        this._pubsubHandler,
-      );
+      const pubsub = this.swarm.ipfsNode.libp2p.services
+        .pubsub as PubSubBaseProtocol;
+      pubsub.unsubscribe(this.documentPath);
+      pubsub.removeEventListener('message', this._pubsubHandler);
     }
   }
 
@@ -826,7 +845,10 @@ export class CollabswarmDocument<
    *
    * @param message A sync message to apply.
    */
-  public async sync(message: CRDTSyncMessage<ChangesType>, verifySignature = true) {
+  public async sync(
+    message: CRDTSyncMessage<ChangesType>,
+    verifySignature = true,
+  ) {
     const { signature, ...messageWithoutSignature } = message;
     if (!signature) {
       return false;
@@ -837,7 +859,10 @@ export class CollabswarmDocument<
       messageWithoutSignature,
     );
 
-    if (verifySignature && !(await this._verifyWriterSignature(raw, signature))) {
+    if (
+      verifySignature &&
+      !(await this._verifyWriterSignature(raw, signature))
+    ) {
       console.warn(
         `Received a sync message with an invalid signature for ${message.documentId}`,
         signature,
@@ -852,9 +877,17 @@ export class CollabswarmDocument<
     if (message.keychainChanges) {
       try {
         this._keychain.merge(message.keychainChanges);
-        console.log(`Updated keychain in ${this.documentPath}: `, this._keychain);
+        console.log(
+          `Updated keychain in ${this.documentPath}: `,
+          this._keychain,
+        );
       } catch (e) {
-        console.error('Failed to merge in keychain changes', this._keychain, message, e);
+        console.error(
+          'Failed to merge in keychain changes',
+          this._keychain,
+          message,
+          e,
+        );
         throw e;
       }
     }
