@@ -1843,9 +1843,9 @@ __metadata:
   resolution: "@collabswarm/collabswarm-react@workspace:packages/collabswarm-react"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/react": "npm:^17.0.11"
+    "@types/react": "npm:^18.3.9"
     eslint: "npm:^7.31.0"
-    react: "npm:^17.0.2"
+    react: "npm:^18.3.1"
     redux: "npm:^4.1.0"
     redux-thunk: "npm:^2.3.0"
     typescript: "npm:^4.9.5"
@@ -5015,17 +5015,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:^17.0.11":
-  version: 17.0.82
-  resolution: "@types/react@npm:17.0.82"
-  dependencies:
-    "@types/prop-types": "npm:*"
-    "@types/scheduler": "npm:^0.16"
-    csstype: "npm:^3.0.2"
-  checksum: 10/ff6827d45032b6efc9ae0b4e56b3ee708fd131595988a4aba205f4424267cea7a9e2a9d15138d6a26eb4bb8273880eaf1b942e3396bacf0ecff8cf223381d185
-  languageName: node
-  linkType: hard
-
 "@types/resolve@npm:1.17.1":
   version: 1.17.1
   resolution: "@types/resolve@npm:1.17.1"
@@ -5046,13 +5035,6 @@ __metadata:
   version: 0.12.2
   resolution: "@types/retry@npm:0.12.2"
   checksum: 10/e5675035717b39ce4f42f339657cae9637cf0c0051cf54314a6a2c44d38d91f6544be9ddc0280587789b6afd056be5d99dbe3e9f4df68c286c36321579b1bf4a
-  languageName: node
-  linkType: hard
-
-"@types/scheduler@npm:^0.16":
-  version: 0.16.8
-  resolution: "@types/scheduler@npm:0.16.8"
-  checksum: 10/6c091b096daa490093bf30dd7947cd28e5b2cd612ec93448432b33f724b162587fed9309a0acc104d97b69b1d49a0f3fc755a62282054d62975d53d7fd13472d
   languageName: node
   linkType: hard
 
@@ -15684,16 +15666,6 @@ __metadata:
     react: ">=16.6.0"
     react-dom: ">=16.6.0"
   checksum: 10/ca32d3fd2168c976c5d90a317f25d5f5cd723608b415fb3b9006f9d793c8965c619562d0884503a3e44e4b06efbca4fdd1520f30e58ca3e00a0890e637d55419
-  languageName: node
-  linkType: hard
-
-"react@npm:^17.0.2":
-  version: 17.0.2
-  resolution: "react@npm:17.0.2"
-  dependencies:
-    loose-envify: "npm:^1.1.0"
-    object-assign: "npm:^4.1.1"
-  checksum: 10/ece60c31c1d266d132783aaaffa185d2e4c9b4db144f853933ec690cee1e0600c8929a1dd0a9e79323eea8e2df636c9a06d40f6cfdc9f797f65225433e67f707
   languageName: node
   linkType: hard
 
