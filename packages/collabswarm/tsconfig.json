@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ES2015",
+    "target": "ESNext",
     "module": "CommonJS",
     "lib": ["ESNext", "DOM"],
     "sourceMap": true,
     "downlevelIteration": true,
     "strict": true,
     "declaration": true,
-    "types": ["node"],
     "typeRoots": ["types", "node_modules/@types"],
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -15,14 +14,6 @@
     "outDir": "dist",
     "composite": true
   },
-  "exclude": [
-    "node_modules",
-    "examples",
-    "extras"
-  ],
-  "include": [
-    "src",
-    "types",
-    "bin"
-  ]
+  "exclude": ["node_modules", "examples", "extras"],
+  "include": ["src", "types", "bin"]
 }

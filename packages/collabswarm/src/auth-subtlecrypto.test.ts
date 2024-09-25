@@ -180,11 +180,11 @@ async function tryEncrypt(
     return {
       data: res.data,
       nonce: res.nonce,
-      crashed: true,
+      crashed: false,
     };
   } catch {
     return {
-      crashed: false,
+      crashed: true,
     };
   }
 }
