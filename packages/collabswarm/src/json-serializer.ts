@@ -1,7 +1,6 @@
 import { Base64 } from 'js-base64';
 import { ChangesSerializer } from './changes-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
-import { CRDTChangeNode, crdtChangeNodeDeferred, CRDTChangeNodeDeferred, CRDTChangeNodeKind } from './crdt-change-node';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -11,7 +10,8 @@ export class JSONSerializer<ChangesType>
   implements
     ChangesSerializer<ChangesType>,
     SyncMessageSerializer<ChangesType>,
-    LoadMessageSerializer {
+    LoadMessageSerializer
+{
   serialize(message: any): string {
     return JSON.stringify(message);
   }

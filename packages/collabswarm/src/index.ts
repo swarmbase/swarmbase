@@ -1,5 +1,9 @@
 import { Collabswarm, CollabswarmPeersHandler } from './collabswarm';
-import { CollabswarmConfig, DEFAULT_CONFIG } from './collabswarm-config';
+import {
+  CollabswarmConfig,
+  defaultConfig,
+  defaultBootstrapConfig,
+} from './collabswarm-config';
 import {
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
@@ -18,7 +22,12 @@ import { ACL } from './acl';
 import { Keychain } from './keychain';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
-import { CRDTChangeNodeKind, CRDTChangeNodeDeferred, CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
+import {
+  CRDTChangeNodeKind,
+  CRDTChangeNodeDeferred,
+  CRDTChangeNode,
+  crdtChangeNodeDeferred,
+} from './crdt-change-node';
 
 export {
   ACL,
@@ -44,6 +53,7 @@ export {
   SyncMessageSerializer,
   LoadMessageSerializer,
   JSONSerializer,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
   DEFAULT_NODE_CONFIG,
 };

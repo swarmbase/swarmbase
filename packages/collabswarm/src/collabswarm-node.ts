@@ -1,4 +1,3 @@
-import { MessageHandlerFn } from 'ipfs-core-types/src/pubsub';
 import * as fs from 'fs';
 import {
   addBootstrapAddr,

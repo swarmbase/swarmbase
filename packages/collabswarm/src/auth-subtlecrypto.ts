@@ -18,7 +18,8 @@ export type SubtleCryptoEncryptionResult = {
  * The base keytype is `CryptoKey`.
  */
 export class SubtleCrypto
-  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey> {
+  implements AuthProvider<CryptoKey, CryptoKey, CryptoKey>
+{
   constructor(
     /**
      * Uses the Web Crypto API for performant implementation.
@@ -40,7 +41,8 @@ export class SubtleCrypto
       | AlgorithmIdentifier
       | RsaPssParams
       | EcdsaParams
-      | AesCmacParams = {
+      | AesCbcParams = {
+      // TODO: Is this correct?
       name: 'ECDSA',
       hash: { name: 'SHA-384' },
     },

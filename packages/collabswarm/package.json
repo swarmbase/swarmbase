@@ -27,9 +27,28 @@
     "typescript": "^4.3.5"
   },
   "dependencies": {
-    "ipfs": "^0.55.4",
+    "@chainsafe/libp2p-gossipsub": "^14.1.0",
+    "@helia/unixfs": "^3.0.7",
+    "@libp2p/autonat": "^2.0.0",
+    "@libp2p/circuit-relay-v2": "^2.0.0",
+    "@libp2p/identify": "^3.0.1",
+    "@libp2p/interface": "^2.0.0",
+    "@libp2p/kad-dht": "^13.0.1",
+    "@libp2p/peer-id": "^5.0.1",
+    "@libp2p/pubsub-peer-discovery": "^11.0.0",
+    "@libp2p/topology": "^4.0.3",
+    "@libp2p/webrtc": "^5.0.0",
+    "@libp2p/websockets": "^9.0.0",
+    "@libp2p/webtransport": "^5.0.0",
+    "@multiformats/multiaddr": "^12.3.1",
+    "blockstore-idb": "2.0.1",
+    "datastore-idb": "3.0.1",
+    "helia": "next",
+    "ipns": "^10.0.0",
     "it-pipe": "^1.1.0",
-    "js-base64": "^3.6.1"
+    "js-base64": "^3.6.1",
+    "libp2p": "^2.0.2",
+    "multiformats": "^13.3.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {

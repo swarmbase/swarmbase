@@ -22,8 +22,8 @@
     "typescript": "^4.3.5"
   },
   "dependencies": {
-    "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge",
-    "automerge": "^1.0.1-preview.3"
+    "@automerge/automerge": "2.2.8",
+    "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {

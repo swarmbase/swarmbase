@@ -10,18 +10,24 @@
  *   at least one address to join
  */
 
-import IPFS from 'ipfs';
-import Libp2p from 'libp2p';
 import { AuthProvider } from './auth-provider';
 import { CRDTProvider } from './crdt-provider';
-import { CollabswarmConfig, DEFAULT_CONFIG } from './collabswarm-config';
-import { IDResult } from 'ipfs-core-types/src/root';
+import {
+  CollabswarmConfig,
+  defaultConfig,
+  defaultBootstrapConfig,
+} from './collabswarm-config';
 import { CollabswarmDocument } from './collabswarm-document';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { createHelia, DefaultLibp2pServices, HeliaLibp2p } from 'helia';
+import { Libp2p } from 'libp2p';
+import { PeerId } from '@libp2p/interface';
+import { peerIdFromString } from '@libp2p/peer-id';
+import { PubSubBaseProtocol } from '@libp2p/pubsub';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -63,7 +69,7 @@ export class Collabswarm<
   ChangeFnType,
   PrivateKey, // TODO (eric) if it's here it's not per document?
   PublicKey,
-  DocumentKey
+  DocumentKey,
 > {
   constructor(
     private readonly _userKey: PrivateKey,
@@ -90,17 +96,19 @@ export class Collabswarm<
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
-  private _ipfsNode: IPFS.IPFS | undefined;
-  private _ipfsInfo: IDResult | undefined;
+  private _ipfsNode:
+    | HeliaLibp2p<
+        Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+      >
+    | undefined;
+  private _ipfsInfo: PeerId | undefined;
   private _peerAddrs: string[] = [];
   private _peerConnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<
     string,
     CollabswarmPeersHandler
   >();
-  private _peerDisconnectHandlers: Map<
-    string,
-    CollabswarmPeersHandler
-  > = new Map<string, CollabswarmPeersHandler>();
+  private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
+    new Map<string, CollabswarmPeersHandler>();
 
   /**
    * Gets the current libp2p node instance.
@@ -116,7 +124,9 @@ export class Collabswarm<
    *
    * Only works after `.initialize()` has been called.
    */
-  public get ipfsNode(): IPFS.IPFS {
+  public get ipfsNode(): HeliaLibp2p<
+    Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+  > {
     if (this._ipfsNode) {
       return this._ipfsNode;
     }
@@ -129,7 +139,7 @@ export class Collabswarm<
    *
    * Only works after `.initialize()` has been called.
    */
-  public get ipfsInfo(): IDResult {
+  public get ipfsInfo(): PeerId {
     if (this._ipfsInfo) {
       return this._ipfsInfo;
     }
@@ -156,20 +166,34 @@ export class Collabswarm<
    *
    * @param config General settings for collabswarm.
    */
-  public async initialize(config: CollabswarmConfig = DEFAULT_CONFIG) {
+  public async initialize(config?: CollabswarmConfig) {
+    if (!config) {
+      config = defaultConfig(defaultBootstrapConfig([]));
+    }
+
     this._config = config;
 
     // Setup IPFS node.
-    this._ipfsNode = await IPFS.create(config.ipfs);
-    this.libp2p.connectionManager.on('peer:connect', (connection) => {
-      const peerAddress = connection.remotePeer.toB58String();
+    this._ipfsNode = await (config.ipfs
+      ? (createHelia(config.ipfs) as Promise<
+          HeliaLibp2p<
+            Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+          >
+        >) // TODO: Is this correct?
+      : (createHelia() as Promise<
+          HeliaLibp2p<
+            Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+          >
+        >));
+    this.libp2p.addEventListener('peer:connect', (connection) => {
+      const peerAddress = connection.detail.toString(); // TODO: Is this correct?
       this._peerAddrs.push(peerAddress);
       for (const [, handler] of this._peerConnectHandlers) {
         handler(peerAddress, connection);
       }
     });
-    this.libp2p.connectionManager.on('peer:disconnect', (connection) => {
-      const peerAddress = connection.remotePeer.toB58String();
+    this.libp2p.addEventListener('peer:disconnect', (connection) => {
+      const peerAddress = connection.detail.toString(); // TODO: Is this correct?
       const peerIndex = this._peerAddrs.indexOf(peerAddress);
       if (peerIndex > 0) {
         this._peerAddrs.splice(peerIndex, 1);
@@ -178,7 +202,7 @@ export class Collabswarm<
         handler(peerAddress, connection);
       }
     });
-    this._ipfsInfo = await this._ipfsNode.id();
+    this._ipfsInfo = this._ipfsNode?.libp2p?.peerId;
     console.log('IPFS node initialized:', this._ipfsInfo);
   }
 
@@ -194,7 +218,9 @@ export class Collabswarm<
     // Connect to bootstrapping node(s).
     const connectionPromises: Promise<any>[] = [];
     for (const address of addresses) {
-      connectionPromises.push(this.ipfsNode.swarm.connect(address));
+      connectionPromises.push(
+        this.ipfsNode.libp2p.dial(peerIdFromString(address)),
+      );
     }
     await Promise.all(connectionPromises);
   }
