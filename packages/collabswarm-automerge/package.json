@@ -20,7 +20,7 @@
   "author": "allegrormc@gmail.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^16.4.0",
+    "@types/node": "^22.5.5",
     "@types/uuid": "^8",
     "eslint": "^7.31.0",
     "ts-node": "^10.1.0",

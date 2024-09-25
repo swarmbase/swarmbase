@@ -11,7 +11,7 @@ jobs:
   collabswarm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: nodeversion
         run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
       - run: corepack enable
@@ -24,7 +24,7 @@ jobs:
   collabswarm-automerge:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: nodeversion
         run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
       - run: corepack enable
@@ -37,7 +37,7 @@ jobs:
   collabswarm-react:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: nodeversion
         run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
       - run: corepack enable
@@ -50,7 +50,7 @@ jobs:
   collabswarm-redux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: nodeversion
         run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
       - run: corepack enable
@@ -63,7 +63,7 @@ jobs:
   collabswarm-yjs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: nodeversion
         run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
       - run: corepack enable
