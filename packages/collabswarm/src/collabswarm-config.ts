@@ -13,12 +13,8 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
 import { ipnsSelector } from 'ipns/selector';
 import { ipnsValidator } from 'ipns/validator';
-
-// TODO: Is this correct?
 import { bitswap } from '@helia/block-brokers';
-// @ts-ignore
 import { IDBDatastore } from 'datastore-idb';
-// @ts-ignore
 import { IDBBlockstore } from 'blockstore-idb';
 
 /**
