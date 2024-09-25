@@ -9,7 +9,7 @@ import {
   CollabswarmDocumentChangeHandler,
 } from './collabswarm-document';
 import { CRDTSyncMessage } from './crdt-sync-message';
-import { CollabswarmNode, DEFAULT_NODE_CONFIG } from './collabswarm-node';
+import { CollabswarmNode, defaultNodeConfig } from './collabswarm-node';
 import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
@@ -55,5 +55,5 @@ export {
   JSONSerializer,
   defaultConfig,
   defaultBootstrapConfig,
-  DEFAULT_NODE_CONFIG,
+  defaultNodeConfig,
 };

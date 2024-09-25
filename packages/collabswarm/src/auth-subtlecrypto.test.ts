@@ -1,4 +1,4 @@
-import { it, beforeAll, describe, expect, test } from '@jest/globals';
+import { describe, expect, test } from '@jest/globals';
 import { SubtleCrypto } from './auth-subtlecrypto';
 
 const auth = new SubtleCrypto();
@@ -86,8 +86,11 @@ async function importKey(
       throw 'Error in key import. Is algorithm type supported?'!;
     }
   }
+  if (format !== 'jwk') {
+    console.warn('Warning: key import format is not jwk.');
+  }
   const key = await crypto.subtle.importKey(
-    format,
+    format as 'jwk',
     keyData,
     algorithm,
     true,

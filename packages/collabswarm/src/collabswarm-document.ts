@@ -101,20 +101,20 @@ export class CollabswarmDocument<
    */
 
   // Only store/cache the full automerge document.
-  private _document: DocType = this._crdtProvider.newDocument();
+  private _document: DocType;
   get document(): DocType {
     return this._document;
   }
 
   // Document readers ACL.
-  private _readers = this._aclProvider.initialize();
+  private _readers;
 
   // Document writers ACL.
-  private _writers = this._aclProvider.initialize();
+  private _writers;
 
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
-  private _keychain = this._keychainProvider.initialize();
+  private _keychain;
 
   /**
    * /CORE STATE ==============================================================
@@ -231,6 +231,11 @@ export class CollabswarmDocument<
     private readonly _loadMessageSerializer: LoadMessageSerializer,
   ) {
     this.heliaFs = unixfs(this.swarm.ipfsNode);
+
+    this._document = this._crdtProvider.newDocument();
+    this._readers = this._aclProvider.initialize();
+    this._writers = this._aclProvider.initialize();
+    this._keychain = this._keychainProvider.initialize();
   }
 
   // Helpers ------------------------------------------------------------------
@@ -828,8 +833,8 @@ export class CollabswarmDocument<
     if (this._pubsubHandler) {
       const pubsub = this.swarm.ipfsNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
-      pubsub.removeEventListener('message', this._pubsubHandler);
       pubsub.unsubscribe(this.documentPath);
+      pubsub.removeEventListener('message', this._pubsubHandler);
     }
   }
 
