@@ -1808,7 +1808,7 @@ __metadata:
     "@types/react-dom": "npm:^18.3.0"
     "@types/react-redux": "npm:^7.1.34"
     jsondiffpatch: "npm:^0.6.0"
-    jsoneditor: "npm:^9"
+    jsoneditor: "npm:^10"
     jsoneditor-react: "npm:^3.1.2"
     libp2p: "npm:^2.1.2"
     react: "npm:^18.3.1"
@@ -5530,7 +5530,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ace-builds@npm:^1.31.1":
+"ace-builds@npm:^1.35.0":
   version: 1.36.2
   resolution: "ace-builds@npm:1.36.2"
   checksum: 10/66ea2af6c0671781b9f1d58efa84d3af1335d84f48e54e83b5d0518ddb70d2ebe3caf30fe6552ebc759e4da7b1789e717df165055e09169e37c55df4b5d3b78a
@@ -12486,20 +12486,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsoneditor@npm:^9":
-  version: 9.10.5
-  resolution: "jsoneditor@npm:9.10.5"
+"jsoneditor@npm:^10":
+  version: 10.1.0
+  resolution: "jsoneditor@npm:10.1.0"
   dependencies:
-    ace-builds: "npm:^1.31.1"
+    ace-builds: "npm:^1.35.0"
     ajv: "npm:^6.12.6"
     javascript-natural-sort: "npm:^0.7.1"
     jmespath: "npm:^0.16.0"
     json-source-map: "npm:^0.6.1"
-    jsonrepair: "npm:3.1.0"
+    jsonrepair: "npm:^3.8.0"
     mobius1-selectr: "npm:^2.4.13"
     picomodal: "npm:^3.0.0"
-    vanilla-picker: "npm:^2.12.2"
-  checksum: 10/8f072ed8d62daf220bcf0e4fe09078858cb6c6287687f89b3ddd51b45704b06084352d3889771b7fc9f2ddbe11aa88ab7c8d6642f550cc2b912262a1e8671432
+    vanilla-picker: "npm:^2.12.3"
+  checksum: 10/646c19328459a3737af9a8061cfd9a5814559aff6c4bb37497dc7afdf9dd9636e7bab10bc9463479ac352c23d4f2f704c8cfadb46aa5ef566afe71e781b14b53
   languageName: node
   linkType: hard
 
@@ -12534,12 +12534,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsonrepair@npm:3.1.0":
-  version: 3.1.0
-  resolution: "jsonrepair@npm:3.1.0"
+"jsonrepair@npm:^3.8.0":
+  version: 3.8.1
+  resolution: "jsonrepair@npm:3.8.1"
   bin:
     jsonrepair: bin/cli.js
-  checksum: 10/a6b4c89fb47a69174705982e171b7e4c36ea253e117e0e27eaadc30eb05a7f788b90715bde8873d2c2fb72db05338c7e8725b430ce87ce23ef1def44241ba57c
+  checksum: 10/95de23d2ed4e1d8c8a728b20ef14e138dea94b3fb8bb8a8de3c5822c2845aed475369e12693dc0b946d188fea302c7bbecf6c81405250c212360b775a2ca7d31
   languageName: node
   linkType: hard
 
@@ -18218,7 +18218,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vanilla-picker@npm:^2.12.2":
+"vanilla-picker@npm:^2.12.3":
   version: 2.12.3
   resolution: "vanilla-picker@npm:2.12.3"
   dependencies:
