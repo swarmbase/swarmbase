@@ -77,7 +77,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@automerge/automerge@npm:2.2.8":
+"@automerge/automerge@npm:2.2.8, @automerge/automerge@npm:^2.2.8":
   version: 2.2.8
   resolution: "@automerge/automerge@npm:2.2.8"
   dependencies:
@@ -1825,9 +1825,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/collabswarm-automerge@workspace:packages/collabswarm-automerge"
   dependencies:
-    "@automerge/automerge": "npm:2.2.8"
+    "@automerge/automerge": "npm:^2.2.8"
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": "npm:^16.4.0"
+    "@types/node": "npm:^22.5.5"
     "@types/uuid": "npm:^8"
     eslint: "npm:^7.31.0"
     ts-node: "npm:^10.1.0"
@@ -1870,7 +1870,7 @@ __metadata:
   resolution: "@collabswarm/collabswarm-yjs@workspace:packages/collabswarm-yjs"
   dependencies:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
-    "@types/node": "npm:^16.4.0"
+    "@types/node": "npm:^22.5.5"
     eslint: "npm:^7.31.0"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^4.9.5"
@@ -1899,7 +1899,7 @@ __metadata:
     "@libp2p/webtransport": "npm:^5.0.0"
     "@multiformats/multiaddr": "npm:^12.3.1"
     "@peculiar/webcrypto": "npm:^1.4.6"
-    "@types/node": "npm:^16.4.0"
+    "@types/node": "npm:^22.5.5"
     blockstore-idb: "npm:2.0.1"
     datastore-idb: "npm:3.0.1"
     eslint: "npm:^7.31.0"
@@ -4885,19 +4885,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^22.7.0":
+"@types/node@npm:*, @types/node@npm:^22.5.5, @types/node@npm:^22.7.0":
   version: 22.7.0
   resolution: "@types/node@npm:22.7.0"
   dependencies:
     undici-types: "npm:~6.19.2"
   checksum: 10/6476d94a4c0fbf60df56634063e8aa26da1152e7096daf374f1eb010eab1c7ef4cdb75ab2508480e82c0b56538e0e7bdfc72af47e7a4e4ace37f2035eddfd3c2
-  languageName: node
-  linkType: hard
-
-"@types/node@npm:^16.4.0":
-  version: 16.18.109
-  resolution: "@types/node@npm:16.18.109"
-  checksum: 10/620916997eed4482d3c2faf6b9c0be2765de0219f5bc1eaad19c68c3723258dcfc3b815f81b3d899f2471ea3e8e2ebb979ac8a9c4573a4dfd7f64dcd9adfdc1c
   languageName: node
   linkType: hard
 
