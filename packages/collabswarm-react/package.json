@@ -20,7 +20,7 @@
     "@types/react": "^18.3.9",
     "eslint": "^7.31.0",
     "redux": "^4.1.0",
-    "redux-thunk": "^2.3.0",
+    "redux-thunk": "^3.1.0",
     "typescript": "^4.9.5"
   },
   "dependencies": {
