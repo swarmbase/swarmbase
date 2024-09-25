@@ -168,7 +168,15 @@ export class CollabswarmNode<
     this._docPublishHandler = (rawMessage) => {
       try {
         const thisNodeId = this.swarm.ipfsInfo.toString();
-        const senderNodeId = rawMessage.from;
+        // const senderNodeId = rawMessage.from;
+        const senderNodeId = (() => {
+          switch (rawMessage.detail.type) {
+            case 'signed':
+              return rawMessage.detail.from.toString();
+            default:
+              return undefined;
+          }
+        })();
 
         if (thisNodeId !== senderNodeId) {
           const message = this.syncMessageSerializer.deserializeSyncMessage(

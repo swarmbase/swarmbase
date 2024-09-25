@@ -56,11 +56,11 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
         services: {
           identify: identify(),
           autoNAT: autoNAT(),
-          //pubsub: gossipsub({allowPublishToZeroPeers: true, emitSelf: false, canRelayMessage: true}),
           pubsub: gossipsub({
             allowPublishToZeroTopicPeers: true,
-            emitSelf: true,
+            emitSelf: false,
             canRelayMessage: true,
+            globalSignaturePolicy: 'StrictSign',
           }),
           dht: kadDHT({
             clientMode: true,

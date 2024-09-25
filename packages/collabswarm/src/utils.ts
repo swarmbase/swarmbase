@@ -85,7 +85,7 @@ export async function generateAndExportHmacKey() {
 
 export async function importHmacKey(
   keyData: Uint8Array,
-  format: KeyFormat = 'jwk',
+  format: Exclude<KeyFormat, 'jwk'> = 'raw',
   hash = 'SHA-512',
 ) {
   const key = await crypto.subtle.importKey(
@@ -104,7 +104,7 @@ export async function importHmacKey(
 
 export async function importSymmetricKey(
   keyData: Uint8Array,
-  format: KeyFormat = 'jwk',
+  format: Exclude<KeyFormat, 'jwk'> = 'raw',
 ) {
   const key = await crypto.subtle.importKey(format, keyData, 'AES-GCM', true, [
     'encrypt',
