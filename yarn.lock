@@ -1878,7 +1878,7 @@ __metadata:
     "@chainsafe/libp2p-gossipsub": "npm:^14.1.0"
     "@helia/unixfs": "npm:^3.0.7"
     "@libp2p/autonat": "npm:^2.0.0"
-    "@libp2p/circuit-relay-v2": "npm:^2.0.0"
+    "@libp2p/circuit-relay-v2": "npm:^2.1.1"
     "@libp2p/identify": "npm:^3.0.1"
     "@libp2p/interface": "npm:^2.0.0"
     "@libp2p/kad-dht": "npm:^13.0.1"
@@ -3155,6 +3155,32 @@ __metadata:
     uint8arraylist: "npm:^2.4.8"
     uint8arrays: "npm:^5.1.0"
   checksum: 10/b68d9f9084424a887f156d2ca517e2cad245a695a2046784412339e34af93f3e859b075196a5d0808847f37840d44bad7d95819c750a4a31b39eeb39b5b94803
+  languageName: node
+  linkType: hard
+
+"@libp2p/circuit-relay-v2@npm:^2.1.1":
+  version: 2.1.1
+  resolution: "@libp2p/circuit-relay-v2@npm:2.1.1"
+  dependencies:
+    "@libp2p/interface": "npm:^2.1.2"
+    "@libp2p/interface-internal": "npm:^2.0.6"
+    "@libp2p/peer-collections": "npm:^6.0.6"
+    "@libp2p/peer-id": "npm:^5.0.4"
+    "@libp2p/peer-record": "npm:^8.0.6"
+    "@libp2p/utils": "npm:^6.0.6"
+    "@multiformats/mafmt": "npm:^12.1.6"
+    "@multiformats/multiaddr": "npm:^12.2.3"
+    any-signal: "npm:^4.1.1"
+    it-protobuf-stream: "npm:^1.1.3"
+    it-stream-types: "npm:^2.0.1"
+    multiformats: "npm:^13.1.0"
+    p-defer: "npm:^4.0.1"
+    progress-events: "npm:^1.0.0"
+    protons-runtime: "npm:^5.4.0"
+    race-signal: "npm:^1.0.2"
+    uint8arraylist: "npm:^2.4.8"
+    uint8arrays: "npm:^5.1.0"
+  checksum: 10/b82e8e80ccbdfa6db7003e6fe3aa5e481c53f514a24f7cefa09a7bef046dd30982e454d874e8c03c78a2e914d13f48053d51c1169bb807cdfbbc18eaad6e8bd0
   languageName: node
   linkType: hard
 
