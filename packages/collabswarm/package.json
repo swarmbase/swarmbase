@@ -44,7 +44,7 @@
     "@libp2p/topology": "^4.0.3",
     "@libp2p/webrtc": "^5.0.0",
     "@libp2p/websockets": "^9.0.0",
-    "@libp2p/webtransport": "^5.0.0",
+    "@libp2p/webtransport": "^5.0.9",
     "@multiformats/multiaddr": "^12.3.1",
     "blockstore-idb": "2.0.1",
     "datastore-idb": "3.0.1",
