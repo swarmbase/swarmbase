@@ -52,7 +52,7 @@
     "ipns": "^10.0.0",
     "it-pipe": "^1.1.0",
     "js-base64": "^3.6.1",
-    "libp2p": "^2.0.2",
+    "libp2p": "^2.1.5",
     "multiformats": "^13.3.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
