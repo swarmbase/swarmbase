@@ -1930,7 +1930,7 @@ __metadata:
     bootstrap: "npm:^5.3.3"
     quill-delta: "npm:^5.1.0"
     react: "npm:^18.3.1"
-    react-bootstrap: "npm:^2.10.4"
+    react-bootstrap: "npm:^2.10.5"
     react-dom: "npm:^18.3.1"
     react-router-bootstrap: "npm:^0.26.3"
     react-router-dom: "npm:^6.26.2"
@@ -1965,7 +1965,7 @@ __metadata:
     bootstrap: "npm:^5.3.3"
     dayjs: "npm:^1.11.13"
     react: "npm:^18.3.1"
-    react-bootstrap: "npm:^2.10.4"
+    react-bootstrap: "npm:^2.10.5"
     react-bootstrap-icons: "npm:^1.11.4"
     react-dom: "npm:^18.3.1"
     react-redux: "npm:^9.1.2"
@@ -15618,9 +15618,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-bootstrap@npm:^2.10.4":
-  version: 2.10.4
-  resolution: "react-bootstrap@npm:2.10.4"
+"react-bootstrap@npm:^2.10.5":
+  version: 2.10.5
+  resolution: "react-bootstrap@npm:2.10.5"
   dependencies:
     "@babel/runtime": "npm:^7.24.7"
     "@restart/hooks": "npm:^0.4.9"
@@ -15641,7 +15641,7 @@ __metadata:
   peerDependenciesMeta:
     "@types/react":
       optional: true
-  checksum: 10/859795e7a6a8c992cc87673365bf4b9a590d044a667b307c2fbc82d88a7f1e6de83ff137ba0ef7f2f31a80a4b0306129c1fc5ae74ff7368b4a4ae240056224a4
+  checksum: 10/00678acd12a8d3aa75451bb9e8402c9042ffa0077240aa2797ba6ed0b1dd8c53c0a4dca4ddadfed256baab49609edd9790d18f4c43674f3a516cfd45ffd7924e
   languageName: node
   linkType: hard
 
