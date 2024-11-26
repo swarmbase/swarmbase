@@ -51,6 +51,45 @@ Far future maybes: tools to make various things simpler like pinning, more langu
 
 Development philosophy: we intend to prioritize improving performance, reliability, security, etc., over things like adding new features or languages.
 
+## Architecture
+
+Swarmbase, also known as SwarmDB, uses Conflict-Free Replicated Data Types (CRDTs) and the Gossipsub protocol to implement a distributed database:
+
+**CRDTs (Conflict-Free Replicated Data Types)**:
+ - CRDTs ensure eventual consistency without the need for a consensus mechanism.
+ - Swarmbase uses JSON CRDTs to allow multiple clients to make changes simultaneously.
+ - Changes are applied locally and then propagated to other peers. This is evident in files like `crdt-provider.ts` and `crdt-change-node.ts`.
+
+**Gossipsub Protocol**:
+ - Gossipsub is used for efficient message exchange in the peer-to-peer network.
+ - It allows nodes to subscribe to topics and receive updates, making it suitable for propagating CRDT changes.
+ - Implementation examples are found in files like `relay.ts` and `collabswarm-node.ts`.
+
+**Libp2p**:
+ - Swarmbase uses libp2p for peer discovery and connection management.
+ - This includes various transports like WebRTC, WebSockets, and TCP, as seen in the `collabswarm-config.ts` and `collabswarm-node.ts`.
+
+**IPFS Integration**:
+ - IPFS is used for content-addressed storage, ensuring data integrity and availability across the network.
+ - The combination of CRDTs with IPFS allows for decentralized storage and retrieval of document changes.
+
+### Private data
+
+The Swarmbase repository employs a comprehensive authentication and authorization scheme to protect data access, integrating several key components:
+
+1. **Authentication and Authorization**:
+   - Users are identified by their public keys.
+   - Access control lists (ACLs) manage permissions, allowing specific keys to read or write data.
+   - The `AuthProvider` interface defines methods for signing, verifying, encrypting, and decrypting data using cryptographic keys.
+   - Example code and detailed implementation can be found in [auth-provider.ts](https://github.com/swarmbase/swarmbase/blob/d847136d34e6afdb4290def02e92ecd0a4ffe709/packages/collabswarm/src/auth-provider.ts).
+
+2. **Data Access Protection**:
+   - Data is encrypted using symmetric encryption algorithms like AES-GCM.
+   - Each change to the document is signed and encrypted, ensuring integrity and confidentiality.
+   - The repository includes detailed notes on encryption and key management strategies in the [auth.md](https://github.com/swarmbase/swarmbase/blob/d847136d34e6afdb4290def02e92ecd0a4ffe709/notes/auth.md) and [automerge-db-security.md](https://github.com/swarmbase/swarmbase/blob/d847136d34e6afdb4290def02e92ecd0a4ffe709/notes/automerge-db-security.md) files.
+
+These components work together to ensure that only authorized users have access to the data and that any changes are securely tracked and verified.
+
 ## Docs
 
 Will be generated based on code comments, so that they are more likely to be current and we are encouraged to provide more detail.
