@@ -19,7 +19,7 @@ jobs:
           cache: 'yarn'
       - run: yarn install
       - run: yarn workspace @collabswarm/collabswarm doc
-      - uses: JamesIves/github-pages-deploy-action@v4.6.8
+      - uses: JamesIves/github-pages-deploy-action@v4.7.2
         with:
           branch: docs # The branch the action should deploy to.
           folder: docs # The folder the action should deploy.
