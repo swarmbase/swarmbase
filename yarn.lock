@@ -1865,7 +1865,7 @@ __metadata:
     eslint: "npm:^9.11.1"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^4.9.5"
-    yjs: "npm:^13.5.10"
+    yjs: "npm:^13.6.21"
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
   languageName: unknown
@@ -12959,16 +12959,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lib0@npm:^0.2.86":
-  version: 0.2.97
-  resolution: "lib0@npm:0.2.97"
+"lib0@npm:^0.2.98":
+  version: 0.2.99
+  resolution: "lib0@npm:0.2.99"
   dependencies:
     isomorphic.js: "npm:^0.2.4"
   bin:
     0ecdsa-generate-keypair: bin/0ecdsa-generate-keypair.js
     0gentesthtml: bin/gentesthtml.js
     0serve: bin/0serve.js
-  checksum: 10/c86b0a95a5f6f0e3001515cb64a06580949b95faf2a3f89aab60278a3c4a63583c4805425bef4f5773a20747dd2a5f90689ecf7f2b38126875a96b69cbaea28f
+  checksum: 10/825f248d31fc85241d322365d838aa4902ee5d97e12b8a14ac1234d0ec1c3263fa217057a2d167ec734f3037b89fd6d514a29b4a768cdf677e57d2a2692a5827
   languageName: node
   linkType: hard
 
@@ -19376,12 +19376,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yjs@npm:^13.5.10":
-  version: 13.6.19
-  resolution: "yjs@npm:13.6.19"
+"yjs@npm:^13.6.21":
+  version: 13.6.21
+  resolution: "yjs@npm:13.6.21"
   dependencies:
-    lib0: "npm:^0.2.86"
-  checksum: 10/5b7789f835b26c24212a3721a1f96814c021508779799724eadb202274dda978c062a9841883de3cd78596063e2bfee9ead2264f83e9f5e34c4fffe39d9414af
+    lib0: "npm:^0.2.98"
+  checksum: 10/5c13655e5bca9aee9d9cd1a383a85e3f4998d08f43ee1b658c83b88637ea18d77e6aae32ee41869e90e643465ead203035770b950cdcff7ddfce1c0a0dab2f2d
   languageName: node
   linkType: hard
 
