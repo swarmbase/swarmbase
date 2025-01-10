@@ -39,7 +39,7 @@
     "@libp2p/identify": "^3.0.1",
     "@libp2p/interface": "^2.1.3",
     "@libp2p/kad-dht": "^13.0.1",
-    "@libp2p/peer-id": "^5.0.1",
+    "@libp2p/peer-id": "^5.0.10",
     "@libp2p/pubsub-peer-discovery": "^11.0.0",
     "@libp2p/topology": "^4.0.3",
     "@libp2p/webrtc": "^5.0.0",
