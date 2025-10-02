@@ -42,7 +42,7 @@ jobs:
       
       - name: Start Docker Compose services
         run: |
-          docker-compose up -d browser-test
+          docker compose up -d browser-test
           # Wait for service to be ready
           timeout 120 bash -c 'until curl -f http://localhost:3001 > /dev/null 2>&1; do sleep 2; done' || true
       
@@ -61,8 +61,8 @@ jobs:
       
       - name: Show Docker logs on failure
         if: failure()
-        run: docker-compose logs browser-test
+        run: docker compose logs browser-test
       
       - name: Stop Docker Compose services
         if: always()
-        run: docker-compose down
+        run: docker compose down

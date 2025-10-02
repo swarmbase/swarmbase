@@ -34,7 +34,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: process.env.CI ? undefined : [
     {
-      command: 'docker-compose up browser-test',
+      command: 'docker compose up browser-test',
       port: 3001,
       timeout: 120 * 1000,
       reuseExistingServer: !process.env.CI,

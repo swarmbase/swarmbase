@@ -26,7 +26,7 @@ The e2e tests use:
 ### Run Tests
 
 #### With Docker Compose (Recommended)
-This will automatically start the services using docker-compose:
+This will automatically start the services using Docker Compose:
 
 ```bash
 yarn test:e2e
@@ -37,7 +37,7 @@ If you want to run the application manually:
 
 1. Start the browser-test example:
    ```bash
-   docker-compose up browser-test
+   docker compose up browser-test
    ```
 
 2. In another terminal, run the tests:
@@ -138,7 +138,7 @@ npx playwright test --debug
 ### View Docker Logs
 If tests fail, check the application logs:
 ```bash
-docker-compose logs browser-test
+docker compose logs browser-test
 ```
 
 ## Configuration
@@ -154,7 +154,7 @@ Test configuration is in `playwright.config.ts`:
 ### Port Already in Use
 If port 3001 is already in use:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Tests Timeout
@@ -168,5 +168,5 @@ Check Docker logs and ensure all dependencies are built:
 ```bash
 yarn workspace @collabswarm/collabswarm tsc
 yarn workspace @collabswarm/collabswarm-automerge tsc
-docker-compose logs browser-test
+docker compose logs browser-test
 ```
