@@ -57,7 +57,9 @@
     "setupFiles": [
       "<rootDir>/jest.setup.js"
     ],
-    "extensionsToTreatAsEsm": [".ts"],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "globals": {
       "ts-jest": {
         "useESM": true

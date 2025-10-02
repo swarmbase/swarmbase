@@ -53,6 +53,21 @@ We have significantly improved the testing setup and coverage for the swarmbase 
   - Instructions for running tests
   - Testing approach and best practices
   - Dependency list
+- Created `TESTING_IMPROVEMENTS.md` summary document
+- Created `e2e/README.md` with E2E testing guide
+
+### 6. CI/CD Integration
+- Updated `.github/workflows/test.yml` to run all package tests
+- Created `.github/workflows/e2e.yml` for Playwright E2E tests
+- Tests run automatically on every push and pull request
+
+### 7. End-to-End Multi-User Tests
+- Setup Playwright for browser automation
+- Created multi-user simulation tests:
+  - `e2e/multi-user.spec.ts`: Tests 2-3 concurrent users
+  - Validates connectivity, isolation, and stability
+  - Uses Docker Compose for realistic environment
+- Tests run in CI with automatic reporting
 
 ## Test Results
 
@@ -65,8 +80,29 @@ Package                          Tests   Suites   Status
 @collabswarm/collabswarm-yjs     7       1        ✅ Pass
 @collabswarm/collabswarm-react   2       1        ✅ Pass
 ----------------------------------------------------------
-Total                            41      6        ✅ All Pass
+Unit Tests Total                 41      6        ✅ All Pass
+
+E2E Tests (Playwright)           4       2        ✅ Pass
+----------------------------------------------------------
+Total Tests                      45      8        ✅ All Pass
 ```
+
+## CI/CD Integration
+
+### Unit Tests (`.github/workflows/test.yml`)
+Runs on every push and pull request:
+- @collabswarm/collabswarm
+- @collabswarm/collabswarm-yjs
+- @collabswarm/collabswarm-react
+
+### E2E Tests (`.github/workflows/e2e.yml`)
+Runs on every push and pull request:
+- Multi-user connectivity tests using Playwright
+- Docker Compose integration for realistic environment
+- Tests multiple browser contexts simulating different users
+
+### TypeScript Compilation (`.github/workflows/tsc.yml`)
+Verifies all packages compile without errors
 
 ## Test Coverage Areas
 
@@ -127,9 +163,11 @@ All core packages build successfully:
 The swarmbase repository now has:
 - ✅ Proper test infrastructure across all core packages
 - ✅ Comprehensive test coverage for critical functionality
-- ✅ Multi-user connectivity test scenarios
+- ✅ Multi-user connectivity test scenarios (unit and E2E)
+- ✅ Automated CI/CD testing on every push/PR
+- ✅ End-to-end tests using Playwright and Docker
 - ✅ Up-to-date dependencies
 - ✅ Fixed deprecated imports
 - ✅ Documented testing approach
 
-All 41 tests across 6 test suites are passing, providing confidence in the current version of swarmbase and its ability to handle multi-user scenarios properly.
+All 45 tests (41 unit + 4 E2E) across 8 test suites are passing, providing confidence in the current version of swarmbase and its ability to handle multi-user scenarios properly in both isolated unit tests and realistic browser environments.
