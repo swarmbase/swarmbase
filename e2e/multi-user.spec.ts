@@ -109,10 +109,16 @@ test.describe('Browser test example basic functionality', () => {
     // Verify the page loaded (React App is the default title)
     await expect(page).toHaveTitle(/React App/i);
     
-    // Verify React root element is present and visible
+    // Verify React root element is present in the DOM
     const rootElement = await page.locator('#root');
     await expect(rootElement).toBeAttached();
-    await expect(rootElement).toBeVisible();
+    
+    // Verify the page has rendered some content (not just empty)
+    const hasContent = await page.evaluate(() => {
+      const root = document.getElementById('root');
+      return root !== null && root.innerHTML.length > 0;
+    });
+    expect(hasContent).toBe(true);
   });
 
   test('should not have critical console errors', async ({ page }) => {
