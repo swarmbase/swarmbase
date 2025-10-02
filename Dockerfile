@@ -1,4 +1,4 @@
-FROM node:16-alpine AS builder
+FROM node:20-alpine AS builder
 
 RUN apk update && apk add dos2unix
 
@@ -27,7 +27,7 @@ COPY examples/browser-test/package.json /app/examples/browser-test/package.json
 COPY examples/wiki-swarm/package.json /app/examples/wiki-swarm/package.json
 RUN yarn install
 
-FROM node:16-alpine
+FROM node:20-alpine
 ENV SKIP_PREFLIGHT_CHECK=true
 RUN mkdir -p /app
 COPY --from=builder /app /app
