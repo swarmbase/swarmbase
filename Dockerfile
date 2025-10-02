@@ -10,7 +10,6 @@ COPY package.json /app/package.json
 COPY yarn.lock /app/yarn.lock
 COPY .yarnrc.yml /app/.yarnrc.yml
 RUN mkdir -p /app/.yarn
-COPY .yarn/plugins /app/.yarn/plugins
 COPY .yarn/releases /app/.yarn/releases
 RUN mkdir -p /app/packages/collabswarm
 RUN mkdir -p /app/packages/collabswarm-automerge
