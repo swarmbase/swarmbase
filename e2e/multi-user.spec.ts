@@ -113,10 +113,20 @@ test.describe('Browser test example basic functionality', () => {
     const rootElement = await page.locator('#root');
     await expect(rootElement).toBeAttached();
     
-    // Verify the page has rendered some content (not just empty)
+    // Wait for React to render content into the root element
+    // The app may take time to initialize and render
+    await page.waitForFunction(
+      () => {
+        const root = document.getElementById('root');
+        return root !== null && root.innerHTML.trim().length > 0;
+      },
+      { timeout: 10000 } // Give it 10 seconds to render
+    );
+    
+    // Verify content was rendered
     const hasContent = await page.evaluate(() => {
       const root = document.getElementById('root');
-      return root !== null && root.innerHTML.length > 0;
+      return root !== null && root.innerHTML.trim().length > 0;
     });
     expect(hasContent).toBe(true);
   });
