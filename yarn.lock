@@ -1915,6 +1915,8 @@ __metadata:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@collabswarm/collabswarm-react": "workspace:packages/collabswarm-react"
     "@collabswarm/collabswarm-yjs": "workspace:packages/collabswarm-yjs"
+    "@popperjs/core": "npm:^2.11.8"
+    "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/jest-dom": "npm:^6.5.0"
     "@testing-library/react": "npm:^16.0.1"
     "@testing-library/user-event": "npm:^14.5.2"
