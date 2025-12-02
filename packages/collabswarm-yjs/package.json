@@ -41,7 +41,9 @@
       "<rootDir>/src"
     ],
     "transform": {
-      "^.+\\.tsx?$": "ts-jest"
+      "^.+\\.tsx?$": ["ts-jest", {
+        "useESM": true
+      }]
     },
     "moduleFileExtensions": [
       "ts",
@@ -59,11 +61,6 @@
     ],
     "extensionsToTreatAsEsm": [
       ".ts"
-    ],
-    "globals": {
-      "ts-jest": {
-        "useESM": true
-      }
-    }
+    ]
   }
 }
