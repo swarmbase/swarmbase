@@ -137,8 +137,8 @@ yarn install
 There is also a docker-compose.yaml file provided that runs browser-test and wiki-swarm examples by default:
 
 ```sh
-docker-compose build
-docker-compose up
+docker compose build
+docker compose up
 ```
 
 # Reference

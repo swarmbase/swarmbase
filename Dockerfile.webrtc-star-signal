@@ -1,13 +1,13 @@
-FROM node:16-alpine
+FROM node:20-alpine
 
-FROM node:16-alpine AS builder
+FROM node:20-alpine AS builder
 
 USER root
 RUN mkdir -p /app
 WORKDIR /app
 RUN npm install libp2p-webrtc-star@0.22.3
 
-FROM node:16-alpine
+FROM node:20-alpine
 
 COPY --from=builder /app /app
 WORKDIR /app

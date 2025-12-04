@@ -6,6 +6,8 @@
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
     "@collabswarm/collabswarm-react": "workspace:packages/collabswarm-react",
     "@collabswarm/collabswarm-yjs": "workspace:packages/collabswarm-yjs",
+    "@popperjs/core": "^2.11.8",
+    "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
