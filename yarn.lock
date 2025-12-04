@@ -1855,7 +1855,7 @@ __metadata:
     "@types/react": "npm:^18.3.11"
     "@types/react-dom": "npm:^18.3.0"
     "@types/react-redux": "npm:^7.1.34"
-    jsondiffpatch: "npm:^0.6.0"
+    jsondiffpatch: "npm:^0.7.2"
     jsoneditor: "npm:^10"
     jsoneditor-react: "npm:^3.1.2"
     libp2p: "npm:^2.1.5"
@@ -2229,6 +2229,13 @@ __metadata:
   peerDependencies:
     postcss-selector-parser: ^6.0.10
   checksum: 10/84ae0e902e8879d375406bd7d2e117b862e18cf8e5f82cecad62fcf729a8fc1527e2b3e2774b0e869a17e2006bd27ac5240f79220638183b273aeece97acd3f2
+  languageName: node
+  linkType: hard
+
+"@dmsnell/diff-match-patch@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@dmsnell/diff-match-patch@npm:1.1.0"
+  checksum: 10/fe4127b57a3f972839688d8b6abf325c2633106a1ee1da900e584c3057ed543797f009749fb6b77879e3dac0096755b09a9a224f9bd97a40eefba8f4665d5ace
   languageName: node
   linkType: hard
 
@@ -5139,13 +5146,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/diff-match-patch@npm:^1.0.36":
-  version: 1.0.36
-  resolution: "@types/diff-match-patch@npm:1.0.36"
-  checksum: 10/7d7ce03422fcc3e79d0cda26e4748aeb176b75ca4b4e5f38459b112bf24660d628424bdb08d330faefa69039d19a5316e7a102a8ab68b8e294c8346790e55113
-  languageName: node
-  linkType: hard
-
 "@types/dns-packet@npm:*, @types/dns-packet@npm:^5.6.5":
   version: 5.6.5
   resolution: "@types/dns-packet@npm:5.6.5"
@@ -7266,13 +7266,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:^5.3.0":
-  version: 5.3.0
-  resolution: "chalk@npm:5.3.0"
-  checksum: 10/6373caaab21bd64c405bfc4bd9672b145647fc9482657b5ea1d549b3b2765054e9d3d928870cdf764fb4aad67555f5061538ff247b8310f110c5c888d92397ea
-  languageName: node
-  linkType: hard
-
 "char-regex@npm:^1.0.2":
   version: 1.0.2
   resolution: "char-regex@npm:1.0.2"
@@ -8420,13 +8413,6 @@ __metadata:
   version: 1.2.2
   resolution: "didyoumean@npm:1.2.2"
   checksum: 10/de7f11b6a0c8c61018629b7f405bb9746d6e994ce87c1a4b7655c3c718442dc69037a3d46d804950604fd9cbe85c074f7b224a119fc1bda851690a74540c6cf8
-  languageName: node
-  linkType: hard
-
-"diff-match-patch@npm:^1.0.5":
-  version: 1.0.5
-  resolution: "diff-match-patch@npm:1.0.5"
-  checksum: 10/fd1ab417eba9559bda752a4dfc9a8ac73fa2ca8b146d29d153964b437168e301c09d8a688fae0cd81d32dc6508a4918a94614213c85df760793f44e245173bb6
   languageName: node
   linkType: hard
 
@@ -13246,16 +13232,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsondiffpatch@npm:^0.6.0":
-  version: 0.6.0
-  resolution: "jsondiffpatch@npm:0.6.0"
+"jsondiffpatch@npm:^0.7.2":
+  version: 0.7.3
+  resolution: "jsondiffpatch@npm:0.7.3"
   dependencies:
-    "@types/diff-match-patch": "npm:^1.0.36"
-    chalk: "npm:^5.3.0"
-    diff-match-patch: "npm:^1.0.5"
+    "@dmsnell/diff-match-patch": "npm:^1.1.0"
   bin:
     jsondiffpatch: bin/jsondiffpatch.js
-  checksum: 10/124b9797c266c693e69f8d23216e64d5ca4b21a4ec10e3a769a7b8cb19602ba62522f9a3d0c55299c1bfbe5ad955ca9ad2852439ca2c6b6316b8f91a5c218e94
+  checksum: 10/c7ad8f63c4d6283f79a9a1883d101544ea1ed675cf45200cd1a6fbe802f761a36c07c46caaa4071e73b7142fc7d7839ec4df7873cc878b48013252c2fc265032
   languageName: node
   linkType: hard
 
