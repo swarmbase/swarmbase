@@ -17,7 +17,7 @@
     "@playwright/test": "^1.58.2"
   },
   "scripts": {
-    "build": "yarn workspaces foreach -Atpvi run tsc",
+    "build": "yarn workspaces foreach -Atpvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' run tsc",
     "test": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-redux' run test",
     "test:e2e": "playwright test",
     "test:integration": "playwright test --config=playwright.integration.config.ts"
