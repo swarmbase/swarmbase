@@ -653,7 +653,9 @@ export class CollabswarmDocument<
         // }, stream.sink);
         return [];
       },
-    );
+    ).catch((err: unknown) => {
+      console.error(`Error handling ${this.protocolLoadV1} load request:`, err);
+    });
   };
 
   private async _ensureCurrentUserCanWrite() {

@@ -113,10 +113,7 @@ async function init() {
     }),
   ]
 
-  // Only add bootstrap if we have a relay address
-  if (relayAddr) {
-    peerDiscovery.push(bootstrap({ list: [relayAddr] }))
-  }
+  peerDiscovery.push(bootstrap({ list: [relayAddr] }))
 
   const node = await createLibp2p({
     addresses: {

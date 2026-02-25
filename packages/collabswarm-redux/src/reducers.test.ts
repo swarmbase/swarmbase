@@ -201,6 +201,7 @@ describe('collabswarmReducer', () => {
     const newState = reducer(state, changeDocument('doc-1', updatedDoc));
     expect(newState).not.toBe(state);
     expect(newState.documents['doc-1'].document).toEqual(updatedDoc);
+    expect(newState.documents['doc-1'].documentRef).toBe(docRef);
   });
 
   test('CHANGE_DOCUMENT of non-existent doc returns same state', () => {

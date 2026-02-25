@@ -106,8 +106,15 @@ test.describe('Peer Discovery', () => {
       console.log(`Browser 1 peers: ${JSON.stringify(peers1)}`);
       console.log(`Browser 2 peers: ${JSON.stringify(peers2)}`);
 
+      // Verify mutual discovery: each browser should see the other (not just the relay)
+      const peerId1 = await page1.evaluate(() => (window as any).__libp2p?.peerId?.toString());
+      const peerId2 = await page2.evaluate(() => (window as any).__libp2p?.peerId?.toString());
+
       expect(peers1.length).toBeGreaterThanOrEqual(1);
       expect(peers2.length).toBeGreaterThanOrEqual(1);
+      // Each browser should have discovered the other's peer ID
+      expect(peers1).toContain(peerId2);
+      expect(peers2).toContain(peerId1);
     } finally {
       await context1.close();
       await context2.close();
@@ -156,6 +163,9 @@ test.describe('Peer Discovery', () => {
       const hasWebRTC2 = connectionTypes2.some(([_, addr]: [string, string]) => addr.includes('/webrtc'));
       console.log(`Browser 1 has WebRTC connection: ${hasWebRTC1}`);
       console.log(`Browser 2 has WebRTC connection: ${hasWebRTC2}`);
+
+      // Soft assertion: WebRTC upgrade is expected but environment-dependent
+      expect.soft(hasWebRTC1 || hasWebRTC2).toBe(true);
     } finally {
       await context1.close();
       await context2.close();

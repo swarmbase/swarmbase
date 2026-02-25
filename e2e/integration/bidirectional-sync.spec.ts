@@ -40,30 +40,36 @@ async function setupConnectedPair(browser: any): Promise<{
 }> {
   const context1 = await browser.newContext();
   const context2 = await browser.newContext();
-  const page1 = await context1.newPage();
-  const page2 = await context2.newPage();
+  try {
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
 
-  const track1 = trackConsole(page1);
-  const track2 = trackConsole(page2);
+    const track1 = trackConsole(page1);
+    const track2 = trackConsole(page2);
 
-  await page1.goto(APP_1_URL);
-  await page2.goto(APP_2_URL);
+    await page1.goto(APP_1_URL);
+    await page2.goto(APP_2_URL);
 
-  await Promise.all([
-    track1.waitFor('INIT_COMPLETE'),
-    track2.waitFor('INIT_COMPLETE'),
-  ]);
+    await Promise.all([
+      track1.waitFor('INIT_COMPLETE'),
+      track2.waitFor('INIT_COMPLETE'),
+    ]);
 
-  await Promise.all([
-    track1.waitFor('PEER_CONNECTED:', 90_000),
-    track2.waitFor('PEER_CONNECTED:', 90_000),
-  ]);
+    await Promise.all([
+      track1.waitFor('PEER_CONNECTED:', 90_000),
+      track2.waitFor('PEER_CONNECTED:', 90_000),
+    ]);
 
-  // Wait for GossipSub mesh to form (mesh grafting takes several seconds through relay).
-  // Longer wait needed when previous tests have cycled connections through the relay.
-  await page1.waitForTimeout(10000);
+    // Wait for GossipSub mesh to form (mesh grafting takes several seconds through relay).
+    // Longer wait needed when previous tests have cycled connections through the relay.
+    await page1.waitForTimeout(10000);
 
-  return { page1, page2, track1, track2, context1, context2 };
+    return { page1, page2, track1, track2, context1, context2 };
+  } catch (err) {
+    await context1.close();
+    await context2.close();
+    throw err;
+  }
 }
 
 test.describe('Bi-directional Sync', () => {
@@ -171,8 +177,19 @@ test.describe('Bi-directional Sync', () => {
         await page2.waitForTimeout(300);
       }
 
-      // Wait for messages to propagate through relay
-      await page1.waitForTimeout(10_000);
+      // Wait until both browsers have received messages from the other side
+      await Promise.all([
+        page1.waitForFunction(
+          (count) => (window as any).__messages?.filter((m: any) => m.text.startsWith('B-msg-')).length >= count,
+          Math.floor(messageCount / 2),
+          { timeout: 30_000 }
+        ),
+        page2.waitForFunction(
+          (count) => (window as any).__messages?.filter((m: any) => m.text.startsWith('A-msg-')).length >= count,
+          Math.floor(messageCount / 2),
+          { timeout: 30_000 }
+        ),
+      ]);
 
       const messages1 = await page1.evaluate(() => (window as any).__messages);
       const messages2 = await page2.evaluate(() => (window as any).__messages);
