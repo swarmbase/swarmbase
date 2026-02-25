@@ -65,7 +65,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
           }),
         },
         // https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md#configuring-connection-gater
-        connectionGater: { denyDialMultiaddr: async (...args: any[]) => false },
+        connectionGater: { denyDialMultiaddr: async () => false },
       },
     },
 

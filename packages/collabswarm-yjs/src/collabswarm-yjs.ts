@@ -85,7 +85,10 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     });
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<Uint8Array> {
-    const deserialized = this.deserialize(changes);
+    const deserialized = this.deserialize(changes) as {
+      changes: string;
+      nonce: string;
+    };
     return {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
@@ -104,15 +107,21 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     );
   }
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
-    const deserialized = this.deserialize(this.decode(message));
+    const deserialized = this.deserialize(this.decode(message)) as {
+      documentId: string;
+      changeId?: string;
+      changes?: iCRDTChangeNode;
+      keychainChanges?: string;
+      signature?: string;
+    };
     return {
       ...deserialized,
       changes:
         deserialized.changes &&
         deserializeUint8ArrayInMerkleDAG(deserialized.changes),
-      keychainChanges:
-        deserialized.keychainChanges &&
-        Base64.toUint8Array(deserialized.keychainChanges),
+      keychainChanges: deserialized.keychainChanges
+        ? Base64.toUint8Array(deserialized.keychainChanges)
+        : undefined,
     };
   }
 }

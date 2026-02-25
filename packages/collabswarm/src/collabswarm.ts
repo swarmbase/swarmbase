@@ -37,7 +37,7 @@ import { PubSubBaseProtocol } from '@libp2p/pubsub';
  */
 export type CollabswarmPeersHandler = (
   address: string,
-  connection: any,
+  connection: CustomEvent<PeerId>,
 ) => void;
 
 /**
@@ -117,7 +117,7 @@ export class Collabswarm<
    * Only works after `.initialize()` has been called.
    */
   public get libp2p(): Libp2p {
-    return (this.ipfsNode as any).libp2p;
+    return this.ipfsNode.libp2p;
   }
 
   /**
@@ -217,7 +217,7 @@ export class Collabswarm<
    */
   public async connect(addresses: string[]) {
     // Connect to bootstrapping node(s).
-    const connectionPromises: Promise<any>[] = [];
+    const connectionPromises: Promise<unknown>[] = [];
     for (const address of addresses) {
       connectionPromises.push(
         this.ipfsNode.libp2p.dial(peerIdFromString(address)),

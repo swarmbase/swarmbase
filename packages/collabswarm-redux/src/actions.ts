@@ -37,7 +37,15 @@ export function initializeAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) => s as any,
+  > = (s) =>
+    s as unknown as CollabswarmState<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
 ): ThunkAction<
   Promise<
     Collabswarm<
@@ -151,7 +159,15 @@ export function connectAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) => s as any,
+  > = (s) =>
+    s as unknown as CollabswarmState<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
 ): ThunkAction<Promise<void>, RootStateType, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
@@ -203,7 +219,15 @@ export function openDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) => s as any,
+  > = (s) =>
+    s as unknown as CollabswarmState<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
 ): ThunkAction<
   Promise<CollabswarmDocument<
     DocType,
@@ -335,7 +359,15 @@ export function closeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) => s as any,
+  > = (s) =>
+    s as unknown as CollabswarmState<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
 ): ThunkAction<
   Promise<void>,
   RootStateType,
@@ -404,7 +436,15 @@ export function changeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) => s as any,
+  > = (s) =>
+    s as unknown as CollabswarmState<
+      DocType,
+      ChangesType,
+      ChangeFnType,
+      PrivateKey,
+      PublicKey,
+      DocumentKey
+    >,
 ): ThunkAction<
   Promise<DocType>,
   RootStateType,

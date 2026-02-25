@@ -75,7 +75,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
           }),
         },
         // https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md#configuring-connection-gater
-        connectionGater: { denyDialMultiaddr: async (...args: any[]) => false },
+        connectionGater: { denyDialMultiaddr: async () => false },
       },
     },
     // ipfs: {
@@ -213,7 +213,7 @@ export class CollabswarmNode<
     fs.writeFile(
       clientConfigFile,
       `REACT_APP_CLIENT_CONFIG='${JSON.stringify(clientConfig)}'`,
-      (err: any) => {
+      (err: NodeJS.ErrnoException | null) => {
         if (err) {
           console.error(`Failed to write ${clientConfigFile}:`, err);
         } else {
@@ -288,7 +288,7 @@ export class CollabswarmNode<
     };
     this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
       'message',
-      this._docPublishHandler as any,
+      this._docPublishHandler as EventListener,
     );
     this.swarm.ipfsNode.libp2p.services.pubsub.subscribe(
       this.config.pubsubDocumentPublishPath,
@@ -305,7 +305,7 @@ export class CollabswarmNode<
       );
       this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
         'message',
-        this._docPublishHandler as any,
+        this._docPublishHandler as EventListener,
       );
     }
     if (this._subscriptions) {
