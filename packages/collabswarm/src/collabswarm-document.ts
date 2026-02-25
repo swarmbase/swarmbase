@@ -5,7 +5,7 @@
  *   Document keys are attached to a single document.
  */
 
-import pipe from 'it-pipe';
+import { pipe } from 'it-pipe';
 import { Libp2p } from 'libp2p';
 import { Collabswarm } from './collabswarm';
 import {
@@ -572,7 +572,7 @@ export class CollabswarmDocument<
     console.log(`received ${this.protocolLoadV1} dial`);
     pipe(
       stream.source,
-      async (source: AsyncIterable<Uint8Array | BufferList>) => {
+      async (source: any) => {
         const assembledRequest = await readUint8Iterable(source);
         const message =
           this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
@@ -728,7 +728,7 @@ export class CollabswarmDocument<
       );
       await pipe(
         stream.source,
-        async (source: AsyncIterable<Uint8Array | BufferList>) => {
+        async (source: any) => {
           console.log(`awaiting ${this.protocolLoadV1} response...`, source);
           const assembled = await readUint8Iterable(source);
           const message =
@@ -803,7 +803,7 @@ export class CollabswarmDocument<
 
     const pubsub = this.swarm.ipfsNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
-    pubsub.addEventListener('message', this._pubsubHandler);
+    pubsub.addEventListener('message', this._pubsubHandler as any);
     pubsub.subscribe(this.documentPath);
 
     // For now we support multiple protocols, one per document path.
@@ -834,7 +834,7 @@ export class CollabswarmDocument<
       const pubsub = this.swarm.ipfsNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(this.documentPath);
-      pubsub.removeEventListener('message', this._pubsubHandler);
+      pubsub.removeEventListener('message', this._pubsubHandler as any);
     }
   }
 

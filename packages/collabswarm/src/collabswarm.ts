@@ -23,7 +23,8 @@ import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
-import { createHelia, DefaultLibp2pServices, HeliaLibp2p } from 'helia';
+import { createHelia, DefaultLibp2pServices } from 'helia';
+import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
 import { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
@@ -97,7 +98,7 @@ export class Collabswarm<
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
   private _ipfsNode:
-    | HeliaLibp2p<
+    | Helia<
         Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
       >
     | undefined;
@@ -124,7 +125,7 @@ export class Collabswarm<
    *
    * Only works after `.initialize()` has been called.
    */
-  public get ipfsNode(): HeliaLibp2p<
+  public get ipfsNode(): Helia<
     Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
   > {
     if (this._ipfsNode) {
@@ -176,12 +177,12 @@ export class Collabswarm<
     // Setup IPFS node.
     this._ipfsNode = await (config.ipfs
       ? (createHelia(config.ipfs) as Promise<
-          HeliaLibp2p<
+          Helia<
             Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
           >
         >) // TODO: Is this correct?
       : (createHelia() as Promise<
-          HeliaLibp2p<
+          Helia<
             Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
           >
         >));

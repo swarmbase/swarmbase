@@ -90,7 +90,7 @@ export async function importHmacKey(
 ) {
   const key = await crypto.subtle.importKey(
     format,
-    keyData,
+    keyData as Uint8Array<ArrayBuffer>,
     {
       name: 'HMAC',
       hash,
@@ -106,7 +106,7 @@ export async function importSymmetricKey(
   keyData: Uint8Array,
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
 ) {
-  const key = await crypto.subtle.importKey(format, keyData, 'AES-GCM', true, [
+  const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, 'AES-GCM', true, [
     'encrypt',
     'decrypt',
   ]);

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "scripts": {
     "tsc": "tsc -b",
-    "prepublishOnly": "npm run tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "yarn tsc",
+    "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
   },
   "main": "dist/src/index.js",
@@ -17,17 +17,51 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "eslint": "^9.11.1",
+    "jest": "^29.2.5",
     "redux": "^5.0.1",
     "redux-thunk": "^3.1.0",
-    "typescript": "^4.9.5"
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@automerge/automerge": "2.2.8",
+    "@automerge/automerge": "^3.2.4",
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
+  },
+  "jest": {
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "useESM": true,
+          "diagnostics": false
+        }
+      ]
+    },
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json",
+      "node"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "moduleNameMapper": {
+      "^@collabswarm/collabswarm$": "<rootDir>/src/__mocks__/@collabswarm/collabswarm.ts"
+    }
   }
 }

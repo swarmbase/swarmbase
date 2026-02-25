@@ -78,7 +78,7 @@ export class SubtleCrypto
           : crypto.getRandomValues(new Uint8Array(this.nonceBits));
         return {
           name: 'AES-GCM',
-          iv,
+          iv: iv as Uint8Array<ArrayBuffer>,
         };
       default:
         throw 'Encryption is only supported with AesGcmParams currently'!;
@@ -97,7 +97,7 @@ export class SubtleCrypto
     privateKey: CryptoKey,
   ): Promise<Uint8Array> {
     return new Uint8Array(
-      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data),
+      await crypto.subtle.sign(this.signingAlgorithm, privateKey, data as Uint8Array<ArrayBuffer>),
     );
   }
 
@@ -117,8 +117,8 @@ export class SubtleCrypto
     return await crypto.subtle.verify(
       this.signingAlgorithm,
       publicKey,
-      signature,
-      data,
+      signature as Uint8Array<ArrayBuffer>,
+      data as Uint8Array<ArrayBuffer>,
     );
   }
 
@@ -145,7 +145,7 @@ export class SubtleCrypto
         await crypto.subtle.decrypt(
           this._encryptionAlgorithmParams(nonce),
           documentKey,
-          data,
+          data as Uint8Array<ArrayBuffer>,
         ),
       );
     } catch (err) {
@@ -170,7 +170,7 @@ export class SubtleCrypto
     const ciphertext = await crypto.subtle.encrypt(
       algorithmParams,
       documentKey,
-      data,
+      data as Uint8Array<ArrayBuffer>,
     );
     return {
       data: new Uint8Array(ciphertext),
