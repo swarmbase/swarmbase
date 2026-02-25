@@ -78,8 +78,10 @@ echo ""
 # Step 4: Run Playwright tests
 echo "=== Step 4: Running Playwright integration tests ==="
 cd "$PROJECT_DIR"
+set +e
 yarn exec playwright test --config=playwright.integration.config.ts "$@"
 TEST_EXIT=$?
+set -e
 
 echo ""
 if [ "$TEST_EXIT" -eq 0 ]; then

@@ -36,14 +36,29 @@ function updateStatus(status) {
 
 function updatePeersUI() {
   const peers = Array.from(window.__peers)
-  peersEl.innerHTML = `<strong>Connected Peers (${peers.length}):</strong> ` +
-    peers.map(p => `<div class="peer">${p}</div>`).join('')
+  peersEl.textContent = ''
+  const label = document.createElement('strong')
+  label.textContent = `Connected Peers (${peers.length}):`
+  peersEl.appendChild(label)
+  for (const p of peers) {
+    const div = document.createElement('div')
+    div.className = 'peer'
+    div.textContent = p
+    peersEl.appendChild(div)
+  }
 }
 
 function updateConnectionTypesUI() {
   const types = Array.from(window.__connectionTypes.entries())
-  connectionTypesEl.innerHTML = `<strong>Connection Types:</strong> ` +
-    types.map(([peer, type]) => `<div>${peer}: ${type}</div>`).join('')
+  connectionTypesEl.textContent = ''
+  const label = document.createElement('strong')
+  label.textContent = 'Connection Types:'
+  connectionTypesEl.appendChild(label)
+  for (const [peer, type] of types) {
+    const div = document.createElement('div')
+    div.textContent = `${peer}: ${type}`
+    connectionTypesEl.appendChild(div)
+  }
 }
 
 function addMessageToUI(msg) {

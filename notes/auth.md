@@ -99,4 +99,4 @@ AesGcmParams
 
 ### Algos for public-key
 
-Three of these algorithms — RSASSA-PKCS1-v1_5, RSA-PSS, and ECDSA — are public-key
+Three of these algorithms (RSASSA-PKCS1-v1_5, RSA-PSS, and ECDSA) are public-key

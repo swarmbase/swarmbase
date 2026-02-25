@@ -31,33 +31,33 @@ For more details, see `e2e/README.md`.
 ## Test Coverage Summary
 
 ### Core Package (@collabswarm/collabswarm) - 32 tests
-- ✅ Unit tests for JSON serialization/deserialization
-- ✅ Unit tests for authentication (sign/verify, encrypt/decrypt)
-- ✅ Unit tests for utility functions (arrays, promises, crypto keys)
-- ✅ Integration tests for multi-user crypto scenarios
+- Unit tests for JSON serialization/deserialization
+- Unit tests for authentication (sign/verify, encrypt/decrypt)
+- Unit tests for utility functions (arrays, promises, crypto keys)
+- Integration tests for multi-user crypto scenarios
 
 ### Yjs Package (@collabswarm/collabswarm-yjs) - 7 tests
-- ✅ Yjs document creation and management
-- ✅ Base64 serialization utilities
-- ✅ Document arrays and structures
-- ✅ Multi-document independence
+- Yjs document creation and management
+- Base64 serialization utilities
+- Document arrays and structures
+- Multi-document independence
 
 ### React Package (@collabswarm/collabswarm-react) - 2 tests
-- ✅ React context creation and functionality
-- ✅ Provider and Consumer component verification
+- React context creation and functionality
+- Provider and Consumer component verification
 
 ### Example Apps
-- ✅ password-manager: Basic smoke test
-- ✅ browser-test: Basic smoke test
-- ✅ wiki-swarm: Basic smoke test
+- password-manager: Basic smoke test
+- browser-test: Basic smoke test
+- wiki-swarm: Basic smoke test
 
 ### End-to-End Tests (Playwright) - 4 tests
-- ✅ Multi-user connectivity (2 concurrent users)
-- ✅ Multiple browser instances (3 concurrent users)
-- ✅ Application loading without errors
-- ✅ Console error monitoring
+- Multi-user connectivity (2 concurrent users)
+- Multiple browser instances (3 concurrent users)
+- Application loading without errors
+- Console error monitoring
 
-**Total: 45 tests across 8 test suites - All Passing ✅**
+**Total: 45 tests across 8 test suites - All Passing**
 
 ## Test Structure
 - Use table-driven testing approach for comprehensive coverage

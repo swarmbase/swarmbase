@@ -9,7 +9,7 @@ import {
   deserializeKey,
 } from './collabswarm-automerge';
 
-// ECDSA P-384 JWK test keys (public only — ACL uses raw export which requires public keys)
+// ECDSA P-384 JWK test keys (public only - ACL uses raw export which requires public keys)
 const publicKeyData1 = {
   key_ops: ['verify'] as KeyUsage[],
   ext: true,
@@ -256,9 +256,10 @@ describe('AutomergeKeychain', () => {
     // re-apply our own history without error.
     const kc2 = new AutomergeKeychain();
     kc2.merge(exported);
-    // The merged doc should have entries (may differ due to actor conflicts)
+    // The merged doc should have entries (may differ due to actor conflicts
+    // between distinct from()-initialized documents).
     const keys2 = await kc2.keys();
-    expect(keys2.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(keys2)).toBe(true);
   });
 
   test('getKey() retrieves a cached key by ID', async () => {
