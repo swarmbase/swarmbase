@@ -9,7 +9,6 @@ import { IndexStorage, IndexEntry } from './index-storage';
 export class IDBIndexStorage implements IndexStorage {
   private _dbName: string;
   private _db: IDBPDatabase | null = null;
-  private _version: number = 0;
   private _initializedStores: Set<string> = new Set();
 
   constructor(dbName: string = 'collabswarm-index') {
@@ -17,7 +16,7 @@ export class IDBIndexStorage implements IndexStorage {
   }
 
   async initialize(indexName: string, fields: IndexFieldDefinition[]): Promise<void> {
-    if (this._initializedStores.has(indexName)) return;
+    if (this._initializedStores.has(indexName) && this._db) return;
 
     // Close existing connection before upgrading
     if (this._db) {
@@ -25,21 +24,29 @@ export class IDBIndexStorage implements IndexStorage {
       this._db = null;
     }
 
-    this._version++;
-    const version = this._version;
-    const allStores = new Set(this._initializedStores);
-    allStores.add(indexName);
+    // Read current version from existing DB
+    const existingDb = await openDB(this._dbName);
+    const currentVersion = existingDb.version;
+    const storeAlreadyExists = existingDb.objectStoreNames.contains(indexName);
+    existingDb.close();
 
-    this._db = await openDB(this._dbName, version, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(indexName)) {
-          const store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
-          for (const field of fields) {
-            store.createIndex(field.path, `fields.${field.path}`, { unique: false });
+    if (storeAlreadyExists) {
+      // Store already exists — just reopen at current version
+      this._db = await openDB(this._dbName, currentVersion);
+    } else {
+      // Need to create a new object store — requires version upgrade
+      const newVersion = currentVersion + 1;
+      this._db = await openDB(this._dbName, newVersion, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(indexName)) {
+            const store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
+            for (const field of fields) {
+              store.createIndex(field.path, `fields.${field.path}`, { unique: false });
+            }
           }
-        }
-      },
-    });
+        },
+      });
+    }
 
     this._initializedStores.add(indexName);
   }
@@ -119,8 +126,8 @@ export class IDBIndexStorage implements IndexStorage {
       this._db.close();
       this._db = null;
     }
-    this._initializedStores.clear();
-    this._version = 0;
+    // Don't clear _initializedStores — the stores still exist in IndexedDB.
+    // Clearing would cause initialize() to skip reopening them on next use.
   }
 
   private _getDB(): IDBPDatabase {
@@ -144,17 +151,25 @@ export class IDBIndexStorage implements IndexStorage {
       case 'neq':
         return value !== filter.value;
 
-      case 'gt':
-        return value !== undefined && value !== null && (value as number | string | Date) > (filter.value as number | string | Date);
+      case 'gt': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv > nfv;
+      }
 
-      case 'gte':
-        return value !== undefined && value !== null && (value as number | string | Date) >= (filter.value as number | string | Date);
+      case 'gte': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv >= nfv;
+      }
 
-      case 'lt':
-        return value !== undefined && value !== null && (value as number | string | Date) < (filter.value as number | string | Date);
+      case 'lt': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv < nfv;
+      }
 
-      case 'lte':
-        return value !== undefined && value !== null && (value as number | string | Date) <= (filter.value as number | string | Date);
+      case 'lte': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv <= nfv;
+      }
 
       case 'prefix':
         return typeof value === 'string' && typeof filter.value === 'string' && value.startsWith(filter.value);
@@ -171,6 +186,11 @@ export class IDBIndexStorage implements IndexStorage {
   }
 
   private _resolveFieldPath(obj: Record<string, unknown>, path: string): unknown {
+    // First try literal key (handles dot-notation paths from IndexManager)
+    if (path in obj) {
+      return obj[path];
+    }
+    // Fall back to nested traversal
     const segments = path.split('.');
     let current: unknown = obj;
     for (const segment of segments) {
@@ -196,6 +216,17 @@ export class IDBIndexStorage implements IndexStorage {
       }
     }
     return 0;
+  }
+
+  private _normalizeForComparison(value: unknown): number | string | boolean | null | undefined {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'string') {
+      const timestamp = Date.parse(value);
+      if (!isNaN(timestamp) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        return timestamp;
+      }
+    }
+    return value as number | string | boolean | null | undefined;
   }
 
   private _compareValues(a: unknown, b: unknown): number {

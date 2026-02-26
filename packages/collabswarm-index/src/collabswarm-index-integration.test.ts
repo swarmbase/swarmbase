@@ -8,6 +8,15 @@ interface MockDoc {
   author: string;
 }
 
+async function waitFor(condition: () => Promise<boolean>, timeoutMs: number = 2000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await condition()) return;
+    await new Promise(r => setTimeout(r, 10));
+  }
+  throw new Error('waitFor timed out');
+}
+
 class MockSubscribableDocument implements SubscribableDocument<MockDoc> {
   documentPath: string;
   document: MockDoc;
@@ -67,14 +76,13 @@ describe('CollabswarmIndexIntegration', () => {
       const doc = new MockSubscribableDocument('/docs/1', { title: 'Hello', author: 'Alice' });
       integration.trackDocument(doc);
 
-      // Wait for async index
-      await new Promise(r => setTimeout(r, 50));
-
-      const result = await manager.query({
-        indexName: 'docs',
-        filters: [{ path: 'title', operator: 'eq', value: 'Hello' }],
+      await waitFor(async () => {
+        const result = await manager.query({
+          indexName: 'docs',
+          filters: [{ path: 'title', operator: 'eq', value: 'Hello' }],
+        });
+        return result.documents.length === 1;
       });
-      expect(result.documents).toHaveLength(1);
     });
 
     test('should subscribe to document changes', async () => {
@@ -87,17 +95,23 @@ describe('CollabswarmIndexIntegration', () => {
       const doc = new MockSubscribableDocument('/docs/1', { title: 'v1', author: 'Alice' });
       integration.trackDocument(doc);
 
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(async () => {
+        const result = await manager.query({
+          indexName: 'docs',
+          filters: [{ path: 'title', operator: 'eq', value: 'v1' }],
+        });
+        return result.documents.length === 1;
+      });
 
       doc.simulateChange({ title: 'v2', author: 'Alice' });
 
-      await new Promise(r => setTimeout(r, 50));
-
-      const result = await manager.query({
-        indexName: 'docs',
-        filters: [{ path: 'title', operator: 'eq', value: 'v2' }],
+      await waitFor(async () => {
+        const result = await manager.query({
+          indexName: 'docs',
+          filters: [{ path: 'title', operator: 'eq', value: 'v2' }],
+        });
+        return result.documents.length === 1;
       });
-      expect(result.documents).toHaveLength(1);
     });
 
     test('should not double-track the same document', () => {
@@ -119,13 +133,18 @@ describe('CollabswarmIndexIntegration', () => {
     test('should remove document from index', async () => {
       const doc = new MockSubscribableDocument('/docs/1', { title: 'Hello', author: 'Alice' });
       integration.trackDocument(doc);
-      await new Promise(r => setTimeout(r, 50));
+
+      await waitFor(async () => {
+        const result = await manager.query({ indexName: 'docs', filters: [] });
+        return result.documents.length === 1;
+      });
 
       integration.untrackDocument(doc);
-      await new Promise(r => setTimeout(r, 50));
 
-      const result = await manager.query({ indexName: 'docs', filters: [] });
-      expect(result.documents).toHaveLength(0);
+      await waitFor(async () => {
+        const result = await manager.query({ indexName: 'docs', filters: [] });
+        return result.documents.length === 0;
+      });
     });
   });
 

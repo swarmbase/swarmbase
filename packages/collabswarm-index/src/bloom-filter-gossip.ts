@@ -1,4 +1,5 @@
 import { BloomFilterCRDT } from './bloom-filter-crdt';
+import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
 
 /**
  * Peer filter state tracked per remote peer.
@@ -24,7 +25,7 @@ export interface BloomFilterGossipConfig {
 }
 
 /** Default gossip topic for bloom filter updates. */
-export const BLOOM_FILTER_TOPIC = '/collabswarm/bloom-index/v1';
+export const BLOOM_FILTER_TOPIC = bloomFilterUpdateV1;
 
 const DEFAULT_CONFIG: BloomFilterGossipConfig = {
   topic: BLOOM_FILTER_TOPIC,
@@ -91,16 +92,19 @@ export class BloomFilterGossip {
    */
   start(): void {
     if (this._started) return;
+    if (!this._publishFn || !this._subscribeFn || !this._unsubscribeFn) {
+      throw new Error('setPubSub() must be called before start()');
+    }
     this._started = true;
 
-    if (this._subscribeFn) {
-      this._subscribeFn(this._config.topic, (peerId, data) => {
-        this.onReceiveFilter(peerId, data);
-      });
-    }
+    this._subscribeFn(this._config.topic, (peerId, data) => {
+      this.onReceiveFilter(peerId, data);
+    });
 
     this._republishTimer = setInterval(() => {
-      this.publishFilter().catch(() => {});
+      this.publishFilter().catch((err) => {
+        console.warn('BloomFilterGossip: periodic publish failed', err);
+      });
     }, this._config.republishIntervalMs);
   }
 
@@ -142,11 +146,17 @@ export class BloomFilterGossip {
    * Merges into the peer's tracked state.
    */
   onReceiveFilter(peerId: string, data: Uint8Array): void {
-    const received = BloomFilterCRDT.deserialize(
-      data,
-      this._config.filterSizeInBits,
-      this._config.numHashFunctions,
-    );
+    let received: BloomFilterCRDT;
+    try {
+      received = BloomFilterCRDT.deserialize(
+        data,
+        this._config.filterSizeInBits,
+        this._config.numHashFunctions,
+      );
+    } catch {
+      console.warn(`BloomFilterGossip: ignoring malformed filter from ${peerId}`);
+      return;
+    }
 
     const existing = this._peerFilters.get(peerId);
     if (existing) {

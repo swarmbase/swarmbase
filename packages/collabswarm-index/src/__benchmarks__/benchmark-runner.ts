@@ -13,6 +13,9 @@ export class BenchmarkRunner {
    * @param iterations Number of measured iterations (default: 100)
    */
   async run(name: string, fn: () => Promise<void> | void, iterations: number = 100): Promise<BenchmarkResult> {
+    if (!Number.isInteger(iterations) || iterations <= 0) {
+      throw new RangeError(`iterations must be a positive integer, got ${iterations}`);
+    }
     const warmupCount = Math.max(1, Math.floor(iterations * 0.1));
 
     // Warmup
@@ -22,7 +25,7 @@ export class BenchmarkRunner {
 
     // Measure
     const times: number[] = [];
-    const memBefore = typeof process !== 'undefined' ? process.memoryUsage().heapUsed : 0;
+    const memBefore = typeof process !== 'undefined' && process.memoryUsage ? process.memoryUsage().heapUsed : undefined;
 
     for (let i = 0; i < iterations; i++) {
       const start = performance.now();
@@ -31,7 +34,7 @@ export class BenchmarkRunner {
       times.push(end - start);
     }
 
-    const memAfter = typeof process !== 'undefined' ? process.memoryUsage().heapUsed : 0;
+    const memAfter = typeof process !== 'undefined' && process.memoryUsage ? process.memoryUsage().heapUsed : undefined;
 
     times.sort((a, b) => a - b);
 
@@ -40,7 +43,7 @@ export class BenchmarkRunner {
       avgMs: times.reduce((sum, t) => sum + t, 0) / times.length,
       p50Ms: times[Math.floor(times.length * 0.5)],
       p99Ms: times[Math.floor(times.length * 0.99)],
-      memoryDeltaBytes: memAfter - memBefore,
+      memoryDeltaBytes: memBefore !== undefined && memAfter !== undefined ? memAfter - memBefore : undefined,
     };
   }
 

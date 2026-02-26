@@ -40,7 +40,7 @@ describe('BloomFilterGossip', () => {
       await gossip.publishFilter();
       expect(publishFn).toHaveBeenCalledTimes(1);
       expect(publishFn).toHaveBeenCalledWith(
-        '/collabswarm/bloom-index/v1',
+        '/collabswarm/bloom-index/1.0.0',
         expect.any(Uint8Array),
       );
     });
@@ -116,6 +116,25 @@ describe('BloomFilterGossip', () => {
       const merged = gossip.getMergedFilter();
       expect(merged.has('local')).toBe(true);
       expect(merged.has('remote')).toBe(true);
+    });
+  });
+
+  describe('start without setPubSub', () => {
+    test('should throw if setPubSub() was not called', () => {
+      const fresh = new BloomFilterGossip({
+        filterSizeInBits: 1024,
+        numHashFunctions: 3,
+      });
+      expect(() => fresh.start()).toThrow('setPubSub() must be called before start()');
+    });
+  });
+
+  describe('onReceiveFilter with malformed data', () => {
+    test('should not crash on data with wrong length', () => {
+      expect(() => {
+        gossip.onReceiveFilter('bad-peer', new Uint8Array(10));
+      }).not.toThrow();
+      expect(gossip.peerFilters.size).toBe(0);
     });
   });
 

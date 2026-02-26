@@ -19,6 +19,12 @@ export class BloomFilterCRDT {
    * @param numHashFunctions Number of hash functions (default: 7).
    */
   constructor(sizeInBits: number = 65536, numHashFunctions: number = 7) {
+    if (!Number.isInteger(sizeInBits) || sizeInBits <= 0) {
+      throw new RangeError(`sizeInBits must be a positive integer, got ${sizeInBits}`);
+    }
+    if (!Number.isInteger(numHashFunctions) || numHashFunctions <= 0) {
+      throw new RangeError(`numHashFunctions must be a positive integer, got ${numHashFunctions}`);
+    }
     this._sizeInBits = sizeInBits;
     this._numHashFunctions = numHashFunctions;
     this._bits = new Uint8Array(Math.ceil(sizeInBits / 8));
@@ -84,6 +90,10 @@ export class BloomFilterCRDT {
    * Deserialize a filter from bytes.
    */
   static deserialize(data: Uint8Array, sizeInBits: number, numHashFunctions: number = 7): BloomFilterCRDT {
+    const expectedLength = Math.ceil(sizeInBits / 8);
+    if (data.length !== expectedLength) {
+      throw new Error(`Expected ${expectedLength} bytes for ${sizeInBits}-bit filter, got ${data.length}`);
+    }
     const filter = new BloomFilterCRDT(sizeInBits, numHashFunctions);
     filter._bits = new Uint8Array(data);
     return filter;

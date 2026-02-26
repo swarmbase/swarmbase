@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { IndexManager } from './index-manager';
 import { IndexDefinition, QueryOptions, QueryResult } from './types';
 
@@ -19,11 +19,7 @@ export function useIndexQuery(
     totalCount: 0,
   });
 
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
-
   useEffect(() => {
-    const serialized = JSON.stringify(options);
     const unsub = manager.subscribe(options, (newResult) => {
       setResult(newResult);
     });
@@ -48,15 +44,26 @@ export function useDefineIndexes(
 ): void {
   useEffect(() => {
     const names: string[] = [];
+    let cancelled = false;
 
-    for (const def of definitions) {
-      names.push(def.name);
-      manager.defineIndex(def).catch(() => {});
-    }
+    (async () => {
+      for (const def of definitions) {
+        if (cancelled) return;
+        names.push(def.name);
+        try {
+          await manager.defineIndex(def);
+        } catch (err) {
+          console.warn(`useDefineIndexes: failed to define index "${def.name}"`, err);
+        }
+      }
+    })();
 
     return () => {
+      cancelled = true;
       for (const name of names) {
-        manager.removeIndex(name).catch(() => {});
+        manager.removeIndex(name).catch((err) => {
+          console.warn(`useDefineIndexes: failed to remove index "${name}"`, err);
+        });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

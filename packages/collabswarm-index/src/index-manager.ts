@@ -136,7 +136,9 @@ export class IndexManager<DocType> {
     this._subscriptions.set(id, { options, callback });
 
     // Fire initial query
-    this.query(options).then(callback).catch(() => {});
+    this.query(options).then(callback).catch((err) => {
+      console.warn('IndexManager: initial subscription query failed', err);
+    });
 
     return () => {
       this._subscriptions.delete(id);
@@ -202,7 +204,9 @@ export class IndexManager<DocType> {
 
   private _notifySubscribers(): void {
     for (const [, sub] of this._subscriptions) {
-      this.query(sub.options).then(sub.callback).catch(() => {});
+      this.query(sub.options).then(sub.callback).catch((err) => {
+        console.warn('IndexManager: subscription notification query failed', err);
+      });
     }
   }
 }

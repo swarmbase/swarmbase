@@ -41,5 +41,3 @@ export { BloomFilterCRDT } from './bloom-filter-crdt';
 export { BloomFilterGossip, BLOOM_FILTER_TOPIC } from './bloom-filter-gossip';
 export type { PeerFilterState, BloomFilterGossipConfig } from './bloom-filter-gossip';
 
-// React hooks (requires react as peer dependency)
-export { useIndexQuery, useDefineIndexes } from './react';

@@ -39,7 +39,7 @@ describe('BloomFilterCRDT', () => {
 
   describe('false positive rate', () => {
     test('should maintain acceptable false positive rate with 10K terms', () => {
-      const filter = new BloomFilterCRDT(65536, 7); // 8 KB, 7 hashes
+      const filter = new BloomFilterCRDT(131072, 7); // 16 KB, 7 hashes
       const terms = Array.from({ length: 10000 }, (_, i) => `term_${i}`);
       for (const term of terms) {
         filter.add(term);
@@ -59,7 +59,7 @@ describe('BloomFilterCRDT', () => {
         }
       }
       const fpRate = falsePositives / testTerms.length;
-      // With 65536 bits, 7 hashes, 10K terms: theoretical FP rate ~1%
+      // With 131072 bits, 7 hashes, 10K terms: theoretical FP rate well under 1%
       // Allow up to 5% for statistical variance
       expect(fpRate).toBeLessThan(0.05);
     });
@@ -127,6 +127,17 @@ describe('BloomFilterCRDT', () => {
     });
   });
 
+  describe('constructor validation', () => {
+    test('should reject non-positive sizeInBits', () => {
+      expect(() => new BloomFilterCRDT(0, 3)).toThrow();
+      expect(() => new BloomFilterCRDT(-1, 3)).toThrow();
+    });
+    test('should reject non-positive numHashFunctions', () => {
+      expect(() => new BloomFilterCRDT(1024, 0)).toThrow();
+      expect(() => new BloomFilterCRDT(1024, -1)).toThrow();
+    });
+  });
+
   describe('serialize/deserialize', () => {
     test('should round-trip correctly', () => {
       const filter = new BloomFilterCRDT(1024, 3);
@@ -139,6 +150,10 @@ describe('BloomFilterCRDT', () => {
       expect(restored.has('hello')).toBe(true);
       expect(restored.has('world')).toBe(true);
       expect(restored.has('other')).toBe(false);
+    });
+
+    test('should reject data with wrong length', () => {
+      expect(() => BloomFilterCRDT.deserialize(new Uint8Array(10), 1024, 3)).toThrow();
     });
 
     test('should produce independent copy', () => {

@@ -51,23 +51,34 @@ export class CollabswarmIndexIntegration<DocType> {
     doc.subscribe(
       handlerId,
       (current: DocType) => {
-        this._manager.updateIndex(doc.documentPath, current).catch(() => {});
+        this._manager.updateIndex(doc.documentPath, current).catch((err) => {
+          console.warn(`CollabswarmIndexIntegration: failed to update index for ${doc.documentPath}`, err);
+        });
       },
       'all',
     );
 
     // Index current state immediately
-    this._manager.updateIndex(doc.documentPath, doc.document).catch(() => {});
+    this._manager.updateIndex(doc.documentPath, doc.document).catch((err) => {
+      console.warn(`CollabswarmIndexIntegration: failed to index initial state of ${doc.documentPath}`, err);
+    });
   }
 
   /**
    * Stop tracking a document. Unsubscribes from changes and removes from index.
    */
-  untrackDocument(doc: SubscribableDocument<DocType>): void {
-    const handlerId = INDEX_HANDLER_PREFIX + doc.documentPath;
-    doc.unsubscribe(handlerId);
-    this._trackedDocuments.delete(doc.documentPath);
-    this._manager.removeFromIndex(doc.documentPath).catch(() => {});
+  untrackDocument(documentPath: string): void;
+  untrackDocument(doc: SubscribableDocument<DocType>): void;
+  untrackDocument(docOrPath: SubscribableDocument<DocType> | string): void {
+    const path = typeof docOrPath === 'string' ? docOrPath : docOrPath.documentPath;
+    const tracked = this._trackedDocuments.get(path);
+    if (!tracked) return;
+    const handlerId = INDEX_HANDLER_PREFIX + path;
+    tracked.unsubscribe(handlerId);
+    this._trackedDocuments.delete(path);
+    this._manager.removeFromIndex(path).catch((err) => {
+      console.warn(`CollabswarmIndexIntegration: failed to remove ${path} from index`, err);
+    });
   }
 
   /**
@@ -78,7 +89,8 @@ export class CollabswarmIndexIntegration<DocType> {
   }
 
   /**
-   * Stop tracking all documents and close the index manager's storage.
+   * Stop tracking all documents and unsubscribe handlers.
+   * Does not close the index manager's storage.
    */
   async dispose(): Promise<void> {
     for (const [, doc] of this._trackedDocuments) {

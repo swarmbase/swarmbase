@@ -14,11 +14,19 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    *   Shorter tokens increase false positives but reduce information leakage.
    */
   constructor(tokenLengthBytes: number = 16) {
+    if (!Number.isInteger(tokenLengthBytes) || tokenLengthBytes <= 0 || tokenLengthBytes > 32) {
+      throw new RangeError(`tokenLengthBytes must be an integer between 1 and 32, got ${tokenLengthBytes}`);
+    }
     this._tokenLengthBytes = tokenLengthBytes;
   }
 
   async deriveFieldKey(masterKey: CryptoKey, fieldPath: string): Promise<CryptoKey> {
-    const rawMaster = await crypto.subtle.exportKey('raw', masterKey);
+    let rawMaster: ArrayBuffer;
+    try {
+      rawMaster = await crypto.subtle.exportKey('raw', masterKey);
+    } catch {
+      throw new Error('Master key must be extractable. Generate with extractable: true.');
+    }
     const hkdfKey = await crypto.subtle.importKey('raw', rawMaster, 'HKDF', false, ['deriveKey']);
     const encoder = new TextEncoder();
     return crypto.subtle.deriveKey(

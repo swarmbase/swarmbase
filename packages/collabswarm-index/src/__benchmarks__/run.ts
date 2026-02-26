@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import { join } from 'path';
 import { runAllScenarios } from './scenarios';
 import { BenchmarkRunner } from './benchmark-runner';
 import { BenchmarkResult } from '../types';
@@ -16,9 +16,12 @@ async function main() {
   }
 
   // Write JSON results
-  const outPath = path.join(__dirname, 'results.json');
+  const outPath = join(__dirname, 'results.json');
   fs.writeFileSync(outPath, JSON.stringify(allResults, null, 2));
   console.log(`\nResults written to ${outPath}`);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

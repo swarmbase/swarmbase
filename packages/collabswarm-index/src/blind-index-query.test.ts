@@ -58,4 +58,29 @@ describe('BlindIndexQuery', () => {
       expect(results).toHaveLength(1);
     });
   });
+
+  describe('compoundMatch', () => {
+    test('should find matching entries by compound key', async () => {
+      const compoundKey = await provider.deriveFieldKey(masterKey, 'name+age');
+      const token = await provider.computeCompoundToken(compoundKey, ['Alice', 30]);
+      const entries: BlindIndexEntry[] = [
+        { documentPath: '/users/1', blindIndexTokens: { 'name+age': token } },
+        { documentPath: '/users/2', blindIndexTokens: { 'name+age': await provider.computeCompoundToken(compoundKey, ['Bob', 25]) } },
+      ];
+
+      const results = await query.compoundMatch(compoundKey, 'name+age', ['Alice', 30], entries);
+      expect(results).toHaveLength(1);
+      expect(results[0].documentPath).toBe('/users/1');
+    });
+
+    test('should return empty when no compound match', async () => {
+      const compoundKey = await provider.deriveFieldKey(masterKey, 'name+age');
+      const entries: BlindIndexEntry[] = [
+        { documentPath: '/users/1', blindIndexTokens: { 'name+age': await provider.computeCompoundToken(compoundKey, ['Alice', 30]) } },
+      ];
+
+      const results = await query.compoundMatch(compoundKey, 'name+age', ['Bob', 25], entries);
+      expect(results).toHaveLength(0);
+    });
+  });
 });

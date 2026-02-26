@@ -3,6 +3,15 @@ import { IndexManager } from './index-manager';
 import { MemoryIndexStorage } from './memory-index-storage';
 import { IndexDefinition } from './types';
 
+async function waitFor(condition: () => Promise<boolean>, timeoutMs: number = 2000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await condition()) return;
+    await new Promise(r => setTimeout(r, 10));
+  }
+  throw new Error('waitFor timed out');
+}
+
 interface WikiArticle {
   title: string;
   content: string;
@@ -240,9 +249,7 @@ describe('IndexManager', () => {
         (result) => { results.push(result.totalCount); },
       );
 
-      // Wait for async initial query
-      await new Promise(r => setTimeout(r, 50));
-      expect(results.length).toBeGreaterThanOrEqual(1);
+      await waitFor(async () => results.length >= 1);
       expect(results[0]).toBe(1);
 
       unsub();
@@ -255,7 +262,7 @@ describe('IndexManager', () => {
         (result) => { results.push(result.totalCount); },
       );
 
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(async () => results.length >= 1);
 
       await manager.updateIndex('/articles/1', {
         title: 'New',
@@ -265,7 +272,7 @@ describe('IndexManager', () => {
         tags: [],
       });
 
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(async () => results.includes(1));
 
       // Should have initial (0) and updated (1) results
       expect(results).toContain(0);
@@ -281,7 +288,7 @@ describe('IndexManager', () => {
         (result) => { results.push(result.totalCount); },
       );
 
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(async () => results.length >= 1);
       unsub();
       const countAfterUnsub = results.length;
 
@@ -292,6 +299,7 @@ describe('IndexManager', () => {
         createdOn: '2024-01-01',
         tags: [],
       });
+      // Give time for any unexpected callback to fire
       await new Promise(r => setTimeout(r, 50));
 
       expect(results.length).toBe(countAfterUnsub);

@@ -71,6 +71,7 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
+import { bloomFilterUpdateV1 } from './wire-protocols';
 
 export * from './beekem';
 
@@ -137,6 +138,8 @@ export {
   // UCAN ACL
   UCANACL,
   UCANACLProvider,
+  // Wire protocols
+  bloomFilterUpdateV1,
 };
 
 // Re-export types
