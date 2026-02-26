@@ -115,11 +115,16 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
     const [doc] = applyChanges(this._acl, change);
     this._acl = doc;
   }
-  async check(publicKey: CryptoKey): Promise<boolean> {
+  // AutomergeACL uses binary access control (user is either in the list or not).
+  // The capability parameter is accepted for interface compatibility but ignored here;
+  // capability-based filtering is handled at the UCANACL wrapper level.
+  async check(publicKey: CryptoKey, capability?: string): Promise<boolean> {
     const hash = await serializeKey(publicKey);
     return this._acl.users && this._acl.users[hash] !== undefined;
   }
-  async users(): Promise<CryptoKey[]> {
+  // The capability parameter is accepted for interface compatibility but ignored here;
+  // capability-based filtering is handled at the UCANACL wrapper level.
+  async users(capability?: string): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
     return Promise.all(
       Object.keys(this._acl.users).map(
@@ -170,10 +175,21 @@ function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
 
 /**
  * Parse a cache key string back to a Uint8Array key ID.
+ * Validates UUID format with regex before parsing, and validates hex strings
+ * for correct format and even length.
+ *
+ * @throws {Error} If the cache key is not a valid UUID or hex string.
  */
 function cacheKeyToKeyId(cacheKey: string): Uint8Array {
-  if (cacheKey.includes('-') || cacheKey.length === 36) {
+  // UUID format: 8-4-4-4-12 hex digits with dashes
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  if (uuidRegex.test(cacheKey)) {
     return new Uint8Array(uuid.parse(cacheKey));
+  }
+  // Hex-encoded epoch ID: must be even-length and only hex characters
+  const hexRegex = /^[0-9a-fA-F]+$/;
+  if (!hexRegex.test(cacheKey) || cacheKey.length % 2 !== 0) {
+    throw new Error(`Invalid cache key format: expected UUID or even-length hex string, got "${cacheKey}"`);
   }
   const bytes = new Uint8Array(cacheKey.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -214,6 +230,17 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     return [keyIDBytes, key, keychainChanges];
   }
 
+  /**
+   * Add an epoch-based encryption key to the keychain.
+   *
+   * Epoch keys are used for key rotation: each epoch has a unique 32-byte ID
+   * and an associated AES-GCM symmetric key. The key is cached locally and
+   * appended to the Automerge keychain document for synchronization with peers.
+   *
+   * @param epochId - The 32-byte epoch identifier.
+   * @param key - The AES-GCM CryptoKey for this epoch.
+   * @returns The Automerge changes representing the keychain update for broadcasting.
+   */
   async addEpochKey(epochId: Uint8Array, key: CryptoKey): Promise<BinaryChange[]> {
     const epochIdHex = toHex(epochId);
     this._keyCache.set(epochIdHex, key);
@@ -272,6 +299,18 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
       this._keyCache.set(keyID, key);
     }
     return [keyIDBytes, key];
+  }
+  async currentKeyChange(): Promise<BinaryChange[]> {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
+      throw new Error("Can't get current key change from an empty keychain");
+    }
+
+    // Build a minimal Automerge doc containing only the current (most recent) key.
+    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length - 1];
+    const minimalDoc = change(from({ keys: [] as [string, string][] }), (doc) => {
+      doc.keys.push([keyID, serialized]);
+    });
+    return getAllChanges(minimalDoc);
   }
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
     const cacheKey = keyIdToCacheKey(keyIDBytes);

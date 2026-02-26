@@ -28,39 +28,43 @@ export interface UCANACLEntry {
  * - Concurrent mutual revocations: both parties are removed (safety-first)
  * - Concurrent grant + revoke of the same user: revoke wins
  * - Concurrent grants by different admins: both apply (CRDT merge)
+ *
+ * All access to the backing ACL should go through UCANACL methods to keep
+ * state consistent between the entries map, revoked set, and backing ACL.
  */
 export class UCANACL<ChangesType, PublicKey> implements ACL<ChangesType, PublicKey> {
   private _entries: Map<string, UCANACLEntry> = new Map(); // publicKeyBase64 -> entry
   private _revokedKeys: Set<string> = new Set(); // set of revoked public key base64 strings
 
-  // Delegate to a backing ACL for CRDT operations
+  // Private backing ACL — all access must go through UCANACL methods
+  // to keep _entries, _revokedKeys, and the backing ACL in sync.
   constructor(
-    private readonly _backingAcl: ACL<ChangesType, PublicKey>,
+    private readonly _backing: ACL<ChangesType, PublicKey>,
     private readonly _serializePublicKey: (key: PublicKey) => Promise<string>,
   ) {}
 
   async add(publicKey: PublicKey): Promise<ChangesType> {
-    return this._backingAcl.add(publicKey);
+    return this._backing.add(publicKey);
   }
 
   async remove(publicKey: PublicKey): Promise<ChangesType> {
     const keyBase64 = await this._serializePublicKey(publicKey);
     this._revokedKeys.add(keyBase64);
     this._entries.delete(keyBase64);
-    return this._backingAcl.remove(publicKey);
+    return this._backing.remove(publicKey);
   }
 
   current(): ChangesType {
-    return this._backingAcl.current();
+    return this._backing.current();
   }
 
   merge(changes: ChangesType): void {
-    this._backingAcl.merge(changes);
+    this._backing.merge(changes);
   }
 
   async check(publicKey: PublicKey, capability?: string): Promise<boolean> {
     if (!capability) {
-      return this._backingAcl.check(publicKey);
+      return this._backing.check(publicKey);
     }
 
     const keyBase64 = await this._serializePublicKey(publicKey);
@@ -73,7 +77,7 @@ export class UCANACL<ChangesType, PublicKey> implements ACL<ChangesType, PublicK
     const entry = this._entries.get(keyBase64);
     if (!entry) {
       // Fall back to backing ACL for basic membership check
-      return this._backingAcl.check(publicKey);
+      return this._backing.check(publicKey);
     }
 
     // Check if any held capability implies the required one
@@ -81,7 +85,7 @@ export class UCANACL<ChangesType, PublicKey> implements ACL<ChangesType, PublicK
   }
 
   async users(capability?: string): Promise<PublicKey[]> {
-    const allUsers = await this._backingAcl.users();
+    const allUsers = await this._backing.users();
 
     if (!capability) {
       return allUsers;
@@ -128,7 +132,7 @@ export class UCANACL<ChangesType, PublicKey> implements ACL<ChangesType, PublicK
       revoked: false,
     });
 
-    return this._backingAcl.add(publicKey);
+    return this._backing.add(publicKey);
   }
 
   /**

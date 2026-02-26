@@ -51,6 +51,15 @@ export interface Keychain<KeychainChange, DocumentKey> {
   getKey(keyID: Uint8Array): DocumentKey | undefined;
 
   /**
+   * Gets a block of change(s) describing only the current (most recent) key.
+   * Used for `current_only` history visibility where new members should only
+   * receive the current encryption key, not the full key history.
+   *
+   * @return A block of change(s) containing only the current key.
+   */
+  currentKeyChange(): Promise<KeychainChange>;
+
+  /**
    * Add an encryption key for a specific epoch.
    * Used when transitioning to epoch-based key management.
    *
@@ -58,5 +67,5 @@ export interface Keychain<KeychainChange, DocumentKey> {
    * @param key The encryption key for this epoch.
    * @return A block of change(s) describing the keychain addition.
    */
-  addEpochKey?(epochId: Uint8Array, key: DocumentKey): Promise<KeychainChange>;
+  addEpochKey(epochId: Uint8Array, key: DocumentKey): Promise<KeychainChange>;
 }

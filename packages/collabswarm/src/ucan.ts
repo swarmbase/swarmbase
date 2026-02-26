@@ -83,7 +83,7 @@ export async function createUCAN(
     proofs,
   };
 
-  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const payloadBytes = new TextEncoder().encode(canonicalPayloadString(payload));
   const signatureBytes = await crypto.subtle.sign(
     { name: 'ECDSA', hash: { name: 'SHA-384' } },
     issuerPrivateKey,
@@ -98,13 +98,16 @@ export async function createUCAN(
 
 /**
  * Verify a UCAN token's signature.
+ *
+ * Note: Uses SHA-384 to match ECDSA P-384 curve strength (not SHA-256,
+ * which is used in epoch.ts for HKDF — different purpose).
  */
 export async function verifyUCANSignature(
   ucan: UCAN,
   issuerPublicKey: CryptoKey,
 ): Promise<boolean> {
   const { signature, ...payload } = ucan;
-  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const payloadBytes = new TextEncoder().encode(canonicalPayloadString(payload));
   const signatureBytes = base64ToUint8Array(signature);
 
   return crypto.subtle.verify(
@@ -122,12 +125,26 @@ export async function verifyUCANSignature(
  * 2. The audience of each proof matches the issuer of the next
  * 3. Capabilities are properly attenuated (only narrowed, never broadened)
  * 4. The token is not expired
+ * 5. The chain does not exceed maxDepth or contain circular delegations
  */
 export async function validateUCANChain(
   ucan: UCAN,
   rootPublicKey: CryptoKey,
   resolvePublicKey: (base64Key: string) => Promise<CryptoKey>,
+  maxDepth: number = 10,
+  visited: Set<string> = new Set(),
 ): Promise<{ valid: boolean; error?: string }> {
+  if (maxDepth <= 0) {
+    return { valid: false, error: 'UCAN chain exceeds maximum depth' };
+  }
+
+  // Detect circular delegations using the serialized UCAN as fingerprint
+  const fingerprint = serializeUCAN(ucan);
+  if (visited.has(fingerprint)) {
+    return { valid: false, error: 'Circular delegation detected in UCAN chain' };
+  }
+  visited.add(fingerprint);
+
   // Check expiration
   if (ucan.expiration !== null && Date.now() / 1000 > ucan.expiration) {
     return { valid: false, error: 'UCAN has expired' };
@@ -174,8 +191,8 @@ export async function validateUCANChain(
       }
     }
 
-    // Recursively validate proof
-    const proofResult = await validateUCANChain(proof, rootPublicKey, resolvePublicKey);
+    // Recursively validate proof with decremented depth and shared visited set
+    const proofResult = await validateUCANChain(proof, rootPublicKey, resolvePublicKey, maxDepth - 1, visited);
     if (!proofResult.valid) {
       return proofResult;
     }
@@ -185,10 +202,52 @@ export async function validateUCANChain(
 }
 
 /**
- * Serialize a UCAN to a Base64 string.
+ * Serialize a UCAN to a Base64 string using deterministic key ordering.
+ * Header fields come first (version), then payload fields alphabetically,
+ * then signature last. This ensures identical UCANs always produce the
+ * same serialized output regardless of object key insertion order.
  */
 export function serializeUCAN(ucan: UCAN): string {
-  return uint8ArrayToBase64(new TextEncoder().encode(JSON.stringify(ucan)));
+  return uint8ArrayToBase64(new TextEncoder().encode(deterministicStringify(ucan)));
+}
+
+/**
+ * Canonical JSON serialization of a UCAN payload (without signature).
+ * Used for both signing and verification to ensure deterministic byte
+ * representation regardless of JS object key insertion order.
+ */
+function canonicalPayloadString(payload: UCANPayload): string {
+  const ordered: Record<string, unknown> = {
+    version: payload.version,
+    audience: payload.audience,
+    capabilities: payload.capabilities,
+    expiration: payload.expiration,
+    issuer: payload.issuer,
+    nonce: payload.nonce,
+    notBefore: payload.notBefore,
+    proofs: payload.proofs,
+  };
+  return JSON.stringify(ordered);
+}
+
+/**
+ * Deterministic JSON serialization for UCAN tokens (including signature).
+ * Serializes fields in a fixed order: version (header), then payload
+ * fields alphabetically, then signature.
+ */
+function deterministicStringify(ucan: UCAN): string {
+  const ordered: Record<string, unknown> = {
+    version: ucan.version,
+    audience: ucan.audience,
+    capabilities: ucan.capabilities,
+    expiration: ucan.expiration,
+    issuer: ucan.issuer,
+    nonce: ucan.nonce,
+    notBefore: ucan.notBefore,
+    proofs: ucan.proofs,
+    signature: ucan.signature,
+  };
+  return JSON.stringify(ordered);
 }
 
 /**

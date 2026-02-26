@@ -20,6 +20,15 @@
  * - The level of a node equals the number of trailing 1-bits in its index
  */
 
+/** Throws if the value is negative or not a safe integer. */
+function assertNonNegativeSafeInt(value: number, name: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      `${name} must be a non-negative safe integer, got ${value}`,
+    );
+  }
+}
+
 /** Returns true if the node index is a leaf (even index). */
 export function isLeaf(index: number): boolean {
   return (index & 1) === 0;
@@ -35,6 +44,7 @@ export function isInternal(index: number): boolean {
  * Leaves are level 0; the level equals the number of trailing 1-bits.
  */
 export function level(index: number): number {
+  assertNonNegativeSafeInt(index, 'index');
   if ((index & 1) === 0) return 0;
   let k = 0;
   while (((index >> k) & 1) === 1) {
@@ -50,6 +60,7 @@ function nodeWidth(numLeaves: number): number {
 
 /** Floor of log2(x). Returns the position of the most significant 1-bit. */
 function log2(x: number): number {
+  assertNonNegativeSafeInt(x, 'x');
   if (x === 0) return 0;
   let k = 0;
   while ((x >> k) !== 0) {
@@ -139,7 +150,7 @@ export function directPath(leafIndex: number, numLeaves: number): number[] {
 }
 
 /**
- * Copath: siblings of nodes on the direct path.
+ * Copath: siblings of the leaf and nodes on the direct path (excluding root).
  * These are the nodes whose public keys are needed to encrypt path updates.
  */
 export function copath(leafIndex: number, numLeaves: number): number[] {

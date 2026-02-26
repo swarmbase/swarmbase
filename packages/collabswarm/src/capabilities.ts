@@ -17,14 +17,26 @@ export const CAP_DOC_READ = '/doc/read';
 /** Access historical epoch keys */
 export const CAP_DOC_HISTORY = '/doc/history';
 
-/** All document capabilities in order of decreasing privilege */
+/**
+ * All document capabilities in order of decreasing privilege.
+ * Note: /doc/history is deliberately excluded because it is orthogonal to
+ * the read/write/admin hierarchy. History access is independent — a user
+ * can have read+history or read without history.
+ */
 export const CAPABILITY_HIERARCHY = [
   CAP_DOC_ADMIN,
   CAP_DOC_WRITE,
   CAP_DOC_READ,
 ] as const;
 
-export type DocumentCapability = typeof CAPABILITY_HIERARCHY[number] | typeof CAP_DOC_HISTORY;
+/** Capabilities that are not part of the hierarchy and require exact match. */
+export const NON_HIERARCHICAL_CAPABILITIES = [
+  CAP_DOC_HISTORY,
+] as const;
+
+export type DocumentCapability =
+  | typeof CAPABILITY_HIERARCHY[number]
+  | typeof NON_HIERARCHICAL_CAPABILITIES[number];
 
 /**
  * Check if a capability implies another capability.

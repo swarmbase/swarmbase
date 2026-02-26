@@ -266,13 +266,22 @@ function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
 
 /**
  * Parse a cache key string back to a Uint8Array key ID.
+ * Validates UUID format with regex before parsing, and validates hex strings
+ * for correct format and even length.
+ *
+ * @throws {Error} If the cache key is not a valid UUID or hex string.
  */
 function cacheKeyToKeyId(cacheKey: string): Uint8Array {
   // UUID format: 8-4-4-4-12 hex digits with dashes
-  if (cacheKey.includes('-') || cacheKey.length === 36) {
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  if (uuidRegex.test(cacheKey)) {
     return new Uint8Array(uuid.parse(cacheKey));
   }
-  // Hex-encoded epoch ID
+  // Hex-encoded epoch ID: must be even-length and only hex characters
+  const hexRegex = /^[0-9a-fA-F]+$/;
+  if (!hexRegex.test(cacheKey) || cacheKey.length % 2 !== 0) {
+    throw new Error(`Invalid cache key format: expected UUID or even-length hex string, got "${cacheKey}"`);
+  }
   const bytes = new Uint8Array(cacheKey.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(cacheKey.substring(i * 2, i * 2 + 2), 16);
@@ -314,6 +323,17 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     return [keyIDBytes, key, keychainChanges];
   }
 
+  /**
+   * Add an epoch-based encryption key to the keychain.
+   *
+   * Epoch keys are used for key rotation: each epoch has a unique 32-byte ID
+   * and an associated AES-GCM symmetric key. The key is cached locally and
+   * appended to the CRDT keychain for synchronization with peers.
+   *
+   * @param epochId - The 32-byte epoch identifier.
+   * @param key - The AES-GCM CryptoKey for this epoch.
+   * @returns The serialized keychain state as a Yjs update for broadcasting.
+   */
   async addEpochKey(epochId: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
     const epochIdHex = toHex(epochId);
     this._keyCache.set(epochIdHex, key);
@@ -372,30 +392,27 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     }
     return [keyIDBytes, key];
   }
+  async currentKeyChange(): Promise<Uint8Array> {
+    const yarr = this._keychain.getArray<[string, string]>('keys');
+    if (yarr.length === 0) {
+      throw new Error("Can't get current key change from an empty keychain");
+    }
+
+    // Build a minimal Y.Doc containing only the current (most recent) key.
+    const minimalDoc = new Doc();
+    const [keyID, serialized] = yarr.get(yarr.length - 1);
+    minimalDoc.getArray<[string, string]>('keys').push([[keyID, serialized]]);
+    return encodeStateAsUpdateV2(minimalDoc);
+  }
+  /**
+   * Synchronous cache lookup for a key by its ID bytes.
+   *
+   * This is intentionally a pure cache lookup. Use keys() or current() to
+   * ensure keys are imported and cached before calling getKey.
+   */
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
     const cacheKey = keyIdToCacheKey(keyIDBytes);
-    // Try exact match first.
-    let key = this._keyCache.get(cacheKey);
-    if (key) return key;
-
-    // If not cached, scan the keychain CRDT for a matching key and cache it.
-    const yarr = this._keychain.getArray<[string, string]>('keys');
-    for (let i = 0; i < yarr.length; i++) {
-      const [storedKeyID, serialized] = yarr.get(i);
-      if (storedKeyID === cacheKey) {
-        // Import the key synchronously isn't possible, so return undefined
-        // and let the caller handle the async import via keys() or current().
-        // However, we can schedule caching for next time.
-        deserializeKey({ name: 'AES-GCM', length: 256 }, [
-          'encrypt',
-          'decrypt',
-        ])(serialized).then((importedKey) => {
-          this._keyCache.set(storedKeyID, importedKey);
-        });
-        return undefined;
-      }
-    }
-    return undefined;
+    return this._keyCache.get(cacheKey);
   }
 }
 

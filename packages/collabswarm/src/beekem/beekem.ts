@@ -5,6 +5,7 @@ import {
   PathUpdate,
   PathNodeUpdate,
   BeeKEMWelcome,
+  WelcomeNodePublicKey,
 } from './types';
 import * as TreeMath from './tree-math';
 
@@ -14,6 +15,9 @@ const ECDH_ALGO = { name: 'ECDH', namedCurve: ECDH_CURVE };
 
 /** AES-GCM nonce length in bytes. */
 const AES_NONCE_LENGTH = 12;
+
+/** HKDF salt length in bytes. */
+const HKDF_SALT_LENGTH = 32;
 
 /** Cast Uint8Array to ArrayBuffer for WebCrypto API compatibility. */
 function toBuffer(data: Uint8Array): ArrayBuffer {
@@ -163,7 +167,19 @@ export class BeeKEM {
    */
   async processPathUpdate(update: PathUpdate): Promise<Uint8Array> {
     // Update the sender's leaf with their new public key
-    const senderNode = update.nodes.length > 0 ? update.nodes : [];
+    const senderLeafPublicKey = await crypto.subtle.importKey(
+      'raw',
+      toBuffer(update.senderLeafPublicKey),
+      ECDH_ALGO,
+      true,
+      [],
+    );
+    const senderLeaf: LeafNode = {
+      type: 'leaf',
+      index: update.senderLeafIndex,
+      publicKey: senderLeafPublicKey,
+    };
+    this._nodes.set(update.senderLeafIndex, senderLeaf);
 
     // Find where our copath intersects the update path
     const myCopath = TreeMath.copath(this._myLeafIndex, this._numLeaves);
@@ -174,8 +190,9 @@ export class BeeKEM {
 
     // The update path consists of internal nodes from the sender's leaf to root.
     // We need to find the first node in the update that is on our direct path.
-    // At that node, the encrypted private key is encrypted to the copath node
-    // (which is on our side of the tree, so we can decrypt it).
+    // At that node, the encrypted private key is encrypted to the resolution
+    // of the subtree on OUR side (the sender's copath), so we can decrypt it
+    // using a private key from our subtree.
     let decryptedPrivateKey: CryptoKey | null = null;
     let intersectionIdx = -1;
 
@@ -184,25 +201,26 @@ export class BeeKEM {
       const dpIdx = myDirectPath.indexOf(pathNode.nodeIndex);
       if (dpIdx >= 0) {
         // This update node is on our direct path.
-        // The encrypted private key is encrypted to the copath node at dpIdx.
-        const copathNodeIndex = myCopath[dpIdx];
-        const copathNode = this._nodes.get(copathNodeIndex);
-
-        if (copathNode?.privateKey) {
-          // We have the private key for the copath node; decrypt directly
-          decryptedPrivateKey = await this._decryptNodeKey(
-            pathNode.encryptedPrivateKey,
-            copathNode.privateKey,
-          );
-        } else if (copathNode?.publicKey) {
-          // We need to find a private key in our subtree that can resolve this
-          // Walk down from copathNode to find a node with a private key
-          const resolved = await this._resolveSubtreeKey(copathNodeIndex);
-          if (resolved) {
+        // The sender encrypted this node's private key to the resolution of
+        // the subtree on OUR side (the sender's copath at this level).
+        // Find the child of this node on our side and look for a private key.
+        const childOnOurSide = this._findChildOnOurSide(pathNode.nodeIndex);
+        if (childOnOurSide !== undefined) {
+          const childNode = this._nodes.get(childOnOurSide);
+          if (childNode?.privateKey) {
             decryptedPrivateKey = await this._decryptNodeKey(
               pathNode.encryptedPrivateKey,
-              resolved,
+              childNode.privateKey,
             );
+          } else {
+            // Walk down our subtree to find any node with a private key
+            const resolved = await this._resolveSubtreeKey(childOnOurSide);
+            if (resolved) {
+              decryptedPrivateKey = await this._decryptNodeKey(
+                pathNode.encryptedPrivateKey,
+                resolved,
+              );
+            }
           }
         }
 
@@ -291,10 +309,6 @@ export class BeeKEM {
       this._nodes.set(pathNode.nodeIndex, node);
     }
 
-    // Update the sender's leaf public key
-    // The sender's new leaf public key can be derived from the lowest update node
-    // For now we store it if available through the update
-
     return this.getRootSecret();
   }
 
@@ -307,17 +321,22 @@ export class BeeKEM {
     publicKey: CryptoKey,
   ): Promise<Uint8Array> {
     this._myLeafIndex = welcome.leafIndex;
-    // Determine numLeaves from the highest node index in the welcome
-    const maxNodeIndex = Math.max(
-      welcome.leafIndex,
-      ...welcome.pathKeys.map((pk) => pk.nodeIndex),
-    );
-    this._numLeaves = Math.max(
-      this._numLeaves,
-      TreeMath.nodeToLeafIndex(
-        maxNodeIndex % 2 === 0 ? maxNodeIndex : maxNodeIndex + 1,
-      ) + 1,
-    );
+
+    // Derive numLeaves conservatively from the leaf index and the max
+    // path key node indices. The leaf index gives us a lower bound;
+    // internal node indices on the path may imply a larger tree.
+    const leafBasedCount =
+      TreeMath.nodeToLeafIndex(welcome.leafIndex) + 1;
+    let maxFromPath = leafBasedCount;
+    for (const pk of welcome.pathKeys) {
+      // Each internal node index implies a minimum tree width
+      const implied =
+        TreeMath.nodeToLeafIndex(
+          pk.nodeIndex % 2 === 0 ? pk.nodeIndex : pk.nodeIndex + 1,
+        ) + 1;
+      if (implied > maxFromPath) maxFromPath = implied;
+    }
+    this._numLeaves = Math.max(this._numLeaves, maxFromPath);
 
     // Set up our leaf node
     const myLeaf: LeafNode = {
@@ -357,6 +376,41 @@ export class BeeKEM {
 
       // Use this node's private key to decrypt the next level
       currentPrivateKey = nodePrivateKey;
+    }
+
+    // Install all tree node public keys so we have the full tree state
+    for (const nodeEntry of welcome.treeNodePublicKeys) {
+      if (nodeEntry.publicKey) {
+        const pubKey = await crypto.subtle.importKey(
+          'raw',
+          toBuffer(nodeEntry.publicKey),
+          ECDH_ALGO,
+          true,
+          [],
+        );
+        const isLeaf = TreeMath.isLeaf(nodeEntry.nodeIndex);
+        const node: TreeNode = isLeaf
+          ? { type: 'leaf', index: nodeEntry.nodeIndex, publicKey: pubKey }
+          : { type: 'internal', index: nodeEntry.nodeIndex, publicKey: pubKey };
+        this._nodes.set(nodeEntry.nodeIndex, node);
+      } else {
+        const isLeaf = TreeMath.isLeaf(nodeEntry.nodeIndex);
+        const node: TreeNode = isLeaf
+          ? { type: 'leaf', index: nodeEntry.nodeIndex, publicKey: null }
+          : { type: 'internal', index: nodeEntry.nodeIndex, publicKey: null };
+        this._nodes.set(nodeEntry.nodeIndex, node);
+      }
+    }
+
+    // Verify tree hash matches the sender's snapshot
+    const computedHash = await this._computeTreeHash();
+    if (
+      computedHash.byteLength !== welcome.treeHash.byteLength ||
+      !computedHash.every((b, i) => b === welcome.treeHash[i])
+    ) {
+      throw new Error(
+        'Welcome tree hash mismatch: reconstructed tree does not match sender state',
+      );
     }
 
     return this.getRootSecret();
@@ -406,6 +460,40 @@ export class BeeKEM {
     return this._myLeafIndex;
   }
 
+  /**
+   * Remove blanked leaf nodes and their parent path nodes from the tree
+   * when an entire subtree is blanked. This reclaims memory for nodes
+   * that can never contribute to key derivation.
+   */
+  compact(): void {
+    // Find blanked leaf indices
+    const blankedLeaves: number[] = [];
+    for (let i = 0; i < this._numLeaves; i++) {
+      const nodeIndex = TreeMath.leafToNodeIndex(i);
+      const node = this._nodes.get(nodeIndex);
+      if (!node || node.publicKey === null) {
+        blankedLeaves.push(nodeIndex);
+      }
+    }
+
+    // For each blanked leaf, check if all nodes on its direct path
+    // are also blanked. If so, remove the leaf and those path nodes.
+    for (const leafIndex of blankedLeaves) {
+      if (this._numLeaves <= 1) break;
+      const path = TreeMath.directPath(leafIndex, this._numLeaves);
+      const allBlanked = path.every((idx) => {
+        const n = this._nodes.get(idx);
+        return !n || n.publicKey === null;
+      });
+      if (allBlanked) {
+        this._nodes.delete(leafIndex);
+        for (const idx of path) {
+          this._nodes.delete(idx);
+        }
+      }
+    }
+  }
+
   // ---- Private helpers ----
 
   /**
@@ -416,12 +504,22 @@ export class BeeKEM {
     pathUpdate: PathUpdate;
     rootSecret: Uint8Array;
   }> {
+    // Export our leaf public key for inclusion in the PathUpdate
+    const myLeaf = this._nodes.get(this._myLeafIndex);
+    if (!myLeaf?.publicKey) {
+      throw new Error('Cannot update path: no public key at our leaf');
+    }
+    const senderLeafPublicKey = new Uint8Array(
+      await crypto.subtle.exportKey('raw', myLeaf.publicKey),
+    );
+
     if (this._numLeaves === 1) {
       // Single member: no path to update
       const rootSecret = await this.getRootSecret();
       return {
         pathUpdate: {
           senderLeafIndex: this._myLeafIndex,
+          senderLeafPublicKey,
           nodes: [],
         },
         rootSecret,
@@ -483,6 +581,7 @@ export class BeeKEM {
     return {
       pathUpdate: {
         senderLeafIndex: this._myLeafIndex,
+        senderLeafPublicKey,
         nodes: pathNodes,
       },
       rootSecret,
@@ -533,21 +632,40 @@ export class BeeKEM {
       encryptionKey = node.publicKey;
     }
 
+    // Collect public keys for all tree nodes NOT already covered by pathKeys
+    // or the new member's own leaf. This allows the joiner to reconstruct the
+    // full tree state for hash verification and future path updates.
+    const pathKeyIndices = new Set(dp);
+    const treeNodePublicKeys: WelcomeNodePublicKey[] = [];
+    for (const [nodeIndex, node] of this._nodes) {
+      if (nodeIndex === newLeafIndex) continue; // skip new member's own leaf
+      if (pathKeyIndices.has(nodeIndex)) continue; // already in pathKeys
+      if (node.publicKey) {
+        const exported = new Uint8Array(
+          await crypto.subtle.exportKey('raw', node.publicKey),
+        );
+        treeNodePublicKeys.push({ nodeIndex, publicKey: exported });
+      } else {
+        treeNodePublicKeys.push({ nodeIndex, publicKey: null });
+      }
+    }
+
     // Tree hash for verification
     const treeHash = await this._computeTreeHash();
 
     return {
       leafIndex: newLeafIndex,
       pathKeys,
+      treeNodePublicKeys,
       treeHash,
     };
   }
 
   /**
    * Encrypt a CryptoKey's PKCS8 representation using ECIES:
-   * ECDH with an ephemeral key + AES-256-GCM.
+   * ECDH with an ephemeral key + HKDF (random salt) + AES-256-GCM.
    *
-   * Output format: [65 bytes ephemeral public key] [12 bytes nonce] [ciphertext + tag]
+   * Output format: [32 bytes salt] [65 bytes ephemeral public key] [12 bytes nonce] [ciphertext + tag]
    */
   private async _encryptNodeKey(
     keyToEncrypt: CryptoKey,
@@ -565,6 +683,9 @@ export class BeeKEM {
       256,
     );
 
+    // Random salt for HKDF domain separation
+    const salt = crypto.getRandomValues(new Uint8Array(HKDF_SALT_LENGTH));
+
     // Derive AES key from shared secret via HKDF
     const hkdfKey = await crypto.subtle.importKey(
       'raw',
@@ -577,7 +698,7 @@ export class BeeKEM {
       {
         name: 'HKDF',
         hash: 'SHA-256',
-        salt: new Uint8Array(32),
+        salt,
         info: new TextEncoder().encode('beekem-ecies'),
       },
       hkdfKey,
@@ -602,16 +723,21 @@ export class BeeKEM {
       await crypto.subtle.exportKey('raw', ephemeral.publicKey),
     );
 
-    // Concatenate: ephemeralPub || nonce || ciphertext
+    // Concatenate: salt || ephemeralPub || nonce || ciphertext
     const result = new Uint8Array(
-      ephemeralPub.byteLength + nonce.byteLength + ciphertext.byteLength,
+      salt.byteLength +
+        ephemeralPub.byteLength +
+        nonce.byteLength +
+        ciphertext.byteLength,
     );
-    result.set(ephemeralPub, 0);
-    result.set(nonce, ephemeralPub.byteLength);
-    result.set(
-      new Uint8Array(ciphertext),
-      ephemeralPub.byteLength + nonce.byteLength,
-    );
+    let offset = 0;
+    result.set(salt, offset);
+    offset += salt.byteLength;
+    result.set(ephemeralPub, offset);
+    offset += ephemeralPub.byteLength;
+    result.set(nonce, offset);
+    offset += nonce.byteLength;
+    result.set(new Uint8Array(ciphertext), offset);
 
     return result;
   }
@@ -624,11 +750,19 @@ export class BeeKEM {
     encryptedData: Uint8Array,
     recipientPrivateKey: CryptoKey,
   ): Promise<CryptoKey> {
-    // Parse: ephemeralPub (65 bytes) || nonce (12 bytes) || ciphertext
+    // Parse: salt (32 bytes) || ephemeralPub (65 bytes) || nonce (12 bytes) || ciphertext
+    let pos = 0;
+    const salt = encryptedData.slice(pos, pos + HKDF_SALT_LENGTH);
+    pos += HKDF_SALT_LENGTH;
+
     const ephPubLen = 65; // Uncompressed P-256 point
-    const ephemeralPubBytes = encryptedData.slice(0, ephPubLen);
-    const nonce = encryptedData.slice(ephPubLen, ephPubLen + AES_NONCE_LENGTH);
-    const ciphertext = encryptedData.slice(ephPubLen + AES_NONCE_LENGTH);
+    const ephemeralPubBytes = encryptedData.slice(pos, pos + ephPubLen);
+    pos += ephPubLen;
+
+    const nonce = encryptedData.slice(pos, pos + AES_NONCE_LENGTH);
+    pos += AES_NONCE_LENGTH;
+
+    const ciphertext = encryptedData.slice(pos);
 
     // Import ephemeral public key
     const ephemeralPublicKey = await crypto.subtle.importKey(
@@ -646,7 +780,7 @@ export class BeeKEM {
       256,
     );
 
-    // Derive AES key (same params as encrypt)
+    // Derive AES key (same params as encrypt, with the extracted salt)
     const hkdfKey = await crypto.subtle.importKey(
       'raw',
       sharedBits,
@@ -658,7 +792,7 @@ export class BeeKEM {
       {
         name: 'HKDF',
         hash: 'SHA-256',
-        salt: new Uint8Array(32),
+        salt,
         info: new TextEncoder().encode('beekem-ecies'),
       },
       hkdfKey,
@@ -768,22 +902,28 @@ export class BeeKEM {
   }
 
   /**
-   * Compute a SHA-256 hash over the tree's public keys for verification.
+   * Compute a deterministic SHA-256 hash over all tree node public keys.
+   * Format: for each non-null node, concatenate (nodeIndex as 4-byte BE || raw public key).
+   * Nodes are iterated in index order for determinism.
    */
   private async _computeTreeHash(): Promise<Uint8Array> {
     const parts: Uint8Array[] = [];
 
-    for (let i = 0; i < this._numLeaves; i++) {
-      const nodeIndex = TreeMath.leafToNodeIndex(i);
+    // Collect all node indices and sort for deterministic ordering
+    const sortedIndices = [...this._nodes.keys()].sort((a, b) => a - b);
+
+    for (const nodeIndex of sortedIndices) {
       const node = this._nodes.get(nodeIndex);
       if (node?.publicKey) {
+        // 4-byte big-endian node index
+        const indexBytes = new Uint8Array(4);
+        new DataView(indexBytes.buffer).setUint32(0, nodeIndex, false);
+        parts.push(indexBytes);
+
         const exported = new Uint8Array(
           await crypto.subtle.exportKey('raw', node.publicKey),
         );
         parts.push(exported);
-      } else {
-        // Blank leaf: push a zero byte
-        parts.push(new Uint8Array([0]));
       }
     }
 
