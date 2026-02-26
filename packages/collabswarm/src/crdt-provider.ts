@@ -44,4 +44,16 @@ export interface CRDTProvider<DocType, ChangesType, ChangeFnType> {
    * @param document CRDT document to inspect.
    */
   getHistory(document: DocType): ChangesType;
+
+  /**
+   * Get a compacted state snapshot of the document.
+   * Used for onboarding new members without replaying individual changes.
+   *
+   * For Yjs: `Y.encodeStateAsUpdate(doc)`
+   * For Automerge: `Automerge.save(doc)`
+   *
+   * @param document CRDT document to snapshot.
+   * @returns A snapshot that can be applied via `remoteChange()`.
+   */
+  getSnapshot?(document: DocType): ChangesType;
 }

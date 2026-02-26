@@ -7,6 +7,7 @@ import {
 import {
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
+  HistoryVisibility,
 } from './collabswarm-document';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { CollabswarmNode, defaultNodeConfig } from './collabswarm-node';
@@ -28,6 +29,49 @@ import {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
 } from './crdt-change-node';
+import {
+  EPOCH_ID_LENGTH,
+  NONCE_LENGTH,
+  EPOCH_SECRET_INFO,
+  ENCRYPTION_KEY_INFO,
+  Epoch,
+  EpochTransition,
+  toHex,
+  generateEpochId,
+  deriveEpochSecret,
+  deriveEncryptionKey,
+  createEpoch,
+  EpochManager,
+} from './epoch';
+import {
+  GroupKeyAgreementOutput,
+  WelcomeMessage,
+  MembershipProposal,
+  GroupKeyProvider,
+} from './group-key-provider';
+import {
+  CAP_DOC_ADMIN,
+  CAP_DOC_WRITE,
+  CAP_DOC_READ,
+  CAP_DOC_HISTORY,
+  CAPABILITY_HIERARCHY,
+  capabilityImplies,
+  isFieldCapability,
+  getFieldPath,
+} from './capabilities';
+import {
+  createUCAN,
+  verifyUCANSignature,
+  validateUCANChain,
+  serializeUCAN,
+  deserializeUCAN,
+} from './ucan';
+import {
+  UCANACL,
+  UCANACLProvider,
+} from './ucan-acl';
+
+export * from './beekem';
 
 export {
   ACL,
@@ -39,6 +83,7 @@ export {
   CollabswarmConfig,
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
+  HistoryVisibility,
   CollabswarmNode,
   CRDTChangeBlock,
   CRDTChangeNodeKind,
@@ -48,6 +93,22 @@ export {
   CRDTSyncMessage,
   CRDTProvider,
   ChangesSerializer,
+  EPOCH_ID_LENGTH,
+  NONCE_LENGTH,
+  EPOCH_SECRET_INFO,
+  ENCRYPTION_KEY_INFO,
+  Epoch,
+  EpochTransition,
+  toHex,
+  generateEpochId,
+  deriveEpochSecret,
+  deriveEncryptionKey,
+  createEpoch,
+  EpochManager,
+  GroupKeyAgreementOutput,
+  WelcomeMessage,
+  MembershipProposal,
+  GroupKeyProvider,
   Keychain,
   KeychainProvider,
   SyncMessageSerializer,
@@ -56,4 +117,27 @@ export {
   defaultConfig,
   defaultBootstrapConfig,
   defaultNodeConfig,
+  // Capabilities
+  CAP_DOC_ADMIN,
+  CAP_DOC_WRITE,
+  CAP_DOC_READ,
+  CAP_DOC_HISTORY,
+  CAPABILITY_HIERARCHY,
+  capabilityImplies,
+  isFieldCapability,
+  getFieldPath,
+  // UCAN
+  createUCAN,
+  verifyUCANSignature,
+  validateUCANChain,
+  serializeUCAN,
+  deserializeUCAN,
+  // UCAN ACL
+  UCANACL,
+  UCANACLProvider,
 };
+
+// Re-export types
+export type { DocumentCapability } from './capabilities';
+export type { UCAN, UCANCapability, UCANPayload } from './ucan';
+export type { UCANACLEntry } from './ucan-acl';

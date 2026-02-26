@@ -124,6 +124,15 @@ export interface CollabswarmConfig {
    * Prefix to apply to Libp2p PubSub topics for documents.
    */
   pubsubDocumentPublishPath: string;
+
+  /**
+   * Enable GossipSub topic validators for authorization enforcement.
+   * When enabled, messages from unauthorized peers are rejected at the
+   * transport layer (P4 penalty in peer scoring).
+   *
+   * Default: false (for backward compatibility).
+   */
+  enableTopicValidators?: boolean;
 }
 
 /**

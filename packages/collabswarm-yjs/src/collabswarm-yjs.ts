@@ -243,6 +243,43 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   }
 }
 
+/**
+ * Convert a Uint8Array to a hex string for use as a cache key.
+ */
+function toHex(bytes: Uint8Array): string {
+  const hexChars: string[] = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    hexChars[i] = bytes[i].toString(16).padStart(2, '0');
+  }
+  return hexChars.join('');
+}
+
+/**
+ * Convert a key ID (either 16-byte UUID or 32-byte epoch ID) to a cache key string.
+ */
+function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
+  if (keyIDBytes.length === 16) {
+    return uuid.stringify(keyIDBytes);
+  }
+  return toHex(keyIDBytes);
+}
+
+/**
+ * Parse a cache key string back to a Uint8Array key ID.
+ */
+function cacheKeyToKeyId(cacheKey: string): Uint8Array {
+  // UUID format: 8-4-4-4-12 hex digits with dashes
+  if (cacheKey.includes('-') || cacheKey.length === 36) {
+    return new Uint8Array(uuid.parse(cacheKey));
+  }
+  // Hex-encoded epoch ID
+  const bytes = new Uint8Array(cacheKey.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(cacheKey.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   // TODO: Replace this with a LRU cache of bounded size.
   private readonly _keyCache = new Map<string, CryptoKey>();
@@ -276,6 +313,17 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     const keychainChanges = encodeStateAsUpdateV2(this._keychain);
     return [keyIDBytes, key, keychainChanges];
   }
+
+  async addEpochKey(epochId: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
+    const epochIdHex = toHex(epochId);
+    this._keyCache.set(epochIdHex, key);
+    const serialized = await serializeKey(key);
+    this._keychain
+      .getArray<[string, string]>('keys')
+      .push([[epochIdHex, serialized]]);
+    return encodeStateAsUpdateV2(this._keychain);
+  }
+
   history(): Uint8Array {
     return encodeStateAsUpdateV2(this._keychain);
   }
@@ -287,7 +335,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     const promises: Promise<[Uint8Array, CryptoKey]>[] = [];
     for (let i = 0; i < yarr.length; i++) {
       const [keyID, serialized] = yarr.get(i);
-      const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+      const keyIDBytes = cacheKeyToKeyId(keyID);
       promises.push(
         (async () => {
           let key = this._keyCache.get(keyID);
@@ -296,6 +344,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
               'encrypt',
               'decrypt',
             ])(serialized);
+            this._keyCache.set(keyID, key);
           }
           return [keyIDBytes, key] as [Uint8Array, CryptoKey];
         })(),
@@ -311,7 +360,7 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     }
 
     const [keyID, serialized] = yarr.get(yarr.length - 1);
-    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    const keyIDBytes = cacheKeyToKeyId(keyID);
 
     let key = this._keyCache.get(keyID);
     if (!key) {
@@ -319,12 +368,34 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
         'encrypt',
         'decrypt',
       ])(serialized);
+      this._keyCache.set(keyID, key);
     }
     return [keyIDBytes, key];
   }
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
-    const keyID = uuid.stringify(keyIDBytes);
-    return this._keyCache.get(keyID);
+    const cacheKey = keyIdToCacheKey(keyIDBytes);
+    // Try exact match first.
+    let key = this._keyCache.get(cacheKey);
+    if (key) return key;
+
+    // If not cached, scan the keychain CRDT for a matching key and cache it.
+    const yarr = this._keychain.getArray<[string, string]>('keys');
+    for (let i = 0; i < yarr.length; i++) {
+      const [storedKeyID, serialized] = yarr.get(i);
+      if (storedKeyID === cacheKey) {
+        // Import the key synchronously isn't possible, so return undefined
+        // and let the caller handle the async import via keys() or current().
+        // However, we can schedule caching for next time.
+        deserializeKey({ name: 'AES-GCM', length: 256 }, [
+          'encrypt',
+          'decrypt',
+        ])(serialized).then((importedKey) => {
+          this._keyCache.set(storedKeyID, importedKey);
+        });
+        return undefined;
+      }
+    }
+    return undefined;
   }
 }
 
@@ -335,6 +406,8 @@ export class YjsKeychainProvider
     return new YjsKeychain();
   }
 
-  // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
+  // UUID v4 is 16 bytes. Epoch IDs are 32 bytes.
+  // Use 16 for backward compatibility; will be updated to 32 when
+  // epoch-based key management is fully activated.
   keyIDLength = 16;
 }

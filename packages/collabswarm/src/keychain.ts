@@ -1,6 +1,10 @@
 /**
  * A keychain contains a CollabswarmDocument's encryption keys.
  *
+ * Keys are identified by a key ID. In the legacy model, key IDs are 16-byte
+ * UUID v4 values. In the epoch-based model, key IDs are 32-byte SHA-256
+ * hashes (epoch IDs).
+ *
  * @typeParam KeychainChange Type of a block of change(s) describing edits made to the document keychain.
  * @typeParam DocumentKey Type of a document encryption key.
  */
@@ -41,8 +45,18 @@ export interface Keychain<KeychainChange, DocumentKey> {
   /**
    * Looks up a document key by its ID.
    *
-   * @param keyID An identifier for a document key.
+   * @param keyID An identifier for a document key (16-byte UUID or 32-byte epoch ID).
    * @return The requested document key.
    */
   getKey(keyID: Uint8Array): DocumentKey | undefined;
+
+  /**
+   * Add an encryption key for a specific epoch.
+   * Used when transitioning to epoch-based key management.
+   *
+   * @param epochId The 32-byte epoch ID.
+   * @param key The encryption key for this epoch.
+   * @return A block of change(s) describing the keychain addition.
+   */
+  addEpochKey?(epochId: Uint8Array, key: DocumentKey): Promise<KeychainChange>;
 }

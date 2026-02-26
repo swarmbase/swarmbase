@@ -147,6 +147,41 @@ export type AutomergeKeychainDoc = Doc<{
   keys: [string, string][];
 }>;
 
+/**
+ * Convert a Uint8Array to a hex string for use as a cache key.
+ */
+function toHex(bytes: Uint8Array): string {
+  const hexChars: string[] = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    hexChars[i] = bytes[i].toString(16).padStart(2, '0');
+  }
+  return hexChars.join('');
+}
+
+/**
+ * Convert a key ID (either 16-byte UUID or 32-byte epoch ID) to a cache key string.
+ */
+function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
+  if (keyIDBytes.length === 16) {
+    return uuid.stringify(keyIDBytes);
+  }
+  return toHex(keyIDBytes);
+}
+
+/**
+ * Parse a cache key string back to a Uint8Array key ID.
+ */
+function cacheKeyToKeyId(cacheKey: string): Uint8Array {
+  if (cacheKey.includes('-') || cacheKey.length === 36) {
+    return new Uint8Array(uuid.parse(cacheKey));
+  }
+  const bytes = new Uint8Array(cacheKey.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(cacheKey.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   // TODO: Replace this with a LRU cache of bounded size.
   private readonly _keyCache = new Map<string, CryptoKey>();
@@ -178,6 +213,22 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     this._keychain = keychainNew;
     return [keyIDBytes, key, keychainChanges];
   }
+
+  async addEpochKey(epochId: Uint8Array, key: CryptoKey): Promise<BinaryChange[]> {
+    const epochIdHex = toHex(epochId);
+    this._keyCache.set(epochIdHex, key);
+    const serialized = await serializeKey(key);
+    const keychainNew = change(this._keychain, (doc) => {
+      if (!doc.keys) {
+        doc.keys = [];
+      }
+      doc.keys.push([epochIdHex, serialized]);
+    });
+    const keychainChanges = getChanges(this._keychain, keychainNew);
+    this._keychain = keychainNew;
+    return keychainChanges;
+  }
+
   history(): BinaryChange[] {
     return getAllChanges(this._keychain);
   }
@@ -191,25 +242,26 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     }
     return await Promise.all(
       this._keychain.keys.map(async ([keyID, serialized]) => {
-        const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+        const keyIDBytes = cacheKeyToKeyId(keyID);
         let key = this._keyCache.get(keyID);
         if (!key) {
           key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
             'encrypt',
             'decrypt',
           ])(serialized);
+          this._keyCache.set(keyID, key);
         }
         return [keyIDBytes, key] as [Uint8Array, CryptoKey];
       }),
     );
   }
   async current(): Promise<[Uint8Array, CryptoKey]> {
-    if (!this._keychain.keys) {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
       throw new Error("Can't get an empty keychain's current value");
     }
 
-    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length];
-    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length - 1];
+    const keyIDBytes = cacheKeyToKeyId(keyID);
 
     let key = this._keyCache.get(keyID);
     if (!key) {
@@ -217,12 +269,13 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
         'encrypt',
         'decrypt',
       ])(serialized);
+      this._keyCache.set(keyID, key);
     }
     return [keyIDBytes, key];
   }
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
-    const keyID = uuid.stringify(keyIDBytes);
-    return this._keyCache.get(keyID);
+    const cacheKey = keyIdToCacheKey(keyIDBytes);
+    return this._keyCache.get(cacheKey);
   }
 }
 
@@ -233,7 +286,9 @@ export class AutomergeKeychainProvider
     return new AutomergeKeychain();
   }
 
-  // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
+  // UUID v4 is 16 bytes. Epoch IDs are 32 bytes.
+  // Use 16 for backward compatibility; will be updated to 32 when
+  // epoch-based key management is fully activated.
   keyIDLength = 16;
 }
 
