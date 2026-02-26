@@ -37,7 +37,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
         },
         transports: [
           circuitRelayTransport({
-            discoverRelays: 1,
+            reservationConcurrency: 1,
           }),
           webSockets({ filter: all }),
           webRTC(),
@@ -65,7 +65,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
           }),
         },
         // https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md#configuring-connection-gater
-        connectionGater: { denyDialMultiaddr: async (...args) => false },
+        connectionGater: { denyDialMultiaddr: async () => false },
       },
     },
 
@@ -103,7 +103,8 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
 
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
-  } as CollabswarmConfig);
+  // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
+  } as unknown as CollabswarmConfig);
 
 /**
  * CollabswarmConfig is a settings object for collabswarm.

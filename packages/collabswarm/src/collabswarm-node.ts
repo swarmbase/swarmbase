@@ -28,8 +28,8 @@ import { all } from '@libp2p/websockets/filters';
 import { webTransport } from '@libp2p/webtransport';
 import { IDBBlockstore } from 'blockstore-idb';
 import { IDBDatastore } from 'datastore-idb';
-import { ipnsSelector } from 'ipns/dist/src/selector';
-import { ipnsValidator } from 'ipns/dist/src/validator';
+import { ipnsSelector } from 'ipns/selector';
+import { ipnsValidator } from 'ipns/validator';
 import { bitswap } from '@helia/block-brokers';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
@@ -47,7 +47,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
         },
         transports: [
           circuitRelayTransport({
-            discoverRelays: 1,
+            reservationConcurrency: 1,
           }),
           webSockets({ filter: all }),
           webRTC(),
@@ -75,7 +75,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
           }),
         },
         // https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md#configuring-connection-gater
-        connectionGater: { denyDialMultiaddr: async (...args) => false },
+        connectionGater: { denyDialMultiaddr: async () => false },
       },
     },
     // ipfs: {
@@ -99,7 +99,8 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
 
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
-  } as CollabswarmConfig);
+  // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
+  } as unknown as CollabswarmConfig);
 
 export class CollabswarmNode<
   DocType,
@@ -213,7 +214,7 @@ export class CollabswarmNode<
     fs.writeFile(
       clientConfigFile,
       `REACT_APP_CLIENT_CONFIG='${JSON.stringify(clientConfig)}'`,
-      (err: any) => {
+      (err: NodeJS.ErrnoException | null) => {
         if (err) {
           console.error(`Failed to write ${clientConfigFile}:`, err);
         } else {
@@ -286,9 +287,11 @@ export class CollabswarmNode<
         console.error('Error:', err);
       }
     };
+    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
       'message',
-      this._docPublishHandler,
+      this._docPublishHandler as EventListener,
     );
     this.swarm.ipfsNode.libp2p.services.pubsub.subscribe(
       this.config.pubsubDocumentPublishPath,
@@ -303,9 +306,10 @@ export class CollabswarmNode<
       this.swarm.ipfsNode.libp2p.services.pubsub.unsubscribe(
         this.config.pubsubDocumentPublishPath,
       );
+      // Cast required: see addEventListener comment above
       this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
         'message',
-        this._docPublishHandler,
+        this._docPublishHandler as EventListener,
       );
     }
     if (this._subscriptions) {

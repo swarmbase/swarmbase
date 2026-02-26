@@ -32,10 +32,13 @@ export type CollabswarmContextOpenResult<
   writers?: PublicKey[];
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Module-level singletons must use `any` because
+// they store results from multiple generic instantiations of useCollabswarmDocumentState.
 const openTasks = new Map<
   string,
   Promise<CollabswarmContextOpenResult<any, any, any, any, any, any>>
 >();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- See above.
 const openTaskResults = new Map<
   string,
   CollabswarmContextOpenResult<any, any, any, any, any, any>

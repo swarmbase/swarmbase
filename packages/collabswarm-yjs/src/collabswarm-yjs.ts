@@ -85,7 +85,15 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     });
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<Uint8Array> {
-    const deserialized = this.deserialize(changes);
+    const raw = this.deserialize(changes);
+    if (
+      typeof raw !== 'object' || raw === null ||
+      typeof (raw as Record<string, unknown>).changes !== 'string' ||
+      typeof (raw as Record<string, unknown>).nonce !== 'string'
+    ) {
+      throw new Error('Invalid change block: expected {changes: string, nonce: string}');
+    }
+    const deserialized = raw as { changes: string; nonce: string };
     return {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
@@ -104,15 +112,25 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     );
   }
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
-    const deserialized = this.deserialize(this.decode(message));
+    const raw = this.deserialize(this.decode(message));
+    if (typeof raw !== 'object' || raw === null || typeof (raw as Record<string, unknown>).documentId !== 'string') {
+      throw new Error('Invalid sync message: expected object with documentId string');
+    }
+    const deserialized = raw as {
+      documentId: string;
+      changeId?: string;
+      changes?: iCRDTChangeNode;
+      keychainChanges?: string;
+      signature?: string;
+    };
     return {
       ...deserialized,
       changes:
         deserialized.changes &&
         deserializeUint8ArrayInMerkleDAG(deserialized.changes),
-      keychainChanges:
-        deserialized.keychainChanges &&
-        Base64.toUint8Array(deserialized.keychainChanges),
+      keychainChanges: deserialized.keychainChanges
+        ? Base64.toUint8Array(deserialized.keychainChanges)
+        : undefined,
     };
   }
 }
@@ -169,7 +187,8 @@ export function deserializeKey(
 ): (publicKey: string) => Promise<CryptoKey> {
   return (publicKey: string) => {
     const bytes = Base64.toUint8Array(publicKey);
-    return crypto.subtle.importKey('raw', bytes, algorithm, true, keyUsages);
+    // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
+    return crypto.subtle.importKey('raw', bytes as Uint8Array<ArrayBuffer>, algorithm, true, keyUsages);
   };
 }
 

@@ -1,6 +1,7 @@
 import BufferList from 'bl';
+import type { Uint8ArrayList } from 'uint8arraylist';
 
-export function shuffleArray<T = any>(array: T[]) {
+export function shuffleArray<T>(array: T[]) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
@@ -30,17 +31,17 @@ export function concatUint8Arrays(...arrs: Uint8Array[]): Uint8Array {
 }
 
 // HACK:
-export function isBufferList(input: Uint8Array | BufferList): boolean {
+export function isBufferList(input: Uint8Array | Uint8ArrayList | BufferList): boolean {
   return !!Object.getOwnPropertySymbols(input).find((s) => {
     return String(s) === 'Symbol(BufferList)';
   });
 }
 
 export async function readUint8Iterable(
-  iterable: AsyncIterable<Uint8Array | BufferList>,
+  iterable: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,
 ): Promise<Uint8Array> {
   let length = 0;
-  const chunks = [] as (Uint8Array | BufferList)[];
+  const chunks = [] as (Uint8Array | Uint8ArrayList | BufferList)[];
   for await (const chunk of iterable) {
     if (chunk) {
       chunks.push(chunk);
@@ -56,9 +57,11 @@ export async function readUint8Iterable(
       for (let i = 0; i < bufferList.length; i++) {
         assembled.set([bufferList.readUInt8(i)], index + i);
       }
+    } else if (chunk instanceof Uint8Array) {
+      assembled.set(chunk, index);
     } else {
-      const arr = chunk as Uint8Array;
-      assembled.set(arr, index);
+      // Uint8ArrayList — use subarray() to get a contiguous Uint8Array
+      assembled.set((chunk as Uint8ArrayList).subarray(), index);
     }
     index += chunk.length;
   }
@@ -88,9 +91,10 @@ export async function importHmacKey(
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
   hash = 'SHA-512',
 ) {
+  // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
   const key = await crypto.subtle.importKey(
     format,
-    keyData,
+    keyData as Uint8Array<ArrayBuffer>,
     {
       name: 'HMAC',
       hash,
@@ -106,7 +110,8 @@ export async function importSymmetricKey(
   keyData: Uint8Array,
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
 ) {
-  const key = await crypto.subtle.importKey(format, keyData, 'AES-GCM', true, [
+  // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
+  const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, 'AES-GCM', true, [
     'encrypt',
     'decrypt',
   ]);

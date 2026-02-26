@@ -12,10 +12,10 @@ export class JSONSerializer<ChangesType>
     SyncMessageSerializer<ChangesType>,
     LoadMessageSerializer
 {
-  serialize(message: any): string {
+  serialize(message: unknown): string {
     return JSON.stringify(message);
   }
-  deserialize(message: string): any {
+  deserialize(message: string): unknown {
     try {
       return JSON.parse(message);
     } catch (err) {
@@ -37,7 +37,8 @@ export class JSONSerializer<ChangesType>
     return this.encode(this.serialize(changes));
   }
   deserializeChanges(changes: Uint8Array): ChangesType {
-    return this.deserialize(this.decode(changes));
+    // Shape validated by subclass overrides; base class trusts JSON.parse output matches ChangesType
+    return this.deserialize(this.decode(changes)) as ChangesType;
   }
   serializeChangeBlock(changes: CRDTChangeBlock<ChangesType>): string {
     return this.serialize({
@@ -46,7 +47,11 @@ export class JSONSerializer<ChangesType>
     });
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<ChangesType> {
-    const deserialized = this.deserialize(changes);
+    // Shape validated by subclass overrides; base class trusts JSON.parse output matches ChangesType
+    const deserialized = this.deserialize(changes) as {
+      changes: ChangesType;
+      nonce: string;
+    };
     return {
       ...deserialized,
       nonce: Base64.toUint8Array(deserialized.nonce),
@@ -56,12 +61,14 @@ export class JSONSerializer<ChangesType>
     return this.encode(this.serialize(message));
   }
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<ChangesType> {
-    return this.deserialize(this.decode(message));
+    // Shape validated by subclass overrides; base class trusts JSON.parse output matches CRDTSyncMessage
+    return this.deserialize(this.decode(message)) as CRDTSyncMessage<ChangesType>;
   }
   serializeLoadRequest(message: CRDTLoadRequest): Uint8Array {
     return this.encode(this.serialize(message));
   }
   deserializeLoadRequest(message: Uint8Array): CRDTLoadRequest {
-    return this.deserialize(this.decode(message));
+    // Shape validated by subclass overrides; base class trusts JSON.parse output matches CRDTLoadRequest
+    return this.deserialize(this.decode(message)) as CRDTLoadRequest;
   }
 }

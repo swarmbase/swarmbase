@@ -67,7 +67,8 @@ export function deserializeKey(
 ): (publicKey: string) => Promise<CryptoKey> {
   return (publicKey: string) => {
     const bytes = Base64.toUint8Array(publicKey);
-    return crypto.subtle.importKey('raw', bytes, algorithm, true, keyUsages);
+    // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
+    return crypto.subtle.importKey('raw', bytes as Uint8Array<ArrayBuffer>, algorithm, true, keyUsages);
   };
 }
 

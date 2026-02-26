@@ -1,0 +1,46 @@
+services:
+  # Circuit Relay V2 server - enables browser-to-browser WebRTC signaling
+  relay:
+    build:
+      context: ./relay-server
+      dockerfile: Dockerfile
+    ports:
+      - "9001:9001"
+      - "9002:9002"
+    volumes:
+      - shared-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Browser test app instance 1
+  test-app-1:
+    build:
+      context: ./e2e/test-app
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    volumes:
+      - shared-data:/shared:ro
+    depends_on:
+      relay:
+        condition: service_healthy
+
+  # Browser test app instance 2
+  test-app-2:
+    build:
+      context: ./e2e/test-app
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3000"
+    volumes:
+      - shared-data:/shared:ro
+    depends_on:
+      relay:
+        condition: service_healthy
+
+volumes:
+  shared-data:

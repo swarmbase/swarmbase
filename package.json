@@ -10,10 +10,16 @@
     "examples/wiki-swarm",
     "examples/password-manager"
   ],
+  "resolutions": {
+    "@peculiar/asn1-schema": "^2.6.0"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.58.2"
   },
   "scripts": {
-    "test:e2e": "playwright test"
+    "build": "yarn workspaces foreach -Atpvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' run tsc",
+    "test": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-redux' run test",
+    "test:e2e": "playwright test",
+    "test:integration": "playwright test --config=playwright.integration.config.ts"
   }
 }

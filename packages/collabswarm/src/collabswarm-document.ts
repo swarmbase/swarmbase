@@ -5,7 +5,7 @@
  *   Document keys are attached to a single document.
  */
 
-import pipe from 'it-pipe';
+import { pipe } from 'it-pipe';
 import { Libp2p } from 'libp2p';
 import { Collabswarm } from './collabswarm';
 import {
@@ -35,6 +35,7 @@ import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
 import * as uuid from 'uuid';
 import BufferList from 'bl';
+import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
@@ -143,7 +144,7 @@ export class CollabswarmDocument<
   } = {};
 
   public get libp2p(): Libp2p {
-    return (this.swarm.ipfsNode as any).libp2p;
+    return this.swarm.ipfsNode.libp2p;
   }
 
   public get protocolLoadV1() {
@@ -572,7 +573,7 @@ export class CollabswarmDocument<
     console.log(`received ${this.protocolLoadV1} dial`);
     pipe(
       stream.source,
-      async (source: AsyncIterable<Uint8Array | BufferList>) => {
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
         const assembledRequest = await readUint8Iterable(source);
         const message =
           this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
@@ -649,11 +650,13 @@ export class CollabswarmDocument<
         // Return a sync message.
         // return [assembled];
         // await stream.sink(assembled);
-        await stream.sink([assembled] as any);
+        await stream.sink([assembled] as Iterable<Uint8Array>);
         // }, stream.sink);
         return [];
       },
-    );
+    ).catch((err: unknown) => {
+      console.error(`Error handling ${this.protocolLoadV1} load request:`, err);
+    });
   };
 
   private async _ensureCurrentUserCanWrite() {
@@ -728,7 +731,7 @@ export class CollabswarmDocument<
       );
       await pipe(
         stream.source,
-        async (source: AsyncIterable<Uint8Array | BufferList>) => {
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           console.log(`awaiting ${this.protocolLoadV1} response...`, source);
           const assembled = await readUint8Iterable(source);
           const message =
@@ -803,7 +806,9 @@ export class CollabswarmDocument<
 
     const pubsub = this.swarm.ipfsNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
-    pubsub.addEventListener('message', this._pubsubHandler);
+    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
+    pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this.documentPath);
 
     // For now we support multiple protocols, one per document path.
@@ -834,7 +839,8 @@ export class CollabswarmDocument<
       const pubsub = this.swarm.ipfsNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(this.documentPath);
-      pubsub.removeEventListener('message', this._pubsubHandler);
+      // Cast required: see addEventListener comment above
+      pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
     }
   }
 

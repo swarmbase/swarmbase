@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "tsc": "tsc -b",
-    "prepublishOnly": "npm run tsc",
+    "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
   },
@@ -28,7 +28,7 @@
     "redux": "^5.0.1",
     "redux-thunk": "^3.1.0",
     "ts-jest": "^29.2.5",
-    "typescript": "^4.9.5"
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
@@ -44,7 +44,10 @@
     ],
     "testEnvironment": "jsdom",
     "transform": {
-      "^.+\\.tsx?$": ["ts-jest", {}]
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {}
+      ]
     },
     "moduleFileExtensions": [
       "ts",

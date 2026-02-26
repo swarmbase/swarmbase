@@ -8,7 +8,7 @@
     "strict": true,
     "declaration": true,
     "types": ["node"],
-    "typeRoots": ["types", "node_modules/@types"],
+    "typeRoots": ["types", "node_modules/@types", "../../node_modules/@types"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
