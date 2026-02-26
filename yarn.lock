@@ -1966,6 +1966,7 @@ __metadata:
     "@chainsafe/libp2p-noise": "npm:^16.1.5"
     "@chainsafe/libp2p-yamux": "npm:^7.0.4"
     "@helia/block-brokers": "npm:^4.2.4"
+    "@helia/interface": "npm:^5.4.0"
     "@helia/unixfs": "npm:^5.1.0"
     "@libp2p/autonat": "npm:^2.0.38"
     "@libp2p/bootstrap": "npm:^11.0.47"
