@@ -76,7 +76,7 @@ test.describe('Peer Discovery', () => {
     }
   });
 
-  test('browsers discover each other via relay', async ({ browser }) => {
+  test('browsers prove mutual awareness via pubsub round-trip', async ({ browser }) => {
     const context1 = await browser.newContext();
     const context2 = await browser.newContext();
     try {
@@ -100,27 +100,41 @@ test.describe('Peer Discovery', () => {
         track2.waitFor('PEER_CONNECTED:', 90_000),
       ]);
 
-      const peers1 = await page1.evaluate(() => Array.from((window as any).__peers));
-      const peers2 = await page2.evaluate(() => Array.from((window as any).__peers));
+      // Wait for GossipSub mesh to form through relay
+      await page1.waitForTimeout(10000);
 
-      console.log(`Browser 1 peers: ${JSON.stringify(peers1)}`);
-      console.log(`Browser 2 peers: ${JSON.stringify(peers2)}`);
-
-      // Both browsers should have discovered at least the relay peer
-      expect(peers1.length).toBeGreaterThanOrEqual(1);
-      expect(peers2.length).toBeGreaterThanOrEqual(1);
-
-      // Check if browsers also discovered each other (not just the relay)
+      // Get each browser's peer ID
       const peerId1 = await page1.evaluate(() => (window as any).__libp2p?.peerId?.toString());
       const peerId2 = await page2.evaluate(() => (window as any).__libp2p?.peerId?.toString());
-      const mutualDiscovery = peers1.includes(peerId2) && peers2.includes(peerId1);
-      if (mutualDiscovery) {
-        console.log('Mutual browser-to-browser discovery confirmed');
-      } else {
-        // Mutual discovery via gossipsub can take longer than the relay connection;
-        // in CI/Docker environments it may not happen within the test window
-        console.warn('Mutual browser discovery not yet observed - peers connected via relay only');
-      }
+
+      console.log(`Browser 1 PeerId: ${peerId1}`);
+      console.log(`Browser 2 PeerId: ${peerId2}`);
+
+      // Browser 1 sends a discovery message containing its peer ID
+      // Set up waitFor on Browser 2 BEFORE sending from Browser 1
+      const msg1to2 = track2.waitFor('PUBSUB_MESSAGE:', 30_000);
+      await page1.fill('#message-input', 'DISCOVERY:' + peerId1);
+      await page1.click('#send-btn');
+      await msg1to2;
+
+      // Browser 2 sends a discovery message containing its peer ID
+      // Set up waitFor on Browser 1 BEFORE sending from Browser 2
+      const msg2to1 = track1.waitFor('PUBSUB_MESSAGE:', 30_000);
+      await page2.fill('#message-input', 'DISCOVERY:' + peerId2);
+      await page2.click('#send-btn');
+      await msg2to1;
+
+      // Verify Browser 2 received Browser 1's peer ID
+      const messages2 = await page2.evaluate(() => (window as any).__messages);
+      const browser2ReceivedFrom1 = messages2.some((m: any) => m.text === 'DISCOVERY:' + peerId1);
+      expect(browser2ReceivedFrom1).toBe(true);
+
+      // Verify Browser 1 received Browser 2's peer ID
+      const messages1 = await page1.evaluate(() => (window as any).__messages);
+      const browser1ReceivedFrom2 = messages1.some((m: any) => m.text === 'DISCOVERY:' + peerId2);
+      expect(browser1ReceivedFrom2).toBe(true);
+
+      console.log('Mutual browser-to-browser awareness confirmed via pubsub round-trip');
     } finally {
       await context1.close();
       await context2.close();
