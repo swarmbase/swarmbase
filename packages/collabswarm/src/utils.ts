@@ -91,6 +91,7 @@ export async function importHmacKey(
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
   hash = 'SHA-512',
 ) {
+  // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
   const key = await crypto.subtle.importKey(
     format,
     keyData as Uint8Array<ArrayBuffer>,
@@ -109,6 +110,7 @@ export async function importSymmetricKey(
   keyData: Uint8Array,
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
 ) {
+  // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
   const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, 'AES-GCM', true, [
     'encrypt',
     'decrypt',

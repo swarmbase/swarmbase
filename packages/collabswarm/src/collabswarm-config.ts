@@ -103,6 +103,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
 
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
+  // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
 
 /**

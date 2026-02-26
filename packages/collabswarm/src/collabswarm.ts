@@ -186,6 +186,12 @@ export class Collabswarm<
             Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
           >
         >));
+
+    // Runtime guard: ensure the Helia node was initialized with a pubsub service.
+    if (!this._ipfsNode.libp2p.services.pubsub) {
+      throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
+    }
+
     this.libp2p.addEventListener('peer:connect', (connection) => {
       const peerAddress = connection.detail.toString(); // TODO: Is this correct?
       this._peerAddrs.push(peerAddress);

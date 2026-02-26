@@ -806,6 +806,8 @@ export class CollabswarmDocument<
 
     const pubsub = this.swarm.ipfsNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
+    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this.documentPath);
 
@@ -837,6 +839,7 @@ export class CollabswarmDocument<
       const pubsub = this.swarm.ipfsNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(this.documentPath);
+      // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
     }
   }

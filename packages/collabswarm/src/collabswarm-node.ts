@@ -99,6 +99,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
 
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
+  // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
 
 export class CollabswarmNode<
@@ -286,6 +287,8 @@ export class CollabswarmNode<
         console.error('Error:', err);
       }
     };
+    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
       'message',
       this._docPublishHandler as EventListener,
@@ -303,6 +306,7 @@ export class CollabswarmNode<
       this.swarm.ipfsNode.libp2p.services.pubsub.unsubscribe(
         this.config.pubsubDocumentPublishPath,
       );
+      // Cast required: see addEventListener comment above
       this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
         'message',
         this._docPublishHandler as EventListener,
