@@ -42,6 +42,18 @@ import { PubSubBaseProtocol } from '@libp2p/pubsub';
 import { EventHandler, Message, StreamHandler } from '@libp2p/interface';
 
 /**
+ * Controls what historical data new members receive when joining a document.
+ *
+ * - `current_only` (default): New member receives only a CRDT state snapshot.
+ *   No historical epoch keys are included. Most private option.
+ * - `full_history`: All epoch keys included in Welcome message.
+ *   Suitable for audit trails and regulatory compliance.
+ * - `since_invited`: Epoch keys from the invitation epoch onward.
+ *   Partial history access.
+ */
+export type HistoryVisibility = 'current_only' | 'full_history' | 'since_invited';
+
+/**
  * Handler type for local-change (changes made on the current computer) and remote-change (changes made by a remote peer) events.
  *
  * Subscribe functions that match this type signature to track local-change/remote-change events.
@@ -116,6 +128,27 @@ export class CollabswarmDocument<
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain;
+
+  // Controls what historical data new members receive when joining.
+  private _historyVisibility: HistoryVisibility = 'current_only';
+
+  // Tracks the epoch at which this node was invited to the document.
+  // Used by `since_invited` history visibility to filter keychain history.
+  // TODO: Wire this up during the BeeKEM Welcome flow so it is set when
+  // a new member is onboarded.
+  private _invitationEpoch: Uint8Array | undefined;
+
+  /**
+   * Set the history visibility for this document.
+   * Controls what data new members receive when they join.
+   */
+  public set historyVisibility(value: HistoryVisibility) {
+    this._historyVisibility = value;
+  }
+
+  public get historyVisibility(): HistoryVisibility {
+    return this._historyVisibility;
+  }
 
   /**
    * /CORE STATE ==============================================================
@@ -616,9 +649,35 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Since this is a load request, send document keys.
+        // Construct load response based on history visibility setting.
         const loadMessage = this._createSyncMessage();
-        loadMessage.keychainChanges = this._keychain.history();
+
+        switch (this._historyVisibility) {
+          case 'full_history':
+            // Send ALL epoch keys — for audit trails and regulatory compliance.
+            // The receiver gets the full keychain history and can decrypt any
+            // historical change in the document.
+            loadMessage.keychainChanges = this._keychain.history();
+            break;
+          case 'since_invited':
+            // Send epoch keys from the invitation epoch onward.
+            // TODO: This requires epoch-based keychain filtering using
+            // _invitationEpoch to exclude keys from before the requestor
+            // was invited. Until epochs are fully wired into the keychain
+            // CRDT, we fall back to sending full history.
+            loadMessage.keychainChanges = this._keychain.history();
+            break;
+          case 'current_only':
+          default:
+            // Only send the current key — new member gets a state snapshot,
+            // not individual historical changes. This is the most private
+            // option: the receiver cannot decrypt any prior epoch's data.
+            loadMessage.keychainChanges =
+              await this._keychain.currentKeyChange();
+            // TODO: Once snapshot support is added to CRDTProvider, send
+            // a compacted state snapshot instead of the full change tree.
+            break;
+        }
 
         // Sign new message.
         loadMessage.signature = await this._signAsWriter(loadMessage);
@@ -626,32 +685,28 @@ export class CollabswarmDocument<
         const serializedLoad =
           this._syncMessageSerializer.serializeSyncMessage(loadMessage);
 
-        // Encrypt sync message.
-        // const [documentKeyID, documentKey] = await this._keychain.current();
-        // if (!documentKey) {
-        //   throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-        // }
-        // const { nonce, data } = await this._authProvider.encrypt(
-        //   serializedLoad,
-        //   documentKey,
-        // );
-        // if (!nonce) {
-        //   throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
-        // }
-        // const assembled = concatUint8Arrays(documentKeyID, nonce, data);
-        const assembled = serializedLoad;
+        // Encrypt the load response so keychain is not sent in plaintext.
+        // NOTE: This uses the current key, which works for existing peers requesting
+        // a reload (they already have the key). For NEW members being onboarded for
+        // the first time, the key must be delivered out-of-band via BeeKEM Welcome
+        // message -- they cannot decrypt this load response without the key.
+        const [documentKeyID, documentKey] = await this._keychain.current();
+        if (!documentKey) {
+          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+        }
+        const { nonce, data } = await this._authProvider.encrypt(
+          serializedLoad,
+          documentKey,
+        );
+        if (!nonce) {
+          throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+        }
+        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
         console.log(
-          `sending ${this.protocolLoadV1} response:`,
-          assembled,
-          loadMessage,
-          stream.sink,
+          `sending ${this.protocolLoadV1} response (encrypted)`,
         );
 
-        // Return a sync message.
-        // return [assembled];
-        // await stream.sink(assembled);
         await stream.sink([assembled] as Iterable<Uint8Array>);
-        // }, stream.sink);
         return [];
       },
     ).catch((err: unknown) => {
@@ -732,14 +787,47 @@ export class CollabswarmDocument<
       await pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          console.log(`awaiting ${this.protocolLoadV1} response...`, source);
+          console.log(`awaiting ${this.protocolLoadV1} response...`);
           const assembled = await readUint8Iterable(source);
+
+          // Decrypt the load response. If the response is too short to
+          // contain an encryption header (keyIDLength + nonceBits), treat
+          // it as plaintext from a legacy peer. If a header IS present but
+          // decryption fails, propagate the error rather than silently
+          // falling back to plaintext (which would be corrupted data).
+          const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
+          let rawContent: Uint8Array;
+          if (assembled.length > headerLength) {
+            const blockKeyID = assembled.slice(
+              0,
+              this._keychainProvider.keyIDLength,
+            );
+            const blockNonce = assembled.slice(
+              this._keychainProvider.keyIDLength,
+              headerLength,
+            );
+            const blockData = assembled.slice(headerLength);
+            const decrypted = await this._decryptBlock(
+              blockKeyID,
+              blockNonce,
+              blockData,
+            );
+            if (!decrypted) {
+              throw new Error(
+                `Failed to decrypt load response for ${this.documentPath}: ` +
+                'encryption header present but decryption failed',
+              );
+            }
+            rawContent = decrypted;
+          } else {
+            // Response too short for encryption header — legacy plaintext peer
+            rawContent = assembled;
+          }
+
           const message =
-            this._syncMessageSerializer.deserializeSyncMessage(assembled);
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
           console.log(
-            `received ${this.protocolLoadV1} response:`,
-            assembled,
-            message,
+            `received ${this.protocolLoadV1} response (decrypted)`,
           );
 
           if (message.documentId === this.documentPath) {
@@ -815,6 +903,70 @@ export class CollabswarmDocument<
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
+    this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
+
+    // Register GossipSub topic validator for authorization enforcement.
+    // When enabled, messages from unauthorized peers are rejected at the
+    // transport layer with a P4 penalty in peer scoring.
+    if (this.swarm.config?.enableTopicValidators) {
+      const gossipsubService = pubsub as any;
+      if (typeof gossipsubService.topicValidators?.set === 'function') {
+        gossipsubService.topicValidators.set(
+          this.documentPath,
+          async (
+            _peerIdStr: string,
+            message: { data: Uint8Array },
+          ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
+            try {
+              // Decrypt the message to access the signature.
+              const blockKeyID = message.data.slice(
+                0,
+                this._keychainProvider.keyIDLength,
+              );
+              const blockNonce = message.data.slice(
+                this._keychainProvider.keyIDLength,
+                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+              );
+              const blockData = message.data.slice(
+                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+              );
+              const rawContent = await this._decryptBlock(
+                blockKeyID,
+                blockNonce,
+                blockData,
+              );
+              if (!rawContent) {
+                // Decryption failed — key may not be in keychain yet
+                console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
+                return 'Ignore';
+              }
+
+              const syncMessage =
+                this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+              if (!syncMessage.signature) {
+                return 'Reject';
+              }
+
+              const { signature, ...messageWithoutSignature } = syncMessage;
+              const raw =
+                this._syncMessageSerializer.serializeSyncMessage(
+                  messageWithoutSignature,
+                );
+
+              // Verify the message was signed by an authorized writer for this document
+              if (await this._verifyWriterSignature(raw, signature)) {
+                return 'Accept';
+              }
+              return 'Reject';
+            } catch {
+              console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
+              return 'Ignore';
+            }
+          },
+        );
+      }
+    }
 
     // Load initial document from peers.
     const isExisting = await this.load(); // new document would return false; then a key is needed
@@ -842,6 +994,9 @@ export class CollabswarmDocument<
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
     }
+    // Unregister protocol handlers.
+    await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
   }
 
   /**
@@ -1023,6 +1178,16 @@ export class CollabswarmDocument<
     const changes = await this._writers.remove(writer);
 
     await this._makeChange(changes, crdtWriterChangeNode);
+
+    // Save the current (soon-to-be-previous) key before rotation.
+    // This key is what peers currently have and can use to decrypt the update.
+    const previousKey = await this._keychain.current();
+
+    // Rotate the document key (required after removing any member with access).
+    const [keyID, key, keychainChanges] = await this._keychain.add();
+
+    // Distribute the new key to all remaining members, encrypted with the previous key.
+    await this._distributeKeyUpdate(keychainChanges, previousKey);
   }
 
   /**
@@ -1076,11 +1241,179 @@ export class CollabswarmDocument<
     const changes = await this._readers.remove(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // Create a new document key
+    // Save the current (soon-to-be-previous) key before rotation.
+    // This key is what peers currently have and can use to decrypt the update.
+    const previousKey = await this._keychain.current();
+
+    // Create a new document key (rotation required after reader removal).
     const [keyID, key, keychainChanges] = await this._keychain.add();
 
-    // TODO: Consider sending keychain changes to all remaining readers on secure overlay.
+    // Distribute the new key to all remaining readers, encrypted with the previous key.
+    await this._distributeKeyUpdate(keychainChanges, previousKey);
   }
+
+  /**
+   * Distribute keychain changes to all connected peers via the key-update protocol.
+   * Used after key rotation (e.g., when a reader is removed).
+   *
+   * @param keychainChanges The keychain CRDT changes containing the new key.
+   * @param previousKey The previous document key to encrypt the update with.
+   *   Peers already have this key and can decrypt the message to learn about the new key.
+   *   This avoids the chicken-and-egg problem of encrypting with a key peers don't have yet.
+   */
+  private async _distributeKeyUpdate(
+    keychainChanges: ChangesType,
+    previousKey: [Uint8Array, DocumentKey],
+  ) {
+    const keyUpdateMessage: CRDTSyncMessage<ChangesType> = {
+      documentId: this.documentPath,
+      keychainChanges,
+    };
+
+    // Sign the key update message.
+    keyUpdateMessage.signature = await this._signAsWriter(keyUpdateMessage);
+
+    const serialized =
+      this._syncMessageSerializer.serializeSyncMessage(keyUpdateMessage);
+
+    // Encrypt with the PREVIOUS key so that existing peers can decrypt the message.
+    // Peers don't have the new key yet -- that's what this message delivers to them.
+    const [previousKeyID, previousDocumentKey] = previousKey;
+    const { nonce, data } = await this._authProvider.encrypt(
+      serialized,
+      previousDocumentKey,
+    );
+    if (!nonce) {
+      throw new Error(`Failed to encrypt key update! Nonce cannot be empty`);
+    }
+
+    // Send to all connected peers via the key-update protocol.
+    const peers = this.swarm.ipfsNode.libp2p
+      .getConnections()
+      ?.map((x) => x.remoteAddr);
+
+    // WARNING: If some peers fail to receive this update, they will be unable
+    // to decrypt future messages encrypted with the new key. They will need to
+    // perform a fresh document load to recover the keychain state.
+    const failedPeers: string[] = [];
+    for (const peer of peers) {
+      try {
+        const stream = await this.libp2p.dialProtocol(peer, [
+          this.protocolKeyUpdateV1,
+        ]);
+        await pipe(
+          [concatUint8Arrays(previousKeyID, nonce, data)],
+          stream.sink,
+        );
+      } catch (err) {
+        const peerAddr = peer.toString();
+        failedPeers.push(peerAddr);
+        console.warn(
+          `Failed to send key update to peer:`,
+          peerAddr,
+          err,
+        );
+      }
+    }
+
+    if (failedPeers.length > 0) {
+      console.warn(
+        `Key update for ${this.documentPath} failed to reach ${failedPeers.length} peer(s):`,
+        failedPeers,
+        'These peers may be unable to decrypt future messages until they reload the document.',
+      );
+    }
+  }
+
+  /**
+   * Handle incoming key-update protocol messages.
+   * Verifies the sender is an authorized writer, then merges the keychain changes.
+   */
+  private _handleKeyUpdateRequest: StreamHandler = ({ stream }) => {
+    console.log(`received ${this.protocolKeyUpdateV1} dial`);
+    pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+        const assembled = await readUint8Iterable(source);
+
+        // Decrypt the key update message.
+        const blockKeyID = assembled.slice(
+          0,
+          this._keychainProvider.keyIDLength,
+        );
+        const blockNonce = assembled.slice(
+          this._keychainProvider.keyIDLength,
+          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+        );
+        const blockData = assembled.slice(
+          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+        );
+
+        let rawContent: Uint8Array | undefined;
+        try {
+          rawContent = await this._decryptBlock(
+            blockKeyID,
+            blockNonce,
+            blockData,
+          );
+        } catch (e) {
+          console.warn('Failed to decrypt key update message:', e);
+        }
+
+        if (!rawContent) {
+          console.warn(
+            `Unable to decrypt key update for ${this.documentPath}`,
+          );
+          return [];
+        }
+
+        const message =
+          this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+        // Verify the sender is an authorized writer.
+        if (message.signature) {
+          const { signature, ...messageWithoutSignature } = message;
+          const raw =
+            this._syncMessageSerializer.serializeSyncMessage(
+              messageWithoutSignature,
+            );
+          if (!(await this._verifyWriterSignature(raw, signature))) {
+            console.warn(
+              `Received key update with invalid signature for ${this.documentPath}`,
+            );
+            return [];
+          }
+        } else {
+          console.warn(
+            `Received unsigned key update for ${this.documentPath}`,
+          );
+          return [];
+        }
+
+        // Merge keychain changes.
+        if (message.keychainChanges) {
+          try {
+            this._keychain.merge(message.keychainChanges);
+            console.log(
+              `Updated keychain via key-update protocol in ${this.documentPath}`,
+            );
+          } catch (e) {
+            console.error(
+              'Failed to merge keychain changes from key update:',
+              e,
+            );
+          }
+        }
+
+        return [];
+      },
+    ).catch((err: unknown) => {
+      console.error(
+        `Error handling ${this.protocolKeyUpdateV1} request:`,
+        err,
+      );
+    });
+  };
 
   // public async pin() {
   //   // Apply local change w/ CRDT provider.

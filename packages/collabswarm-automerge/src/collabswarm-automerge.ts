@@ -115,11 +115,16 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
     const [doc] = applyChanges(this._acl, change);
     this._acl = doc;
   }
-  async check(publicKey: CryptoKey): Promise<boolean> {
+  // AutomergeACL uses binary access control (user is either in the list or not).
+  // The capability parameter is accepted for interface compatibility but ignored here;
+  // capability-based filtering is handled at the UCANACL wrapper level.
+  async check(publicKey: CryptoKey, capability?: string): Promise<boolean> {
     const hash = await serializeKey(publicKey);
     return this._acl.users && this._acl.users[hash] !== undefined;
   }
-  async users(): Promise<CryptoKey[]> {
+  // The capability parameter is accepted for interface compatibility but ignored here;
+  // capability-based filtering is handled at the UCANACL wrapper level.
+  async users(capability?: string): Promise<CryptoKey[]> {
     // TODO: Cache deserialized keys to make this faster.
     return Promise.all(
       Object.keys(this._acl.users).map(
@@ -146,6 +151,52 @@ export class AutomergeACLProvider
 export type AutomergeKeychainDoc = Doc<{
   keys: [string, string][];
 }>;
+
+/**
+ * Convert a Uint8Array to a hex string for use as a cache key.
+ */
+function toHex(bytes: Uint8Array): string {
+  const hexChars: string[] = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    hexChars[i] = bytes[i].toString(16).padStart(2, '0');
+  }
+  return hexChars.join('');
+}
+
+/**
+ * Convert a key ID (either 16-byte UUID or 32-byte epoch ID) to a cache key string.
+ */
+function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
+  if (keyIDBytes.length === 16) {
+    return uuid.stringify(keyIDBytes);
+  }
+  return toHex(keyIDBytes);
+}
+
+/**
+ * Parse a cache key string back to a Uint8Array key ID.
+ * Validates UUID format with regex before parsing, and validates hex strings
+ * for correct format and even length.
+ *
+ * @throws {Error} If the cache key is not a valid UUID or hex string.
+ */
+function cacheKeyToKeyId(cacheKey: string): Uint8Array {
+  // UUID format: 8-4-4-4-12 hex digits with dashes
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  if (uuidRegex.test(cacheKey)) {
+    return new Uint8Array(uuid.parse(cacheKey));
+  }
+  // Hex-encoded epoch ID: must be even-length and only hex characters
+  const hexRegex = /^[0-9a-fA-F]+$/;
+  if (!hexRegex.test(cacheKey) || cacheKey.length % 2 !== 0) {
+    throw new Error(`Invalid cache key format: expected UUID or even-length hex string, got "${cacheKey}"`);
+  }
+  const bytes = new Uint8Array(cacheKey.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(cacheKey.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
 
 export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   // TODO: Replace this with a LRU cache of bounded size.
@@ -178,6 +229,33 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     this._keychain = keychainNew;
     return [keyIDBytes, key, keychainChanges];
   }
+
+  /**
+   * Add an epoch-based encryption key to the keychain.
+   *
+   * Epoch keys are used for key rotation: each epoch has a unique 32-byte ID
+   * and an associated AES-GCM symmetric key. The key is cached locally and
+   * appended to the Automerge keychain document for synchronization with peers.
+   *
+   * @param epochId - The 32-byte epoch identifier.
+   * @param key - The AES-GCM CryptoKey for this epoch.
+   * @returns The Automerge changes representing the keychain update for broadcasting.
+   */
+  async addEpochKey(epochId: Uint8Array, key: CryptoKey): Promise<BinaryChange[]> {
+    const epochIdHex = toHex(epochId);
+    this._keyCache.set(epochIdHex, key);
+    const serialized = await serializeKey(key);
+    const keychainNew = change(this._keychain, (doc) => {
+      if (!doc.keys) {
+        doc.keys = [];
+      }
+      doc.keys.push([epochIdHex, serialized]);
+    });
+    const keychainChanges = getChanges(this._keychain, keychainNew);
+    this._keychain = keychainNew;
+    return keychainChanges;
+  }
+
   history(): BinaryChange[] {
     return getAllChanges(this._keychain);
   }
@@ -191,25 +269,26 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     }
     return await Promise.all(
       this._keychain.keys.map(async ([keyID, serialized]) => {
-        const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+        const keyIDBytes = cacheKeyToKeyId(keyID);
         let key = this._keyCache.get(keyID);
         if (!key) {
           key = await deserializeKey({ name: 'AES-GCM', length: 256 }, [
             'encrypt',
             'decrypt',
           ])(serialized);
+          this._keyCache.set(keyID, key);
         }
         return [keyIDBytes, key] as [Uint8Array, CryptoKey];
       }),
     );
   }
   async current(): Promise<[Uint8Array, CryptoKey]> {
-    if (!this._keychain.keys) {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
       throw new Error("Can't get an empty keychain's current value");
     }
 
-    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length];
-    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length - 1];
+    const keyIDBytes = cacheKeyToKeyId(keyID);
 
     let key = this._keyCache.get(keyID);
     if (!key) {
@@ -217,12 +296,25 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
         'encrypt',
         'decrypt',
       ])(serialized);
+      this._keyCache.set(keyID, key);
     }
     return [keyIDBytes, key];
   }
+  async currentKeyChange(): Promise<BinaryChange[]> {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
+      throw new Error("Can't get current key change from an empty keychain");
+    }
+
+    // Build a minimal Automerge doc containing only the current (most recent) key.
+    const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length - 1];
+    const minimalDoc = change(from({ keys: [] as [string, string][] }), (doc) => {
+      doc.keys.push([keyID, serialized]);
+    });
+    return getAllChanges(minimalDoc);
+  }
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
-    const keyID = uuid.stringify(keyIDBytes);
-    return this._keyCache.get(keyID);
+    const cacheKey = keyIdToCacheKey(keyIDBytes);
+    return this._keyCache.get(cacheKey);
   }
 }
 
@@ -233,7 +325,9 @@ export class AutomergeKeychainProvider
     return new AutomergeKeychain();
   }
 
-  // UUID v4 is 32 characters as a string and 16 bytes parsed (Uint8Array).
+  // UUID v4 is 16 bytes. Epoch IDs are 32 bytes.
+  // Use 16 for backward compatibility; will be updated to 32 when
+  // epoch-based key management is fully activated.
   keyIDLength = 16;
 }
 

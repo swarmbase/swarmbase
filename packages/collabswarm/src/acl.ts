@@ -37,15 +37,20 @@ export interface ACL<ChangesType, PublicKey> {
   merge(changes: ChangesType): void;
 
   /**
-   * Checks to see if the specified user is in the ACL already.
+   * Checks to see if the specified user has a specific capability.
+   * If capability is undefined, checks if the user is in the ACL at all (backward compatible).
    *
    * @param publicKey User's public key.
-   * @return true if the user is in the ACL.
+   * @param capability Optional capability string to check for.
+   * @return true if the user has the specified capability (or is in the ACL if no capability specified).
    */
-  check(publicKey: PublicKey): Promise<boolean>;
+  check(publicKey: PublicKey, capability?: string): Promise<boolean>;
 
   /**
-   * Returns the list of users in the ACL.
+   * Returns the list of users with a specific capability.
+   * If capability is undefined, returns all users (backward compatible).
+   *
+   * @param capability Optional capability to filter users by.
    */
-  users(): Promise<PublicKey[]>;
+  users(capability?: string): Promise<PublicKey[]>;
 }
