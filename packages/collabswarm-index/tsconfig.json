@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "CommonJS",
+    "lib": ["ESNext", "DOM"],
+    "sourceMap": true,
+    "downlevelIteration": true,
+    "strict": true,
+    "declaration": true,
+    "types": ["node"],
+    "typeRoots": ["types", "node_modules/@types", "../../node_modules/@types"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist",
+    "composite": true
+  },
+  "exclude": [
+    "node_modules",
+    "examples",
+    "extras"
+  ],
+  "include": [
+    "src",
+    "types"
+  ],
+  "references": [{
+    "path": "../collabswarm"
+  }]
+}

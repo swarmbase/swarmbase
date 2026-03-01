@@ -14,4 +14,10 @@ export interface CRDTChangeBlock<ChangesType> {
    * Changes object describing edits made to a CRDT document. CRDTProvider implementation dependent.
    */
   changes: ChangesType;
+
+  /**
+   * Optional blind index tokens for encrypted search.
+   * Maps field path to HMAC-derived token for equality matching without exposing plaintext.
+   */
+  blindIndexTokens?: Record<string, string>;
 }
