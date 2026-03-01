@@ -31,6 +31,9 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    * @returns A non-extractable CryptoKey usable with `computeToken` and `computeCompoundToken`.
    * @throws If fieldPath is empty/blank or if masterKey is not extractable.
    */
+  // TODO: Consider accepting raw key material (Uint8Array) instead of CryptoKey
+  // to allow the master key to remain non-extractable. Current API requires
+  // extractable master keys, which weakens key-handling guarantees.
   async deriveFieldKey(masterKey: CryptoKey, fieldPath: string): Promise<CryptoKey> {
     if (!fieldPath || fieldPath.trim().length === 0) {
       throw new Error('fieldPath must be a non-empty string');

@@ -121,23 +121,19 @@ export class IndexManager<DocType> {
       return { documents: [], totalCount: 0 };
     }
 
-    // Single storage call: fetch all filtered+sorted entries, then paginate in-memory
-    const allEntries = await this._storage.query(
-      indexName,
-      options.filters,
-      options.sort,
-    );
+    // Get total count (unpaginated) and paginated results.
+    // Two queries so that storage backends can optimize pagination natively.
+    const [allEntries, paginatedEntries] = await Promise.all([
+      this._storage.query(indexName, options.filters, options.sort),
+      (options.limit !== undefined || (options.offset !== undefined && options.offset > 0))
+        ? this._storage.query(indexName, options.filters, options.sort, options.limit, options.offset)
+        : null,
+    ]);
     const totalCount = allEntries.length;
-
-    const start = options.offset ?? 0;
-    const paginatedEntries = options.limit !== undefined
-      ? allEntries.slice(start, start + options.limit)
-      : start > 0
-        ? allEntries.slice(start)
-        : allEntries;
+    const resultEntries = paginatedEntries ?? allEntries;
 
     return {
-      documents: paginatedEntries.map(entry => ({
+      documents: resultEntries.map(entry => ({
         documentPath: entry.documentPath,
         snapshot: entry.fields,
       })),

@@ -137,8 +137,7 @@ export class IDBIndexStorage implements IndexStorage {
       this._db.close();
       this._db = null;
     }
-    // Don't clear _initializedStores — the stores still exist in IndexedDB.
-    // Clearing would cause initialize() to skip reopening them on next use.
+    // After close(), initialize() will reopen the database; this set just tracks which stores exist.
   }
 
   private _getDB(): IDBPDatabase {
