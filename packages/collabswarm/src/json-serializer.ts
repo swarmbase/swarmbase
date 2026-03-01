@@ -45,7 +45,7 @@ export class JSONSerializer<ChangesType>
       changes: changes.changes,
       nonce: Base64.fromUint8Array(changes.nonce),
     };
-    if (changes.blindIndexTokens) {
+    if ('blindIndexTokens' in changes) {
       obj.blindIndexTokens = changes.blindIndexTokens;
     }
     return this.serialize(obj);
@@ -61,7 +61,7 @@ export class JSONSerializer<ChangesType>
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.blindIndexTokens) {
+    if ('blindIndexTokens' in deserialized) {
       // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
       const tokens = deserialized.blindIndexTokens;
       if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {

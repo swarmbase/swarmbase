@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, jest as jestFn } from '@jest/globals';
 import { BloomFilterGossip } from './bloom-filter-gossip';
+import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
 
 type MockFn = ReturnType<typeof jestFn.fn>;
 
@@ -40,7 +41,7 @@ describe('BloomFilterGossip', () => {
       await gossip.publishFilter();
       expect(publishFn).toHaveBeenCalledTimes(1);
       expect(publishFn).toHaveBeenCalledWith(
-        '/collabswarm/bloom-index/1.0.0',
+        bloomFilterUpdateV1,
         expect.any(Uint8Array),
       );
     });

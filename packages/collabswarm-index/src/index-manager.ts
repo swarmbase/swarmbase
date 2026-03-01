@@ -11,7 +11,8 @@ import { extractField } from './field-extractor';
  * Manages index definitions, incremental updates, and queries over a local materialized index.
  *
  * Designed to be fed by CRDT change events via `CollabswarmDocument.subscribe()`.
- * Queries execute locally against the storage backend with <1ms reads for exact match.
+ * Queries execute locally against the configured storage backend; performance depends on
+ * the underlying storage implementation and index configuration.
  *
  * @typeParam DocType The CRDT document type (e.g., Y.Doc).
  */

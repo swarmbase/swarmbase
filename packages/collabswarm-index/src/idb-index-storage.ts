@@ -70,6 +70,13 @@ export class IDBIndexStorage implements IndexStorage {
   ): Promise<IndexEntry[]> {
     const db = this._getDB();
 
+    if (offset !== undefined && offset < 0) {
+      throw new RangeError(`offset must be non-negative, got ${offset}`);
+    }
+    if (limit !== undefined && limit < 0) {
+      throw new RangeError(`limit must be non-negative, got ${limit}`);
+    }
+
     if (!db.objectStoreNames.contains(indexName)) return [];
 
     const tx = db.transaction(indexName, 'readonly');
@@ -229,12 +236,14 @@ export class IDBIndexStorage implements IndexStorage {
   }
 
   private _compareValues(a: unknown, b: unknown): number {
-    if (a === b) return 0;
-    if (a === undefined || a === null) return -1;
-    if (b === undefined || b === null) return 1;
-    if (typeof a === 'number' && typeof b === 'number') return a - b;
-    if (typeof a === 'string' && typeof b === 'string') return a.localeCompare(b);
-    if (typeof a === 'boolean' && typeof b === 'boolean') return (a ? 1 : 0) - (b ? 1 : 0);
-    return String(a).localeCompare(String(b));
+    const na = this._normalizeForComparison(a);
+    const nb = this._normalizeForComparison(b);
+    if (na === nb) return 0;
+    if (na === undefined || na === null) return -1;
+    if (nb === undefined || nb === null) return 1;
+    if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+    if (typeof na === 'string' && typeof nb === 'string') return na.localeCompare(nb);
+    if (typeof na === 'boolean' && typeof nb === 'boolean') return (na ? 1 : 0) - (nb ? 1 : 0);
+    return String(na).localeCompare(String(nb));
   }
 }
