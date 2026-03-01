@@ -60,27 +60,54 @@ describe('BlindIndexQuery', () => {
   });
 
   describe('compoundMatch', () => {
-    test('should find matching entries by compound key', async () => {
+    test.each([
+      {
+        description: 'matches exact compound key',
+        storedValues: [['Alice', 30], ['Bob', 25]],
+        queryValues: ['Alice', 30],
+        expectedPaths: ['/users/0'],
+      },
+      {
+        description: 'returns multiple matches',
+        storedValues: [['Alice', 30], ['Bob', 25], ['Alice', 30]],
+        queryValues: ['Alice', 30],
+        expectedPaths: ['/users/0', '/users/2'],
+      },
+      {
+        description: 'no match when name differs',
+        storedValues: [['Alice', 30]],
+        queryValues: ['Bob', 30],
+        expectedPaths: [],
+      },
+      {
+        description: 'no match when age differs',
+        storedValues: [['Alice', 30]],
+        queryValues: ['Alice', 25],
+        expectedPaths: [],
+      },
+      {
+        description: 'no match against empty entries',
+        storedValues: [],
+        queryValues: ['Alice', 30],
+        expectedPaths: [],
+      },
+      {
+        description: 'distinguishes field order (values are ordered)',
+        storedValues: [['Alice', 30]],
+        queryValues: [30, 'Alice'] as (string | number)[],
+        expectedPaths: [],
+      },
+    ])('$description', async ({ storedValues, queryValues, expectedPaths }) => {
       const compoundKey = await provider.deriveFieldKey(masterKey, 'name+age');
-      const token = await provider.computeCompoundToken(compoundKey, ['Alice', 30]);
-      const entries: BlindIndexEntry[] = [
-        { documentPath: '/users/1', blindIndexTokens: { 'name+age': token } },
-        { documentPath: '/users/2', blindIndexTokens: { 'name+age': await provider.computeCompoundToken(compoundKey, ['Bob', 25]) } },
-      ];
+      const entries: BlindIndexEntry[] = await Promise.all(
+        storedValues.map(async (values: (string | number)[], i: number) => ({
+          documentPath: `/users/${i}`,
+          blindIndexTokens: { 'name+age': await provider.computeCompoundToken(compoundKey, values) },
+        })),
+      );
 
-      const results = await query.compoundMatch(compoundKey, 'name+age', ['Alice', 30], entries);
-      expect(results).toHaveLength(1);
-      expect(results[0].documentPath).toBe('/users/1');
-    });
-
-    test('should return empty when no compound match', async () => {
-      const compoundKey = await provider.deriveFieldKey(masterKey, 'name+age');
-      const entries: BlindIndexEntry[] = [
-        { documentPath: '/users/1', blindIndexTokens: { 'name+age': await provider.computeCompoundToken(compoundKey, ['Alice', 30]) } },
-      ];
-
-      const results = await query.compoundMatch(compoundKey, 'name+age', ['Bob', 25], entries);
-      expect(results).toHaveLength(0);
+      const results = await query.compoundMatch(compoundKey, 'name+age', queryValues as (string | number)[], entries);
+      expect(results.map(r => r.documentPath)).toEqual(expectedPaths);
     });
   });
 });
