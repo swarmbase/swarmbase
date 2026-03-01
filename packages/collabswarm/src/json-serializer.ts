@@ -41,21 +41,30 @@ export class JSONSerializer<ChangesType>
     return this.deserialize(this.decode(changes)) as ChangesType;
   }
   serializeChangeBlock(changes: CRDTChangeBlock<ChangesType>): string {
-    return this.serialize({
+    const obj: Record<string, unknown> = {
       changes: changes.changes,
       nonce: Base64.fromUint8Array(changes.nonce),
-    });
+    };
+    if (changes.blindIndexTokens) {
+      obj.blindIndexTokens = changes.blindIndexTokens;
+    }
+    return this.serialize(obj);
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<ChangesType> {
     // Shape validated by subclass overrides; base class trusts JSON.parse output matches ChangesType
     const deserialized = this.deserialize(changes) as {
       changes: ChangesType;
       nonce: string;
+      blindIndexTokens?: Record<string, string>;
     };
-    return {
-      ...deserialized,
+    const result: CRDTChangeBlock<ChangesType> = {
+      changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
+    if (deserialized.blindIndexTokens) {
+      result.blindIndexTokens = deserialized.blindIndexTokens;
+    }
+    return result;
   }
   serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
     return this.encode(this.serialize(message));

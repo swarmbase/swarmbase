@@ -38,6 +38,6 @@ export type { BlindIndexEntry } from './blind-index-query';
 
 // Bloom filter (distributed discovery)
 export { BloomFilterCRDT } from './bloom-filter-crdt';
-export { BloomFilterGossip, BLOOM_FILTER_TOPIC } from './bloom-filter-gossip';
+export { BloomFilterGossip } from './bloom-filter-gossip';
 export type { PeerFilterState, BloomFilterGossipConfig } from './bloom-filter-gossip';
 

@@ -1,12 +1,13 @@
 import { describe, expect, test } from '@jest/globals';
-import { useIndexQuery, useDefineIndexes } from './react';
 
 describe('React hooks', () => {
-  test('useIndexQuery should be a function', () => {
-    expect(typeof useIndexQuery).toBe('function');
+  test('useIndexQuery should be exported as a function', async () => {
+    const mod = await import('./react');
+    expect(typeof mod.useIndexQuery).toBe('function');
   });
 
-  test('useDefineIndexes should be a function', () => {
-    expect(typeof useDefineIndexes).toBe('function');
+  test('useDefineIndexes should be exported as a function', async () => {
+    const mod = await import('./react');
+    expect(typeof mod.useDefineIndexes).toBe('function');
   });
 });

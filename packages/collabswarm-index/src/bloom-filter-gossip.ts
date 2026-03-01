@@ -24,11 +24,8 @@ export interface BloomFilterGossipConfig {
   republishIntervalMs: number;
 }
 
-/** Default gossip topic for bloom filter updates. */
-export const BLOOM_FILTER_TOPIC = bloomFilterUpdateV1;
-
 const DEFAULT_CONFIG: BloomFilterGossipConfig = {
-  topic: BLOOM_FILTER_TOPIC,
+  topic: bloomFilterUpdateV1,
   filterSizeInBits: 65536,
   numHashFunctions: 7,
   republishIntervalMs: 30000,

@@ -69,7 +69,7 @@ export class IndexManager<DocType> {
 
       const fields: Record<string, unknown> = {};
       for (const fieldDef of definition.fields) {
-        fields[fieldDef.path] = extractField(snapshot, fieldDef.path);
+        this._setNestedField(fields, fieldDef.path, extractField(snapshot, fieldDef.path));
       }
 
       // Diff against previous entry — skip write if unchanged
@@ -103,20 +103,25 @@ export class IndexManager<DocType> {
       return { documents: [], totalCount: 0 };
     }
 
-    const entries = await this._storage.query(
+    // Get total count without pagination
+    const allEntries = await this._storage.query(
       indexName,
       options.filters,
       options.sort,
     );
+    const totalCount = allEntries.length;
 
-    const totalCount = entries.length;
-    const start = options.offset ?? 0;
-    const sliced = options.limit !== undefined
-      ? entries.slice(start, start + options.limit)
-      : entries.slice(start);
+    // Get paginated entries from storage
+    const entries = await this._storage.query(
+      indexName,
+      options.filters,
+      options.sort,
+      options.limit,
+      options.offset,
+    );
 
     return {
-      documents: sliced.map(entry => ({
+      documents: entries.map(entry => ({
         documentPath: entry.documentPath,
         snapshot: entry.fields,
       })),
@@ -162,7 +167,7 @@ export class IndexManager<DocType> {
       const snapshot = this._extractor(document);
       const fields: Record<string, unknown> = {};
       for (const fieldDef of definition.fields) {
-        fields[fieldDef.path] = extractField(snapshot, fieldDef.path);
+        this._setNestedField(fields, fieldDef.path, extractField(snapshot, fieldDef.path));
       }
 
       await this._storage.put(indexName, documentPath, fields);
@@ -197,9 +202,38 @@ export class IndexManager<DocType> {
     const keysB = Object.keys(b);
     if (keysA.length !== keysB.length) return false;
     for (const key of keysA) {
-      if (a[key] !== b[key]) return false;
+      const va = a[key];
+      const vb = b[key];
+      if (va === vb) continue;
+      if (
+        va !== null && vb !== null &&
+        typeof va === 'object' && typeof vb === 'object'
+      ) {
+        if (!this._fieldsEqual(va as Record<string, unknown>, vb as Record<string, unknown>)) {
+          return false;
+        }
+      } else {
+        return false;
+      }
     }
     return true;
+  }
+
+  /**
+   * Set a value in a nested object structure using a dot-notation path.
+   * e.g. _setNestedField(obj, 'a.b', 42) creates { a: { b: 42 } }
+   */
+  private _setNestedField(obj: Record<string, unknown>, path: string, value: unknown): void {
+    const segments = path.split('.');
+    let current: Record<string, unknown> = obj;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const seg = segments[i];
+      if (!(seg in current) || typeof current[seg] !== 'object' || current[seg] === null) {
+        current[seg] = {};
+      }
+      current = current[seg] as Record<string, unknown>;
+    }
+    current[segments[segments.length - 1]] = value;
   }
 
   private _notifySubscribers(): void {

@@ -11,6 +11,16 @@
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./react": {
+      "types": "./dist/src/react.d.ts",
+      "default": "./dist/src/react.js"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -66,39 +76,39 @@
       "__benchmarks__"
     ],
     "setupFiles": [
-      "<rootDir>/jest.setup.js"
+      "<rootDir>/jest.setup.cjs"
     ],
     "extensionsToTreatAsEsm": [
       ".ts"
     ],
     "moduleNameMapper": {
-      "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@chainsafe/libp2p-gossipsub$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/pubsub-peer-discovery$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/circuit-relay-v2$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/webrtc$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/webtransport$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/websockets$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/websockets/filters$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/identify$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/autonat$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/kad-dht$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/interface$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/pubsub$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@libp2p/peer-id$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@helia/block-brokers$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@helia/interface$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@helia/unixfs$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^helia$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^datastore-idb$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^blockstore-idb$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^libp2p$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^it-pipe$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^bl$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^multiformats$": "<rootDir>/src/__mocks__/empty-module.js"
+      "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@chainsafe/libp2p-gossipsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/pubsub-peer-discovery$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/circuit-relay-v2$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/webrtc$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/webtransport$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/websockets$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/websockets/filters$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/identify$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/autonat$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/kad-dht$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/interface$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/pubsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/peer-id$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@helia/block-brokers$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@helia/interface$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@helia/unixfs$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^helia$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^datastore-idb$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^blockstore-idb$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^libp2p$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^it-pipe$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^bl$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^multiformats$": "<rootDir>/src/__mocks__/empty-module.cjs"
     }
   }
 }

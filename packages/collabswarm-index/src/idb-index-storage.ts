@@ -186,11 +186,6 @@ export class IDBIndexStorage implements IndexStorage {
   }
 
   private _resolveFieldPath(obj: Record<string, unknown>, path: string): unknown {
-    // First try literal key (handles dot-notation paths from IndexManager)
-    if (path in obj) {
-      return obj[path];
-    }
-    // Fall back to nested traversal
     const segments = path.split('.');
     let current: unknown = obj;
     for (const segment of segments) {

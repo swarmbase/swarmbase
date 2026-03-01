@@ -18,10 +18,6 @@ export interface CRDTChangeBlock<ChangesType> {
   /**
    * Optional blind index tokens for encrypted search.
    * Maps field path to HMAC-derived token for equality matching without exposing plaintext.
-   *
-   * TODO: Update ChangesSerializer implementations (JSONSerializer in collabswarm-yjs and
-   * collabswarm-automerge) to include this field in serialize/deserialize so tokens
-   * propagate through the system.
    */
   blindIndexTokens?: Record<string, string>;
 }
