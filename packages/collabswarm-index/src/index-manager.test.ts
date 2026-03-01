@@ -299,8 +299,8 @@ describe('IndexManager', () => {
         createdOn: '2024-01-01',
         tags: [],
       });
-      // Give time for any unexpected callback to fire
-      await new Promise(r => setTimeout(r, 50));
+      // Wait a tick and verify no additional callbacks fired
+      await waitFor(async () => true, 100);
 
       expect(results.length).toBe(countAfterUnsub);
     });

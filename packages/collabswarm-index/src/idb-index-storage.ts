@@ -77,7 +77,11 @@ export class IDBIndexStorage implements IndexStorage {
 
     let results: IndexEntry[] = [];
 
-    // Scan all entries and apply filters in JS
+    // TODO: Optimization opportunity — leverage IDB indexes for common single-field
+    // equality/range queries instead of always doing a full JS scan. Currently IDB indexes
+    // are created in initialize() but not used during query(). For simple cases (single eq
+    // filter on an indexed field), we could use store.index(field).getAll(value) for a
+    // significant speedup on large datasets.
     let cursor = await store.openCursor();
     while (cursor) {
       const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };

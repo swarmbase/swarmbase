@@ -32,8 +32,21 @@ export class IndexManager<DocType> {
 
   /**
    * Register a new index definition. Initializes the storage backend for this index.
+   * Throws if an index with the same name already exists with a different configuration.
+   * Re-defining with identical config is a no-op.
    */
   async defineIndex(definition: IndexDefinition): Promise<void> {
+    const existing = this._definitions.get(definition.name);
+    if (existing) {
+      // Allow idempotent re-definition with same config
+      if (JSON.stringify(existing) === JSON.stringify(definition)) {
+        return;
+      }
+      throw new Error(
+        `Index "${definition.name}" is already defined with a different configuration. ` +
+        `Call removeIndex() first to redefine it.`,
+      );
+    }
     this._definitions.set(definition.name, definition);
     await this._storage.initialize(definition.name, definition.fields);
   }
@@ -61,6 +74,7 @@ export class IndexManager<DocType> {
    */
   async updateIndex(documentPath: string, document: DocType): Promise<void> {
     const snapshot = this._extractor(document);
+    let changed = false;
 
     for (const [indexName, definition] of this._definitions) {
       if (!documentPath.startsWith(definition.collectionPrefix)) {
@@ -79,9 +93,12 @@ export class IndexManager<DocType> {
       }
 
       await this._storage.put(indexName, documentPath, fields);
+      changed = true;
     }
 
-    this._notifySubscribers();
+    if (changed) {
+      this._notifySubscribers();
+    }
   }
 
   /**
@@ -103,7 +120,7 @@ export class IndexManager<DocType> {
       return { documents: [], totalCount: 0 };
     }
 
-    // Get total count without pagination
+    // Single storage call: fetch all filtered+sorted entries, then paginate in-memory
     const allEntries = await this._storage.query(
       indexName,
       options.filters,
@@ -111,17 +128,15 @@ export class IndexManager<DocType> {
     );
     const totalCount = allEntries.length;
 
-    // Get paginated entries from storage
-    const entries = await this._storage.query(
-      indexName,
-      options.filters,
-      options.sort,
-      options.limit,
-      options.offset,
-    );
+    const start = options.offset ?? 0;
+    const paginatedEntries = options.limit !== undefined
+      ? allEntries.slice(start, start + options.limit)
+      : start > 0
+        ? allEntries.slice(start)
+        : allEntries;
 
     return {
-      documents: entries.map(entry => ({
+      documents: paginatedEntries.map(entry => ({
         documentPath: entry.documentPath,
         snapshot: entry.fields,
       })),
@@ -140,8 +155,12 @@ export class IndexManager<DocType> {
     const id = this._nextSubscriptionId++;
     this._subscriptions.set(id, { options, callback });
 
-    // Fire initial query
-    this.query(options).then(callback).catch((err) => {
+    // Fire initial query — guard against delivery after unsubscribe
+    this.query(options).then((result) => {
+      if (this._subscriptions.has(id)) {
+        callback(result);
+      }
+    }).catch((err) => {
       console.warn('IndexManager: initial subscription query failed', err);
     });
 
@@ -205,6 +224,11 @@ export class IndexManager<DocType> {
       const va = a[key];
       const vb = b[key];
       if (va === vb) continue;
+      // Handle Date objects explicitly — they have no enumerable keys
+      if (va instanceof Date && vb instanceof Date) {
+        if (va.getTime() !== vb.getTime()) return false;
+        continue;
+      }
       if (
         va !== null && vb !== null &&
         typeof va === 'object' && typeof vb === 'object'
@@ -237,8 +261,13 @@ export class IndexManager<DocType> {
   }
 
   private _notifySubscribers(): void {
-    for (const [, sub] of this._subscriptions) {
-      this.query(sub.options).then(sub.callback).catch((err) => {
+    for (const [id, sub] of this._subscriptions) {
+      this.query(sub.options).then((result) => {
+        // Guard: subscription may have been removed while query was in flight
+        if (this._subscriptions.has(id)) {
+          sub.callback(result);
+        }
+      }).catch((err) => {
         console.warn('IndexManager: subscription notification query failed', err);
       });
     }

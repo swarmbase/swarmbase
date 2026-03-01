@@ -55,16 +55,18 @@ export function useDefineIndexes(
     setReady(false);
 
     (async () => {
+      let allSucceeded = true;
       for (const def of definitions) {
         if (cancelled) return;
-        names.push(def.name);
         try {
           await manager.defineIndex(def);
+          names.push(def.name);
         } catch (err) {
+          allSucceeded = false;
           console.warn(`useDefineIndexes: failed to define index "${def.name}"`, err);
         }
       }
-      if (!cancelled) {
+      if (!cancelled && allSucceeded) {
         setReady(true);
       }
     })();

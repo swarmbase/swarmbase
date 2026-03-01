@@ -20,7 +20,21 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
     this._tokenLengthBytes = tokenLengthBytes;
   }
 
+  /**
+   * Derive a field-specific HMAC key from a master key using HKDF with the field path as context.
+   * Each unique field path produces a distinct key, ensuring index tokens for different fields
+   * are cryptographically isolated.
+   *
+   * @param masterKey An extractable CryptoKey used as the root secret.
+   * @param fieldPath Dot-notation path identifying the field (e.g., "title", "metadata.author").
+   *   Must be a non-empty string.
+   * @returns A non-extractable CryptoKey usable with `computeToken` and `computeCompoundToken`.
+   * @throws If fieldPath is empty/blank or if masterKey is not extractable.
+   */
   async deriveFieldKey(masterKey: CryptoKey, fieldPath: string): Promise<CryptoKey> {
+    if (!fieldPath || fieldPath.trim().length === 0) {
+      throw new Error('fieldPath must be a non-empty string');
+    }
     let rawMaster: ArrayBuffer;
     try {
       rawMaster = await crypto.subtle.exportKey('raw', masterKey);
@@ -43,6 +57,15 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
     );
   }
 
+  /**
+   * Compute a blind index token for a single field value.
+   * The value is normalized (lowercased/trimmed for strings, prefixed for type disambiguation)
+   * then HMAC'd with the field key and truncated.
+   *
+   * @param fieldKey A field-specific CryptoKey obtained from `deriveFieldKey`.
+   * @param value The plaintext field value to tokenize.
+   * @returns A base64url-encoded token string suitable for storage and equality comparison.
+   */
   async computeToken(fieldKey: CryptoKey, value: string | number): Promise<string> {
     const normalized = this._normalize(value);
     const encoder = new TextEncoder();
@@ -50,6 +73,15 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
     return this._truncateAndEncode(new Uint8Array(signature));
   }
 
+  /**
+   * Compute a compound blind index token from multiple field values.
+   * Values are individually normalized and joined with a null separator before HMAC.
+   * Useful for multi-field equality queries (e.g., matching on both author and category).
+   *
+   * @param fieldKey A field-specific CryptoKey obtained from `deriveFieldKey`.
+   * @param values Array of plaintext field values to combine into a single token.
+   * @returns A base64url-encoded compound token string.
+   */
   async computeCompoundToken(fieldKey: CryptoKey, values: (string | number)[]): Promise<string> {
     const normalized = values.map(v => this._normalize(v)).join('\x00');
     const encoder = new TextEncoder();

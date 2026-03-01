@@ -9,17 +9,20 @@ export class MemoryIndexStorage implements IndexStorage {
   /** indexName → (documentPath → fields) */
   private _stores: Map<string, Map<string, Record<string, unknown>>> = new Map();
 
+  /** Initialize storage for the given index. Creates an empty map if one does not exist. */
   async initialize(_indexName: string, _fields: IndexFieldDefinition[]): Promise<void> {
     if (!this._stores.has(_indexName)) {
       this._stores.set(_indexName, new Map());
     }
   }
 
+  /** Insert or update an index entry for a document in the named index. */
   async put(indexName: string, documentPath: string, fields: Record<string, unknown>): Promise<void> {
     const store = this._getStore(indexName);
     store.set(documentPath, { ...fields });
   }
 
+  /** Remove an index entry for the given document path. No-op if the entry does not exist. */
   async delete(indexName: string, documentPath: string): Promise<void> {
     const store = this._stores.get(indexName);
     if (store) {
@@ -27,6 +30,15 @@ export class MemoryIndexStorage implements IndexStorage {
     }
   }
 
+  /**
+   * Query the index, applying filters, sorting, and pagination.
+   * @param indexName The index to query.
+   * @param filters Array of field filters to apply.
+   * @param sort Optional sort clauses applied in order.
+   * @param limit Maximum number of results to return.
+   * @param offset Number of results to skip before returning.
+   * @throws {RangeError} If offset or limit is negative.
+   */
   async query(
     indexName: string,
     filters: FieldFilter[],
@@ -36,6 +48,13 @@ export class MemoryIndexStorage implements IndexStorage {
   ): Promise<IndexEntry[]> {
     const store = this._stores.get(indexName);
     if (!store) return [];
+
+    if (offset !== undefined && offset < 0) {
+      throw new RangeError(`offset must be non-negative, got ${offset}`);
+    }
+    if (limit !== undefined && limit < 0) {
+      throw new RangeError(`limit must be non-negative, got ${limit}`);
+    }
 
     let results: IndexEntry[] = [];
 
@@ -59,6 +78,7 @@ export class MemoryIndexStorage implements IndexStorage {
     return results;
   }
 
+  /** Get a single entry by document path. Returns undefined if not found. */
   async get(indexName: string, documentPath: string): Promise<Record<string, unknown> | undefined> {
     const store = this._stores.get(indexName);
     if (!store) return undefined;
@@ -66,6 +86,7 @@ export class MemoryIndexStorage implements IndexStorage {
     return fields ? { ...fields } : undefined;
   }
 
+  /** Remove all entries from the named index. */
   async clear(indexName: string): Promise<void> {
     const store = this._stores.get(indexName);
     if (store) {
@@ -73,6 +94,7 @@ export class MemoryIndexStorage implements IndexStorage {
     }
   }
 
+  /** Close the storage backend, releasing all in-memory data. */
   async close(): Promise<void> {
     this._stores.clear();
   }
@@ -100,17 +122,25 @@ export class MemoryIndexStorage implements IndexStorage {
       case 'neq':
         return value !== filter.value;
 
-      case 'gt':
-        return value !== undefined && value !== null && (value as number | string | Date) > (filter.value as number | string | Date);
+      case 'gt': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv > nfv;
+      }
 
-      case 'gte':
-        return value !== undefined && value !== null && (value as number | string | Date) >= (filter.value as number | string | Date);
+      case 'gte': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv >= nfv;
+      }
 
-      case 'lt':
-        return value !== undefined && value !== null && (value as number | string | Date) < (filter.value as number | string | Date);
+      case 'lt': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv < nfv;
+      }
 
-      case 'lte':
-        return value !== undefined && value !== null && (value as number | string | Date) <= (filter.value as number | string | Date);
+      case 'lte': {
+        const [nv, nfv] = [this._normalizeForComparison(value), this._normalizeForComparison(filter.value)];
+        return nv !== undefined && nv !== null && nfv !== undefined && nfv !== null && nv <= nfv;
+      }
 
       case 'prefix':
         return typeof value === 'string' && typeof filter.value === 'string' && value.startsWith(filter.value);
@@ -154,13 +184,26 @@ export class MemoryIndexStorage implements IndexStorage {
     return 0;
   }
 
+  private _normalizeForComparison(value: unknown): number | string | boolean | null | undefined {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'string') {
+      const timestamp = Date.parse(value);
+      if (!isNaN(timestamp) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        return timestamp;
+      }
+    }
+    return value as number | string | boolean | null | undefined;
+  }
+
   private _compareValues(a: unknown, b: unknown): number {
-    if (a === b) return 0;
-    if (a === undefined || a === null) return -1;
-    if (b === undefined || b === null) return 1;
-    if (typeof a === 'number' && typeof b === 'number') return a - b;
-    if (typeof a === 'string' && typeof b === 'string') return a.localeCompare(b);
-    if (typeof a === 'boolean' && typeof b === 'boolean') return (a ? 1 : 0) - (b ? 1 : 0);
-    return String(a).localeCompare(String(b));
+    const na = this._normalizeForComparison(a);
+    const nb = this._normalizeForComparison(b);
+    if (na === nb) return 0;
+    if (na === undefined || na === null) return -1;
+    if (nb === undefined || nb === null) return 1;
+    if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+    if (typeof na === 'string' && typeof nb === 'string') return na.localeCompare(nb);
+    if (typeof na === 'boolean' && typeof nb === 'boolean') return (na ? 1 : 0) - (nb ? 1 : 0);
+    return String(na).localeCompare(String(nb));
   }
 }

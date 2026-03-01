@@ -62,7 +62,17 @@ export class JSONSerializer<ChangesType>
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
     if (deserialized.blindIndexTokens) {
-      result.blindIndexTokens = deserialized.blindIndexTokens;
+      // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
+      const tokens = deserialized.blindIndexTokens;
+      if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
+        throw new Error('blindIndexTokens must be a plain object');
+      }
+      for (const [key, val] of Object.entries(tokens)) {
+        if (typeof key !== 'string' || typeof val !== 'string') {
+          throw new Error(`blindIndexTokens values must be strings, got non-string at key "${key}"`);
+        }
+      }
+      result.blindIndexTokens = tokens;
     }
     return result;
   }

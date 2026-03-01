@@ -42,7 +42,7 @@ export class BenchmarkRunner {
       name,
       avgMs: times.reduce((sum, t) => sum + t, 0) / times.length,
       p50Ms: times[Math.floor(times.length * 0.5)],
-      p99Ms: times[Math.floor(times.length * 0.99)],
+      p99Ms: times[Math.min(Math.ceil(times.length * 0.99) - 1, times.length - 1)],
       memoryDeltaBytes: memBefore !== undefined && memAfter !== undefined ? memAfter - memBefore : undefined,
     };
   }
