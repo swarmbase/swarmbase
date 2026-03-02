@@ -32,6 +32,18 @@ interface SimulatedPeer {
   bytesReceived: number;
 }
 
+/**
+ * Run convergence simulation benchmarks measuring peer-to-peer synchronization.
+ *
+ * Simulates N peers (2 to 32) making concurrent edits through the full
+ * sign-encrypt-broadcast-decrypt-verify pipeline, then measures:
+ * - Total convergence time for all peers to apply all changes
+ * - Message generation rate per peer
+ * - Bandwidth estimates per peer
+ *
+ * @param iterations - Number of iterations per benchmark (default 20)
+ * @returns A {@link BenchmarkSuiteResult} with timing statistics for each peer count
+ */
 export async function runConvergenceSimulationBenchmarks(
   iterations: number = 20,
 ): Promise<BenchmarkSuiteResult> {
@@ -111,7 +123,10 @@ export async function runConvergenceSimulationBenchmarks(
 
           // Verify
           const senderKey = peerKeys[msg.fromPeer].publicKey;
-          await auth.verify(decrypted, senderKey, msg.signature);
+          const valid = await auth.verify(decrypted, senderKey, msg.signature);
+          if (!valid) {
+            throw new Error(`Signature verification failed for message from peer ${msg.fromPeer}`);
+          }
 
           // Deserialize and apply
           const block = serializer.deserializeChangeBlock(msg.serialized);
@@ -119,6 +134,17 @@ export async function runConvergenceSimulationBenchmarks(
 
           peer.messagesReceived++;
           peer.bytesReceived += msg.byteSize;
+        }
+      }
+
+      // Assert all peers converged to the same document state
+      const referenceDocKeys = Object.keys(peers[0].document).sort().join(',');
+      for (let i = 1; i < peers.length; i++) {
+        const peerDocKeys = Object.keys(peers[i].document).sort().join(',');
+        if (peerDocKeys !== referenceDocKeys) {
+          throw new Error(
+            `Peer ${peers[i].id} did not converge with peer 0: expected ${referenceDocKeys.length} keys, got ${peerDocKeys.length} keys`,
+          );
         }
       }
     }, iterations);

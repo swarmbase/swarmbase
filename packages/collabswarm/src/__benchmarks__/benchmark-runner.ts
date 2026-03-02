@@ -120,7 +120,8 @@ export class PaperBenchmarkRunner {
    * Format results as a markdown table for console output.
    */
   static formatTable(results: BenchmarkResultEntry[]): string {
-    const header = '| Benchmark | Iters | Min (ms) | Mean (ms) | Median (ms) | P99 (ms) | Max (ms) | StdDev | Mem Delta |';
+    const unit = (results.length > 0 && results[0].unit) ? results[0].unit : 'ms';
+    const header = `| Benchmark | Iters | Min (${unit}) | Mean (${unit}) | Median (${unit}) | P99 (${unit}) | Max (${unit}) | StdDev | Mem Delta |`;
     const sep =    '|-----------|-------|----------|-----------|-------------|----------|----------|--------|-----------|';
     const rows = results.map(r => {
       const memStr = r.memoryDeltaBytes !== undefined
@@ -143,7 +144,9 @@ function computeStats(times: number[]): BenchmarkStats {
     min: sorted[0],
     max: sorted[n - 1],
     mean,
-    median: sorted[Math.floor(n * 0.5)],
+    median: n % 2 === 1
+      ? sorted[(n - 1) / 2]
+      : (sorted[n / 2 - 1] + sorted[n / 2]) / 2,
     p99: sorted[Math.min(Math.ceil(n * 0.99) - 1, n - 1)],
     stddev: Math.sqrt(variance),
   };

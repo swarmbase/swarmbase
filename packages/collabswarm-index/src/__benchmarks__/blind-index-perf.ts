@@ -27,6 +27,15 @@ async function generateMasterKey(): Promise<CryptoKey> {
   );
 }
 
+/**
+ * Run the blind index performance benchmark suite.
+ *
+ * Measures field-key derivation, token generation (string, numeric, compound),
+ * token match/mismatch comparison, field-count scaling, and batch throughput.
+ *
+ * @param iterations - Number of timed iterations per benchmark (default 100).
+ * @returns Promise<BenchmarkSuiteResult> with statistical summaries for each benchmark.
+ */
 export async function runBlindIndexPerfBenchmarks(
   iterations: number = 100,
 ): Promise<BenchmarkSuiteResult> {
@@ -70,15 +79,17 @@ export async function runBlindIndexPerfBenchmarks(
   const precomputedToken = await provider.computeToken(fieldKey, 'hello world');
   await runner.run('token-match-compare', async () => {
     const newToken = await provider.computeToken(fieldKey, 'hello world');
-    const match = newToken === precomputedToken;
-    void match;
+    if (newToken !== precomputedToken) {
+      throw new Error(`token-match-compare: expected tokens to match but got ${newToken} !== ${precomputedToken}`);
+    }
   }, iterations);
 
   // --- Token mismatch: generate and compare (negative) ---
   await runner.run('token-mismatch-compare', async () => {
     const newToken = await provider.computeToken(fieldKey, 'different value');
-    const match = newToken === precomputedToken;
-    void match;
+    if (newToken === precomputedToken) {
+      throw new Error(`token-mismatch-compare: expected tokens to differ but both were ${newToken}`);
+    }
   }, iterations);
 
   // --- Scaling: derive N field keys + compute N tokens ---

@@ -143,7 +143,7 @@ function computeStats(times: number[]): BenchmarkStats {
     min: sorted[0],
     max: sorted[n - 1],
     mean,
-    median: sorted[Math.floor(n * 0.5)],
+    median: n % 2 === 0 ? (sorted[Math.floor(n / 2) - 1] + sorted[Math.floor(n / 2)]) / 2 : sorted[Math.floor(n / 2)],
     p99: sorted[Math.min(Math.ceil(n * 0.99) - 1, n - 1)],
     stddev: Math.sqrt(variance),
   };

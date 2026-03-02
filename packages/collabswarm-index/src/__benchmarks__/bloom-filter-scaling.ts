@@ -22,6 +22,16 @@ const FILTER_SIZES = [
 
 const FILL_COUNTS = [100, 500, 1000, 5000, 10000];
 
+/**
+ * Run the bloom filter scaling benchmark suite.
+ *
+ * Measures insert throughput, positive/negative query time, false-positive rate,
+ * serialization/deserialization cost, merge (CRDT join) time, and memory footprint
+ * across a range of filter sizes (1K to 1M bits).
+ *
+ * @param iterations - Number of timed iterations per benchmark (default 100).
+ * @returns Promise<BenchmarkSuiteResult> with statistical summaries for each benchmark.
+ */
 export async function runBloomFilterScalingBenchmarks(
   iterations: number = 100,
 ): Promise<BenchmarkSuiteResult> {
@@ -45,8 +55,12 @@ export async function runBloomFilterScalingBenchmarks(
     }
 
     await runner.run(`query-positive-${label}`, () => {
+      let hits = 0;
       for (let i = 0; i < 100; i++) {
-        filter.has(`term_${i}`);
+        if (filter.has(`term_${i}`)) hits++;
+      }
+      if (hits !== 100) {
+        throw new Error(`query-positive-${label}: expected 100 hits but got ${hits}`);
       }
     }, iterations);
   }
