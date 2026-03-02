@@ -16,6 +16,7 @@ import { ipnsValidator } from 'ipns/validator';
 import { bitswap } from '@helia/block-brokers';
 import { IDBDatastore } from 'datastore-idb';
 import { IDBBlockstore } from 'blockstore-idb';
+import { CompactionConfig } from './compaction-config';
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -25,8 +26,8 @@ import { IDBBlockstore } from 'blockstore-idb';
  */
 export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
   ({
-    // NEW (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
-    ipfs: {
+    // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
+    helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
       blockBrokers: [bitswap()],
@@ -111,7 +112,12 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
  */
 export interface CollabswarmConfig {
   /**
-   * Configuration for IPFS/libp2p.
+   * Configuration for Helia/libp2p.
+   */
+  helia?: HeliaInit;
+
+  /**
+   * @deprecated Use `helia` instead. Will be removed in a future version.
    */
   ipfs?: HeliaInit;
 
@@ -133,6 +139,13 @@ export interface CollabswarmConfig {
    * Default: false (for backward compatibility).
    */
   enableTopicValidators?: boolean;
+
+  /**
+   * Configuration for history compaction.
+   * When provided with `enabled: true`, the document will periodically
+   * create snapshot nodes to compact the Merkle-DAG change history.
+   */
+  compaction?: CompactionConfig;
 }
 
 /**

@@ -61,9 +61,19 @@ class WikiArticle extends React.Component<
         ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
         : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
       if (process.env.REACT_APP_SIGNALING_SERVER) {
-        config.ipfs.config.Addresses.Swarm.push(
-          process.env.REACT_APP_SIGNALING_SERVER,
-        );
+        // Add signaling server as a listen address in the Helia/libp2p config.
+        const heliaConfig = config.helia ?? config.ipfs;
+        if (heliaConfig) {
+          if (!heliaConfig.libp2p) heliaConfig.libp2p = {};
+          if (!heliaConfig.libp2p.addresses) {
+            heliaConfig.libp2p.addresses = { listen: [] };
+          } else if (!heliaConfig.libp2p.addresses.listen) {
+            heliaConfig.libp2p.addresses.listen = [];
+          }
+          heliaConfig.libp2p.addresses.listen.push(
+            process.env.REACT_APP_SIGNALING_SERVER,
+          );
+        }
       }
       this.props
         .onInitialize(config)

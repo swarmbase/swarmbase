@@ -59,8 +59,8 @@ export function Settings({
             </tr>
           </thead>
           <tbody>
-            {collabswarm.ipfsInfo.addresses.map((addr, i) => <tr key={addr.toString()}>
-              <KeyCell>Peer ID {i+1}</KeyCell>
+            {collabswarm.libp2p.getMultiaddrs().map((addr, i) => <tr key={addr.toString()}>
+              <KeyCell>Address {i+1}</KeyCell>
               <ValueCell>{addr.toString()}</ValueCell>
               <ActionCell value={addr.toString()}></ActionCell>
             </tr>)}
@@ -70,7 +70,7 @@ export function Settings({
               <ActionCell value={serializedKey}></ActionCell>
             </tr>}
 
-            {!serializeKey && (collabswarm.ipfsInfo.addresses.length === 0) && (
+            {!serializedKey && (collabswarm.libp2p.getMultiaddrs().length === 0) && (
               <tr>
                 <td colSpan={3}>No settings found!</td>
               </tr>

@@ -25,7 +25,7 @@ export type CRDTChangeNode<ChangesType> = {
   /**
    * Changes made to the document itself (if any).
    *
-   * `false` means that the changes should be fetched from IPFS blockstore.
+   * `false` means that the changes should be fetched from the Helia blockstore.
    */
   change?: ChangesType;
 

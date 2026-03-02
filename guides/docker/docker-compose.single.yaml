@@ -1,0 +1,33 @@
+# SwarmDB Single-Server Deployment
+#
+# Runs the relay/bootstrap server on a single machine.
+# This is the minimum infrastructure needed for SwarmDB.
+#
+# Usage:
+#   docker compose -f guides/docker/docker-compose.single.yaml up -d
+#
+# After startup, retrieve the relay multiaddress:
+#   docker compose -f guides/docker/docker-compose.single.yaml exec relay cat /shared/relay-info.json
+#
+# Configure your SwarmDB client with the wsMultiaddr from relay-info.json.
+
+services:
+  relay:
+    build:
+      context: ../../relay-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9001:9001"   # WebSocket (browser connections)
+      - "9002:9002"   # TCP (node-to-node connections)
+    volumes:
+      - relay-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  relay-data:
