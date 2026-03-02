@@ -58,7 +58,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
   /** Number of change nodes compacted into this snapshot */
   compactedCount: number;
 
-  /** Signature of the snapshot creator (signs the state + lastChangeNodeCID + compactedCount + timestamp) */
+  /** Signature of the snapshot creator (signs the state + lastChangeNodeCID + timestamp + compactedCount) */
   signature: Uint8Array;
 
   /** Public key of the snapshot creator */
