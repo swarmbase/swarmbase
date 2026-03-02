@@ -13,6 +13,16 @@ import { generateDocuments } from './mock-data';
 
 const SCALES = [100, 1_000, 10_000, 100_000];
 
+/**
+ * Run the index query scaling benchmark suite.
+ *
+ * Populates a {@link MemoryIndexStorage}-backed index at various document counts
+ * (100 to 100K) and measures latency for exact-match, range, prefix, compound,
+ * and sorted queries, plus single-document update cost and a full-scan baseline.
+ *
+ * @param iterations - Number of timed iterations per benchmark (default 100).
+ * @returns Promise<BenchmarkSuiteResult> with statistical summaries for each benchmark.
+ */
 export async function runIndexQueryScalingBenchmarks(
   iterations: number = 100,
 ): Promise<BenchmarkSuiteResult> {

@@ -24,6 +24,18 @@ const PAYLOAD_SIZES: Array<{ label: string; bytes: number }> = [
   { label: '1mb', bytes: 1024 * 1024 },
 ];
 
+/**
+ * Run crypto overhead benchmarks comparing plaintext vs encrypted pipelines.
+ *
+ * Measures key generation (ECDSA P-384, AES-GCM-256), key rotation cost,
+ * and the isolated overhead of each cryptographic operation (sign, verify,
+ * encrypt, decrypt) at payload sizes from 1KB to 1MB. Also compares full
+ * plaintext serialization against the encrypted sign-encrypt-decrypt-verify
+ * pipeline to quantify crypto overhead.
+ *
+ * @param iterations - Number of iterations per benchmark (default 100)
+ * @returns A {@link BenchmarkSuiteResult} with timing statistics for each operation
+ */
 export async function runCryptoOverheadBenchmarks(
   iterations: number = 100,
 ): Promise<BenchmarkSuiteResult> {
@@ -69,7 +81,7 @@ export async function runCryptoOverheadBenchmarks(
     const encryptionKey = await generateEncryptionKey();
 
     // Plaintext pipeline: serialize only (no crypto)
-    const changeData = `change-data-for-${label}`;
+    const changeData = 'x'.repeat(bytes);
     await runner.run(`plaintext-pipeline-${label}`, () => {
       const serialized = serializer.serializeChanges(changeData);
       serializer.deserializeChanges(serialized);
@@ -83,7 +95,10 @@ export async function runCryptoOverheadBenchmarks(
       const enc = await auth.encrypt(payload, encryptionKey);
       // Receiver side
       const dec = await auth.decrypt(enc.data, encryptionKey, enc.nonce);
-      await auth.verify(dec, signingKeyPair.publicKey, sig);
+      const valid = await auth.verify(dec, signingKeyPair.publicKey, sig);
+      if (!valid) {
+        throw new Error(`Signature verification failed for encrypted-pipeline-${label}`);
+      }
       serializer.deserializeChanges(serialized);
     }, iterations);
 
@@ -95,7 +110,10 @@ export async function runCryptoOverheadBenchmarks(
     // Isolated: verification overhead only
     const sig = await auth.sign(payload, signingKeyPair.privateKey);
     await runner.run(`isolated-verify-${label}`, async () => {
-      await auth.verify(payload, signingKeyPair.publicKey, sig);
+      const valid = await auth.verify(payload, signingKeyPair.publicKey, sig);
+      if (!valid) {
+        throw new Error(`Signature verification failed for isolated-verify-${label}`);
+      }
     }, iterations);
 
     // Isolated: encryption overhead only

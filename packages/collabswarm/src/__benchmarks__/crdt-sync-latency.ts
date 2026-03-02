@@ -23,6 +23,16 @@ const PAYLOAD_SIZES: Array<{ label: string; bytes: number }> = [
   { label: '1mb', bytes: 1024 * 1024 },
 ];
 
+/**
+ * Run CRDT sync latency benchmarks for the SwarmDB change pipeline.
+ *
+ * Measures per-operation latency for sign, verify, encrypt, decrypt,
+ * serialize, and deserialize at payload sizes from 1KB to 1MB.
+ * Also benchmarks the combined sign+encrypt and decrypt+verify pipelines.
+ *
+ * @param iterations - Number of iterations per benchmark (default 100)
+ * @returns A {@link BenchmarkSuiteResult} with timing statistics for each operation and size
+ */
 export async function runCrdtSyncLatencyBenchmarks(
   iterations: number = 100,
 ): Promise<BenchmarkSuiteResult> {
@@ -45,7 +55,10 @@ export async function runCrdtSyncLatencyBenchmarks(
     // --- Verify ---
     const signature = await auth.sign(payload, signingKeyPair.privateKey);
     await runner.run(`verify-${label}`, async () => {
-      await auth.verify(payload, signingKeyPair.publicKey, signature);
+      const valid = await auth.verify(payload, signingKeyPair.publicKey, signature);
+      if (!valid) {
+        throw new Error(`Signature verification failed for verify-${label}`);
+      }
     }, iterations);
 
     // --- Encrypt ---
@@ -70,12 +83,16 @@ export async function runCrdtSyncLatencyBenchmarks(
     // --- Full pipeline: decrypt + verify ---
     await runner.run(`decrypt-verify-${label}`, async () => {
       const decrypted = await auth.decrypt(encrypted.data, encryptionKey, encrypted.nonce);
-      await auth.verify(decrypted, signingKeyPair.publicKey, signature);
+      const valid = await auth.verify(decrypted, signingKeyPair.publicKey, signature);
+      if (!valid) {
+        throw new Error(`Signature verification failed for decrypt-verify-${label}`);
+      }
     }, iterations);
 
     // --- Serialize change block ---
+    const changeData = 'x'.repeat(bytes);
     const changeBlock = {
-      changes: `change-data-${label}`,
+      changes: changeData,
       nonce: encrypted.nonce,
       blindIndexTokens: { title: 'abc123', author: 'def456' },
     };
@@ -92,11 +109,11 @@ export async function runCrdtSyncLatencyBenchmarks(
 
     // --- Serialize raw changes (Uint8Array payload) ---
     await runner.run(`serialize-changes-${label}`, () => {
-      serializer.serializeChanges(`payload-${label}`);
+      serializer.serializeChanges(changeData);
     }, iterations);
 
     // --- Deserialize raw changes ---
-    const serializedChanges = serializer.serializeChanges(`payload-${label}`);
+    const serializedChanges = serializer.serializeChanges(changeData);
     await runner.run(`deserialize-changes-${label}`, () => {
       serializer.deserializeChanges(serializedChanges);
     }, iterations);
