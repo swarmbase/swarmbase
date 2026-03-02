@@ -71,10 +71,10 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
 ### 2.4 DAG Pruning
 
-After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can be pruned from the sync tree (but optionally retained in blockstore for auditing):
+After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can be pruned from the in-memory sync tree:
 
-- **Sync tree pruning**: The `_lastSyncMessage.changes` tree is replaced with a tree rooted at the snapshot node, with only post-snapshot change nodes as children
-- **Blockstore pruning** (optional): If `pruneAfterSnapshot` is enabled, old IPFS blocks can be unpinned (they remain accessible to peers who already have them)
+- **Sync tree pruning**: The `_lastSyncMessage.changes` tree is replaced with a tree rooted at the snapshot node, with only post-snapshot change nodes as children. This reduces the size of sync messages sent to new peers.
+- **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. The current implementation only prunes the in-memory sync message tree; blockstore-level unpinning of old blocks is a future enhancement.
 - **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync
 
 The key insight: **CRDTs are designed to converge from any state**. A Yjs `encodeStateAsUpdate` or Automerge `save` produces a snapshot that any peer can apply via `remoteChange()` to arrive at the same state, without needing individual change history.

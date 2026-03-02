@@ -198,6 +198,11 @@ export class CollabswarmDocument<
     return `${documentKeyUpdateV1}${this.documentPath}`;
   }
 
+  /**
+   * Returns the versioned snapshot-load protocol string for this document.
+   * Used to register and dial the `/collabswarm/snapshot-load/1.0.0` handler
+   * scoped to this document's path.
+   */
   public get protocolSnapshotLoadV1() {
     return `${snapshotLoadV1}${this.documentPath}`;
   }
@@ -464,6 +469,7 @@ export class CollabswarmDocument<
             );
             newDocumentHashes.push(sentHash);
             this._documentChangeCount++;
+            this._changesSinceSnapshot++;
             break;
           }
           case crdtReaderChangeNode: {
@@ -506,6 +512,7 @@ export class CollabswarmDocument<
                 );
                 this._hashes.add(missingHash);
                 this._documentChangeCount++;
+                this._changesSinceSnapshot++;
                 return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtReaderChangeNode: {
@@ -1382,10 +1389,20 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Returns the number of change nodes in the current document history.
+   * Returns the total number of change nodes (including ACL nodes) tracked
+   * in the current document history. This is a count of all known CIDs,
+   * not the depth of the longest path in the DAG.
+   */
+  public historySize(): number {
+    return this._hashes.size;
+  }
+
+  /**
+   * @deprecated Use {@link historySize} instead. This method returns the total
+   * node count, not the DAG depth.
    */
   public historyDepth(): number {
-    return this._hashes.size;
+    return this.historySize();
   }
 
   /**
@@ -1402,6 +1419,7 @@ export class CollabswarmDocument<
    * Requires `CRDTProvider.getSnapshot()` to be implemented.
    *
    * @returns The created snapshot node, or undefined if the provider does not support snapshots.
+   * @throws {Error} If the current user is not a writer for this document.
    */
   public async snapshot(): Promise<CRDTSnapshotNode<ChangesType, PublicKey> | undefined> {
     await this._ensureCurrentUserCanWrite();

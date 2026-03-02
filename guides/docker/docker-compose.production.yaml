@@ -27,6 +27,8 @@ services:
     depends_on:
       relay-1:
         condition: service_healthy
+      relay-2:
+        condition: service_healthy
     environment:
       - RELAY_DOMAIN=${RELAY_DOMAIN:-relay.localhost}
 
