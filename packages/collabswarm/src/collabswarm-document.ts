@@ -170,6 +170,9 @@ export class CollabswarmDocument<
   private _changesSinceSnapshot = 0;
   // Counts only document-kind changes (excludes ACL reader/writer changes).
   // Used by _maybeCompact() for the minChangesBeforeSnapshot threshold.
+  // Incremented for both local changes (in _makeChange) and remote changes
+  // (in _syncDocumentChanges). Compaction triggers from both paths, so relay-only
+  // nodes that never make local changes will still compact via remote change processing.
   private _documentChangeCount = 0;
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
@@ -681,7 +684,15 @@ export class CollabswarmDocument<
 
     // BFS traversal to collect nodes up to the limit.
     // ACL nodes (reader/writer) are always preserved regardless of keepCount.
-    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType> }> = [
+    //
+    // When a document node at the boundary is pruned, any ACL children of that
+    // node are preserved by re-attaching them. This prevents losing ACL state
+    // during pruning.
+    //
+    // For branching histories (DAG with multiple branches), keepCount is applied
+    // globally across all branches. Once the limit is reached, all further
+    // document nodes in any branch are pruned.
+    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType>; parent?: CRDTChangeNode<ChangesType> }> = [
       { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
     ];
     let documentNodesVisited = 0;
@@ -703,11 +714,25 @@ export class CollabswarmDocument<
         current.node.children !== crdtChangeNodeDeferred
       ) {
         if (!isACLNode && documentNodesVisited >= keepCount) {
-          // This document node is at the boundary — prune its children.
-          delete current.node.children;
+          // This document node is at the boundary — prune its children,
+          // but preserve any ACL nodes among them.
+          const aclChildren: Record<string, CRDTChangeNode<ChangesType>> = {};
+          for (const [childHash, childNode] of Object.entries(current.node.children)) {
+            if (
+              childNode.kind === crdtReaderChangeNode ||
+              childNode.kind === crdtWriterChangeNode
+            ) {
+              aclChildren[childHash] = childNode;
+            }
+          }
+          if (Object.keys(aclChildren).length > 0) {
+            current.node.children = aclChildren;
+          } else {
+            delete current.node.children;
+          }
         } else {
           for (const [childHash, childNode] of Object.entries(current.node.children)) {
-            queue.push({ id: childHash, node: childNode });
+            queue.push({ id: childHash, node: childNode, parent: current.node });
           }
         }
       }
@@ -1118,9 +1143,10 @@ export class CollabswarmDocument<
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
     this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
-    // Registered proactively for future peer-initiated snapshot requests.
+    // TODO: Registered proactively for future peer-initiated snapshot requests.
     // Currently, snapshots are included in the standard load response
     // (protocolLoadV1), so no client-side code dials this protocol yet.
+    // Will be activated when a dedicated snapshot request protocol is needed.
     this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.
@@ -1311,10 +1337,13 @@ export class CollabswarmDocument<
               incoming.state,
             );
             this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
-            // Reset the per-snapshot change counter, but do not adjust
-            // _documentChangeCount from incoming.compactedCount, since
-            // compactedCount counts all node kinds (including ACL changes)
-            // whereas _documentChangeCount tracks only document-kind changes.
+            // Ensure our local document change count is at least as high as
+            // the snapshot's compactedCount. This prevents re-triggering
+            // compaction below the threshold after applying a remote snapshot.
+            this._documentChangeCount = Math.max(
+              this._documentChangeCount,
+              incoming.compactedCount,
+            );
             this._changesSinceSnapshot = 0;
             console.log(
               `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
@@ -1427,7 +1456,8 @@ export class CollabswarmDocument<
    * Requires `CRDTProvider.getSnapshot()` to be implemented.
    *
    * @returns The created snapshot node, or undefined if the provider does not support snapshots.
-   * @throws {Error} If the current user is not a writer for this document.
+   * @throws {Error} If the current user does not have write access to this document.
+   *   Only writers are authorized to create snapshots.
    */
   public async snapshot(): Promise<CRDTSnapshotNode<ChangesType, PublicKey> | undefined> {
     await this._ensureCurrentUserCanWrite();
@@ -1442,7 +1472,9 @@ export class CollabswarmDocument<
     const timestamp = Date.now();
 
     // Create a deterministic payload to sign.
-    const compactedCount = this._hashes.size;
+    // Use _documentChangeCount (document-kind changes only) rather than
+    // _hashes.size (which includes ACL nodes) to keep the semantic consistent.
+    const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
     const signPayload = concatUint8Arrays(
       stateBytes,

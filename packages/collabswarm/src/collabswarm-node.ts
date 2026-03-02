@@ -178,11 +178,14 @@ export class CollabswarmNode<
 
   private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
     if (!this._seenCids.has(cid)) {
+      // Mark as seen synchronously BEFORE the async pin to prevent concurrent
+      // pin attempts for the same CID. If the pin fails, the CID stays in
+      // _seenCids to avoid a retry storm; the TODO below covers retry logic.
+      this._seenCids.add(cid);
       // TODO: Handle this operation failing (retry).
       const cidParsed = CID.parse(cid);
       // Helia pins.add() returns an AsyncGenerator — drain it to complete the pin.
       for await (const _ of this.swarm.heliaNode.pins.add(cidParsed)) { /* drain */ }
-      this._seenCids.add(cid);
     }
 
     if (node.children === crdtChangeNodeDeferred) {
@@ -273,7 +276,9 @@ export class CollabswarmNode<
 
             // Pin all of the files that were received.
             if (message.changeId && message.changes) {
-              this._pinNewCIDs(message.changeId, message.changes);
+              this._pinNewCIDs(message.changeId, message.changes).catch((err) => {
+                console.error('Failed to pin CIDs for message:', message.changeId, err);
+              });
             }
           } else {
             console.warn(
