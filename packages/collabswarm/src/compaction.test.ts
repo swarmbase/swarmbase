@@ -40,11 +40,11 @@ describe('Compaction trigger logic', () => {
    */
   function shouldCompact(
     config: CompactionConfig,
-    totalHashes: number,
+    documentChangeCount: number,
     changesSinceSnapshot: number,
   ): boolean {
     if (!config.enabled) return false;
-    if (totalHashes < config.minChangesBeforeSnapshot) return false;
+    if (documentChangeCount < config.minChangesBeforeSnapshot) return false;
     if (changesSinceSnapshot < config.snapshotInterval) return false;
     return true;
   }
