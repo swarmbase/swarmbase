@@ -27,7 +27,9 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentKeyUpdateV1, documentLoadV1 } from './wire-protocols';
+import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
+import { CRDTSnapshotNode } from './snapshot-node';
+import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -162,6 +164,11 @@ export class CollabswarmDocument<
   // private _readersHashes = new Set<string>();
   // private _writersHashes = new Set<string>();
 
+  // Compaction state.
+  private _compactionConfig: CompactionConfig;
+  private _latestSnapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
+  private _changesSinceSnapshot = 0;
+
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
@@ -177,7 +184,7 @@ export class CollabswarmDocument<
   } = {};
 
   public get libp2p(): Libp2p {
-    return this.swarm.ipfsNode.libp2p;
+    return this.swarm.heliaNode.libp2p;
   }
 
   public get protocolLoadV1() {
@@ -186,6 +193,10 @@ export class CollabswarmDocument<
 
   public get protocolKeyUpdateV1() {
     return `${documentKeyUpdateV1}${this.documentPath}`;
+  }
+
+  public get protocolSnapshotLoadV1() {
+    return `${snapshotLoadV1}${this.documentPath}`;
   }
 
   private heliaFs: UnixFS;
@@ -264,18 +275,20 @@ export class CollabswarmDocument<
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
   ) {
-    this.heliaFs = unixfs(this.swarm.ipfsNode);
+    this.heliaFs = unixfs(this.swarm.heliaNode);
 
     this._document = this._crdtProvider.newDocument();
     this._readers = this._aclProvider.initialize();
     this._writers = this._aclProvider.initialize();
     this._keychain = this._keychainProvider.initialize();
+    this._compactionConfig =
+      this.swarm.config?.compaction ?? { ...defaultCompactionConfig };
   }
 
   // Helpers ------------------------------------------------------------------
 
   private async _shuffledPeers() {
-    const peers = this.swarm.ipfsNode.libp2p
+    const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
     if (peers.length === 0) {
@@ -310,7 +323,7 @@ export class CollabswarmDocument<
   }
 
   private async _getBlock(hash: CID): Promise<ChangesType> {
-    const block = await this.swarm.ipfsNode.blockstore.get(hash);
+    const block = await this.swarm.heliaNode.blockstore.get(hash);
     const blockKeyID = block.slice(0, this._keychainProvider.keyIDLength);
     const blockNonce = block.slice(
       this._keychainProvider.keyIDLength,
@@ -474,9 +487,9 @@ export class CollabswarmDocument<
       await this._fireRemoteUpdateHandlers(newDocumentHashes);
     }
 
-    // Then apply missing hashes by fetching them via IPFS.
+    // Then apply missing hashes by fetching them from the blockstore.
     for (const [missingHash, missingHashKind] of missingDocumentHashes) {
-      // Fetch missing hashes using IPFS.
+      // Fetch missing hashes from the Helia blockstore.
       const cid = CID.parse(missingHash);
       this._getBlock(cid)
         .then((missingChanges) => {
@@ -503,14 +516,14 @@ export class CollabswarmDocument<
             }
           } else {
             console.error(
-              `'/ipfs/${missingHash}' returned nothing`,
+              `Block '${missingHash}' returned nothing`,
               missingChanges,
             );
           }
         })
         .catch((err) => {
           console.error(
-            'Failed to fetch missing change from ipfs:',
+            'Failed to fetch missing change from blockstore:',
             missingHash,
             err,
           );
@@ -559,7 +572,7 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
-    // Store changes in ipfs.
+    // Store changes in blockstore.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
 
@@ -593,13 +606,35 @@ export class CollabswarmDocument<
     if (!nonce) {
       throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
     }
-    await this.swarm.ipfsNode.libp2p.services.pubsub.publish(
+    await this.swarm.heliaNode.libp2p.services.pubsub.publish(
       this.documentPath,
       concatUint8Arrays(documentKeyID, nonce, data),
     );
 
     // Fire change handlers.
     await this._fireLocalUpdateHandlers([hash]);
+
+    // Track document changes for compaction.
+    if (kind === crdtDocumentChangeNode) {
+      this._changesSinceSnapshot++;
+      await this._maybeCompact();
+    }
+  }
+
+  /**
+   * Check if automatic compaction should be triggered based on the config.
+   */
+  private async _maybeCompact() {
+    if (!this._compactionConfig.enabled) {
+      return;
+    }
+    if (this._hashes.size < this._compactionConfig.minChangesBeforeSnapshot) {
+      return;
+    }
+    if (this._changesSinceSnapshot < this._compactionConfig.snapshotInterval) {
+      return;
+    }
+    await this.snapshot();
   }
 
   private _handleLoadRequest: StreamHandler = ({ stream }) => {
@@ -674,9 +709,12 @@ export class CollabswarmDocument<
             // option: the receiver cannot decrypt any prior epoch's data.
             loadMessage.keychainChanges =
               await this._keychain.currentKeyChange();
-            // TODO: Once snapshot support is added to CRDTProvider, send
-            // a compacted state snapshot instead of the full change tree.
             break;
+        }
+
+        // Include the latest snapshot if available, to accelerate initial sync.
+        if (this._latestSnapshot) {
+          loadMessage.snapshot = this._latestSnapshot;
         }
 
         // Sign new message.
@@ -892,7 +930,7 @@ export class CollabswarmDocument<
       );
     };
 
-    const pubsub = this.swarm.ipfsNode.libp2p.services
+    const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
@@ -988,7 +1026,7 @@ export class CollabswarmDocument<
    */
   public async close() {
     if (this._pubsubHandler) {
-      const pubsub = this.swarm.ipfsNode.libp2p.services
+      const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(this.documentPath);
       // Cast required: see addEventListener comment above
@@ -1001,7 +1039,7 @@ export class CollabswarmDocument<
 
   /**
    * Given a sync message containing a list of hashes:
-   * - Fetch new changes that are only hashes (missing change itself) from IPFS (using the hash).
+   * - Fetch new changes that are only hashes (missing change itself) from the blockstore (using the hash).
    * - Apply new changes to the existing CRDT document.
    *
    * @param message A sync message to apply.
@@ -1050,6 +1088,27 @@ export class CollabswarmDocument<
           e,
         );
         throw e;
+      }
+    }
+
+    // Apply snapshot if present and more recent than ours.
+    if (message.snapshot) {
+      const incoming = message.snapshot;
+      if (
+        !this._latestSnapshot ||
+        incoming.compactedCount > this._latestSnapshot.compactedCount
+      ) {
+        // Apply the snapshot state. CRDTs converge, so applying a full state
+        // snapshot via remoteChange is safe and produces the correct result.
+        this._document = this._crdtProvider.remoteChange(
+          this._document,
+          incoming.state,
+        );
+        this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
+        this._changesSinceSnapshot = 0;
+        console.log(
+          `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
+        );
       }
     }
 
@@ -1131,6 +1190,73 @@ export class CollabswarmDocument<
     this._document = newDocument;
 
     await this._makeChange(changes);
+  }
+
+  /**
+   * Returns the number of change nodes in the current document history.
+   */
+  public historyDepth(): number {
+    return this._hashes.size;
+  }
+
+  /**
+   * Returns the current snapshot, if one exists.
+   */
+  public get latestSnapshot(): CRDTSnapshotNode<ChangesType, PublicKey> | undefined {
+    return this._latestSnapshot;
+  }
+
+  /**
+   * Creates a snapshot of the current document state.
+   *
+   * The snapshot compacts all current change nodes into a single state representation.
+   * Requires `CRDTProvider.getSnapshot()` to be implemented.
+   *
+   * @returns The created snapshot node, or undefined if the provider does not support snapshots.
+   */
+  public async snapshot(): Promise<CRDTSnapshotNode<ChangesType, PublicKey> | undefined> {
+    await this._ensureCurrentUserCanWrite();
+
+    if (!this._crdtProvider.getSnapshot) {
+      console.warn('CRDTProvider does not implement getSnapshot(); compaction skipped.');
+      return undefined;
+    }
+
+    const state = this._crdtProvider.getSnapshot(this._document);
+    const lastChangeNodeCID = this._lastSyncMessage?.changeId ?? '';
+    const timestamp = Date.now();
+
+    // Create a deterministic payload to sign.
+    const stateBytes = this._changesSerializer.serializeChanges(state);
+    const signPayload = concatUint8Arrays(
+      stateBytes,
+      this._encoder.encode(lastChangeNodeCID),
+      this._encoder.encode(String(timestamp)),
+    );
+    const signature = await this._authProvider.sign(signPayload, this._userKey);
+
+    const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
+      state,
+      lastChangeNodeCID,
+      compactedCount: this._hashes.size,
+      signature,
+      publicKey: this._userPublicKey,
+      timestamp,
+    };
+
+    this._latestSnapshot = snapshotNode;
+    this._changesSinceSnapshot = 0;
+
+    // Update the last sync message to include the snapshot.
+    if (this._lastSyncMessage) {
+      this._lastSyncMessage.snapshot = snapshotNode;
+    }
+
+    console.log(
+      `Created snapshot for ${this.documentPath}: ${snapshotNode.compactedCount} nodes compacted`,
+    );
+
+    return snapshotNode;
   }
 
   /**
@@ -1288,7 +1414,7 @@ export class CollabswarmDocument<
     }
 
     // Send to all connected peers via the key-update protocol.
-    const peers = this.swarm.ipfsNode.libp2p
+    const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
 
@@ -1420,7 +1546,7 @@ export class CollabswarmDocument<
   //   const changes = this._crdtProvider.getHistory(this.document);
 
   //   // Store changes in ipfs.
-  //   const newFileResult = await this.swarm.ipfsNode.add(
+  //   const newFileResult = await this.swarm.heliaNode.add(
   //     this._changesSerializer.serializeChanges(changes),
   //   );
   //   const hash = newFileResult.cid.toString();
@@ -1433,7 +1559,7 @@ export class CollabswarmDocument<
   //   if (!this.swarm.config) {
   //     throw 'Can not pin a file when the node has not been initialized'!;
   //   }
-  //   this.swarm.ipfsNode.pubsub.publish(
+  //   this.swarm.heliaNode.pubsub.publish(
   //     this.swarm.config.pubsubDocumentPublishPath,
   //     this._syncMessageSerializer.serializeSyncMessage(updateMessage),
   //   );

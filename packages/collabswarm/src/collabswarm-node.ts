@@ -36,12 +36,12 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 
 export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
   ({
-    ipfs: {
+    helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
       blockBrokers: [bitswap()],
       libp2p: {
-        // https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
+        // See: https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
         addresses: {
           listen: ['/webrtc', '/wss', '/ws'],
         },
@@ -179,9 +179,9 @@ export class CollabswarmNode<
   private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
     if (!this._seenCids.has(cid)) {
       // TODO: Handle this operation failing (retry).
-      // TODO: Does this need to be converted to a `CID` from a string first?
       const cidParsed = CID.parse(cid);
-      this.swarm.ipfsNode.pins.add(cidParsed);
+      // Helia pins.add() returns an AsyncGenerator — drain it to complete the pin.
+      for await (const _ of this.swarm.heliaNode.pins.add(cidParsed)) { /* drain */ }
       this._seenCids.add(cid);
     }
 
@@ -227,7 +227,7 @@ export class CollabswarmNode<
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage) => {
       try {
-        const thisNodeId = this.swarm.ipfsInfo.toString();
+        const thisNodeId = this.swarm.peerId.toString();
         // const senderNodeId = rawMessage.from;
         const senderNodeId = (() => {
           switch (rawMessage.detail.type) {
@@ -255,7 +255,10 @@ export class CollabswarmNode<
                   if (!this._seenCids.has(cid)) {
                     // TODO: Handle this operation failing (retry).
                     const parsedCid = CID.parse(cid);
-                    this.swarm.ipfsNode.pins.add(parsedCid);
+                    // Helia pins.add() returns an AsyncGenerator — fire and drain it.
+                    (async () => {
+                      for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
+                    })();
                     this._seenCids.add(cid);
                   }
                 }
@@ -289,11 +292,11 @@ export class CollabswarmNode<
     };
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
-    this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
+    this.swarm.heliaNode.libp2p.services.pubsub.addEventListener(
       'message',
       this._docPublishHandler as EventListener,
     );
-    this.swarm.ipfsNode.libp2p.services.pubsub.subscribe(
+    this.swarm.heliaNode.libp2p.services.pubsub.subscribe(
       this.config.pubsubDocumentPublishPath,
     );
     console.log(
@@ -303,11 +306,11 @@ export class CollabswarmNode<
 
   public stop() {
     if (this._docPublishHandler) {
-      this.swarm.ipfsNode.libp2p.services.pubsub.unsubscribe(
+      this.swarm.heliaNode.libp2p.services.pubsub.unsubscribe(
         this.config.pubsubDocumentPublishPath,
       );
       // Cast required: see addEventListener comment above
-      this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
+      this.swarm.heliaNode.libp2p.services.pubsub.removeEventListener(
         'message',
         this._docPublishHandler as EventListener,
       );

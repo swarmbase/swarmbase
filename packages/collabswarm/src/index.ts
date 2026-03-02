@@ -71,7 +71,9 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
-import { bloomFilterUpdateV1 } from './wire-protocols';
+import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import { CRDTSnapshotNode } from './snapshot-node';
+import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 
 export * from './beekem';
 
@@ -140,9 +142,14 @@ export {
   UCANACLProvider,
   // Wire protocols
   bloomFilterUpdateV1,
+  snapshotLoadV1,
+  // Compaction
+  defaultCompactionConfig,
 };
 
 // Re-export types
 export type { DocumentCapability } from './capabilities';
 export type { UCAN, UCANCapability, UCANPayload } from './ucan';
 export type { UCANACLEntry } from './ucan-acl';
+export type { CRDTSnapshotNode } from './snapshot-node';
+export type { CompactionConfig } from './compaction-config';

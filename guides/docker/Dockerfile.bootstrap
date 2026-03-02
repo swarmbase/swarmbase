@@ -1,0 +1,43 @@
+# SwarmDB DHT Bootstrap Node
+#
+# A lightweight node that serves as a Kademlia DHT bootstrap peer.
+# Use this for large deployments (500+ peers) where pubsub-based
+# peer discovery alone is insufficient.
+#
+# This uses the same relay-server code but could be extended to run
+# the DHT in server mode rather than client mode.
+#
+# Build (from repository root):
+#   docker build -f docs/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/
+#
+# Run:
+#   docker run -p 9001:9001 -p 9002:9002 swarmdb-bootstrap
+#
+# For most deployments, the standard relay server (Dockerfile.relay) is
+# sufficient since it already provides bootstrap functionality via
+# pubsub peer discovery. This image is for deployments that need
+# dedicated DHT infrastructure.
+
+FROM node:22-alpine
+RUN corepack enable
+WORKDIR /app
+
+# Install dependencies
+COPY package.json yarn.lock tsconfig.json ./
+RUN yarn install
+
+# Build
+COPY src ./src
+RUN yarn exec tsc
+
+# Security: run as non-root user
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app \
+    && mkdir -p /shared && chown app:app /shared
+USER app
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=10 --start-period=10s \
+  CMD node -e "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"
+
+EXPOSE 9001 9002
+
+CMD ["node", "dist/index.js"]

@@ -1,0 +1,39 @@
+# SwarmDB Circuit Relay / Bootstrap Node
+#
+# This is a standalone Dockerfile for the relay server.
+# Use this when deploying the relay independently from the monorepo.
+#
+# Build:
+#   docker build -f docs/docker/Dockerfile.relay -t swarmdb-relay relay-server/
+#
+# Run:
+#   docker run -p 9001:9001 -p 9002:9002 swarmdb-relay
+#
+# The relay writes its connection info (peer ID and multiaddresses)
+# to /shared/relay-info.json on startup. Mount a volume to access it:
+#   docker run -p 9001:9001 -p 9002:9002 -v relay-data:/shared swarmdb-relay
+
+FROM node:22-alpine
+RUN corepack enable
+WORKDIR /app
+
+# Install dependencies
+COPY package.json yarn.lock tsconfig.json ./
+RUN yarn install
+
+# Build
+COPY src ./src
+RUN yarn exec tsc
+
+# Security: run as non-root user
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app \
+    && mkdir -p /shared && chown app:app /shared
+USER app
+
+# Health check: verify WebSocket port is accepting connections
+HEALTHCHECK --interval=10s --timeout=5s --retries=10 --start-period=10s \
+  CMD node -e "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"
+
+EXPOSE 9001 9002
+
+CMD ["node", "dist/index.js"]

@@ -1,0 +1,17 @@
+# Caddy reverse proxy for SwarmDB relay servers
+#
+# Terminates TLS and proxies WebSocket connections to the relay.
+# Caddy automatically obtains and renews Let's Encrypt certificates.
+#
+# Set RELAY_DOMAIN environment variable or replace {$RELAY_DOMAIN} below.
+
+{$RELAY_DOMAIN} {
+	reverse_proxy relay-1:9001 relay-2:9001 {
+		# Load balance across relay nodes
+		lb_policy round_robin
+
+		# WebSocket support
+		header_up Connection {>Connection}
+		header_up Upgrade {>Upgrade}
+	}
+}

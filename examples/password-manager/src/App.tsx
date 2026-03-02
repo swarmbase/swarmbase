@@ -57,15 +57,14 @@ function App() {
     [docPath: string]: any[];
   }>({});
   const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); // use copy
-  config &&
-    config.ipfs &&
-    config.ipfs.config &&
-    config.ipfs.config.Addresses &&
-    config.ipfs.config.Addresses.Swarm &&
-    config.ipfs.config.Addresses.Swarm.push(
+  // Add signaling server as a listen address in the Helia/libp2p config.
+  const heliaConfig = config.helia ?? config.ipfs;
+  if (heliaConfig?.libp2p?.addresses?.listen) {
+    heliaConfig.libp2p.addresses.listen.push(
       process.env.REACT_APP_SIGNALING_SERVER ||
         '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
     );
+  }
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,

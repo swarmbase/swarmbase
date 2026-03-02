@@ -77,21 +77,25 @@ class App extends React.Component<
         ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
         : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
       if (process.env.REACT_APP_SIGNALING_SERVER) {
-        config.ipfs.config.Addresses.Swarm.push(
-          process.env.REACT_APP_SIGNALING_SERVER,
-        );
+        // Add signaling server as a listen address in the Helia/libp2p config.
+        const heliaConfig = config.helia ?? config.ipfs;
+        if (heliaConfig?.libp2p?.addresses?.listen) {
+          heliaConfig.libp2p.addresses.listen.push(
+            process.env.REACT_APP_SIGNALING_SERVER,
+          );
+        }
       }
       this.props.onInitialize(config);
     }
   }
 
   render() {
-    const ipfsInfo = (() => {
+    const nodeAddresses = (() => {
       try {
-        return this.props.state.node ? this.props.state.node.ipfsInfo : null;
+        return this.props.state.node ? this.props.state.node.libp2p.getMultiaddrs() : null;
       } catch (ex) {
         // No-op.
-        console.warn('Failed to read ipfs info:', ex);
+        console.warn('Failed to read node addresses:', ex);
       }
       return null;
     })();
@@ -103,9 +107,8 @@ class App extends React.Component<
             <strong>Node Addresses:</strong>
           </div>
           <ul>
-            {ipfsInfo &&
-              ipfsInfo.addresses &&
-              ipfsInfo.addresses.map((address: any, i: number) => (
+            {nodeAddresses &&
+              nodeAddresses.map((address: any, i: number) => (
                 <li key={i}>
                   <pre>{address.toString()}</pre>
                 </li>
