@@ -78,11 +78,13 @@ class App extends React.Component<
         : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
       if (process.env.REACT_APP_SIGNALING_SERVER) {
         // Add signaling server as a listen address in the Helia/libp2p config.
+        const signalingServer = process.env.REACT_APP_SIGNALING_SERVER;
         const heliaConfig = config.helia ?? config.ipfs;
-        if (heliaConfig?.libp2p?.addresses?.listen) {
-          heliaConfig.libp2p.addresses.listen.push(
-            process.env.REACT_APP_SIGNALING_SERVER,
-          );
+        if (heliaConfig) {
+          if (!heliaConfig.libp2p) heliaConfig.libp2p = {};
+          if (!heliaConfig.libp2p.addresses) heliaConfig.libp2p.addresses = { listen: [] };
+          if (!heliaConfig.libp2p.addresses.listen) heliaConfig.libp2p.addresses.listen = [];
+          heliaConfig.libp2p.addresses.listen.push(signalingServer);
         }
       }
       this.props.onInitialize(config);

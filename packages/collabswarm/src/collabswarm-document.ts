@@ -645,6 +645,12 @@ export class CollabswarmDocument<
     if (!this._compactionConfig.enabled) {
       return;
     }
+
+    // Only writers can create snapshots; read-only peers must not attempt compaction.
+    if (!(await this._writers.check(this._userPublicKey))) {
+      return;
+    }
+
     if (this._documentChangeCount < this._compactionConfig.minChangesBeforeSnapshot) {
       return;
     }
@@ -663,6 +669,10 @@ export class CollabswarmDocument<
    * @param keepCount Maximum number of change nodes to retain in the sync tree.
    */
   private _pruneChanges(keepCount: number) {
+    if (keepCount <= 0) {
+      // Pruning everything (including root) is destructive and nonsensical; skip.
+      return;
+    }
     if (!this._lastSyncMessage?.changes || !this._lastSyncMessage.changeId) {
       return;
     }
@@ -1110,6 +1120,9 @@ export class CollabswarmDocument<
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
     this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
+    // Registered proactively for future peer-initiated snapshot requests.
+    // Currently, snapshots are included in the standard load response
+    // (protocolLoadV1), so no client-side code dials this protocol yet.
     this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.
@@ -1281,6 +1294,7 @@ export class CollabswarmDocument<
             stateBytes,
             this._encoder.encode(incoming.lastChangeNodeCID),
             this._encoder.encode(String(incoming.timestamp)),
+            this._encoder.encode(String(incoming.compactedCount)),
           );
           const signatureValid = await this._authProvider.verify(
             signPayload,
@@ -1300,6 +1314,7 @@ export class CollabswarmDocument<
             );
             this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
             this._changesSinceSnapshot = 0;
+            this._documentChangeCount = Math.max(this._documentChangeCount, incoming.compactedCount);
             console.log(
               `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
             );
@@ -1398,14 +1413,6 @@ export class CollabswarmDocument<
   }
 
   /**
-   * @deprecated Use {@link historySize} instead. This method returns the total
-   * node count, not the DAG depth.
-   */
-  public historyDepth(): number {
-    return this.historySize();
-  }
-
-  /**
    * Returns the current snapshot, if one exists.
    */
   public get latestSnapshot(): CRDTSnapshotNode<ChangesType, PublicKey> | undefined {
@@ -1434,18 +1441,20 @@ export class CollabswarmDocument<
     const timestamp = Date.now();
 
     // Create a deterministic payload to sign.
+    const compactedCount = this._hashes.size;
     const stateBytes = this._changesSerializer.serializeChanges(state);
     const signPayload = concatUint8Arrays(
       stateBytes,
       this._encoder.encode(lastChangeNodeCID),
       this._encoder.encode(String(timestamp)),
+      this._encoder.encode(String(compactedCount)),
     );
     const signature = await this._authProvider.sign(signPayload, this._userKey);
 
     const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
       state,
       lastChangeNodeCID,
-      compactedCount: this._hashes.size,
+      compactedCount,
       signature,
       publicKey: this._userPublicKey,
       timestamp,

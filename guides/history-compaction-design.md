@@ -92,12 +92,12 @@ A new protocol `/collabswarm/snapshot-load/1.0.0` is added for peers that explic
 The `CRDTSyncMessage` type is extended with an optional `snapshot` field:
 
 ```typescript
-export type CRDTSyncMessage<ChangesType> = {
+export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   documentId: string;
   changeId?: string;
   changes?: CRDTChangeNode<ChangesType>;
   /** Optional snapshot for fast sync */
-  snapshot?: CRDTSnapshotNode<ChangesType, any>;
+  snapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
   keychainChanges?: ChangesType;
   signature?: string;
 };
