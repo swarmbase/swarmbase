@@ -113,7 +113,7 @@ When a peer receives a sync message with a `snapshot` field:
 A snapshot must be verified before applying:
 
 1. **Writer authorization**: The `publicKey` in the snapshot must be in the document's writer ACL
-2. **Signature verification**: The signature must be valid for the snapshot contents (state + lastChangeNodeCID + compactedCount + timestamp, serialized deterministically)
+2. **Signature verification**: The signature must be valid for the snapshot contents (state + lastChangeNodeCID + timestamp + compactedCount, serialized deterministically)
 3. **Freshness**: The `lastChangeNodeCID` must be a known CID in the DAG (or the peer must trust the snapshot provider)
 
 For new peers joining (who have no existing state), verification relies on:

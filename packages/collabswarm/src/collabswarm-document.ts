@@ -507,7 +507,7 @@ export class CollabswarmDocument<
       // Fetch missing hashes from the Helia blockstore.
       const cid = CID.parse(missingHash);
       this._getBlock(cid)
-        .then((missingChanges) => {
+        .then(async (missingChanges) => {
           if (missingChanges) {
             switch (missingHashKind) {
               case crdtDocumentChangeNode: {
@@ -518,7 +518,9 @@ export class CollabswarmDocument<
                 this._hashes.add(missingHash);
                 this._documentChangeCount++;
                 this._changesSinceSnapshot++;
-                return this._fireRemoteUpdateHandlers([missingHash]);
+                await this._fireRemoteUpdateHandlers([missingHash]);
+                await this._maybeCompact();
+                return;
               }
               case crdtReaderChangeNode: {
                 this._readers.merge(missingChanges);
