@@ -276,7 +276,7 @@ export class CollabswarmDocument<
     /**
      * SyncMessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
-    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
 
     /**
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
@@ -289,8 +289,10 @@ export class CollabswarmDocument<
     this._readers = this._aclProvider.initialize();
     this._writers = this._aclProvider.initialize();
     this._keychain = this._keychainProvider.initialize();
-    this._compactionConfig =
-      this.swarm.config?.compaction ?? { ...defaultCompactionConfig };
+    this._compactionConfig = {
+      ...defaultCompactionConfig,
+      ...(this.swarm.config?.compaction ?? {}),
+    };
   }
 
   // Helpers ------------------------------------------------------------------
@@ -1036,10 +1038,8 @@ export class CollabswarmDocument<
             rawContent = assembled;
           }
 
-          // Cast: the serializer returns CRDTSyncMessage<ChangesType, unknown> but
-          // at runtime the deserialized snapshot (if any) contains the concrete PublicKey.
           const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent) as CRDTSyncMessage<ChangesType, PublicKey>;
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
           console.log(
             `received ${this.protocolLoadV1} response (decrypted)`,
           );
@@ -1098,10 +1098,8 @@ export class CollabswarmDocument<
             return this.load();
           }
 
-          // Cast: the serializer returns CRDTSyncMessage<ChangesType, unknown> but
-          // at runtime the deserialized snapshot (if any) contains the concrete PublicKey.
           const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent) as CRDTSyncMessage<ChangesType, PublicKey>;
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
           return this.sync(message);
         },
@@ -1313,8 +1311,11 @@ export class CollabswarmDocument<
               incoming.state,
             );
             this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
+            // Reset the per-snapshot change counter, but do not adjust
+            // _documentChangeCount from incoming.compactedCount, since
+            // compactedCount counts all node kinds (including ACL changes)
+            // whereas _documentChangeCount tracks only document-kind changes.
             this._changesSinceSnapshot = 0;
-            this._documentChangeCount = Math.max(this._documentChangeCount, incoming.compactedCount);
             console.log(
               `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
             );

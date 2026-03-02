@@ -149,7 +149,7 @@ export class CollabswarmNode<
     private readonly nodePublicKey: PublicKey,
     public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
-    public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
     public readonly loadMessageSerializer: LoadMessageSerializer,
     public readonly authProvider: AuthProvider<
       PrivateKey,

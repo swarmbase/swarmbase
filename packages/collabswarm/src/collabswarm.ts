@@ -81,7 +81,7 @@ export class Collabswarm<
       ChangeFnType
     >,
     private readonly _changesSerializer: ChangesSerializer<ChangesType>,
-    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
     private readonly _loadMessageSerializer: LoadMessageSerializer,
     private readonly _authProvider: AuthProvider<
       PrivateKey,

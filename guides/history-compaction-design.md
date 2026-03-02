@@ -5,7 +5,7 @@
 SwarmDB stores document changes as a Merkle-DAG where every edit produces a new `CRDTChangeNode` linked to its parent(s). This design provides causal ordering, deduplication, and tamper detection, but the change history **grows unboundedly**:
 
 - **N edits = N DAG nodes** (plus ACL change nodes for reader/writer modifications)
-- Each node is stored encrypted in IPFS blockstore and referenced in the sync tree
+- Each node is stored encrypted in Helia blockstore and referenced in the sync tree
 - The `_lastSyncMessage` carries the entire DAG structure in its `changes` field
 - When a new peer joins, `load()` transmits the **full Merkle-DAG** to reconstruct the document
 
@@ -42,7 +42,7 @@ A snapshot is created by an authorized **writer** when the number of un-compacte
 1. Serialize the current CRDT document state via `CRDTProvider.getSnapshot(doc)` (already defined as optional on the interface)
 2. Record the CID of the most recent change node included in the snapshot
 3. Sign the snapshot with the writer's private key
-4. Store the snapshot in IPFS blockstore (encrypted with the current document key)
+4. Store the snapshot in Helia blockstore (encrypted with the current document key)
 5. Broadcast a sync message containing the snapshot node
 
 ### 2.3 Snapshot Node Format
@@ -58,7 +58,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
   /** Number of change nodes compacted into this snapshot */
   compactedCount: number;
 
-  /** Signature of the snapshot creator (signs the state + lastChangeNodeCID + timestamp) */
+  /** Signature of the snapshot creator (signs the state + lastChangeNodeCID + compactedCount + timestamp) */
   signature: Uint8Array;
 
   /** Public key of the snapshot creator */
@@ -113,7 +113,7 @@ When a peer receives a sync message with a `snapshot` field:
 A snapshot must be verified before applying:
 
 1. **Writer authorization**: The `publicKey` in the snapshot must be in the document's writer ACL
-2. **Signature verification**: The signature must be valid for the snapshot contents (state + lastChangeNodeCID + timestamp, serialized deterministically)
+2. **Signature verification**: The signature must be valid for the snapshot contents (state + lastChangeNodeCID + compactedCount + timestamp, serialized deterministically)
 3. **Freshness**: The `lastChangeNodeCID` must be a known CID in the DAG (or the peer must trust the snapshot provider)
 
 For new peers joining (who have no existing state), verification relies on:
@@ -124,9 +124,9 @@ For new peers joining (who have no existing state), verification relies on:
 
 Multiple peers may create snapshots concurrently. This is handled by:
 
-1. **Latest wins**: Peers prefer the snapshot with the highest `compactedCount` (or highest `lastChangeNodeCID` in topological order)
-2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent state
-3. **Convergence**: After receiving a peer's snapshot, a node replaces its own snapshot if the received one is more recent
+1. **Deterministic tie-break**: Peers compare snapshots using a three-part tuple: (a) highest `compactedCount` wins; (b) if tied, highest `timestamp` wins; (c) if still tied, lexicographically highest signer public key hash wins. This ordering is fully deterministic and implementable without causal metadata.
+2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent CRDT state, but the metadata (`compactedCount`, `timestamp`) determines which snapshot is preferred.
+3. **Convergence**: After receiving a peer's snapshot, a node replaces its own snapshot if the received one ranks higher by the tie-break tuple above
 
 ### 2.8 Configuration
 

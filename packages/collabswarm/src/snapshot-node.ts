@@ -28,7 +28,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
   /**
    * Signature of the snapshot creator.
-   * Signs the deterministic serialization of (state + lastChangeNodeCID + timestamp).
+   * Signs the deterministic serialization of (state + lastChangeNodeCID + compactedCount + timestamp).
    */
   signature: Uint8Array;
 
