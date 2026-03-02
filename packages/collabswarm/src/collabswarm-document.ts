@@ -534,6 +534,10 @@ export class CollabswarmDocument<
           );
         });
     }
+
+    // Trigger compaction check for remote changes (local changes already
+    // call _maybeCompact from _makeChange).
+    await this._maybeCompact();
   }
 
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
@@ -657,23 +661,31 @@ export class CollabswarmDocument<
     }
 
     // BFS traversal to collect nodes up to the limit.
+    // ACL nodes (reader/writer) are always preserved regardless of keepCount.
     const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType> }> = [
       { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
     ];
-    let visited = 0;
-    const boundaryNodes: CRDTChangeNode<ChangesType>[] = [];
+    let documentNodesVisited = 0;
 
-    while (queue.length > 0 && visited < keepCount) {
+    while (queue.length > 0) {
       const current = queue.shift()!;
-      visited++;
+
+      // ACL nodes are always kept — never count them toward the limit.
+      const isACLNode =
+        current.node.kind === crdtReaderChangeNode ||
+        current.node.kind === crdtWriterChangeNode;
+
+      if (!isACLNode) {
+        documentNodesVisited++;
+      }
 
       if (
         current.node.children !== undefined &&
         current.node.children !== crdtChangeNodeDeferred
       ) {
-        if (visited >= keepCount) {
-          // This node is at the boundary — mark it for pruning.
-          boundaryNodes.push(current.node);
+        if (!isACLNode && documentNodesVisited >= keepCount) {
+          // This document node is at the boundary — prune its children.
+          delete current.node.children;
         } else {
           for (const [childHash, childNode] of Object.entries(current.node.children)) {
             queue.push({ id: childHash, node: childNode });
@@ -682,19 +694,8 @@ export class CollabswarmDocument<
       }
     }
 
-    // Any remaining nodes in the queue are beyond the limit — their parents
-    // need to have children removed. Also prune boundary nodes.
-    for (const node of boundaryNodes) {
-      delete node.children;
-    }
-    // For any nodes still in the queue (children of already-visited nodes that
-    // pushed their children before hitting the limit), prune their children too.
-    for (const entry of queue) {
-      delete entry.node.children;
-    }
-
     console.log(
-      `Pruned change tree for ${this.documentPath}: kept ${visited} of ${this._hashes.size} nodes`,
+      `Pruned change tree for ${this.documentPath}: kept ${documentNodesVisited} document nodes of ${this._hashes.size} total nodes`,
     );
   }
 
@@ -818,8 +819,46 @@ export class CollabswarmDocument<
     pipe(
       stream.source,
       async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        // Drain the request (no payload expected, just a dial).
-        await readUint8Iterable(source);
+        const assembledRequest = await readUint8Iterable(source);
+        const message =
+          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+        console.log(
+          `received ${this.protocolSnapshotLoadV1} request:`,
+          assembledRequest,
+          message,
+        );
+
+        if (message.documentId !== this.documentPath) {
+          console.warn(
+            `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+          );
+          return [];
+        }
+
+        // Verify that this user is a reader or writer.
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        let requestor: PublicKey | undefined;
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            requestor = reader;
+            break;
+          }
+        }
+
+        if (!requestor) {
+          console.warn(
+            `Detected an unauthorized snapshot load request for ${message.documentId}`,
+          );
+          return [];
+        }
 
         if (!this._latestSnapshot) {
           // No snapshot available — respond with empty payload so the peer
@@ -980,8 +1019,10 @@ export class CollabswarmDocument<
             rawContent = assembled;
           }
 
+          // Cast: the serializer returns CRDTSyncMessage<ChangesType, unknown> but
+          // at runtime the deserialized snapshot (if any) contains the concrete PublicKey.
           const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent) as CRDTSyncMessage<ChangesType, PublicKey>;
           console.log(
             `received ${this.protocolLoadV1} response (decrypted)`,
           );
@@ -1040,8 +1081,10 @@ export class CollabswarmDocument<
             return this.load();
           }
 
+          // Cast: the serializer returns CRDTSyncMessage<ChangesType, unknown> but
+          // at runtime the deserialized snapshot (if any) contains the concrete PublicKey.
           const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+            this._syncMessageSerializer.deserializeSyncMessage(rawContent) as CRDTSyncMessage<ChangesType, PublicKey>;
 
           return this.sync(message);
         },
@@ -1165,7 +1208,7 @@ export class CollabswarmDocument<
    * @param message A sync message to apply.
    */
   public async sync(
-    message: CRDTSyncMessage<ChangesType>,
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
     verifySignature = true,
   ) {
     const { signature, ...messageWithoutSignature } = message;
@@ -1219,9 +1262,9 @@ export class CollabswarmDocument<
         incoming.compactedCount > this._latestSnapshot.compactedCount
       ) {
         // Verify the snapshot creator is an authorized writer.
-        const snapshotPublicKey = incoming.publicKey as PublicKey;
+        const snapshotPublicKey = incoming.publicKey;
         if (!(await this._writers.check(snapshotPublicKey))) {
-          console.error(
+          console.warn(
             `Rejected snapshot for ${this.documentPath}: creator's public key is not in the writer ACL`,
           );
         } else {
@@ -1238,7 +1281,7 @@ export class CollabswarmDocument<
             incoming.signature,
           );
           if (!signatureValid) {
-            console.error(
+            console.warn(
               `Rejected snapshot for ${this.documentPath}: invalid signature`,
             );
           } else {

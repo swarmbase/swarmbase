@@ -258,8 +258,11 @@ export class CollabswarmNode<
                     // Helia pins.add() returns an AsyncGenerator — fire and drain it.
                     (async () => {
                       for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
-                    })().catch((err) => console.error('Failed to pin CID', cid, err));
-                    this._seenCids.add(cid);
+                      this._seenCids.add(cid);
+                    })().catch((err) => {
+                      this._seenCids.delete(cid);
+                      console.error('Failed to pin CID', cid, err);
+                    });
                   }
                 }
               },
