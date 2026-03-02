@@ -132,3 +132,7 @@ client-config.env
 /blob-report/
 /playwright/.cache/
 
+# Benchmark build artifacts and results
+dist-bench/
+paper/results/
+

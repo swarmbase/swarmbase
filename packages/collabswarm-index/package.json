@@ -7,7 +7,7 @@
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
-    "benchmark": "node --loader ts-node/esm src/__benchmarks__/run.ts"
+    "benchmark": "tsc -b tsconfig.benchmark.json && echo '{\"type\":\"commonjs\"}' > dist-bench/package.json && node dist-bench/__benchmarks__/run.js"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
