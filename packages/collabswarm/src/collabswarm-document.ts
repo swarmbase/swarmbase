@@ -157,7 +157,7 @@ export class CollabswarmDocument<
    */
 
   // Last sync message (for populating load requests).
-  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
+  private _lastSyncMessage?: CRDTSyncMessage<ChangesType, PublicKey>;
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
@@ -168,6 +168,9 @@ export class CollabswarmDocument<
   private _compactionConfig: CompactionConfig;
   private _latestSnapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
   private _changesSinceSnapshot = 0;
+  // Counts only document-kind changes (excludes ACL reader/writer changes).
+  // Used by _maybeCompact() for the minChangesBeforeSnapshot threshold.
+  private _documentChangeCount = 0;
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
@@ -425,8 +428,8 @@ export class CollabswarmDocument<
     }
   }
 
-  private _createSyncMessage(): CRDTSyncMessage<ChangesType> {
-    const message: CRDTSyncMessage<ChangesType> = {
+  private _createSyncMessage(): CRDTSyncMessage<ChangesType, PublicKey> {
+    const message: CRDTSyncMessage<ChangesType, PublicKey> = {
       ...(this._lastSyncMessage || {
         documentId: this.documentPath,
       }),
@@ -460,6 +463,7 @@ export class CollabswarmDocument<
               sentChanges,
             );
             newDocumentHashes.push(sentHash);
+            this._documentChangeCount++;
             break;
           }
           case crdtReaderChangeNode: {
@@ -501,6 +505,7 @@ export class CollabswarmDocument<
                   missingChanges,
                 );
                 this._hashes.add(missingHash);
+                this._documentChangeCount++;
                 return this._fireRemoteUpdateHandlers([missingHash]);
               }
               case crdtReaderChangeNode: {
@@ -547,7 +552,7 @@ export class CollabswarmDocument<
   }
 
   private async _signAsWriter(
-    message: CRDTSyncMessage<ChangesType>,
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
@@ -616,6 +621,7 @@ export class CollabswarmDocument<
 
     // Track document changes for compaction.
     if (kind === crdtDocumentChangeNode) {
+      this._documentChangeCount++;
       this._changesSinceSnapshot++;
       await this._maybeCompact();
     }
@@ -628,13 +634,68 @@ export class CollabswarmDocument<
     if (!this._compactionConfig.enabled) {
       return;
     }
-    if (this._hashes.size < this._compactionConfig.minChangesBeforeSnapshot) {
+    if (this._documentChangeCount < this._compactionConfig.minChangesBeforeSnapshot) {
       return;
     }
     if (this._changesSinceSnapshot < this._compactionConfig.snapshotInterval) {
       return;
     }
     await this.snapshot();
+  }
+
+  /**
+   * Prune the change tree in the last sync message to keep only the most recent
+   * N change nodes. Nodes beyond the limit have their children removed, turning
+   * them into leaf nodes. Old blocks remain in the Helia blockstore for peers
+   * that already have them.
+   *
+   * @param keepCount Maximum number of change nodes to retain in the sync tree.
+   */
+  private _pruneChanges(keepCount: number) {
+    if (!this._lastSyncMessage?.changes || !this._lastSyncMessage.changeId) {
+      return;
+    }
+
+    // BFS traversal to collect nodes up to the limit.
+    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType> }> = [
+      { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
+    ];
+    let visited = 0;
+    const boundaryNodes: CRDTChangeNode<ChangesType>[] = [];
+
+    while (queue.length > 0 && visited < keepCount) {
+      const current = queue.shift()!;
+      visited++;
+
+      if (
+        current.node.children !== undefined &&
+        current.node.children !== crdtChangeNodeDeferred
+      ) {
+        if (visited >= keepCount) {
+          // This node is at the boundary — mark it for pruning.
+          boundaryNodes.push(current.node);
+        } else {
+          for (const [childHash, childNode] of Object.entries(current.node.children)) {
+            queue.push({ id: childHash, node: childNode });
+          }
+        }
+      }
+    }
+
+    // Any remaining nodes in the queue are beyond the limit — their parents
+    // need to have children removed. Also prune boundary nodes.
+    for (const node of boundaryNodes) {
+      delete node.children;
+    }
+    // For any nodes still in the queue (children of already-visited nodes that
+    // pushed their children before hitting the limit), prune their children too.
+    for (const entry of queue) {
+      delete entry.node.children;
+    }
+
+    console.log(
+      `Pruned change tree for ${this.documentPath}: kept ${visited} of ${this._hashes.size} nodes`,
+    );
   }
 
   private _handleLoadRequest: StreamHandler = ({ stream }) => {
@@ -749,6 +810,63 @@ export class CollabswarmDocument<
       },
     ).catch((err: unknown) => {
       console.error(`Error handling ${this.protocolLoadV1} load request:`, err);
+    });
+  };
+
+  private _handleSnapshotLoadRequest: StreamHandler = ({ stream }) => {
+    console.log(`received ${this.protocolSnapshotLoadV1} dial`);
+    pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+        // Drain the request (no payload expected, just a dial).
+        await readUint8Iterable(source);
+
+        if (!this._latestSnapshot) {
+          // No snapshot available — respond with empty payload so the peer
+          // can fall back to the normal doc-load protocol.
+          console.log(
+            `No snapshot available for ${this.documentPath}, sending empty response`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return [];
+        }
+
+        // Wrap the snapshot in a sync message so it can be serialized
+        // with the standard serializer.
+        const snapshotMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
+          documentId: this.documentPath,
+          snapshot: this._latestSnapshot,
+        };
+        snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
+
+        const serialized =
+          this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
+
+        // Encrypt the response.
+        const [documentKeyID, documentKey] = await this._keychain.current();
+        if (!documentKey) {
+          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+        }
+        const { nonce, data } = await this._authProvider.encrypt(
+          serialized,
+          documentKey,
+        );
+        if (!nonce) {
+          throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
+        }
+        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+        console.log(
+          `sending ${this.protocolSnapshotLoadV1} response (encrypted)`,
+        );
+
+        await stream.sink([assembled] as Iterable<Uint8Array>);
+        return [];
+      },
+    ).catch((err: unknown) => {
+      console.error(
+        `Error handling ${this.protocolSnapshotLoadV1} snapshot load request:`,
+        err,
+      );
     });
   };
 
@@ -942,6 +1060,7 @@ export class CollabswarmDocument<
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
     this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
+    this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -1035,6 +1154,7 @@ export class CollabswarmDocument<
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
     await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
   }
 
   /**
@@ -1098,17 +1218,43 @@ export class CollabswarmDocument<
         !this._latestSnapshot ||
         incoming.compactedCount > this._latestSnapshot.compactedCount
       ) {
-        // Apply the snapshot state. CRDTs converge, so applying a full state
-        // snapshot via remoteChange is safe and produces the correct result.
-        this._document = this._crdtProvider.remoteChange(
-          this._document,
-          incoming.state,
-        );
-        this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
-        this._changesSinceSnapshot = 0;
-        console.log(
-          `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
-        );
+        // Verify the snapshot creator is an authorized writer.
+        const snapshotPublicKey = incoming.publicKey as PublicKey;
+        if (!(await this._writers.check(snapshotPublicKey))) {
+          console.error(
+            `Rejected snapshot for ${this.documentPath}: creator's public key is not in the writer ACL`,
+          );
+        } else {
+          // Verify the snapshot signature against the deterministic payload.
+          const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
+          const signPayload = concatUint8Arrays(
+            stateBytes,
+            this._encoder.encode(incoming.lastChangeNodeCID),
+            this._encoder.encode(String(incoming.timestamp)),
+          );
+          const signatureValid = await this._authProvider.verify(
+            signPayload,
+            snapshotPublicKey,
+            incoming.signature,
+          );
+          if (!signatureValid) {
+            console.error(
+              `Rejected snapshot for ${this.documentPath}: invalid signature`,
+            );
+          } else {
+            // Apply the snapshot state. CRDTs converge, so applying a full state
+            // snapshot via remoteChange is safe and produces the correct result.
+            this._document = this._crdtProvider.remoteChange(
+              this._document,
+              incoming.state,
+            );
+            this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
+            this._changesSinceSnapshot = 0;
+            console.log(
+              `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
+            );
+          }
+        }
       }
     }
 
@@ -1250,6 +1396,11 @@ export class CollabswarmDocument<
     // Update the last sync message to include the snapshot.
     if (this._lastSyncMessage) {
       this._lastSyncMessage.snapshot = snapshotNode;
+
+      // Prune old change nodes from the sync tree if configured.
+      if (this._compactionConfig.pruneAfterSnapshot) {
+        this._pruneChanges(this._compactionConfig.keepRecentNodes);
+      }
     }
 
     console.log(
@@ -1391,7 +1542,7 @@ export class CollabswarmDocument<
     keychainChanges: ChangesType,
     previousKey: [Uint8Array, DocumentKey],
   ) {
-    const keyUpdateMessage: CRDTSyncMessage<ChangesType> = {
+    const keyUpdateMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: this.documentPath,
       keychainChanges,
     };

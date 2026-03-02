@@ -7,7 +7,7 @@ import { CRDTSnapshotNode } from './snapshot-node';
  *
  * @typeParam ChangesType A block of CRDT change(s).
  */
-export type CRDTSyncMessage<ChangesType> = {
+export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   /**
    * ID of a collabswarm document.
    */
@@ -33,7 +33,7 @@ export type CRDTSyncMessage<ChangesType> = {
    * When present, peers can load from the snapshot state instead of replaying
    * the full change history. Post-snapshot changes are still included in `changes`.
    */
-  snapshot?: CRDTSnapshotNode<ChangesType, unknown>;
+  snapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
 
   /**
    * Optional document keys list. Only populated while loading and receiving a document

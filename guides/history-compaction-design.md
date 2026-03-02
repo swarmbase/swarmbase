@@ -27,7 +27,7 @@ The core issue: **initial sync time grows linearly** with edit count, making lon
 
 Introduce a new node type in the Merkle-DAG: **snapshot nodes**. A snapshot node contains the full serialized CRDT state at a given point in history, acting as a checkpoint. Peers can load from the latest snapshot instead of replaying the entire change history.
 
-```
+```text
 Before compaction:
   [change-1] <- [change-2] <- ... <- [change-N] (root)
 
@@ -160,7 +160,7 @@ Default values:
 
 ### 3.1 New Protocol
 
-```
+```text
 /collabswarm/snapshot-load/1.0.0
 ```
 

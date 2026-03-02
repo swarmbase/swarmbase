@@ -63,7 +63,12 @@ class WikiArticle extends React.Component<
       if (process.env.REACT_APP_SIGNALING_SERVER) {
         // Add signaling server as a listen address in the Helia/libp2p config.
         const heliaConfig = config.helia ?? config.ipfs;
-        if (heliaConfig?.libp2p?.addresses?.listen) {
+        if (heliaConfig?.libp2p) {
+          if (!heliaConfig.libp2p.addresses) {
+            heliaConfig.libp2p.addresses = { listen: [] };
+          } else if (!heliaConfig.libp2p.addresses.listen) {
+            heliaConfig.libp2p.addresses.listen = [];
+          }
           heliaConfig.libp2p.addresses.listen.push(
             process.env.REACT_APP_SIGNALING_SERVER,
           );

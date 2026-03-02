@@ -5,7 +5,7 @@
 # This compose file demonstrates the architecture on a single machine.
 #
 # Usage:
-#   docker compose -f docs/docker/docker-compose.production.yaml up -d
+#   docker compose -f guides/docker/docker-compose.production.yaml up -d
 #
 # Prerequisites:
 #   - Set RELAY_DOMAIN environment variable to your domain

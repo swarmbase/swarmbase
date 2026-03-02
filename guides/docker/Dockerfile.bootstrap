@@ -8,7 +8,7 @@
 # the DHT in server mode rather than client mode.
 #
 # Build (from repository root):
-#   docker build -f docs/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/
+#   docker build -f guides/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/
 #
 # Run:
 #   docker run -p 9001:9001 -p 9002:9002 swarmdb-bootstrap

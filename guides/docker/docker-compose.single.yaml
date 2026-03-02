@@ -4,10 +4,10 @@
 # This is the minimum infrastructure needed for SwarmDB.
 #
 # Usage:
-#   docker compose -f docs/docker/docker-compose.single.yaml up -d
+#   docker compose -f guides/docker/docker-compose.single.yaml up -d
 #
 # After startup, retrieve the relay multiaddress:
-#   docker compose -f docs/docker/docker-compose.single.yaml exec relay cat /shared/relay-info.json
+#   docker compose -f guides/docker/docker-compose.single.yaml exec relay cat /shared/relay-info.json
 #
 # Configure your SwarmDB client with the wsMultiaddr from relay-info.json.
 

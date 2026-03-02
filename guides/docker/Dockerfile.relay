@@ -4,7 +4,7 @@
 # Use this when deploying the relay independently from the monorepo.
 #
 # Build:
-#   docker build -f docs/docker/Dockerfile.relay -t swarmdb-relay relay-server/
+#   docker build -f guides/docker/Dockerfile.relay -t swarmdb-relay relay-server/
 #
 # Run:
 #   docker run -p 9001:9001 -p 9002:9002 swarmdb-relay

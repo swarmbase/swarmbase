@@ -70,7 +70,7 @@ export function Settings({
               <ActionCell value={serializedKey}></ActionCell>
             </tr>}
 
-            {!serializeKey && (collabswarm.libp2p.getMultiaddrs().length === 0) && (
+            {!serializedKey && (collabswarm.libp2p.getMultiaddrs().length === 0) && (
               <tr>
                 <td colSpan={3}>No settings found!</td>
               </tr>

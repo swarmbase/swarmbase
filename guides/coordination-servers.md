@@ -49,7 +49,7 @@ In SwarmDB, the bootstrap node and relay node are combined into a single process
 In SwarmDB's architecture, the relay server runs `circuitRelayServer()` which implements libp2p Circuit Relay V2. Browser clients configure `circuitRelayTransport()` to connect through the relay.
 
 **Data flow through relay:**
-```
+```text
 Browser A ──WebSocket──> Relay Server ──WebSocket──> Browser B
                   (Circuit Relay V2)
 ```
@@ -126,7 +126,7 @@ At minimum, you need **one relay/bootstrap server** and access to **public STUN 
 
 ### 2.2 Architecture
 
-```
+```text
                     ┌─────────────────────┐
                     │   Your Server       │
                     │                     │
@@ -154,7 +154,7 @@ At minimum, you need **one relay/bootstrap server** and access to **public STUN 
 
 ```bash
 # From the repository root
-docker compose -f docs/docker/docker-compose.single.yaml up -d
+docker compose -f guides/docker/docker-compose.single.yaml up -d
 ```
 
 Or build and run the relay server directly:
@@ -236,7 +236,7 @@ server {
 ```
 
 With TLS, clients connect using:
-```
+```text
 /dns4/relay.yourdomain.com/tcp/443/wss/p2p/<RELAY_PEER_ID>
 ```
 
@@ -258,7 +258,7 @@ The relay server currently reads no environment variables. Configuration is done
 
 For production with 100+ peers, deploy multiple relay nodes behind a load balancer.
 
-```
+```text
                           ┌──────────────┐
                           │   DNS / LB   │
                           │ relay.app.com│
@@ -446,7 +446,7 @@ For persistent data storage without running your own pinning node:
 
 ## 5. Docker Deployment Configs
 
-Ready-to-use Docker configurations are provided in `docs/docker/`.
+Ready-to-use Docker configurations are provided in `guides/docker/`.
 
 ### 5.1 Files
 
@@ -461,32 +461,35 @@ Ready-to-use Docker configurations are provided in `docs/docker/`.
 
 ```bash
 # Start the relay server
-docker compose -f docs/docker/docker-compose.single.yaml up -d
+docker compose -f guides/docker/docker-compose.single.yaml up -d
 
 # View relay connection info
-docker compose -f docs/docker/docker-compose.single.yaml exec relay cat /shared/relay-info.json
+docker compose -f guides/docker/docker-compose.single.yaml exec relay cat /shared/relay-info.json
 
 # View logs
-docker compose -f docs/docker/docker-compose.single.yaml logs -f relay
+docker compose -f guides/docker/docker-compose.single.yaml logs -f relay
 
 # Stop
-docker compose -f docs/docker/docker-compose.single.yaml down
+docker compose -f guides/docker/docker-compose.single.yaml down
 ```
 
 ### 5.3 Production Deployment
 
 ```bash
 # Start all services
-docker compose -f docs/docker/docker-compose.production.yaml up -d
-
-# Scale relay nodes
-docker compose -f docs/docker/docker-compose.production.yaml up -d --scale relay=3
+docker compose -f guides/docker/docker-compose.production.yaml up -d
 
 # Monitor health
-docker compose -f docs/docker/docker-compose.production.yaml ps
+docker compose -f guides/docker/docker-compose.production.yaml ps
 ```
 
-See individual Dockerfile documentation in `docs/docker/` for build instructions.
+> **Scaling:** The production compose file defines individually named relay services
+> (`relay-1`, `relay-2`) rather than a single scalable `relay` service, because each
+> relay node needs unique port mappings and may run on separate hosts. To add more
+> relay nodes, duplicate a `relay-N` service block in the compose file with
+> appropriate port offsets.
+
+See individual Dockerfile documentation in `guides/docker/` for build instructions.
 
 ---
 
@@ -544,7 +547,7 @@ localStorage.setItem('debug', 'libp2p:*')
 ### 6.3 Verifying the Relay is Working
 
 1. **Check relay startup output:**
-   ```
+   ```text
    PeerId: 12D3KooW...
    Multiaddrs: [ '/ip4/0.0.0.0/tcp/9001/ws/p2p/12D3KooW...' ]
    Subscribed to topics: swarmdb._peer-discovery._p2p._pubsub /swarmdb/integration-test/sync

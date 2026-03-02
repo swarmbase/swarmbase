@@ -27,7 +27,7 @@ export interface CompactionConfig {
   /**
    * Whether to prune old DAG nodes from sync messages after a snapshot.
    * When true, only the snapshot + post-snapshot changes are included in sync messages.
-   * Old blocks remain in IPFS blockstore for peers that already have them.
+   * Old blocks remain in Helia blockstore for peers that already have them.
    */
   pruneAfterSnapshot: boolean;
 
