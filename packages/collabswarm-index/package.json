@@ -34,7 +34,7 @@
     "jest": "^29.2.5",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.1.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
