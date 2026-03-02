@@ -516,7 +516,7 @@ See individual Dockerfile documentation in `guides/docker/` for build instructio
 1. **Relay not forwarding:** Ensure the relay has `floodPublish: true` and `canRelayMessage: true` in GossipSub config
 2. **Topic mismatch:** Verify both peers subscribe to the same topic (e.g., `/document/<id>`)
 3. **Mesh not formed:** GossipSub mesh takes 5-10 seconds to form. Wait or send warmup messages
-4. **libp2p version mismatch:** gossipsub v14.x only works with libp2p v2.x. See CLAUDE.md for the compatible version matrix
+4. **libp2p version mismatch:** gossipsub v14.x only works with libp2p v2.x. Verify that your `@chainsafe/libp2p-gossipsub` and `libp2p` versions are compatible by checking their release notes or the official libp2p documentation.
 
 #### "WebRTC connection fails"
 
