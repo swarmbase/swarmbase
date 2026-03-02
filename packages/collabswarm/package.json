@@ -25,7 +25,7 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.1.0",
     "typedoc": "^0.26.7",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3"
   },
   "resolutions": {
     "jest": "^29.2.5",
