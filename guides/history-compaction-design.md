@@ -74,7 +74,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can be pruned from the in-memory sync tree:
 
 - **Sync tree pruning**: The `_lastSyncMessage.changes` tree is replaced with a tree rooted at the snapshot node, with only post-snapshot change nodes as children. This reduces the size of sync messages sent to new peers.
-- **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. The current implementation only prunes the in-memory sync message tree; blockstore-level unpinning of old blocks is a future enhancement.
+- **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. `_pruneChanges` only removes nodes from the in-memory sync message tree (`_lastSyncMessage.changes`); it does **not** remove or unpin blocks from the Helia blockstore. Blockstore-level garbage collection of old blocks is not yet implemented (TODO: add optional blockstore GC pass after pruning).
 - **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync
 
 The key insight: **CRDTs are designed to converge from any state**. A Yjs `encodeStateAsUpdate` or Automerge `save` produces a snapshot that any peer can apply via `remoteChange()` to arrive at the same state, without needing individual change history.
@@ -124,8 +124,8 @@ For new peers joining (who have no existing state), verification relies on:
 
 Multiple peers may create snapshots concurrently. This is handled by:
 
-1. **Deterministic tie-break**: Peers compare snapshots using a three-part tuple: (a) highest `compactedCount` wins; (b) if tied, highest `timestamp` wins; (c) if still tied, lexicographically highest signer public key hash wins. This ordering is fully deterministic and implementable without causal metadata.
-2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent CRDT state, but the metadata (`compactedCount`, `timestamp`) determines which snapshot is preferred.
+1. **Deterministic tie-break**: Peers compare snapshots using a two-part tuple: (a) highest `compactedCount` wins; (b) if tied, the snapshot whose CID (as a raw byte string) is lexicographically greatest wins. This ordering is fully deterministic because CIDs are content-addressed and identical across all peers. Timestamps are intentionally excluded from tie-breaking because clock skew between peers would cause divergent snapshot selection.
+2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent CRDT state, but the metadata (`compactedCount`) and CID determine which snapshot is preferred.
 3. **Convergence**: After receiving a peer's snapshot, a node replaces its own snapshot if the received one ranks higher by the tie-break tuple above
 
 ### 2.8 Configuration
