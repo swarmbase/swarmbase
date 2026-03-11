@@ -395,7 +395,7 @@ function getTotal(): number {
 
 **When to use**: Vote counts, view counters, like counts, any numeric aggregation.
 
-**Caveat**: A single peer incrementing rapidly still has the lost-update problem if they do so across disconnected sessions (same peer ID, two concurrent increments). In practice this is rare because a single peer serializes its own operations locally.
+**Caveat**: This pattern assumes each peer has a unique identifier. If the same peer identifier is reused across multiple Y.js client instances (e.g., multiple browser tabs), concurrent increments from those instances may still conflict. A single Y.js client's operations are totally ordered by its logical clock, so true concurrency within one client does not occur.
 
 ### 3.5 Nested Documents
 
@@ -521,12 +521,10 @@ function nextTimestamp(): number {
   return logicalClock;
 }
 
-// On receiving remote changes, advance clock
+// On receiving remote changes, advance clock (Lamport rule: max + 1)
 meta.observe(() => {
   const remoteClock = meta.get('clock') as number;
-  if (remoteClock > logicalClock) {
-    logicalClock = remoteClock;
-  }
+  logicalClock = Math.max(logicalClock, remoteClock) + 1;
 });
 ```
 

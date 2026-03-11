@@ -227,7 +227,7 @@ export class Collabswarm<
     this.libp2p.addEventListener('peer:disconnect', (connection) => {
       const peerAddress = connection.detail.toString();
       const peerIndex = this._peerAddrs.indexOf(peerAddress);
-      if (peerIndex > 0) {
+      if (peerIndex >= 0) {
         this._peerAddrs.splice(peerIndex, 1);
       }
       for (const [, handler] of this._peerDisconnectHandlers) {
@@ -250,8 +250,12 @@ export class Collabswarm<
     // Connect to bootstrapping node(s).
     const connectionPromises: Promise<unknown>[] = [];
     for (const address of addresses) {
+      // Multiaddr strings start with '/'; bare peer IDs need conversion.
+      const dialTarget = address.startsWith('/')
+        ? address as any  // libp2p.dial() accepts multiaddr strings
+        : peerIdFromString(address);
       connectionPromises.push(
-        this.heliaNode.libp2p.dial(peerIdFromString(address)),
+        this.heliaNode.libp2p.dial(dialTarget),
       );
     }
     await Promise.all(connectionPromises);
