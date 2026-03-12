@@ -256,13 +256,12 @@ export class CollabswarmNode<
               (doc, readers, writers, hashes) => {
                 for (const cid of hashes) {
                   if (!this._seenCids.has(cid)) {
-                    // TODO: Handle this operation failing (retry).
                     const parsedCid = CID.parse(cid);
-                    // Mark as seen synchronously to prevent concurrent pin attempts.
-                    this._seenCids.add(cid);
                     // Helia pins.add() returns an AsyncGenerator — fire and drain it.
+                    // Only mark as seen after successful pin so failures can be retried.
                     (async () => {
                       for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
+                      this._seenCids.add(cid);
                     })().catch((err) => {
                       console.error('Failed to pin CID', cid, err);
                     });
