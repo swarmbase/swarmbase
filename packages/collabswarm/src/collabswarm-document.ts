@@ -168,6 +168,7 @@ export class CollabswarmDocument<
   private _compactionConfig: CompactionConfig;
   private _latestSnapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
   private _changesSinceSnapshot = 0;
+  private _compactionInProgress = false;
   // Counts only document-kind changes (excludes ACL reader/writer changes).
   // Used by _maybeCompact() for the minChangesBeforeSnapshot threshold.
   // Incremented for both local changes (in _makeChange) and remote changes
@@ -653,6 +654,11 @@ export class CollabswarmDocument<
       return;
     }
 
+    // Prevent overlapping snapshot() calls from concurrent async paths.
+    if (this._compactionInProgress) {
+      return;
+    }
+
     // Only writers can create snapshots; read-only peers must not attempt compaction.
     if (!(await this._writers.check(this._userPublicKey))) {
       return;
@@ -664,7 +670,12 @@ export class CollabswarmDocument<
     if (this._changesSinceSnapshot < this._compactionConfig.snapshotInterval) {
       return;
     }
-    await this.snapshot();
+    this._compactionInProgress = true;
+    try {
+      await this.snapshot();
+    } finally {
+      this._compactionInProgress = false;
+    }
   }
 
   /**
@@ -684,12 +695,33 @@ export class CollabswarmDocument<
       return;
     }
 
+    // Recursively collect all ACL nodes from a subtree that is about to be pruned.
+    const collectACLNodes = (
+      children: Record<string, CRDTChangeNode<ChangesType>>,
+      out: Record<string, CRDTChangeNode<ChangesType>>,
+    ) => {
+      for (const [childHash, childNode] of Object.entries(children)) {
+        if (
+          childNode.kind === crdtReaderChangeNode ||
+          childNode.kind === crdtWriterChangeNode
+        ) {
+          out[childHash] = childNode;
+        }
+        if (
+          childNode.children !== undefined &&
+          childNode.children !== crdtChangeNodeDeferred
+        ) {
+          collectACLNodes(childNode.children, out);
+        }
+      }
+    };
+
     // BFS traversal to collect nodes up to the limit.
     // ACL nodes (reader/writer) are always preserved regardless of keepCount.
     //
-    // When a document node at the boundary is pruned, any ACL children of that
-    // node are preserved by re-attaching them. This prevents losing ACL state
-    // during pruning.
+    // When a document node at the boundary is pruned, ACL nodes from the
+    // entire pruned subtree are collected and re-attached. This prevents
+    // losing ACL state during pruning.
     //
     // For branching histories (DAG with multiple branches), keepCount is applied
     // globally across all branches. Once the limit is reached, all further
@@ -698,9 +730,10 @@ export class CollabswarmDocument<
       { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
     ];
     let documentNodesVisited = 0;
+    let qi = 0;
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    while (qi < queue.length) {
+      const current = queue[qi++]!;
 
       // ACL nodes are always kept — never count them toward the limit.
       const isACLNode =
@@ -717,18 +750,11 @@ export class CollabswarmDocument<
       ) {
         if (!isACLNode && documentNodesVisited >= keepCount) {
           // This document node is at the boundary — prune its children,
-          // but preserve any ACL nodes among them.
-          const aclChildren: Record<string, CRDTChangeNode<ChangesType>> = {};
-          for (const [childHash, childNode] of Object.entries(current.node.children)) {
-            if (
-              childNode.kind === crdtReaderChangeNode ||
-              childNode.kind === crdtWriterChangeNode
-            ) {
-              aclChildren[childHash] = childNode;
-            }
-          }
-          if (Object.keys(aclChildren).length > 0) {
-            current.node.children = aclChildren;
+          // but preserve any ACL nodes within the entire subtree.
+          const preservedACL: Record<string, CRDTChangeNode<ChangesType>> = {};
+          collectACLNodes(current.node.children, preservedACL);
+          if (Object.keys(preservedACL).length > 0) {
+            current.node.children = preservedACL;
           } else {
             delete current.node.children;
           }
@@ -1315,13 +1341,15 @@ export class CollabswarmDocument<
           );
         } else {
           // Verify the snapshot signature against the deterministic payload.
+          // Must match the structured encoding used during snapshot creation.
           const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
-          const signPayload = concatUint8Arrays(
-            stateBytes,
-            this._encoder.encode(incoming.lastChangeNodeCID),
-            this._encoder.encode(String(incoming.timestamp)),
-            this._encoder.encode(String(incoming.compactedCount)),
-          );
+          const signPayload = this._encoder.encode(JSON.stringify({
+            v: 1,
+            state: Array.from(stateBytes),
+            lastChangeNodeCID: incoming.lastChangeNodeCID,
+            timestamp: incoming.timestamp,
+            compactedCount: incoming.compactedCount,
+          }));
           const signatureValid = await this._authProvider.verify(
             signPayload,
             snapshotPublicKey,
@@ -1473,17 +1501,21 @@ export class CollabswarmDocument<
     const lastChangeNodeCID = this._lastSyncMessage?.changeId ?? '';
     const timestamp = Date.now();
 
-    // Create a deterministic payload to sign.
+    // Create a deterministic, unambiguous payload to sign.
     // Use _documentChangeCount (document-kind changes only) rather than
     // _hashes.size (which includes ACL nodes) to keep the semantic consistent.
+    // A structured JSON encoding with a version tag avoids ambiguities from
+    // raw byte concatenation (where different field tuples could produce
+    // identical byte sequences).
     const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
-    const signPayload = concatUint8Arrays(
-      stateBytes,
-      this._encoder.encode(lastChangeNodeCID),
-      this._encoder.encode(String(timestamp)),
-      this._encoder.encode(String(compactedCount)),
-    );
+    const signPayload = this._encoder.encode(JSON.stringify({
+      v: 1,
+      state: Array.from(stateBytes),
+      lastChangeNodeCID,
+      timestamp,
+      compactedCount,
+    }));
     const signature = await this._authProvider.sign(signPayload, this._userKey);
 
     const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
