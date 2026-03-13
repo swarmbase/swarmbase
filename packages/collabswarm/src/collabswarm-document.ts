@@ -1108,9 +1108,9 @@ export class CollabswarmDocument<
           return false;
         }
 
-        // Decrypt the load response. If the response is too short to
-        // contain an encryption header (keyIDLength + nonceBits), treat
-        // it as plaintext from a legacy peer.
+        // Decrypt the load response. A valid encrypted response must be
+        // strictly longer than the header (keyIDLength + nonceBits) to
+        // contain at least 1 byte of ciphertext.
         const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
         let rawContent: Uint8Array;
         if (assembled.length > headerLength) {
@@ -1125,14 +1125,23 @@ export class CollabswarmDocument<
             );
           }
           rawContent = decrypted;
+        } else if (assembled.length === headerLength) {
+          // Header present but no ciphertext — malformed encrypted response.
+          console.warn(`Load response for ${this.documentPath} has header but no ciphertext`);
+          return false;
         } else {
+          // Response shorter than header — legacy plaintext peer.
           rawContent = assembled;
         }
 
         const message = this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-        if (message.documentId === this.documentPath) {
-          await this.sync(message, false);
+        if (message.documentId !== this.documentPath) {
+          console.warn(
+            `Load response documentId mismatch: expected ${this.documentPath}, got ${message.documentId}`,
+          );
+          return false;
         }
+        await this.sync(message, false);
         return true;
       },
     );
