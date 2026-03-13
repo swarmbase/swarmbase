@@ -1141,6 +1141,13 @@ export class CollabswarmDocument<
           );
           return false;
         }
+        // Skip outer sync message signature verification during load.
+        // During initial load, the receiver does not yet have writer ACL keys
+        // to verify against. Security is maintained because: (1) the load
+        // request is signed and verified by the responder, (2) the response
+        // is encrypted with the document key (only authorized peers can
+        // decrypt), and (3) snapshot signatures are independently verified
+        // against writer keys received in the same message.
         await this.sync(message, false);
         return true;
       },

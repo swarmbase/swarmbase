@@ -142,6 +142,12 @@ export class CollabswarmNode<
   >();
   private readonly _seenCids = new Set<string>();
   private readonly _pinningCids = new Set<string>();
+  /** Queue of pending pin operations waiting for a concurrency slot. */
+  private readonly _pinQueue: (() => void)[] = [];
+  /** Number of pin operations currently in flight. */
+  private _activePins = 0;
+  /** Maximum concurrent pin operations to prevent overwhelming the blockstore. */
+  private static readonly MAX_CONCURRENT_PINS = 10;
 
   private _docPublishHandler: EventHandler<CustomEvent<Message>> | null = null;
 
@@ -177,28 +183,63 @@ export class CollabswarmNode<
     );
   }
 
-  private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
-    if (!this._seenCids.has(cid) && !this._pinningCids.has(cid)) {
-      // Track in-flight pin to prevent concurrent attempts.
-      this._pinningCids.add(cid);
-      try {
-        // TODO: Handle this operation failing (retry).
-        const cidParsed = CID.parse(cid);
-        // Helia pins.add() returns an AsyncGenerator — drain it to complete the pin.
-        for await (const _ of this.swarm.heliaNode.pins.add(cidParsed)) { /* drain */ }
-        this._seenCids.add(cid);
-      } catch (err) {
-        console.error('Failed to pin CID', cid, err);
-      } finally {
-        this._pinningCids.delete(cid);
-      }
+  /**
+   * Acquire a concurrency slot for pin operations. Resolves when a slot
+   * is available (at most MAX_CONCURRENT_PINS operations run at once).
+   */
+  private _acquirePinSlot(): Promise<void> {
+    if (this._activePins < CollabswarmNode.MAX_CONCURRENT_PINS) {
+      this._activePins++;
+      return Promise.resolve();
     }
+    return new Promise<void>((resolve) => {
+      this._pinQueue.push(resolve);
+    });
+  }
+
+  private _releasePinSlot(): void {
+    const next = this._pinQueue.shift();
+    if (next) {
+      next();
+    } else {
+      this._activePins--;
+    }
+  }
+
+  /**
+   * Pin a single CID with concurrency limiting.
+   */
+  private async _pinCID(cid: string): Promise<void> {
+    if (this._seenCids.has(cid) || this._pinningCids.has(cid)) {
+      return;
+    }
+    let parsedCid: CID;
+    try {
+      parsedCid = CID.parse(cid);
+    } catch (err) {
+      console.error('Skipping malformed CID', cid, err);
+      return;
+    }
+    this._pinningCids.add(cid);
+    await this._acquirePinSlot();
+    try {
+      for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
+      this._seenCids.add(cid);
+    } catch (err) {
+      console.error('Failed to pin CID', cid, err);
+    } finally {
+      this._pinningCids.delete(cid);
+      this._releasePinSlot();
+    }
+  }
+
+  private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
+    const tasks: Promise<void>[] = [this._pinCID(cid)];
 
     if (node.children === crdtChangeNodeDeferred) {
       throw new Error('Currently IPLD deferred nodes are not supported!');
     }
 
-    const tasks: Promise<void>[] = [];
     if (node.children !== undefined) {
       for (const [childHash, childNode] of Object.entries(node.children)) {
         tasks.push(this._pinNewCIDs(childHash, childNode));
@@ -261,27 +302,8 @@ export class CollabswarmNode<
               'pinning-handler',
               (doc, readers, writers, hashes) => {
                 for (const cid of hashes) {
-                  if (!this._seenCids.has(cid) && !this._pinningCids.has(cid)) {
-                    let parsedCid: CID;
-                    try {
-                      parsedCid = CID.parse(cid);
-                    } catch (err) {
-                      console.error('Skipping malformed CID', cid, err);
-                      continue;
-                    }
-                    // Track in-flight pin to prevent concurrent attempts for the same CID.
-                    this._pinningCids.add(cid);
-                    // Helia pins.add() returns an AsyncGenerator — fire and drain it.
-                    // Only mark as seen after successful pin so failures can be retried.
-                    (async () => {
-                      for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
-                      this._seenCids.add(cid);
-                    })().catch((err) => {
-                      console.error('Failed to pin CID', cid, err);
-                    }).finally(() => {
-                      this._pinningCids.delete(cid);
-                    });
-                  }
+                  // _pinCID handles dedup, concurrency limiting, and error handling.
+                  this._pinCID(cid).catch(() => {});
                 }
               },
             );

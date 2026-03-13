@@ -72,8 +72,9 @@ import {
   UCANACLProvider,
 } from './ucan-acl';
 import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
-import { CRDTSnapshotNode } from './snapshot-node';
-import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
+import type { CRDTSnapshotNode } from './snapshot-node';
+import type { CompactionConfig } from './compaction-config';
+import { defaultCompactionConfig } from './compaction-config';
 
 export * from './beekem';
 
