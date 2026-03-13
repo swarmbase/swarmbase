@@ -42,8 +42,8 @@ A snapshot is created by an authorized **writer** when the number of un-compacte
 1. Serialize the current CRDT document state via `CRDTProvider.getSnapshot(doc)` (already defined as optional on the interface)
 2. Record the CID of the most recent change node included in the snapshot
 3. Sign the snapshot with the writer's private key (see Section 2.6 for payload format)
-4. Store the snapshot in-memory (`_latestSnapshot`) and include it in sync messages and load responses
-5. Broadcast a sync message containing the snapshot node
+4. Store the snapshot in-memory (`_latestSnapshot`) and include it in load/snapshot-load responses (snapshots are **not** attached to incremental pubsub sync messages to avoid bandwidth bloat)
+5. Optionally prune old change nodes from the in-memory sync tree (see Section 2.4)
 
 ### 2.3 Snapshot Node Format
 
@@ -61,8 +61,8 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
   /** Signature of the snapshot creator (see Section 2.6 for binary payload format) */
   signature: Uint8Array;
 
-  /** Public key of the snapshot creator */
-  publicKey: PublicKey;
+  /** Public key of the snapshot creator (optional; may be absent on the wire) */
+  publicKey?: PublicKey;
 
   /** Timestamp of snapshot creation (milliseconds since epoch) */
   timestamp: number;
@@ -73,7 +73,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
 After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can be pruned from the in-memory sync tree:
 
-- **Sync tree pruning**: The `_lastSyncMessage.changes` tree is replaced with a tree rooted at the snapshot node, with only post-snapshot change nodes as children. This reduces the size of sync messages sent to new peers.
+- **Sync tree pruning**: `_pruneChanges(keepCount)` traverses the existing change tree and removes children beyond the most recent `keepCount` document change nodes. ACL nodes (reader/writer changes) are preserved as leaf nodes (children stripped) regardless of depth. The snapshot is stored separately in `_latestSnapshot` and included only in load/snapshot-load responses.
 - **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. `_pruneChanges` only removes nodes from the in-memory sync message tree (`_lastSyncMessage.changes`); it does **not** remove or unpin blocks from the Helia blockstore. Blockstore-level garbage collection of old blocks is not yet implemented (TODO: add optional blockstore GC pass after pruning).
 - **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync
 
@@ -114,7 +114,7 @@ A snapshot must be verified before applying:
 
 1. **Writer authorization**: The snapshot signature is verified by trying all public keys in the document's writer ACL (the embedded `publicKey` field is not relied upon because some key types like `CryptoKey` do not survive JSON serialization)
 2. **Signature verification**: The signature must be valid for the binary signing payload described below
-3. **Freshness**: The `lastChangeNodeCID` must be a known CID in the DAG (or the peer must trust the snapshot provider)
+3. **Freshness**: For peers with existing state, `lastChangeNodeCID` should be a known CID in their DAG. New peers joining without existing state trust the snapshot based on writer authorization and the ACL signature chain. Freshness checking against `_hashes` is not currently enforced in the implementation to avoid rejecting valid snapshots from peers that are ahead.
 
 **Signing payload format** (binary, big-endian integers):
 

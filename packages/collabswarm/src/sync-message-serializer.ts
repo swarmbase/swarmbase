@@ -1,7 +1,7 @@
 import { CRDTSyncMessage } from './crdt-sync-message';
 
 /**
- * MessageSerializer provides serialization/deserialization methods for `CRDTSyncMessage`s.
+ * SyncMessageSerializer provides serialization/deserialization methods for `CRDTSyncMessage`s.
  *
  * @typeParam ChangesType Type describing changes made to a CRDT document. CRDT implementation dependent.
  */

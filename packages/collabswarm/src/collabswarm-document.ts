@@ -1106,14 +1106,23 @@ export class CollabswarmDocument<
       return false;
     }
 
+    // Try snapshot-load first for faster initial sync, falling back to regular load.
     const stream = await (async () => {
       for (const peer of shuffledPeers) {
+        // Try snapshot-load protocol first (peer may not support it).
+        try {
+          console.log('Trying snapshot-load from peer:', peer.toString());
+          return await this.libp2p.dialProtocol(peer, [
+            this.protocolSnapshotLoadV1,
+          ]);
+        } catch {
+          // Peer doesn't support snapshot-load — try regular load.
+        }
         try {
           console.log('Selected peer addresses:', peer.toString());
-          const docLoadConnection = await this.libp2p.dialProtocol(peer, [
+          return await this.libp2p.dialProtocol(peer, [
             this.protocolLoadV1,
           ]);
-          return docLoadConnection;
         } catch (err) {
           console.warn(
             `Failed to load document from (${this.protocolLoadV1}): `,

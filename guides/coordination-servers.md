@@ -344,12 +344,11 @@ peerDiscovery: [
 
 ### 3.5 Load Balancing
 
-**WebSocket connections are long-lived.** Standard HTTP load balancing does not apply. Instead:
+**WebSocket connections are long-lived.** Standard HTTP round-robin load balancing does not apply well. Guidelines:
 
-- Use DNS round-robin to distribute initial connections across relay nodes
-- Do **not** use an HTTP load balancer that terminates and re-proxies WebSocket connections (this breaks libp2p's connection state)
-- If using a load balancer, configure it for TCP/Layer 4 passthrough, not Layer 7
-- Alternatively, give clients all relay addresses and let libp2p handle connection management
+- A **TLS-terminating reverse proxy** (nginx, Caddy, Traefik) in front of a single relay is fine and required for `wss://` in production (see Section 2.2). This is Layer 7 but passes WebSocket frames transparently via `Upgrade` headers.
+- Do **not** use an HTTP load balancer that terminates one WebSocket and opens a new upstream WebSocket (connection-splitting proxy), as this breaks libp2p's connection state and multiplexed streams.
+- For **multiple relay nodes**, use DNS round-robin or give clients all relay addresses and let libp2p handle connection management. If using a load balancer across multiple backends, configure it for TCP/Layer 4 passthrough or sticky sessions so each WebSocket stays on a single backend.
 
 ### 3.6 Monitoring and Health Checks
 

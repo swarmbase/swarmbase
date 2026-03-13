@@ -19,12 +19,12 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   changeId?: string;
 
   /**
-   * All document changes as an object whose keys are change object hashes and values
-   * are change objects or null. A null value means that the change should be fetched
-   * from the Helia blockstore (the CID is the hash).
+   * Root of the Merkle-DAG change tree. Each `CRDTChangeNode` contains a change
+   * payload and optional `children` linking to prior nodes. A node whose `change`
+   * is `undefined` (deferred) should be fetched from the Helia blockstore by CID.
    *
-   * Data stored in the blockstore is deserialized using a `MessageSerializer`
-   * implementation.
+   * Changes are decrypted via `ChangesSerializer` and sync messages via
+   * `SyncMessageSerializer`.
    */
   changes?: CRDTChangeNode<ChangesType>;
 

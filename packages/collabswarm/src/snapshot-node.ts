@@ -32,16 +32,20 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
   /**
    * Signature of the snapshot creator.
-   * Signs a versioned binary payload (see `_buildSnapshotSignPayload` for format).
+   * Signs a versioned binary payload: [version(1B), timestamp(8B uint64),
+   * compactedCount(4B uint32), cidLen(4B uint32), lastChangeNodeCID(cidLen B),
+   * stateLen(4B uint32), stateBytes(stateLen B)]. All integers are big-endian.
    * Verified by trying all writer keys rather than relying on the `publicKey` field.
    */
   signature: Uint8Array;
 
   /**
-   * Public key of the snapshot creator.
-   * Must be in the document's writer ACL for the snapshot to be valid.
+   * Public key of the snapshot creator (optional on the wire).
+   * Not relied upon for verification — snapshot signatures are verified
+   * by trying all writer keys in the ACL. May be absent or degraded
+   * after serialization for non-JSON-safe key types (e.g. CryptoKey).
    */
-  publicKey: PublicKey;
+  publicKey?: PublicKey;
 
   /**
    * Timestamp of snapshot creation (milliseconds since epoch).
