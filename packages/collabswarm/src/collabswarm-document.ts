@@ -810,6 +810,7 @@ export class CollabswarmDocument<
           console.warn(
             `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
@@ -836,6 +837,7 @@ export class CollabswarmDocument<
           console.warn(
             `Detected an unauthorized load request for ${message.documentId}`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
@@ -925,6 +927,7 @@ export class CollabswarmDocument<
           console.warn(
             `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
@@ -950,6 +953,7 @@ export class CollabswarmDocument<
           console.warn(
             `Detected an unauthorized snapshot load request for ${message.documentId}`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
