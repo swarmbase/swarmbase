@@ -262,7 +262,13 @@ export class CollabswarmNode<
               (doc, readers, writers, hashes) => {
                 for (const cid of hashes) {
                   if (!this._seenCids.has(cid) && !this._pinningCids.has(cid)) {
-                    const parsedCid = CID.parse(cid);
+                    let parsedCid: CID;
+                    try {
+                      parsedCid = CID.parse(cid);
+                    } catch (err) {
+                      console.error('Skipping malformed CID', cid, err);
+                      continue;
+                    }
                     // Track in-flight pin to prevent concurrent attempts for the same CID.
                     this._pinningCids.add(cid);
                     // Helia pins.add() returns an AsyncGenerator — fire and drain it.

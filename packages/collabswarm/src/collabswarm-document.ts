@@ -1020,14 +1020,21 @@ export class CollabswarmDocument<
     timestamp: number,
     compactedCount: number,
   ): Uint8Array {
-    // Validate inputs to prevent runtime errors (e.g. BigInt(NaN) throws TypeError).
+    // Validate inputs to prevent runtime errors (e.g. BigInt(NaN) throws TypeError)
+    // and silent uint32 overflow/truncation via DataView.setUint32.
     if (!Number.isFinite(timestamp) || timestamp < 0) {
       throw new Error(`Invalid snapshot timestamp: ${timestamp}`);
     }
-    if (!Number.isFinite(compactedCount) || compactedCount < 0) {
+    if (!Number.isInteger(compactedCount) || compactedCount < 0 || compactedCount > 0xFFFFFFFF) {
       throw new Error(`Invalid snapshot compactedCount: ${compactedCount}`);
     }
     const cidBytes = this._encoder.encode(lastChangeNodeCID);
+    if (cidBytes.length > 0xFFFFFFFF) {
+      throw new Error(`lastChangeNodeCID too large: ${cidBytes.length} bytes`);
+    }
+    if (stateBytes.length > 0xFFFFFFFF) {
+      throw new Error(`Snapshot state too large: ${stateBytes.length} bytes`);
+    }
     // 1 (version) + 8 (timestamp) + 4 (compactedCount) + 4 (cidLen) + cidBytes + 4 (stateLen) + stateBytes
     const totalLen = 1 + 8 + 4 + 4 + cidBytes.length + 4 + stateBytes.length;
     const buf = new ArrayBuffer(totalLen);
@@ -1044,7 +1051,7 @@ export class CollabswarmDocument<
     offset += 8;
 
     // compactedCount as uint32
-    view.setUint32(offset, compactedCount >>> 0, false);
+    view.setUint32(offset, compactedCount, false);
     offset += 4;
 
     // lastChangeNodeCID (length-prefixed)
