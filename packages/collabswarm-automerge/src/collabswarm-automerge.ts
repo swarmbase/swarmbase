@@ -14,6 +14,7 @@ import {
   ACLProvider,
   CollabswarmDocumentChangeHandler,
   CRDTProvider,
+  CRDTSyncMessage,
   JSONSerializer,
   Keychain,
   KeychainProvider,
@@ -339,4 +340,47 @@ export class AutomergeKeychainProvider
   keyIDLength = 16;
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
+  serializeSyncMessage(message: CRDTSyncMessage<BinaryChange[]>): Uint8Array {
+    let snapshotForWire: any;
+    if (message.snapshot) {
+      snapshotForWire = { ...message.snapshot };
+      // Base64-encode each BinaryChange (Uint8Array) in state for JSON safety.
+      if (Array.isArray(snapshotForWire.state)) {
+        snapshotForWire.state = snapshotForWire.state.map(
+          (c: Uint8Array) => Base64.fromUint8Array(c),
+        );
+      }
+      if (snapshotForWire.signature instanceof Uint8Array) {
+        snapshotForWire.signature = Base64.fromUint8Array(snapshotForWire.signature);
+      }
+      // Drop publicKey — CryptoKey is not JSON-serializable and
+      // snapshot verification uses writer ACL keys, not the embedded key.
+      delete snapshotForWire.publicKey;
+    }
+    return this.encode(
+      this.serialize({
+        ...message,
+        snapshot: snapshotForWire,
+      }),
+    );
+  }
+
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[]> {
+    const raw = this.deserialize(this.decode(message)) as any;
+    let snapshot: any;
+    if (raw.snapshot) {
+      snapshot = { ...raw.snapshot };
+      // Decode base64-encoded BinaryChange[] back to Uint8Array[].
+      if (Array.isArray(snapshot.state)) {
+        snapshot.state = snapshot.state.map(
+          (c: string) => Base64.toUint8Array(c),
+        );
+      }
+      if (typeof snapshot.signature === 'string') {
+        snapshot.signature = Base64.toUint8Array(snapshot.signature);
+      }
+    }
+    return { ...raw, snapshot } as CRDTSyncMessage<BinaryChange[]>;
+  }
+}
