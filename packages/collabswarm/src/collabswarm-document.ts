@@ -1022,7 +1022,7 @@ export class CollabswarmDocument<
   ): Uint8Array {
     // Validate inputs to prevent runtime errors (e.g. BigInt(NaN) throws TypeError)
     // and silent uint32 overflow/truncation via DataView.setUint32.
-    if (!Number.isFinite(timestamp) || timestamp < 0) {
+    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
       throw new Error(`Invalid snapshot timestamp: ${timestamp}`);
     }
     if (!Number.isInteger(compactedCount) || compactedCount < 0 || compactedCount > 0xFFFFFFFF) {
