@@ -504,59 +504,64 @@ export class CollabswarmDocument<
     }
 
     // Then apply missing hashes by fetching them from the blockstore.
+    // Track all fetch promises so we can compact only after all complete,
+    // avoiding premature snapshots of incomplete state.
+    const fetchPromises: Promise<void>[] = [];
     for (const [missingHash, missingHashKind] of missingDocumentHashes) {
-      // Fetch missing hashes from the Helia blockstore.
       const cid = CID.parse(missingHash);
-      this._getBlock(cid)
-        .then(async (missingChanges) => {
-          if (missingChanges) {
-            switch (missingHashKind) {
-              case crdtDocumentChangeNode: {
-                this._document = this._crdtProvider.remoteChange(
-                  this._document,
-                  missingChanges,
-                );
-                this._hashes.add(missingHash);
-                this._documentChangeCount++;
-                this._changesSinceSnapshot++;
-                await this._fireRemoteUpdateHandlers([missingHash]);
-                await this._maybeCompact();
-                return;
+      fetchPromises.push(
+        this._getBlock(cid)
+          .then(async (missingChanges) => {
+            if (missingChanges) {
+              switch (missingHashKind) {
+                case crdtDocumentChangeNode: {
+                  this._document = this._crdtProvider.remoteChange(
+                    this._document,
+                    missingChanges,
+                  );
+                  this._hashes.add(missingHash);
+                  this._documentChangeCount++;
+                  this._changesSinceSnapshot++;
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
+                case crdtReaderChangeNode: {
+                  this._readers.merge(missingChanges);
+                  this._hashes.add(missingHash);
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
+                case crdtWriterChangeNode: {
+                  this._writers.merge(missingChanges);
+                  this._hashes.add(missingHash);
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
               }
-              case crdtReaderChangeNode: {
-                this._readers.merge(missingChanges);
-                this._hashes.add(missingHash);
-                return this._fireRemoteUpdateHandlers([missingHash]);
-              }
-              case crdtWriterChangeNode: {
-                this._writers.merge(missingChanges);
-                this._hashes.add(missingHash);
-                return this._fireRemoteUpdateHandlers([missingHash]);
-              }
+            } else {
+              console.error(
+                `Block '${missingHash}' returned nothing`,
+                missingChanges,
+              );
             }
-          } else {
+          })
+          .catch((err) => {
             console.error(
-              `Block '${missingHash}' returned nothing`,
-              missingChanges,
+              'Failed to fetch missing change from blockstore:',
+              missingHash,
+              err,
             );
-          }
-        })
-        .catch((err) => {
-          console.error(
-            'Failed to fetch missing change from blockstore:',
-            missingHash,
-            err,
-          );
-        });
+          }),
+      );
     }
 
-    // Trigger compaction check only when all changes were applied directly.
-    // When there are missing blocks being fetched asynchronously, each fetch
-    // callback calls _maybeCompact() individually after applying its change,
-    // avoiding premature snapshots of incomplete state.
-    if (missingDocumentHashes.length === 0) {
-      await this._maybeCompact();
+    // Wait for all missing block fetches to complete before checking compaction.
+    // This ensures the snapshot reflects the full document state rather than
+    // a partial view from incomplete fetches.
+    if (fetchPromises.length > 0) {
+      await Promise.all(fetchPromises);
     }
+    await this._maybeCompact();
   }
 
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
@@ -971,12 +976,11 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Wrap the snapshot in a sync message so it can be serialized
-        // with the standard serializer.
-        const snapshotMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
-          documentId: this.documentPath,
-          snapshot: this._latestSnapshot,
-        };
+        // Build a complete sync message with the snapshot, post-snapshot
+        // changes, and keychain so the peer can fully catch up.
+        const snapshotMessage = this._createSyncMessage();
+        snapshotMessage.snapshot = this._latestSnapshot;
+        snapshotMessage.keychainChanges = this._keychain.history();
         snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
         const serialized =
@@ -1085,6 +1089,56 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Send a load request over the given stream and apply the response.
+   * Returns true if a non-empty response was received and synced,
+   * false if the response was empty (e.g. peer has no snapshot).
+   */
+  private async _sendLoadRequestAndSync(
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
+    serializedRequest: Uint8Array,
+  ): Promise<boolean> {
+    await pipe([serializedRequest], stream.sink);
+    return await pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+        const assembled = await readUint8Iterable(source);
+
+        // Empty response means the peer couldn't serve this request.
+        if (assembled.length === 0) {
+          return false;
+        }
+
+        // Decrypt the load response. If the response is too short to
+        // contain an encryption header (keyIDLength + nonceBits), treat
+        // it as plaintext from a legacy peer.
+        const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
+        let rawContent: Uint8Array;
+        if (assembled.length > headerLength) {
+          const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
+          const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+          const blockData = assembled.slice(headerLength);
+          const decrypted = await this._decryptBlock(blockKeyID, blockNonce, blockData);
+          if (!decrypted) {
+            throw new Error(
+              `Failed to decrypt load response for ${this.documentPath}: ` +
+              'encryption header present but decryption failed',
+            );
+          }
+          rawContent = decrypted;
+        } else {
+          rawContent = assembled;
+        }
+
+        const message = this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+        if (message.documentId === this.documentPath) {
+          await this.sync(message, false);
+        }
+        return true;
+      },
+    );
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -1106,119 +1160,52 @@ export class CollabswarmDocument<
       return false;
     }
 
-    // Try snapshot-load first for faster initial sync, falling back to regular load.
-    const stream = await (async () => {
-      for (const peer of shuffledPeers) {
-        // Try snapshot-load protocol first (peer may not support it).
-        try {
-          console.log('Trying snapshot-load from peer:', peer.toString());
-          return await this.libp2p.dialProtocol(peer, [
-            this.protocolSnapshotLoadV1,
-          ]);
-        } catch {
-          // Peer doesn't support snapshot-load — try regular load.
-        }
-        try {
-          console.log('Selected peer addresses:', peer.toString());
-          return await this.libp2p.dialProtocol(peer, [
-            this.protocolLoadV1,
-          ]);
-        } catch (err) {
-          console.warn(
-            `Failed to load document from (${this.protocolLoadV1}): `,
-            peer.toString(),
-            err,
-          );
-        }
+    const signatureBytes = await this._authProvider.sign(
+      this._encoder.encode(this.documentPath),
+      this._userKey,
+    );
+    const signature = this._serializeSignature(signatureBytes);
+    const loadRequest: CRDTLoadRequest = {
+      documentId: this.documentPath,
+      signature,
+    };
+    const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
+
+    // Try snapshot-load first for faster initial sync.
+    // If the peer returns an empty response (no snapshot available),
+    // fall back to the regular doc-load protocol.
+    for (const peer of shuffledPeers) {
+      try {
+        console.log('Trying snapshot-load from peer:', peer.toString());
+        const snapshotStream = await this.libp2p.dialProtocol(peer, [
+          this.protocolSnapshotLoadV1,
+        ]);
+        const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
+        if (loaded) return true;
+        // Empty response — peer has no snapshot, try doc-load below.
+      } catch {
+        // Peer doesn't support snapshot-load protocol.
       }
-    })();
 
-    // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
-    // TODO: Close connection upon receipt of data.
-    if (stream) {
-      console.log(`Opening stream for ${this.protocolLoadV1}`, stream);
-
-      const signatureBytes = await this._authProvider.sign(
-        this._encoder.encode(this.documentPath),
-        this._userKey,
-      );
-      const signature = this._serializeSignature(signatureBytes);
-
-      // Construct a load request.
-      const loadRequest: CRDTLoadRequest = {
-        documentId: this.documentPath,
-        signature,
-      };
-
-      // Immediately send a load request.
-      await pipe(
-        [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-        stream.sink,
-      );
-      await pipe(
-        stream.source,
-        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          console.log(`awaiting ${this.protocolLoadV1} response...`);
-          const assembled = await readUint8Iterable(source);
-
-          // Decrypt the load response. If the response is too short to
-          // contain an encryption header (keyIDLength + nonceBits), treat
-          // it as plaintext from a legacy peer. If a header IS present but
-          // decryption fails, propagate the error rather than silently
-          // falling back to plaintext (which would be corrupted data).
-          const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
-          let rawContent: Uint8Array;
-          if (assembled.length > headerLength) {
-            const blockKeyID = assembled.slice(
-              0,
-              this._keychainProvider.keyIDLength,
-            );
-            const blockNonce = assembled.slice(
-              this._keychainProvider.keyIDLength,
-              headerLength,
-            );
-            const blockData = assembled.slice(headerLength);
-            const decrypted = await this._decryptBlock(
-              blockKeyID,
-              blockNonce,
-              blockData,
-            );
-            if (!decrypted) {
-              throw new Error(
-                `Failed to decrypt load response for ${this.documentPath}: ` +
-                'encryption header present but decryption failed',
-              );
-            }
-            rawContent = decrypted;
-          } else {
-            // Response too short for encryption header — legacy plaintext peer
-            rawContent = assembled;
-          }
-
-          const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-          console.log(
-            `received ${this.protocolLoadV1} response (decrypted)`,
-          );
-
-          if (message.documentId === this.documentPath) {
-            await this.sync(message, false);
-          }
-
-          // Return an ACK.
-          return [];
-        },
-      );
-      // await pipe(
-      //   [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-      //   stream.sink,
-      // );
-      return true;
-    } else {
-      // Assume new document
-      console.log('Failed to open document on any nodes.', this);
-      return false;
+      try {
+        console.log('Trying doc-load from peer:', peer.toString());
+        const docStream = await this.libp2p.dialProtocol(peer, [
+          this.protocolLoadV1,
+        ]);
+        const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
+        if (loaded) return true;
+      } catch (err) {
+        console.warn(
+          `Failed to load document from (${this.protocolLoadV1}): `,
+          peer.toString(),
+          err,
+        );
+      }
     }
+
+    // No peer could provide the document — assume new document.
+    console.log('Failed to open document on any nodes.', this);
+    return false;
   }
 
   /**
@@ -1275,10 +1262,8 @@ export class CollabswarmDocument<
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
     this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
-    // TODO: Registered proactively for future peer-initiated snapshot requests.
-    // Currently, snapshots are included in the standard load response
-    // (protocolLoadV1), so no client-side code dials this protocol yet.
-    // Will be activated when a dedicated snapshot request protocol is needed.
+    // Snapshot-load protocol: load() tries this first for faster initial sync,
+    // falling back to protocolLoadV1 if the peer doesn't support it or has no snapshot.
     this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.

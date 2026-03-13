@@ -25,7 +25,8 @@ export type CRDTChangeNode<ChangesType> = {
   /**
    * Changes made to the document itself (if any).
    *
-   * `false` means that the changes should be fetched from the Helia blockstore.
+   * `undefined` means the change payload was not included in the sync message
+   * and should be fetched from the Helia blockstore using the node's CID.
    */
   change?: ChangesType;
 
