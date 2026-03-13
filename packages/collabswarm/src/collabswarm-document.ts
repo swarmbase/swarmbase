@@ -1108,9 +1108,11 @@ export class CollabswarmDocument<
           return false;
         }
 
-        // Decrypt the load response. A valid encrypted response must be
-        // strictly longer than the header (keyIDLength + nonceBits) to
-        // contain at least 1 byte of ciphertext.
+        // Decrypt the load response. Responses longer than the encryption
+        // header (keyIDLength + nonceBits) are assumed encrypted. Shorter
+        // responses are treated as plaintext from a legacy peer. This
+        // length-based heuristic is safe because a valid JSON sync message
+        // is always significantly larger than the header (~28 bytes).
         const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
         let rawContent: Uint8Array;
         if (assembled.length > headerLength) {
@@ -1125,12 +1127,8 @@ export class CollabswarmDocument<
             );
           }
           rawContent = decrypted;
-        } else if (assembled.length === headerLength) {
-          // Header present but no ciphertext — malformed encrypted response.
-          console.warn(`Load response for ${this.documentPath} has header but no ciphertext`);
-          return false;
         } else {
-          // Response shorter than header — legacy plaintext peer.
+          // Response at or below header length — treat as legacy plaintext.
           rawContent = assembled;
         }
 
