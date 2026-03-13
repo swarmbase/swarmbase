@@ -169,6 +169,7 @@ export class CollabswarmDocument<
   private _latestSnapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
   private _changesSinceSnapshot = 0;
   private _compactionInProgress = false;
+  private _snapshotUnsupported = false;
   // Counts only document-kind changes (excludes ACL reader/writer changes).
   // Used by _maybeCompact() for the minChangesBeforeSnapshot threshold.
   // Incremented for both local changes (in _makeChange) and remote changes
@@ -696,7 +697,7 @@ export class CollabswarmDocument<
    * Check if automatic compaction should be triggered based on the config.
    */
   private async _maybeCompact() {
-    if (!this._compactionConfig.enabled) {
+    if (!this._compactionConfig.enabled || this._snapshotUnsupported) {
       return;
     }
 
@@ -1108,27 +1109,29 @@ export class CollabswarmDocument<
           return false;
         }
 
-        // Decrypt the load response. Responses longer than the encryption
-        // header (keyIDLength + nonceBits) are assumed encrypted. Shorter
-        // responses are treated as plaintext from a legacy peer. This
-        // length-based heuristic is safe because a valid JSON sync message
-        // is always significantly larger than the header (~28 bytes).
+        // Try to decrypt the response. If the keyID from the header is
+        // found in the keychain, treat it as encrypted. Otherwise fall
+        // back to plaintext parsing (legacy peer compatibility).
         const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
         let rawContent: Uint8Array;
         if (assembled.length > headerLength) {
           const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
-          const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
-          const blockData = assembled.slice(headerLength);
-          const decrypted = await this._decryptBlock(blockKeyID, blockNonce, blockData);
-          if (!decrypted) {
-            throw new Error(
-              `Failed to decrypt load response for ${this.documentPath}: ` +
-              'encryption header present but decryption failed',
-            );
+          const key = this._keychain.getKey(blockKeyID);
+          if (key) {
+            const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+            const blockData = assembled.slice(headerLength);
+            const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
+            if (!decrypted) {
+              throw new Error(
+                `Failed to decrypt load response for ${this.documentPath}`,
+              );
+            }
+            rawContent = decrypted;
+          } else {
+            // KeyID not in keychain — legacy plaintext peer.
+            rawContent = assembled;
           }
-          rawContent = decrypted;
         } else {
-          // Response at or below header length — treat as legacy plaintext.
           rawContent = assembled;
         }
 
@@ -1593,7 +1596,8 @@ export class CollabswarmDocument<
     await this._ensureCurrentUserCanWrite();
 
     if (!this._crdtProvider.getSnapshot) {
-      console.warn('CRDTProvider does not implement getSnapshot(); compaction skipped.');
+      console.warn('CRDTProvider does not implement getSnapshot(); compaction disabled.');
+      this._snapshotUnsupported = true;
       return undefined;
     }
 
