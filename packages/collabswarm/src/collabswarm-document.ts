@@ -713,6 +713,8 @@ export class CollabswarmDocument<
     }
 
     // Recursively collect all ACL nodes from a subtree that is about to be pruned.
+    // Re-attached ACL nodes are stored as leaf nodes (children stripped) so they
+    // don't pull in the full pre-prune subtree through their parent pointers.
     const collectACLNodes = (
       children: Record<string, CRDTChangeNode<ChangesType>>,
       out: Record<string, CRDTChangeNode<ChangesType>>,
@@ -722,7 +724,9 @@ export class CollabswarmDocument<
           childNode.kind === crdtReaderChangeNode ||
           childNode.kind === crdtWriterChangeNode
         ) {
-          out[childHash] = childNode;
+          // Shallow copy without children to avoid retaining the full subtree.
+          const { children: _dropped, ...leafNode } = childNode;
+          out[childHash] = leafNode as CRDTChangeNode<ChangesType>;
         }
         if (
           childNode.children !== undefined &&

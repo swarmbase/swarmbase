@@ -50,6 +50,11 @@ export class AutomergeProvider<T = any>
     return getAllChanges(document);
   }
   getSnapshot(document: Doc<T>): BinaryChange[] {
+    // Returns all changes as the snapshot representation. A more compact
+    // approach would use Automerge.save() (returns Uint8Array), but that
+    // requires a different ChangesType and remoteChange() implementation.
+    // For now, getAllChanges() is compatible with the existing applyChanges()
+    // path used by remoteChange().
     return getAllChanges(document);
   }
 }

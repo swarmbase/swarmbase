@@ -178,15 +178,20 @@ export class CollabswarmNode<
   }
 
   private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
-    if (!this._seenCids.has(cid)) {
-      // Mark as seen synchronously BEFORE the async pin to prevent concurrent
-      // pin attempts for the same CID. If the pin fails, the CID stays in
-      // _seenCids to avoid a retry storm; the TODO below covers retry logic.
-      this._seenCids.add(cid);
-      // TODO: Handle this operation failing (retry).
-      const cidParsed = CID.parse(cid);
-      // Helia pins.add() returns an AsyncGenerator — drain it to complete the pin.
-      for await (const _ of this.swarm.heliaNode.pins.add(cidParsed)) { /* drain */ }
+    if (!this._seenCids.has(cid) && !this._pinningCids.has(cid)) {
+      // Track in-flight pin to prevent concurrent attempts.
+      this._pinningCids.add(cid);
+      try {
+        // TODO: Handle this operation failing (retry).
+        const cidParsed = CID.parse(cid);
+        // Helia pins.add() returns an AsyncGenerator — drain it to complete the pin.
+        for await (const _ of this.swarm.heliaNode.pins.add(cidParsed)) { /* drain */ }
+        this._seenCids.add(cid);
+      } catch (err) {
+        console.error('Failed to pin CID', cid, err);
+      } finally {
+        this._pinningCids.delete(cid);
+      }
     }
 
     if (node.children === crdtChangeNodeDeferred) {

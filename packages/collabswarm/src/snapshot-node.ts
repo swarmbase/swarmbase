@@ -4,7 +4,11 @@
  * Instead of replaying individual change nodes from the beginning, a peer can
  * load the snapshot state and then apply only post-snapshot changes.
  *
- * @typeParam ChangesType A block of CRDT change(s) — the serialized full document state.
+ * @typeParam ChangesType The serialized CRDT type used for both incremental changes
+ *   and full-state snapshots. The `state` field contains a snapshot produced by
+ *   `CRDTProvider.getSnapshot()` that can be applied via `remoteChange()`.
+ *   For Yjs this is `Uint8Array` (from `encodeStateAsUpdateV2`); for Automerge
+ *   this is `BinaryChange[]` (from `getAllChanges`).
  * @typeParam PublicKey The type of key used to identify a user publicly.
  */
 export interface CRDTSnapshotNode<ChangesType, PublicKey> {
@@ -28,7 +32,8 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
   /**
    * Signature of the snapshot creator.
-   * Signs the deterministic serialization of (state + lastChangeNodeCID + timestamp + compactedCount).
+   * Signs a versioned binary payload (see `_buildSnapshotSignPayload` for format).
+   * Verified by trying all writer keys rather than relying on the `publicKey` field.
    */
   signature: Uint8Array;
 
