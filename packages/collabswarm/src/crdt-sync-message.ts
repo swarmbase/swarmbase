@@ -19,7 +19,7 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   changeId?: string;
 
   /**
-   * All document changes as an object who's keys are change object hashes and values
+   * All document changes as an object whose keys are change object hashes and values
    * are change objects or null. A null value means that the change should be fetched
    * from the Helia blockstore (the CID is the hash).
    *

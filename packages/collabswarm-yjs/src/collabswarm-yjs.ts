@@ -110,6 +110,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       if (snapshotForWire.signature instanceof Uint8Array) {
         snapshotForWire.signature = Base64.fromUint8Array(snapshotForWire.signature);
       }
+      // Drop publicKey from wire — CryptoKey is not JSON-serializable and
+      // snapshot verification uses writer ACL keys, not the embedded key.
+      delete snapshotForWire.publicKey;
     }
     return this.encode(
       this.serialize({

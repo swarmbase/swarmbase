@@ -217,6 +217,7 @@ export class Collabswarm<
       throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
     }
 
+    // connection.detail is a PeerId (@libp2p/interface), whose toString() returns the peer ID string.
     this.libp2p.addEventListener('peer:connect', (connection) => {
       const peerAddress = connection.detail.toString();
       this._peerAddrs.push(peerAddress);
