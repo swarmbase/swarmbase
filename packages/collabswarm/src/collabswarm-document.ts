@@ -779,7 +779,7 @@ export class CollabswarmDocument<
     // For branching histories (DAG with multiple branches), keepCount is applied
     // globally across all branches. Once the limit is reached, all further
     // document nodes in any branch are pruned.
-    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType>; parent?: CRDTChangeNode<ChangesType> }> = [
+    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType> }> = [
       { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
     ];
     let documentNodesVisited = 0;
@@ -813,7 +813,7 @@ export class CollabswarmDocument<
           }
         } else {
           for (const [childHash, childNode] of Object.entries(current.node.children)) {
-            queue.push({ id: childHash, node: childNode, parent: current.node });
+            queue.push({ id: childHash, node: childNode });
           }
         }
       }
@@ -1476,7 +1476,7 @@ export class CollabswarmDocument<
             this._document,
             incoming.state,
           );
-          this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
+          this._latestSnapshot = incoming;
           // Ensure our local document change count is at least as high as
           // the snapshot's compactedCount. This prevents re-triggering
           // compaction below the threshold after applying a remote snapshot.

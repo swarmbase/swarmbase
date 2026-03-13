@@ -28,6 +28,7 @@ import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
 import { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
+import { multiaddr } from '@multiformats/multiaddr';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
 
 /**
@@ -252,8 +253,12 @@ export class Collabswarm<
     const connectionPromises: Promise<unknown>[] = [];
     for (const address of addresses) {
       // Multiaddr strings start with '/'; bare peer IDs need conversion.
+      // multiaddr() validates the address format and fails fast on invalid input.
+      // Cast required: @multiformats/multiaddr types are structurally incompatible
+      // with the version bundled in @libp2p/interface due to sub-dependency version
+      // mismatches in the dependency tree.
       const dialTarget = address.startsWith('/')
-        ? address as any  // libp2p.dial() accepts multiaddr strings
+        ? multiaddr(address) as any
         : peerIdFromString(address);
       connectionPromises.push(
         this.heliaNode.libp2p.dial(dialTarget),
