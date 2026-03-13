@@ -570,6 +570,23 @@ export class CollabswarmDocument<
     return firstTrue(verificationTasks);
   }
 
+  /**
+   * Verify a snapshot signature by trying all authorized writers.
+   * Unlike sync message signatures (which are string-encoded), snapshot
+   * signatures are raw Uint8Array. This avoids depending on the snapshot's
+   * embedded publicKey field which may not survive serialization for all
+   * key types (e.g. CryptoKey).
+   */
+  private async _verifySnapshotSignature(payload: Uint8Array, signature: Uint8Array) {
+    const verificationTasks: Promise<boolean>[] = [];
+    for (const writerKey of await this._writers.users()) {
+      verificationTasks.push(
+        this._authProvider.verify(payload, writerKey, signature),
+      );
+    }
+    return firstTrue(verificationTasks);
+  }
+
   private async _signAsWriter(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
@@ -999,6 +1016,13 @@ export class CollabswarmDocument<
     timestamp: number,
     compactedCount: number,
   ): Uint8Array {
+    // Validate inputs to prevent runtime errors (e.g. BigInt(NaN) throws TypeError).
+    if (!Number.isFinite(timestamp) || timestamp < 0) {
+      throw new Error(`Invalid snapshot timestamp: ${timestamp}`);
+    }
+    if (!Number.isFinite(compactedCount) || compactedCount < 0) {
+      throw new Error(`Invalid snapshot compactedCount: ${compactedCount}`);
+    }
     const cidBytes = this._encoder.encode(lastChangeNodeCID);
     // 1 (version) + 8 (timestamp) + 4 (compactedCount) + 4 (cidLen) + cidBytes + 4 (stateLen) + stateBytes
     const totalLen = 1 + 8 + 4 + 4 + cidBytes.length + 4 + stateBytes.length;
@@ -1388,48 +1412,47 @@ export class CollabswarmDocument<
           String(incoming.lastChangeNodeCID ?? '') >
             String(this._latestSnapshot.lastChangeNodeCID ?? ''))
       ) {
-        // Verify the snapshot creator is an authorized writer.
-        const snapshotPublicKey = incoming.publicKey;
-        if (!(await this._writers.check(snapshotPublicKey))) {
-          console.warn(
-            `Rejected snapshot for ${this.documentPath}: creator's public key is not in the writer ACL`,
-          );
-        } else {
-          // Verify the snapshot signature against the deterministic payload.
-          // Must match the binary encoding used during snapshot creation.
+        // Verify the snapshot signature against the deterministic payload
+        // by trying all authorized writers (publicKey may not survive
+        // serialization for all key types, e.g. CryptoKey).
+        let snapshotSignatureValid = false;
+        try {
           const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
           const signPayload = this._buildSnapshotSignPayload(
             stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
           );
-          const signatureValid = await this._authProvider.verify(
-            signPayload,
-            snapshotPublicKey,
-            incoming.signature,
+          snapshotSignatureValid = await this._verifySnapshotSignature(
+            signPayload, incoming.signature,
           );
-          if (!signatureValid) {
-            console.warn(
-              `Rejected snapshot for ${this.documentPath}: invalid signature`,
-            );
-          } else {
-            // Apply the snapshot state. CRDTs converge, so applying a full state
-            // snapshot via remoteChange is safe and produces the correct result.
-            this._document = this._crdtProvider.remoteChange(
-              this._document,
-              incoming.state,
-            );
-            this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
-            // Ensure our local document change count is at least as high as
-            // the snapshot's compactedCount. This prevents re-triggering
-            // compaction below the threshold after applying a remote snapshot.
-            this._documentChangeCount = Math.max(
-              this._documentChangeCount,
-              incoming.compactedCount,
-            );
-            this._changesSinceSnapshot = 0;
-            console.log(
-              `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
-            );
-          }
+        } catch (e) {
+          console.warn(
+            `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
+            e,
+          );
+        }
+        if (!snapshotSignatureValid) {
+          console.warn(
+            `Rejected snapshot for ${this.documentPath}: no authorized writer produced a valid signature`,
+          );
+        } else {
+          // Apply the snapshot state. CRDTs converge, so applying a full state
+          // snapshot via remoteChange is safe and produces the correct result.
+          this._document = this._crdtProvider.remoteChange(
+            this._document,
+            incoming.state,
+          );
+          this._latestSnapshot = incoming as CRDTSnapshotNode<ChangesType, PublicKey>;
+          // Ensure our local document change count is at least as high as
+          // the snapshot's compactedCount. This prevents re-triggering
+          // compaction below the threshold after applying a remote snapshot.
+          this._documentChangeCount = Math.max(
+            this._documentChangeCount,
+            incoming.compactedCount,
+          );
+          this._changesSinceSnapshot = 0;
+          console.log(
+            `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
+          );
         }
       }
     }

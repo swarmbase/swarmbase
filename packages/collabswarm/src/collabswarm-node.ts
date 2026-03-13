@@ -141,6 +141,7 @@ export class CollabswarmNode<
     >
   >();
   private readonly _seenCids = new Set<string>();
+  private readonly _pinningCids = new Set<string>();
 
   private _docPublishHandler: EventHandler<CustomEvent<Message>> | null = null;
 
@@ -255,8 +256,10 @@ export class CollabswarmNode<
               'pinning-handler',
               (doc, readers, writers, hashes) => {
                 for (const cid of hashes) {
-                  if (!this._seenCids.has(cid)) {
+                  if (!this._seenCids.has(cid) && !this._pinningCids.has(cid)) {
                     const parsedCid = CID.parse(cid);
+                    // Track in-flight pin to prevent concurrent attempts for the same CID.
+                    this._pinningCids.add(cid);
                     // Helia pins.add() returns an AsyncGenerator — fire and drain it.
                     // Only mark as seen after successful pin so failures can be retried.
                     (async () => {
@@ -264,6 +267,8 @@ export class CollabswarmNode<
                       this._seenCids.add(cid);
                     })().catch((err) => {
                       console.error('Failed to pin CID', cid, err);
+                    }).finally(() => {
+                      this._pinningCids.delete(cid);
                     });
                   }
                 }

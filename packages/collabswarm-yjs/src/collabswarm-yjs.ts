@@ -194,6 +194,9 @@ export class YjsProvider
     // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
     return encodeStateAsUpdateV2(document);
   }
+  getSnapshot(document: Doc): Uint8Array {
+    return encodeStateAsUpdateV2(document);
+  }
 }
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {

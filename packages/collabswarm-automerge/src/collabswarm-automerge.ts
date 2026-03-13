@@ -49,6 +49,9 @@ export class AutomergeProvider<T = any>
   getHistory(document: Doc<T>): BinaryChange[] {
     return getAllChanges(document);
   }
+  getSnapshot(document: Doc<T>): BinaryChange[] {
+    return getAllChanges(document);
+  }
 }
 
 export async function serializeKey(publicKey: CryptoKey): Promise<string> {

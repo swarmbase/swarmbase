@@ -41,8 +41,8 @@ A snapshot is created by an authorized **writer** when the number of un-compacte
 
 1. Serialize the current CRDT document state via `CRDTProvider.getSnapshot(doc)` (already defined as optional on the interface)
 2. Record the CID of the most recent change node included in the snapshot
-3. Sign the snapshot with the writer's private key
-4. Store the snapshot in Helia blockstore (encrypted with the current document key)
+3. Sign the snapshot with the writer's private key (see Section 2.6 for payload format)
+4. Store the snapshot in-memory (`_latestSnapshot`) and include it in sync messages and load responses
 5. Broadcast a sync message containing the snapshot node
 
 ### 2.3 Snapshot Node Format
@@ -58,7 +58,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
   /** Number of change nodes compacted into this snapshot */
   compactedCount: number;
 
-  /** Signature of the snapshot creator (signs the state + lastChangeNodeCID + timestamp + compactedCount) */
+  /** Signature of the snapshot creator (see Section 2.6 for binary payload format) */
   signature: Uint8Array;
 
   /** Public key of the snapshot creator */
@@ -112,9 +112,21 @@ When a peer receives a sync message with a `snapshot` field:
 
 A snapshot must be verified before applying:
 
-1. **Writer authorization**: The `publicKey` in the snapshot must be in the document's writer ACL
-2. **Signature verification**: The signature must be valid for the snapshot contents (state + lastChangeNodeCID + timestamp + compactedCount, serialized deterministically)
+1. **Writer authorization**: The snapshot signature is verified by trying all public keys in the document's writer ACL (the embedded `publicKey` field is not relied upon because some key types like `CryptoKey` do not survive JSON serialization)
+2. **Signature verification**: The signature must be valid for the binary signing payload described below
 3. **Freshness**: The `lastChangeNodeCID` must be a known CID in the DAG (or the peer must trust the snapshot provider)
+
+**Signing payload format** (binary, big-endian integers):
+
+| Offset | Size | Field |
+|--------|------|-------|
+| 0 | 1 byte | Version (currently `1`) |
+| 1 | 8 bytes | Timestamp (uint64, ms since epoch) |
+| 9 | 4 bytes | compactedCount (uint32) |
+| 13 | 4 bytes | cidLen — length of lastChangeNodeCID (uint32) |
+| 17 | cidLen bytes | UTF-8 encoded lastChangeNodeCID |
+| ... | 4 bytes | stateLen — length of serialized state (uint32) |
+| ... | stateLen bytes | Serialized CRDT state bytes |
 
 For new peers joining (who have no existing state), verification relies on:
 - The snapshot being signed by a writer in the ACL they receive
@@ -124,8 +136,8 @@ For new peers joining (who have no existing state), verification relies on:
 
 Multiple peers may create snapshots concurrently. This is handled by:
 
-1. **Deterministic tie-break**: Peers compare snapshots using a two-part tuple: (a) highest `compactedCount` wins; (b) if tied, the snapshot whose CID (as a raw byte string) is lexicographically greatest wins. This ordering is fully deterministic because CIDs are content-addressed and identical across all peers. Timestamps are intentionally excluded from tie-breaking because clock skew between peers would cause divergent snapshot selection.
-2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent CRDT state, but the metadata (`compactedCount`) and CID determine which snapshot is preferred.
+1. **Deterministic tie-break**: Peers compare snapshots using a two-part tuple: (a) highest `compactedCount` wins; (b) if tied, the snapshot whose `lastChangeNodeCID` is lexicographically greatest wins. Timestamps are intentionally excluded from tie-breaking because clock skew between peers would cause divergent snapshot selection.
+2. **No conflict**: Snapshots are not changes that need merging -- they are deterministic summaries of the CRDT state at a given point. Two snapshots at the same point produce equivalent CRDT state, but the metadata determines which snapshot is preferred.
 3. **Convergence**: After receiving a peer's snapshot, a node replaces its own snapshot if the received one ranks higher by the tie-break tuple above
 
 ### 2.8 Configuration
