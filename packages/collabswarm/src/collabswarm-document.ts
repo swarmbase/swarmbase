@@ -550,9 +550,13 @@ export class CollabswarmDocument<
         });
     }
 
-    // Trigger compaction check for remote changes (local changes already
-    // call _maybeCompact from _makeChange).
-    await this._maybeCompact();
+    // Trigger compaction check only when all changes were applied directly.
+    // When there are missing blocks being fetched asynchronously, each fetch
+    // callback calls _maybeCompact() individually after applying its change,
+    // avoiding premature snapshots of incomplete state.
+    if (missingDocumentHashes.length === 0) {
+      await this._maybeCompact();
+    }
   }
 
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
@@ -1614,14 +1618,12 @@ export class CollabswarmDocument<
     this._latestSnapshot = snapshotNode;
     this._changesSinceSnapshot = 0;
 
-    // Update the last sync message to include the snapshot.
-    if (this._lastSyncMessage) {
-      this._lastSyncMessage.snapshot = snapshotNode;
-
-      // Prune old change nodes from the sync tree if configured.
-      if (this._compactionConfig.pruneAfterSnapshot) {
-        this._pruneChanges(this._compactionConfig.keepRecentNodes);
-      }
+    // Prune old change nodes from the in-memory sync tree if configured.
+    // The snapshot is NOT stored on _lastSyncMessage — it is only included
+    // in load/snapshot-load responses via _latestSnapshot, to avoid bloating
+    // every incremental pubsub sync message with the full snapshot state.
+    if (this._lastSyncMessage && this._compactionConfig.pruneAfterSnapshot) {
+      this._pruneChanges(this._compactionConfig.keepRecentNodes);
     }
 
     console.log(
