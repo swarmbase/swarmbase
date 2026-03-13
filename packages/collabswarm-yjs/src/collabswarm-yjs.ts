@@ -100,6 +100,17 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     };
   }
   serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {
+    // Encode snapshot Uint8Array fields (state, signature) as base64 for JSON safety.
+    let snapshotForWire: any;
+    if (message.snapshot) {
+      snapshotForWire = { ...message.snapshot };
+      if (snapshotForWire.state instanceof Uint8Array) {
+        snapshotForWire.state = Base64.fromUint8Array(snapshotForWire.state);
+      }
+      if (snapshotForWire.signature instanceof Uint8Array) {
+        snapshotForWire.signature = Base64.fromUint8Array(snapshotForWire.signature);
+      }
+    }
     return this.encode(
       this.serialize({
         ...message,
@@ -108,6 +119,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         keychainChanges:
           message.keychainChanges &&
           Base64.fromUint8Array(message.keychainChanges),
+        snapshot: snapshotForWire,
       }),
     );
   }
@@ -121,8 +133,20 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changeId?: string;
       changes?: iCRDTChangeNode;
       keychainChanges?: string;
+      snapshot?: any;
       signature?: string;
     };
+    // Decode snapshot base64 fields back to Uint8Array.
+    let snapshot: any;
+    if (deserialized.snapshot) {
+      snapshot = { ...deserialized.snapshot };
+      if (typeof snapshot.state === 'string') {
+        snapshot.state = Base64.toUint8Array(snapshot.state);
+      }
+      if (typeof snapshot.signature === 'string') {
+        snapshot.signature = Base64.toUint8Array(snapshot.signature);
+      }
+    }
     return {
       ...deserialized,
       changes:
@@ -131,6 +155,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       keychainChanges: deserialized.keychainChanges
         ? Base64.toUint8Array(deserialized.keychainChanges)
         : undefined,
+      snapshot,
     };
   }
 }

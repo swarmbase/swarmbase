@@ -981,6 +981,58 @@ export class CollabswarmDocument<
     });
   };
 
+  /**
+   * Build the deterministic binary payload used for snapshot signing/verification.
+   *
+   * Binary layout (big-endian integers):
+   *   [0]       uint8   version (1)
+   *   [1..8]    uint64  timestamp
+   *   [9..12]   uint32  compactedCount
+   *   [13..16]  uint32  cidLen
+   *   [17..]    bytes   UTF-8(lastChangeNodeCID)
+   *   [..]      uint32  stateLen
+   *   [..]      bytes   stateBytes
+   */
+  private _buildSnapshotSignPayload(
+    stateBytes: Uint8Array,
+    lastChangeNodeCID: string,
+    timestamp: number,
+    compactedCount: number,
+  ): Uint8Array {
+    const cidBytes = this._encoder.encode(lastChangeNodeCID);
+    // 1 (version) + 8 (timestamp) + 4 (compactedCount) + 4 (cidLen) + cidBytes + 4 (stateLen) + stateBytes
+    const totalLen = 1 + 8 + 4 + 4 + cidBytes.length + 4 + stateBytes.length;
+    const buf = new ArrayBuffer(totalLen);
+    const view = new DataView(buf);
+    const out = new Uint8Array(buf);
+    let offset = 0;
+
+    // version
+    view.setUint8(offset, 1);
+    offset += 1;
+
+    // timestamp as uint64
+    view.setBigUint64(offset, BigInt(timestamp), false);
+    offset += 8;
+
+    // compactedCount as uint32
+    view.setUint32(offset, compactedCount >>> 0, false);
+    offset += 4;
+
+    // lastChangeNodeCID (length-prefixed)
+    view.setUint32(offset, cidBytes.length, false);
+    offset += 4;
+    out.set(cidBytes, offset);
+    offset += cidBytes.length;
+
+    // stateBytes (length-prefixed)
+    view.setUint32(offset, stateBytes.length, false);
+    offset += 4;
+    out.set(stateBytes, offset);
+
+    return out;
+  }
+
   private async _ensureCurrentUserCanWrite() {
     // Check that we are a writer (allowed to write to this document).
     if (!(await this._writers.check(this._userPublicKey))) {
@@ -1331,7 +1383,10 @@ export class CollabswarmDocument<
       const incoming = message.snapshot;
       if (
         !this._latestSnapshot ||
-        incoming.compactedCount > this._latestSnapshot.compactedCount
+        incoming.compactedCount > this._latestSnapshot.compactedCount ||
+        (incoming.compactedCount === this._latestSnapshot.compactedCount &&
+          String(incoming.lastChangeNodeCID ?? '') >
+            String(this._latestSnapshot.lastChangeNodeCID ?? ''))
       ) {
         // Verify the snapshot creator is an authorized writer.
         const snapshotPublicKey = incoming.publicKey;
@@ -1341,15 +1396,11 @@ export class CollabswarmDocument<
           );
         } else {
           // Verify the snapshot signature against the deterministic payload.
-          // Must match the structured encoding used during snapshot creation.
+          // Must match the binary encoding used during snapshot creation.
           const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
-          const signPayload = this._encoder.encode(JSON.stringify({
-            v: 1,
-            state: Array.from(stateBytes),
-            lastChangeNodeCID: incoming.lastChangeNodeCID,
-            timestamp: incoming.timestamp,
-            compactedCount: incoming.compactedCount,
-          }));
+          const signPayload = this._buildSnapshotSignPayload(
+            stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
+          );
           const signatureValid = await this._authProvider.verify(
             signPayload,
             snapshotPublicKey,
@@ -1501,21 +1552,16 @@ export class CollabswarmDocument<
     const lastChangeNodeCID = this._lastSyncMessage?.changeId ?? '';
     const timestamp = Date.now();
 
-    // Create a deterministic, unambiguous payload to sign.
+    // Create a deterministic, unambiguous binary payload to sign.
     // Use _documentChangeCount (document-kind changes only) rather than
     // _hashes.size (which includes ACL nodes) to keep the semantic consistent.
-    // A structured JSON encoding with a version tag avoids ambiguities from
-    // raw byte concatenation (where different field tuples could produce
-    // identical byte sequences).
+    // Binary layout with length prefixes avoids ambiguity and is efficient
+    // for large state blobs (no JSON/Array.from overhead).
     const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
-    const signPayload = this._encoder.encode(JSON.stringify({
-      v: 1,
-      state: Array.from(stateBytes),
-      lastChangeNodeCID,
-      timestamp,
-      compactedCount,
-    }));
+    const signPayload = this._buildSnapshotSignPayload(
+      stateBytes, lastChangeNodeCID, timestamp, compactedCount,
+    );
     const signature = await this._authProvider.sign(signPayload, this._userKey);
 
     const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
