@@ -1128,8 +1128,14 @@ export class CollabswarmDocument<
             }
             rawContent = decrypted;
           } else {
-            // KeyID not in keychain — legacy plaintext peer.
-            rawContent = assembled;
+            // KeyID not recognized — peer sent encrypted data with a key we
+            // don't have. Treating this as plaintext would be a security risk
+            // (unauthenticated data via sync(..., false)). Fail and let the
+            // caller try the next peer.
+            console.warn(
+              `Load response for ${this.documentPath}: unrecognized keyID, skipping peer`,
+            );
+            return false;
           }
         } else {
           rawContent = assembled;

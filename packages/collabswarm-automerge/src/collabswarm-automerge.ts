@@ -13,6 +13,11 @@ import {
   ACL,
   ACLProvider,
   CollabswarmDocumentChangeHandler,
+  CRDTChangeBlock,
+  CRDTChangeNode,
+  CRDTChangeNodeDeferred,
+  crdtChangeNodeDeferred,
+  CRDTChangeNodeKind,
   CRDTProvider,
   CRDTSyncMessage,
   JSONSerializer,
@@ -340,7 +345,88 @@ export class AutomergeKeychainProvider
   keyIDLength = 16;
 }
 
+/**
+ * Intermediate wire type for Automerge Merkle-DAG nodes where each
+ * BinaryChange[] is represented as base64-encoded strings.
+ */
+type iCRDTChangeNode = {
+  kind: CRDTChangeNodeKind;
+  change?: string[];
+  children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
+};
+
+function serializeBinaryChangesInMerkleDAG(
+  node: CRDTChangeNode<BinaryChange[]>,
+): iCRDTChangeNode {
+  const change = node.change
+    ? node.change.map((c: Uint8Array) => Base64.fromUint8Array(c))
+    : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: iCRDTChangeNode } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = serializeBinaryChangesInMerkleDAG(child);
+    }
+    return { ...node, change, children };
+  }
+  return { ...node, change, children: node.children };
+}
+
+function deserializeBinaryChangesInMerkleDAG(
+  node: iCRDTChangeNode,
+): CRDTChangeNode<BinaryChange[]> {
+  const change = node.change
+    ? (node.change.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[])
+    : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: CRDTChangeNode<BinaryChange[]> } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = deserializeBinaryChangesInMerkleDAG(child);
+    }
+    return { ...node, change, children };
+  }
+  return { ...node, change, children: node.children };
+}
+
+function serializeBinaryChanges(changes: BinaryChange[]): string[] {
+  return changes.map((c: Uint8Array) => Base64.fromUint8Array(c));
+}
+
+function deserializeBinaryChanges(changes: string[]): BinaryChange[] {
+  return changes.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[];
+}
+
 export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
+  serializeChangeBlock(changes: CRDTChangeBlock<BinaryChange[]>): string {
+    const obj: Record<string, unknown> = {
+      changes: serializeBinaryChanges(changes.changes),
+      nonce: Base64.fromUint8Array(changes.nonce),
+    };
+    if ('blindIndexTokens' in changes) {
+      obj.blindIndexTokens = changes.blindIndexTokens;
+    }
+    return this.serialize(obj);
+  }
+
+  deserializeChangeBlock(changes: string): CRDTChangeBlock<BinaryChange[]> {
+    const raw = this.deserialize(changes);
+    if (
+      typeof raw !== 'object' || raw === null ||
+      !Array.isArray((raw as Record<string, unknown>).changes) ||
+      typeof (raw as Record<string, unknown>).nonce !== 'string'
+    ) {
+      throw new Error('Invalid change block: expected {changes: string[], nonce: string}');
+    }
+    const deserialized = raw as { changes: string[]; nonce: string; blindIndexTokens?: Record<string, string> };
+    const result: CRDTChangeBlock<BinaryChange[]> = {
+      changes: deserializeBinaryChanges(deserialized.changes),
+      nonce: Base64.toUint8Array(deserialized.nonce),
+    };
+    if ('blindIndexTokens' in deserialized) {
+      result.blindIndexTokens = deserialized.blindIndexTokens;
+    }
+    return result;
+  }
+
   serializeSyncMessage(message: CRDTSyncMessage<BinaryChange[]>): Uint8Array {
     let snapshotForWire: any;
     if (message.snapshot) {
@@ -361,6 +447,11 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     return this.encode(
       this.serialize({
         ...message,
+        changes:
+          message.changes && serializeBinaryChangesInMerkleDAG(message.changes),
+        keychainChanges:
+          message.keychainChanges &&
+          serializeBinaryChanges(message.keychainChanges),
         snapshot: snapshotForWire,
       }),
     );
@@ -381,6 +472,15 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         snapshot.signature = Base64.toUint8Array(snapshot.signature);
       }
     }
-    return { ...raw, snapshot } as CRDTSyncMessage<BinaryChange[]>;
+    return {
+      ...raw,
+      changes:
+        raw.changes && deserializeBinaryChangesInMerkleDAG(raw.changes),
+      keychainChanges:
+        raw.keychainChanges
+          ? deserializeBinaryChanges(raw.keychainChanges)
+          : undefined,
+      snapshot,
+    } as CRDTSyncMessage<BinaryChange[]>;
   }
 }
