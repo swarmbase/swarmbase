@@ -673,6 +673,26 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Returns the keychain changes to include in a load response based on
+   * the document's history visibility setting.
+   */
+  private async _keychainChangesForVisibility(): Promise<ChangesType> {
+    switch (this._historyVisibility) {
+      case 'full_history':
+        // Send ALL epoch keys — for audit trails and regulatory compliance.
+        return this._keychain.history();
+      case 'since_invited':
+        // TODO: Filter using _invitationEpoch when epoch-based keychain
+        // filtering is fully wired. Falls back to full history for now.
+        return this._keychain.history();
+      case 'current_only':
+      default:
+        // Only send the current key — most private option.
+        return await this._keychain.currentKeyChange();
+    }
+  }
+
+  /**
    * Check if automatic compaction should be triggered based on the config.
    */
   private async _maybeCompact() {
@@ -685,15 +705,17 @@ export class CollabswarmDocument<
       return;
     }
 
-    // Only writers can create snapshots; read-only peers must not attempt compaction.
-    if (!(await this._writers.check(this._userPublicKey))) {
-      return;
-    }
-
+    // Check cheap thresholds before the async writer ACL check to avoid
+    // repeated crypto/ACL work on every change.
     if (this._documentChangeCount < this._compactionConfig.minChangesBeforeSnapshot) {
       return;
     }
     if (this._changesSinceSnapshot < this._compactionConfig.snapshotInterval) {
+      return;
+    }
+
+    // Only writers can create snapshots; read-only peers must not attempt compaction.
+    if (!(await this._writers.check(this._userPublicKey))) {
       return;
     }
     this._compactionInProgress = true;
@@ -853,30 +875,7 @@ export class CollabswarmDocument<
         // Construct load response based on history visibility setting.
         const loadMessage = this._createSyncMessage();
 
-        switch (this._historyVisibility) {
-          case 'full_history':
-            // Send ALL epoch keys — for audit trails and regulatory compliance.
-            // The receiver gets the full keychain history and can decrypt any
-            // historical change in the document.
-            loadMessage.keychainChanges = this._keychain.history();
-            break;
-          case 'since_invited':
-            // Send epoch keys from the invitation epoch onward.
-            // TODO: This requires epoch-based keychain filtering using
-            // _invitationEpoch to exclude keys from before the requestor
-            // was invited. Until epochs are fully wired into the keychain
-            // CRDT, we fall back to sending full history.
-            loadMessage.keychainChanges = this._keychain.history();
-            break;
-          case 'current_only':
-          default:
-            // Only send the current key — new member gets a state snapshot,
-            // not individual historical changes. This is the most private
-            // option: the receiver cannot decrypt any prior epoch's data.
-            loadMessage.keychainChanges =
-              await this._keychain.currentKeyChange();
-            break;
-        }
+        loadMessage.keychainChanges = await this._keychainChangesForVisibility();
 
         // Include the latest snapshot if available, to accelerate initial sync.
         if (this._latestSnapshot) {
@@ -980,7 +979,7 @@ export class CollabswarmDocument<
         // changes, and keychain so the peer can fully catch up.
         const snapshotMessage = this._createSyncMessage();
         snapshotMessage.snapshot = this._latestSnapshot;
-        snapshotMessage.keychainChanges = this._keychain.history();
+        snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
         snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
         const serialized =
