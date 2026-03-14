@@ -1109,36 +1109,38 @@ export class CollabswarmDocument<
           return false;
         }
 
-        // Try to decrypt the response. If the keyID from the header is
-        // found in the keychain, treat it as encrypted. Otherwise fall
-        // back to plaintext parsing (legacy peer compatibility).
+        // Decrypt the response. Extract the keyID from the header and
+        // look it up in the keychain. Responses shorter than the encryption
+        // header are treated as malformed and rejected.
         const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
         let rawContent: Uint8Array;
-        if (assembled.length > headerLength) {
-          const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
-          const key = this._keychain.getKey(blockKeyID);
-          if (key) {
-            const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
-            const blockData = assembled.slice(headerLength);
-            const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
-            if (!decrypted) {
-              throw new Error(
-                `Failed to decrypt load response for ${this.documentPath}`,
-              );
-            }
-            rawContent = decrypted;
-          } else {
-            // KeyID not recognized — peer sent encrypted data with a key we
-            // don't have. Treating this as plaintext would be a security risk
-            // (unauthenticated data via sync(..., false)). Fail and let the
-            // caller try the next peer.
-            console.warn(
-              `Load response for ${this.documentPath}: unrecognized keyID, skipping peer`,
+        if (assembled.length <= headerLength) {
+          // Too short to contain a valid encrypted payload — reject.
+          console.warn(
+            `Load response for ${this.documentPath}: payload too short (${assembled.length} <= ${headerLength}), skipping peer`,
+          );
+          return false;
+        }
+
+        const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
+        const key = this._keychain.getKey(blockKeyID);
+        if (key) {
+          const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+          const blockData = assembled.slice(headerLength);
+          const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
+          if (!decrypted) {
+            throw new Error(
+              `Failed to decrypt load response for ${this.documentPath}`,
             );
-            return false;
           }
+          rawContent = decrypted;
         } else {
-          rawContent = assembled;
+          // KeyID not recognized — peer sent encrypted data with a key we
+          // don't have. Fail and let the caller try the next peer.
+          console.warn(
+            `Load response for ${this.documentPath}: unrecognized keyID, skipping peer`,
+          );
+          return false;
         }
 
         const message = this._syncMessageSerializer.deserializeSyncMessage(rawContent);
@@ -1148,14 +1150,26 @@ export class CollabswarmDocument<
           );
           return false;
         }
-        // Skip outer sync message signature verification during load.
-        // During initial load, the receiver does not yet have writer ACL keys
-        // to verify against. Security is maintained because: (1) the load
-        // request is signed and verified by the responder, (2) the response
-        // is encrypted with the document key (only authorized peers can
-        // decrypt), and (3) snapshot signatures are independently verified
-        // against writer keys received in the same message.
+        // Initial sync with signature verification deferred: writer ACL
+        // keys are not available until the change DAG is processed. We sync
+        // first (which populates _writers from ACL nodes in the DAG), then
+        // verify the outer message signature post-hoc.
         await this.sync(message, false);
+
+        // Post-hoc writer signature verification now that writer keys
+        // are populated from the change DAG.
+        if (message.signature) {
+          const { signature, ...messageWithoutSignature } = message;
+          const raw = this._syncMessageSerializer.serializeSyncMessage(
+            messageWithoutSignature,
+          );
+          if (!(await this._verifyWriterSignature(raw, signature))) {
+            console.warn(
+              `Load response for ${this.documentPath} failed post-hoc writer signature verification, skipping peer`,
+            );
+            return false;
+          }
+        }
         return true;
       },
     );

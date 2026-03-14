@@ -396,6 +396,18 @@ function deserializeBinaryChanges(changes: string[]): BinaryChange[] {
 }
 
 export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
+  serializeChanges(changes: BinaryChange[]): Uint8Array {
+    return this.encode(this.serialize(serializeBinaryChanges(changes)));
+  }
+
+  deserializeChanges(changes: Uint8Array): BinaryChange[] {
+    const raw = this.deserialize(this.decode(changes));
+    if (!Array.isArray(raw)) {
+      throw new Error('Invalid serialized changes: expected string[]');
+    }
+    return deserializeBinaryChanges(raw as string[]);
+  }
+
   serializeChangeBlock(changes: CRDTChangeBlock<BinaryChange[]>): string {
     const obj: Record<string, unknown> = {
       changes: serializeBinaryChanges(changes.changes),
