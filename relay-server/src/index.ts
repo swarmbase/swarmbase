@@ -24,6 +24,16 @@ const TCP_PORT = process.env.TCP_PORT || '9002'
 const WS_LISTEN = process.env.WS_LISTEN || `/ip4/0.0.0.0/tcp/${WS_PORT}/ws`
 const TCP_LISTEN = process.env.TCP_LISTEN || `/ip4/0.0.0.0/tcp/${TCP_PORT}`
 
+// Auto-subscribe configuration.
+// TOPIC_ALLOWLIST: comma-separated prefixes. If set, only topics matching
+// one of these prefixes will be auto-subscribed. If unset, all non-system
+// topics are allowed (open mode, suitable for development).
+const TOPIC_ALLOWLIST = process.env.TOPIC_ALLOWLIST
+  ? process.env.TOPIC_ALLOWLIST.split(',').map(p => p.trim()).filter(Boolean)
+  : null
+// Maximum number of auto-subscribed topics before rejecting new ones.
+const MAX_AUTO_TOPICS = parseInt(process.env.MAX_AUTO_TOPICS || '1000', 10)
+
 async function main() {
   const libp2p = await createLibp2p({
     addresses: {
@@ -65,20 +75,18 @@ async function main() {
   // haven't formed a direct WebRTC connection yet. This makes the relay
   // self-sufficient — no manual topic configuration is needed.
   //
-  // TODO: Harden auto-subscribe for production use:
-  //   - Add an allowlist/prefix filter (e.g. only subscribe to topics
-  //     matching `${DOCUMENT_PUBLISH_PATH}/*` or `/document/*`)
-  //   - Add a maximum tracked-topic cap to prevent unbounded memory growth
-  //     from malicious/buggy peers subscribing to many random topics
-  //   - Add per-peer rate limiting on subscription-change events
-  //   - Ignore system/internal topics (e.g. `_peer-discovery`, `floodsub:*`)
-  //   - Consider a TOPIC_ALLOWLIST env var for restrictive deployments
-  //   These are not critical for development/small deployments but are
-  //   important for production relay servers exposed to untrusted peers.
+  // Hardening controls (configured via environment variables):
+  //   TOPIC_ALLOWLIST — comma-separated prefixes; only matching topics are
+  //     auto-subscribed. Unset = open mode (all non-system topics allowed).
+  //     Example: TOPIC_ALLOWLIST="/document/,/documents"
+  //   MAX_AUTO_TOPICS — hard cap on auto-subscribed topics (default 1000).
+  //     Once reached, new subscriptions are silently ignored.
   const trackedTopics = new Set<string>([
     PUBSUB_PEER_DISCOVERY_TOPIC,
     DOCUMENT_PUBLISH_PATH,
   ])
+  // Count of topics added via auto-subscribe (excludes seed + EXTRA_TOPICS).
+  let autoSubscribedCount = 0
 
   // System/internal topics that should never be auto-subscribed.
   const IGNORED_TOPIC_PREFIXES = ['_', 'floodsub:']
@@ -93,9 +101,41 @@ async function main() {
       if (IGNORED_TOPIC_PREFIXES.some(prefix => sub.topic.startsWith(prefix))) {
         continue
       }
+      // Enforce allowlist when configured.
+      if (TOPIC_ALLOWLIST && !TOPIC_ALLOWLIST.some(prefix => sub.topic.startsWith(prefix))) {
+        continue
+      }
+      // Enforce hard cap to prevent unbounded growth.
+      if (autoSubscribedCount >= MAX_AUTO_TOPICS) {
+        console.warn(`Auto-subscribe cap reached (${MAX_AUTO_TOPICS}), ignoring topic: ${sub.topic}`)
+        continue
+      }
       trackedTopics.add(sub.topic)
+      autoSubscribedCount++
       libp2p.services.pubsub.subscribe(sub.topic)
-      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId})`)
+      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId}, ${autoSubscribedCount}/${MAX_AUTO_TOPICS})`)
+    }
+  })
+
+  // Clean up auto-subscribed topics when all peers leave them.
+  libp2p.services.pubsub.addEventListener('subscription-change', (event: any) => {
+    const { subscriptions } = event.detail
+    for (const sub of subscriptions) {
+      if (sub.subscribe || !trackedTopics.has(sub.topic)) {
+        continue
+      }
+      // Don't unsubscribe from seed topics.
+      if (sub.topic === PUBSUB_PEER_DISCOVERY_TOPIC || sub.topic === DOCUMENT_PUBLISH_PATH) {
+        continue
+      }
+      // Check if any peers are still subscribed via GossipSub.
+      const subscribers = (libp2p.services.pubsub as any).getSubscribers?.(sub.topic)
+      if (subscribers && subscribers.length === 0) {
+        trackedTopics.delete(sub.topic)
+        autoSubscribedCount = Math.max(0, autoSubscribedCount - 1)
+        libp2p.services.pubsub.unsubscribe(sub.topic)
+        console.log(`Auto-unsubscribed from topic: ${sub.topic} (no remaining subscribers)`)
+      }
     }
   })
 

@@ -160,7 +160,7 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
   } as BootstrapInit);
 
 /**
- * Pre-built default config with no bootstrap peers.
+ * Returns a fresh default config with no bootstrap peers.
  *
  * Use this as a starting point for browser applications. Connect to peers
  * after initialization via `collabswarm.connect([relayMultiaddr])`.
@@ -168,15 +168,12 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  * For configs with bootstrap peers baked in, use
  * `defaultConfig(defaultBootstrapConfig(['/ip4/.../ws/p2p/...']))` instead.
  *
- * **Note:** This is lazily initialized to avoid instantiating IDBBlockstore
- * in Node.js environments (tests). Creates new instances on first access.
- */
-/**
- * Returns a fresh default config with no bootstrap peers.
- *
  * Each call creates new IDB-backed blockstore/datastore instances so callers
  * can safely mutate the returned config without leaking state across
  * consumers. For shared/reused configs, store the result in a variable.
+ *
+ * **Note:** Lazily instantiated — safe to import in Node.js test environments
+ * that lack IndexedDB as long as the function is not called.
  */
 export function getDefaultConfig(): CollabswarmConfig {
   return defaultConfig(defaultBootstrapConfig([]));

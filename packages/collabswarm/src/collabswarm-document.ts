@@ -1543,6 +1543,13 @@ export class CollabswarmDocument<
             incoming.compactedCount,
           );
           this._changesSinceSnapshot = 0;
+          // Mark the snapshot boundary CID as seen so _mergeSyncTree skips
+          // it and all ancestor nodes. This prevents re-applying pre-snapshot
+          // changes (which the snapshot already covers) and avoids inflating
+          // _documentChangeCount / _changesSinceSnapshot.
+          if (incoming.lastChangeNodeCID) {
+            this._hashes.add(incoming.lastChangeNodeCID);
+          }
           console.log(
             `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
           );

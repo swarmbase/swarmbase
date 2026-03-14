@@ -252,6 +252,8 @@ The relay server reads the following environment variables:
 | `TCP_LISTEN` | Full TCP listen multiaddr | `/ip4/0.0.0.0/tcp/${TCP_PORT}` |
 | `DOCUMENT_PUBLISH_PATH` | Pubsub topic for document publish notifications | `/documents` |
 | `EXTRA_TOPICS` | Additional pubsub topics to subscribe to (comma-separated) | *(none)* |
+| `TOPIC_ALLOWLIST` | Comma-separated prefixes for auto-subscribe filtering. Only topics matching a prefix are auto-subscribed. Unset = open mode (all non-system topics allowed). Example: `/document/,/documents` | *(unset — open mode)* |
+| `MAX_AUTO_TOPICS` | Hard cap on auto-subscribed topics to prevent unbounded memory growth | `1000` |
 
 The relay-info.json output path is determined automatically: `/shared/relay-info.json` if the `/shared` directory exists (Docker volume), otherwise `./relay-info.json` in the working directory.
 
