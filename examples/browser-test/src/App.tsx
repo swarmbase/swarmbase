@@ -16,7 +16,8 @@ import {
   Collabswarm,
   CollabswarmConfig,
   CollabswarmDocument,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
 import { Doc, BinaryChange } from 'automerge';
 
@@ -73,21 +74,25 @@ class App extends React.Component<
 
   componentDidMount() {
     if (this.props.onInitialize) {
+      // Get relay/bootstrap address from env. The relay multiaddr
+      // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
+      // for libp2p peer discovery — NOT as a listen address.
+      // REACT_APP_RELAY_MULTIADDR is the preferred env var;
+      // REACT_APP_SIGNALING_SERVER is accepted for backward compatibility.
+      const relayAddr =
+        process.env.REACT_APP_RELAY_MULTIADDR ||
+        process.env.REACT_APP_SIGNALING_SERVER;
+      const bootstrapPeers = relayAddr ? [relayAddr] : [];
       const config = process.env.REACT_APP_CLIENT_CONFIG
         ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
-        : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-      if (process.env.REACT_APP_SIGNALING_SERVER) {
-        // Add signaling server as a listen address in the Helia/libp2p config.
-        const signalingServer = process.env.REACT_APP_SIGNALING_SERVER;
-        const heliaConfig = config.helia ?? config.ipfs;
-        if (heliaConfig) {
-          if (!heliaConfig.libp2p) heliaConfig.libp2p = {};
-          if (!heliaConfig.libp2p.addresses) heliaConfig.libp2p.addresses = { listen: [] };
-          if (!heliaConfig.libp2p.addresses.listen) heliaConfig.libp2p.addresses.listen = [];
-          heliaConfig.libp2p.addresses.listen.push(signalingServer);
+        : defaultConfig(defaultBootstrapConfig(bootstrapPeers));
+      this.props.onInitialize(config).then(() => {
+        // If the relay address was provided but not baked into the config
+        // (e.g. REACT_APP_CLIENT_CONFIG was used), connect explicitly.
+        if (relayAddr && process.env.REACT_APP_CLIENT_CONFIG) {
+          this.props.onConnect([relayAddr]);
         }
-      }
-      this.props.onInitialize(config);
+      });
     }
   }
 

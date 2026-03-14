@@ -11,7 +11,8 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {
   CollabswarmDocument,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
   SubtleCrypto,
 } from '@collabswarm/collabswarm';
 import {
@@ -56,18 +57,16 @@ function App() {
   const [docWritersCache, setDocWritersCache] = React.useState<{
     [docPath: string]: any[];
   }>({});
-  const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); // use copy
-  // Add signaling server as a listen address in the Helia/libp2p config.
-  const heliaConfig = config.helia ?? config.ipfs;
-  if (heliaConfig) {
-    if (!heliaConfig.libp2p) heliaConfig.libp2p = {};
-    if (!heliaConfig.libp2p.addresses) heliaConfig.libp2p.addresses = { listen: [] };
-    if (!heliaConfig.libp2p.addresses.listen) heliaConfig.libp2p.addresses.listen = [];
-    heliaConfig.libp2p.addresses.listen.push(
-      process.env.REACT_APP_SIGNALING_SERVER ||
-        '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
-    );
-  }
+  // Get relay/bootstrap address from env. The relay multiaddr
+  // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
+  // for libp2p peer discovery — NOT as a listen address.
+  // REACT_APP_RELAY_MULTIADDR is the preferred env var;
+  // REACT_APP_SIGNALING_SERVER is accepted for backward compatibility.
+  const relayAddr =
+    process.env.REACT_APP_RELAY_MULTIADDR ||
+    process.env.REACT_APP_SIGNALING_SERVER;
+  const relayPeers = relayAddr ? [relayAddr] : [];
+  const config = defaultConfig(defaultBootstrapConfig(relayPeers));
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,

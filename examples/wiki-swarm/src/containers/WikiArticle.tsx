@@ -2,7 +2,11 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { Doc } from 'automerge';
-import { CollabswarmConfig, DEFAULT_CONFIG } from '@collabswarm/collabswarm';
+import {
+  CollabswarmConfig,
+  defaultConfig,
+  defaultBootstrapConfig,
+} from '@collabswarm/collabswarm';
 import {
   changeDocumentAsync,
   openDocumentAsync,
@@ -57,24 +61,18 @@ class WikiArticle extends React.Component<
     if (this.props.onDocumentOpen && this.props.match.params.documentId) {
       console.log('Loading article at:', this.props.match.params.documentId);
       console.log('Env:', process.env);
+      // Get relay/bootstrap address from env. The relay multiaddr
+      // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
+      // for libp2p peer discovery — NOT as a listen address.
+      // REACT_APP_RELAY_MULTIADDR is the preferred env var;
+      // REACT_APP_SIGNALING_SERVER is accepted for backward compatibility.
+      const relayAddr =
+        process.env.REACT_APP_RELAY_MULTIADDR ||
+        process.env.REACT_APP_SIGNALING_SERVER;
+      const bootstrapPeers = relayAddr ? [relayAddr] : [];
       const config = process.env.REACT_APP_CLIENT_CONFIG
         ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
-        : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-      if (process.env.REACT_APP_SIGNALING_SERVER) {
-        // Add signaling server as a listen address in the Helia/libp2p config.
-        const heliaConfig = config.helia ?? config.ipfs;
-        if (heliaConfig) {
-          if (!heliaConfig.libp2p) heliaConfig.libp2p = {};
-          if (!heliaConfig.libp2p.addresses) {
-            heliaConfig.libp2p.addresses = { listen: [] };
-          } else if (!heliaConfig.libp2p.addresses.listen) {
-            heliaConfig.libp2p.addresses.listen = [];
-          }
-          heliaConfig.libp2p.addresses.listen.push(
-            process.env.REACT_APP_SIGNALING_SERVER,
-          );
-        }
-      }
+        : defaultConfig(defaultBootstrapConfig(bootstrapPeers));
       this.props
         .onInitialize(config)
         .then(() =>

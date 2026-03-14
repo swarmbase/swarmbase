@@ -159,6 +159,21 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
     list: clientAddresses,
   } as BootstrapInit);
 
+/**
+ * Pre-built default config with no bootstrap peers.
+ *
+ * Use this as a starting point for browser applications. Connect to peers
+ * after initialization via `collabswarm.connect([relayMultiaddr])`.
+ *
+ * For configs with bootstrap peers baked in, use
+ * `defaultConfig(defaultBootstrapConfig(['/ip4/.../ws/p2p/...']))` instead.
+ *
+ * **Note:** This creates new IDBBlockstore/IDBDatastore instances on each
+ * access. Do not call this in a render loop — create the config once and
+ * pass it to `initialize()`.
+ */
+export const DEFAULT_CONFIG = defaultConfig(defaultBootstrapConfig([]));
+
 // /**
 //  * Creates a new collabswarm config with an added `.ipfs.config.Bootstrap` entry.
 //  *

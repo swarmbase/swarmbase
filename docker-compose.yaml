@@ -1,5 +1,19 @@
 version: '3.7'
 services:
+  relay:
+    build: ./relay-server
+    ports:
+      - 9001:9001
+      - 9002:9002
+    volumes:
+      - shared-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   browser-test:
     build:
       context: ./
@@ -7,7 +21,6 @@ services:
     image: collabswarm-automerge:latest
     environment:
       - 'PORT=3000'
-      - 'SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -19,18 +32,17 @@ services:
       - ./packages/collabswarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/browser-test/public:/app/examples/browser-test/public
       - ./examples/browser-test/src:/app/examples/browser-test/src
-      - ./client-config.env:/app/.env
+      - shared-data:/shared:ro
     stdin_open: true
+    depends_on:
+      relay:
+        condition: service_healthy
     command:
-      # - sh
-      # - -c
-      # - "ls /app; /app/wait-for-file.sh .env yarn workspace @collabswarm/browser-test start"
-      - /app/wait-for-file.sh
-      - .env
       - yarn
       - workspace
       - '@collabswarm/browser-test'
       - start
+
   wiki-swarm:
     build:
       context: ./
@@ -38,7 +50,6 @@ services:
     image: collabswarm-automerge:latest
     environment:
       - 'PORT=3000'
-      - 'SIGNALING_SERVER=/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -50,15 +61,17 @@ services:
       - ./packages/collabswarm-redux/src:/app/packages/collabswarm-redux/src
       - ./examples/wiki-swarm/public:/app/examples/wiki-swarm/public
       - ./examples/wiki-swarm/src:/app/examples/wiki-swarm/src
-      - ./client-config.env:/app/.env
+      - shared-data:/shared:ro
     stdin_open: true
+    depends_on:
+      relay:
+        condition: service_healthy
     command:
-      - /app/wait-for-file.sh
-      - .env
       - yarn
       - workspace
       - '@collabswarm/wiki-swarm'
       - start
+
   node:
     build:
       context: ./
@@ -76,11 +89,9 @@ services:
       - ./packages/collabswarm/src:/app/packages/collabswarm/src
       - ./packages/collabswarm-automerge/bin:/app/packages/collabswarm-automerge/bin
       - ./packages/collabswarm-automerge/src:/app/packages/collabswarm-automerge/src
-      - ./client-config.env:/app/client-config.env
-  star-signal:
-    build:
-      context: ./
-      dockerfile: ./Dockerfile.webrtc-star-signal
-    image: collabswarm-automerge-signal:latest
-    ports:
-      - 9090:9090
+    depends_on:
+      relay:
+        condition: service_healthy
+
+volumes:
+  shared-data:
