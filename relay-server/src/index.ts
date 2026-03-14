@@ -64,19 +64,38 @@ async function main() {
   // the relay also subscribes so it can relay messages between peers that
   // haven't formed a direct WebRTC connection yet. This makes the relay
   // self-sufficient — no manual topic configuration is needed.
+  //
+  // TODO: Harden auto-subscribe for production use:
+  //   - Add an allowlist/prefix filter (e.g. only subscribe to topics
+  //     matching `${DOCUMENT_PUBLISH_PATH}/*` or `/document/*`)
+  //   - Add a maximum tracked-topic cap to prevent unbounded memory growth
+  //     from malicious/buggy peers subscribing to many random topics
+  //   - Add per-peer rate limiting on subscription-change events
+  //   - Ignore system/internal topics (e.g. `_peer-discovery`, `floodsub:*`)
+  //   - Consider a TOPIC_ALLOWLIST env var for restrictive deployments
+  //   These are not critical for development/small deployments but are
+  //   important for production relay servers exposed to untrusted peers.
   const trackedTopics = new Set<string>([
     PUBSUB_PEER_DISCOVERY_TOPIC,
     DOCUMENT_PUBLISH_PATH,
   ])
 
+  // System/internal topics that should never be auto-subscribed.
+  const IGNORED_TOPIC_PREFIXES = ['_', 'floodsub:']
+
   libp2p.services.pubsub.addEventListener('subscription-change', (event: any) => {
     const { peerId, subscriptions } = event.detail
     for (const sub of subscriptions) {
-      if (sub.subscribe && !trackedTopics.has(sub.topic)) {
-        trackedTopics.add(sub.topic)
-        libp2p.services.pubsub.subscribe(sub.topic)
-        console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId})`)
+      if (!sub.subscribe || trackedTopics.has(sub.topic)) {
+        continue
       }
+      // Skip system/internal topics.
+      if (IGNORED_TOPIC_PREFIXES.some(prefix => sub.topic.startsWith(prefix))) {
+        continue
+      }
+      trackedTopics.add(sub.topic)
+      libp2p.services.pubsub.subscribe(sub.topic)
+      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId})`)
     }
   })
 

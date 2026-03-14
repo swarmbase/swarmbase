@@ -801,8 +801,8 @@ export class CollabswarmDocument<
     // For branching histories (DAG with multiple branches), keepCount is applied
     // globally across all branches. Once the limit is reached, all further
     // document nodes in any branch are pruned.
-    const queue: Array<{ id: string; node: CRDTChangeNode<ChangesType> }> = [
-      { id: this._lastSyncMessage.changeId, node: this._lastSyncMessage.changes },
+    const queue: Array<CRDTChangeNode<ChangesType>> = [
+      this._lastSyncMessage.changes,
     ];
     let documentNodesVisited = 0;
     let qi = 0;
@@ -812,30 +812,30 @@ export class CollabswarmDocument<
 
       // ACL nodes are always kept — never count them toward the limit.
       const isACLNode =
-        current.node.kind === crdtReaderChangeNode ||
-        current.node.kind === crdtWriterChangeNode;
+        current.kind === crdtReaderChangeNode ||
+        current.kind === crdtWriterChangeNode;
 
       if (!isACLNode) {
         documentNodesVisited++;
       }
 
       if (
-        current.node.children !== undefined &&
-        current.node.children !== crdtChangeNodeDeferred
+        current.children !== undefined &&
+        current.children !== crdtChangeNodeDeferred
       ) {
         if (!isACLNode && documentNodesVisited >= keepCount) {
           // This document node is at the boundary — prune its children,
           // but preserve any ACL nodes within the entire subtree.
           const preservedACL: Record<string, CRDTChangeNode<ChangesType>> = {};
-          collectACLNodes(current.node.children, preservedACL);
+          collectACLNodes(current.children, preservedACL);
           if (Object.keys(preservedACL).length > 0) {
-            current.node.children = preservedACL;
+            current.children = preservedACL;
           } else {
-            delete current.node.children;
+            delete current.children;
           }
         } else {
-          for (const [childHash, childNode] of Object.entries(current.node.children)) {
-            queue.push({ id: childHash, node: childNode });
+          for (const [, childNode] of Object.entries(current.children)) {
+            queue.push(childNode);
           }
         }
       }

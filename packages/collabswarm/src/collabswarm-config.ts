@@ -171,12 +171,15 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  * **Note:** This is lazily initialized to avoid instantiating IDBBlockstore
  * in Node.js environments (tests). Creates new instances on first access.
  */
-let _defaultConfig: CollabswarmConfig | undefined;
+/**
+ * Returns a fresh default config with no bootstrap peers.
+ *
+ * Each call creates new IDB-backed blockstore/datastore instances so callers
+ * can safely mutate the returned config without leaking state across
+ * consumers. For shared/reused configs, store the result in a variable.
+ */
 export function getDefaultConfig(): CollabswarmConfig {
-  if (!_defaultConfig) {
-    _defaultConfig = defaultConfig(defaultBootstrapConfig([]));
-  }
-  return _defaultConfig;
+  return defaultConfig(defaultBootstrapConfig([]));
 }
 
 // /**

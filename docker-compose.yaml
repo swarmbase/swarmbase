@@ -37,11 +37,17 @@ services:
     depends_on:
       relay:
         condition: service_healthy
+    # Extract the relay's WebSocket multiaddr from shared relay-info.json
+    # and pass it via REACT_APP_RELAY_MULTIADDR so the CRA app can
+    # use it as a bootstrap peer for libp2p peer discovery.
     command:
-      - yarn
-      - workspace
-      - '@collabswarm/browser-test'
-      - start
+      - sh
+      - -c
+      - |
+        REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        export REACT_APP_RELAY_MULTIADDR
+        echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
+        exec yarn workspace @collabswarm/browser-test start
 
   wiki-swarm:
     build:
@@ -67,10 +73,13 @@ services:
       relay:
         condition: service_healthy
     command:
-      - yarn
-      - workspace
-      - '@collabswarm/wiki-swarm'
-      - start
+      - sh
+      - -c
+      - |
+        REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        export REACT_APP_RELAY_MULTIADDR
+        echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
+        exec yarn workspace @collabswarm/wiki-swarm start
 
   node:
     build:

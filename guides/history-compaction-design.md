@@ -42,8 +42,8 @@ A snapshot is created by an authorized **writer** when the number of un-compacte
 1. Serialize the current CRDT document state via `CRDTProvider.getSnapshot(doc)` (already defined as optional on the interface)
 2. Record the CID of the most recent change node included in the snapshot
 3. Sign the snapshot with the writer's private key (see Section 2.6 for payload format)
-4. Store the snapshot in-memory (`_latestSnapshot`) and include it in load/snapshot-load responses (snapshots are **not** attached to incremental pubsub sync messages to avoid bandwidth bloat)
-5. Optionally prune old change nodes from the in-memory sync tree (see Section 2.4)
+4. Store the snapshot in-memory (`_latestSnapshot`) — it is included only in load/snapshot-load responses, **not** in incremental pubsub sync messages, to avoid bandwidth bloat
+5. Optionally prune old change nodes from the in-memory sync tree via `_pruneChanges(keepCount)` (see Section 2.4)
 
 ### 2.3 Snapshot Node Format
 
@@ -112,9 +112,9 @@ When a peer receives a sync message with a `snapshot` field:
 
 A snapshot must be verified before applying:
 
-1. **Writer authorization**: The snapshot signature is verified by trying all public keys in the document's writer ACL (the embedded `publicKey` field is not relied upon because some key types like `CryptoKey` do not survive JSON serialization)
+1. **Writer authorization**: The snapshot signature is verified by trying all public keys in the document's writer ACL (the embedded `publicKey` field is not relied upon because some key types like `CryptoKey` do not survive JSON serialization). Before verification, an ACL pre-pass (`_applyACLFromTree`) populates writer keys from the change tree so that fresh `open()` calls can verify snapshots.
 2. **Signature verification**: The signature must be valid for the binary signing payload described below
-3. **Freshness**: For peers with existing state, `lastChangeNodeCID` should be a known CID in their DAG. New peers joining without existing state trust the snapshot based on writer authorization and the ACL signature chain. Freshness checking against `_hashes` is not currently enforced in the implementation to avoid rejecting valid snapshots from peers that are ahead.
+3. **Freshness**: `lastChangeNodeCID` is not currently checked against `_hashes`. New peers joining without existing state trust the snapshot based on writer authorization and the ACL signature chain. Peers with existing state accept snapshots with higher `compactedCount` (or lexicographically greater CID on tie). Freshness enforcement is intentionally deferred to avoid rejecting valid snapshots from peers that are ahead.
 
 **Signing payload format** (binary, big-endian integers):
 

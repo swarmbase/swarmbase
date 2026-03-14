@@ -242,13 +242,18 @@ With TLS, clients connect using:
 
 ### 2.7 Environment Variables
 
-The relay server currently reads no environment variables. Configuration is done at the source level. Future releases will support:
+The relay server reads the following environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `WS_PORT` | WebSocket listen port | `9001` |
 | `TCP_PORT` | TCP listen port | `9002` |
-| `RELAY_INFO_PATH` | Where to write relay-info.json | `/shared/relay-info.json` or `./relay-info.json` |
+| `WS_LISTEN` | Full WebSocket listen multiaddr | `/ip4/0.0.0.0/tcp/${WS_PORT}/ws` |
+| `TCP_LISTEN` | Full TCP listen multiaddr | `/ip4/0.0.0.0/tcp/${TCP_PORT}` |
+| `DOCUMENT_PUBLISH_PATH` | Pubsub topic for document publish notifications | `/documents` |
+| `EXTRA_TOPICS` | Additional pubsub topics to subscribe to (comma-separated) | *(none)* |
+
+The relay-info.json output path is determined automatically: `/shared/relay-info.json` if the `/shared` directory exists (Docker volume), otherwise `./relay-info.json` in the working directory.
 
 ---
 
@@ -346,8 +351,8 @@ peerDiscovery: [
 
 **WebSocket connections are long-lived.** Standard HTTP round-robin load balancing does not apply well. Guidelines:
 
-- A **TLS-terminating reverse proxy** (nginx, Caddy, Traefik) in front of a single relay is fine and required for `wss://` in production (see Section 2.2). This is Layer 7 but passes WebSocket frames transparently via `Upgrade` headers.
-- Do **not** use an HTTP load balancer that terminates one WebSocket and opens a new upstream WebSocket (connection-splitting proxy), as this breaks libp2p's connection state and multiplexed streams.
+- A **TLS-terminating reverse proxy** (nginx, Caddy, Traefik) in front of a single relay is fine and required for `wss://` in production (see Section 2.6). The proxy terminates TLS and forwards WebSocket frames transparently via `Upgrade` headers — this is technically Layer 7 but preserves the connection end-to-end.
+- Do **not** use a **connection-splitting proxy** that terminates one WebSocket and opens a new upstream WebSocket, as this breaks libp2p's connection state and multiplexed streams.
 - For **multiple relay nodes**, use DNS round-robin or give clients all relay addresses and let libp2p handle connection management. If using a load balancer across multiple backends, configure it for TCP/Layer 4 passthrough or sticky sessions so each WebSocket stays on a single backend.
 
 ### 3.6 Monitoring and Health Checks
@@ -549,7 +554,7 @@ localStorage.setItem('debug', 'libp2p:*')
    ```text
    PeerId: 12D3KooW...
    Multiaddrs: [ '/ip4/0.0.0.0/tcp/9001/ws/p2p/12D3KooW...' ]
-   Subscribed to topics: swarmdb._peer-discovery._p2p._pubsub /swarmdb/integration-test/sync
+   Subscribed to topics: swarmdb._peer-discovery._p2p._pubsub /documents
    ```
 
 2. **Check relay-info.json:**
