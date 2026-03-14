@@ -565,6 +565,28 @@ export class CollabswarmDocument<
     await this._maybeCompact();
   }
 
+  /**
+   * Walk the change tree and apply only ACL (reader/writer) nodes.
+   * This is a lightweight pre-pass used before snapshot verification to
+   * ensure writer keys are populated without applying document changes.
+   * ACL merges are idempotent, so re-applying them in the subsequent
+   * full _syncDocumentChanges() call is safe.
+   */
+  private _applyACLFromTree(node: CRDTChangeNode<ChangesType>) {
+    if (node.change) {
+      if (node.kind === crdtWriterChangeNode) {
+        this._writers.merge(node.change);
+      } else if (node.kind === crdtReaderChangeNode) {
+        this._readers.merge(node.change);
+      }
+    }
+    if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+      for (const child of Object.values(node.children)) {
+        this._applyACLFromTree(child);
+      }
+    }
+  }
+
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
     // TODO: Cache list of current writers per dag node for now.
     const verificationTasks: Promise<boolean>[] = [];
@@ -1462,16 +1484,18 @@ export class CollabswarmDocument<
       }
     }
 
-    // Sync document changes first, before snapshot verification.
-    // This populates _writers from writer ACL nodes in the change DAG,
-    // which is required for _verifySnapshotSignature() to succeed.
-    // On a fresh open(), _writers is empty until the DAG is processed.
+    // Pre-pass: apply only ACL nodes from the change tree to populate
+    // _writers/_readers. This is needed before snapshot verification since
+    // _verifySnapshotSignature() requires writer keys. ACL merges are
+    // idempotent, so re-applying them in _syncDocumentChanges() is safe.
     if (message.changes) {
-      await this._syncDocumentChanges(message.changeId, message.changes);
+      this._applyACLFromTree(message.changes);
     }
 
     // Apply snapshot if present and more recent than ours.
-    // Must happen after change sync so writer keys are available for verification.
+    // Happens before full change sync so document changes that are already
+    // covered by the snapshot don't need to be applied first (CRDTs handle
+    // duplicate application correctly, but this avoids unnecessary work).
     if (message.snapshot) {
       const incoming = message.snapshot;
       if (
@@ -1524,6 +1548,12 @@ export class CollabswarmDocument<
           );
         }
       }
+    }
+
+    // Full change sync: process all nodes (document + ACL) from the DAG.
+    // ACL nodes applied in the pre-pass above will be re-merged idempotently.
+    if (message.changes) {
+      await this._syncDocumentChanges(message.changeId, message.changes);
     }
   }
 

@@ -145,7 +145,7 @@ export interface CollabswarmConfig {
    * When provided with `enabled: true`, the document will periodically
    * create snapshot nodes to compact the Merkle-DAG change history.
    */
-  compaction?: CompactionConfig;
+  compaction?: Partial<CompactionConfig>;
 }
 
 /**
