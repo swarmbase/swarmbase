@@ -1150,22 +1150,29 @@ export class CollabswarmDocument<
           );
           return false;
         }
-        // Initial sync with signature verification deferred: writer ACL
-        // keys are not available until the change DAG is processed. We sync
-        // first (which populates _writers from ACL nodes in the DAG), then
-        // verify the outer message signature post-hoc.
+        // Capture the pre-load writer set for signature verification.
+        // On first load, _writers is empty (bootstrapping) — we must trust
+        // the encrypted channel (only peers with the document key can respond).
+        // On subsequent loads, verify against the pre-existing trusted writers
+        // to prevent a malicious peer from injecting ACL changes that add its
+        // own key and then passing verification.
+        const preLoadWriters = await this._writers.users();
+
         await this.sync(message, false);
 
-        // Post-hoc writer signature verification now that writer keys
-        // are populated from the change DAG.
-        if (message.signature) {
+        // Verify the outer message signature if we had a trusted writer set.
+        if (preLoadWriters.length > 0 && message.signature) {
           const { signature, ...messageWithoutSignature } = message;
           const raw = this._syncMessageSerializer.serializeSyncMessage(
             messageWithoutSignature,
           );
-          if (!(await this._verifyWriterSignature(raw, signature))) {
+          const signatureBytes = this._deserializeSignature(signature);
+          const verifyTasks = preLoadWriters.map((writerKey) =>
+            this._authProvider.verify(raw, writerKey, signatureBytes),
+          );
+          if (!(await firstTrue(verifyTasks))) {
             console.warn(
-              `Load response for ${this.documentPath} failed post-hoc writer signature verification, skipping peer`,
+              `Load response for ${this.documentPath} failed writer signature verification against pre-load writer set, skipping peer`,
             );
             return false;
           }

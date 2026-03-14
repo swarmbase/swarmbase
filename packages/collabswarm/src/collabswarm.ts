@@ -218,22 +218,25 @@ export class Collabswarm<
       throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
     }
 
-    // connection.detail is a PeerId (@libp2p/interface), whose toString() returns the peer ID string.
-    this.libp2p.addEventListener('peer:connect', (connection) => {
-      const peerAddress = connection.detail.toString();
-      this._peerAddrs.push(peerAddress);
+    // In libp2p v2, 'peer:connect'/'peer:disconnect' emit CustomEvent<PeerId>.
+    // event.detail is a PeerId whose toString() returns the peer ID string.
+    // Note: libp2p v3 changed this to emit Connection objects — this must be
+    // updated if libp2p is upgraded past v2.x.
+    this.libp2p.addEventListener('peer:connect', (event) => {
+      const peerId = event.detail.toString();
+      this._peerAddrs.push(peerId);
       for (const [, handler] of this._peerConnectHandlers) {
-        handler(peerAddress, connection);
+        handler(peerId, event);
       }
     });
-    this.libp2p.addEventListener('peer:disconnect', (connection) => {
-      const peerAddress = connection.detail.toString();
-      const peerIndex = this._peerAddrs.indexOf(peerAddress);
+    this.libp2p.addEventListener('peer:disconnect', (event) => {
+      const peerId = event.detail.toString();
+      const peerIndex = this._peerAddrs.indexOf(peerId);
       if (peerIndex >= 0) {
         this._peerAddrs.splice(peerIndex, 1);
       }
       for (const [, handler] of this._peerDisconnectHandlers) {
-        handler(peerAddress, connection);
+        handler(peerId, event);
       }
     });
     this._peerId = this._heliaNode?.libp2p?.peerId;
