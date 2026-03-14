@@ -120,7 +120,8 @@ export class PaperBenchmarkRunner {
    * Format results as a markdown table for console output.
    */
   static formatTable(results: BenchmarkResultEntry[]): string {
-    const header = '| Benchmark | Iters | Min (ms) | Mean (ms) | Median (ms) | P99 (ms) | Max (ms) | StdDev | Mem Delta |';
+    const unit = (results.length > 0 && results[0].unit) ? results[0].unit : 'ms';
+    const header = `| Benchmark | Iters | Min (${unit}) | Mean (${unit}) | Median (${unit}) | P99 (${unit}) | Max (${unit}) | StdDev | Mem Delta |`;
     const sep =    '|-----------|-------|----------|-----------|-------------|----------|----------|--------|-----------|';
     const rows = results.map(r => {
       const memStr = r.memoryDeltaBytes !== undefined

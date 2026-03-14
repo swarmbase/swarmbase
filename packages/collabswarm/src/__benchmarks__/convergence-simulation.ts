@@ -100,6 +100,9 @@ export async function runConvergenceSimulationBenchmarks(
           const serialized = serializer.serializeChangeBlock(block);
           const byteSize = new TextEncoder().encode(serialized).length + signature.length + encrypted.data.length;
 
+          // Apply locally before broadcast — each peer must have its own edits
+          peer.document[`peer-${peer.id}-${changeData}`] = 'applied';
+
           peer.messagesSent++;
           peer.bytesSent += byteSize;
           allMessages.push({
@@ -138,12 +141,13 @@ export async function runConvergenceSimulationBenchmarks(
       }
 
       // Assert all peers converged to the same document state
-      const referenceDocKeys = Object.keys(peers[0].document).sort().join(',');
+      const referenceKeys = Object.keys(peers[0].document).sort();
+      const referenceJoined = referenceKeys.join(',');
       for (let i = 1; i < peers.length; i++) {
-        const peerDocKeys = Object.keys(peers[i].document).sort().join(',');
-        if (peerDocKeys !== referenceDocKeys) {
+        const peerKeys2 = Object.keys(peers[i].document).sort();
+        if (peerKeys2.join(',') !== referenceJoined) {
           throw new Error(
-            `Peer ${peers[i].id} did not converge with peer 0: expected ${referenceDocKeys.length} keys, got ${peerDocKeys.length} keys`,
+            `Peer ${peers[i].id} did not converge with peer 0: expected ${referenceKeys.length} keys, got ${peerKeys2.length} keys`,
           );
         }
       }
