@@ -1416,8 +1416,6 @@ export class CollabswarmDocument<
       return;
     }
 
-    const syncTasks: Promise<void>[] = [];
-
     // Update/replace list of document keys (if provided).
     if (message.keychainChanges) {
       try {
@@ -1437,7 +1435,16 @@ export class CollabswarmDocument<
       }
     }
 
+    // Sync document changes first, before snapshot verification.
+    // This populates _writers from writer ACL nodes in the change DAG,
+    // which is required for _verifySnapshotSignature() to succeed.
+    // On a fresh open(), _writers is empty until the DAG is processed.
+    if (message.changes) {
+      await this._syncDocumentChanges(message.changeId, message.changes);
+    }
+
     // Apply snapshot if present and more recent than ours.
+    // Must happen after change sync so writer keys are available for verification.
     if (message.snapshot) {
       const incoming = message.snapshot;
       if (
@@ -1491,15 +1498,6 @@ export class CollabswarmDocument<
         }
       }
     }
-
-    // Sync document changes.
-    if (message.changes) {
-      syncTasks.push(
-        this._syncDocumentChanges(message.changeId, message.changes),
-      );
-    }
-
-    await Promise.all(syncTasks);
   }
 
   /**
