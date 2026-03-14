@@ -70,7 +70,8 @@
       "^blockstore-idb$": "<rootDir>/jest.empty-mock.js",
       "^it-pipe$": "<rootDir>/jest.empty-mock.js",
       "^bl$": "<rootDir>/jest.empty-mock.js",
-      "^multiformats$": "<rootDir>/jest.empty-mock.js"
+      "^multiformats$": "<rootDir>/jest.empty-mock.js",
+      "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js"
     }
   }
 }

@@ -36,12 +36,12 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 
 export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
   ({
-    ipfs: {
+    helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
       blockBrokers: [bitswap()],
       libp2p: {
-        // https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
+        // See: https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
         addresses: {
           listen: ['/webrtc', '/wss', '/ws'],
         },
@@ -141,6 +141,13 @@ export class CollabswarmNode<
     >
   >();
   private readonly _seenCids = new Set<string>();
+  private readonly _pinningCids = new Set<string>();
+  /** Queue of pending pin operations waiting for a concurrency slot. */
+  private readonly _pinQueue: (() => void)[] = [];
+  /** Number of pin operations currently in flight. */
+  private _activePins = 0;
+  /** Maximum concurrent pin operations to prevent overwhelming the blockstore. */
+  private static readonly MAX_CONCURRENT_PINS = 10;
 
   private _docPublishHandler: EventHandler<CustomEvent<Message>> | null = null;
 
@@ -149,7 +156,7 @@ export class CollabswarmNode<
     private readonly nodePublicKey: PublicKey,
     public readonly provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
     public readonly changesSerializer: ChangesSerializer<ChangesType>,
-    public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    public readonly syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
     public readonly loadMessageSerializer: LoadMessageSerializer,
     public readonly authProvider: AuthProvider<
       PrivateKey,
@@ -176,20 +183,63 @@ export class CollabswarmNode<
     );
   }
 
-  private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
-    if (!this._seenCids.has(cid)) {
-      // TODO: Handle this operation failing (retry).
-      // TODO: Does this need to be converted to a `CID` from a string first?
-      const cidParsed = CID.parse(cid);
-      this.swarm.ipfsNode.pins.add(cidParsed);
-      this._seenCids.add(cid);
+  /**
+   * Acquire a concurrency slot for pin operations. Resolves when a slot
+   * is available (at most MAX_CONCURRENT_PINS operations run at once).
+   */
+  private _acquirePinSlot(): Promise<void> {
+    if (this._activePins < CollabswarmNode.MAX_CONCURRENT_PINS) {
+      this._activePins++;
+      return Promise.resolve();
     }
+    return new Promise<void>((resolve) => {
+      this._pinQueue.push(resolve);
+    });
+  }
+
+  private _releasePinSlot(): void {
+    const next = this._pinQueue.shift();
+    if (next) {
+      next();
+    } else {
+      this._activePins--;
+    }
+  }
+
+  /**
+   * Pin a single CID with concurrency limiting.
+   */
+  private async _pinCID(cid: string): Promise<void> {
+    if (this._seenCids.has(cid) || this._pinningCids.has(cid)) {
+      return;
+    }
+    let parsedCid: CID;
+    try {
+      parsedCid = CID.parse(cid);
+    } catch (err) {
+      console.error('Skipping malformed CID', cid, err);
+      return;
+    }
+    this._pinningCids.add(cid);
+    await this._acquirePinSlot();
+    try {
+      for await (const _ of this.swarm.heliaNode.pins.add(parsedCid)) { /* drain */ }
+      this._seenCids.add(cid);
+    } catch (err) {
+      console.error('Failed to pin CID', cid, err);
+    } finally {
+      this._pinningCids.delete(cid);
+      this._releasePinSlot();
+    }
+  }
+
+  private async _pinNewCIDs(cid: string, node: CRDTChangeNode<ChangesType>) {
+    const tasks: Promise<void>[] = [this._pinCID(cid)];
 
     if (node.children === crdtChangeNodeDeferred) {
       throw new Error('Currently IPLD deferred nodes are not supported!');
     }
 
-    const tasks: Promise<void>[] = [];
     if (node.children !== undefined) {
       for (const [childHash, childNode] of Object.entries(node.children)) {
         tasks.push(this._pinNewCIDs(childHash, childNode));
@@ -227,7 +277,7 @@ export class CollabswarmNode<
     // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage) => {
       try {
-        const thisNodeId = this.swarm.ipfsInfo.toString();
+        const thisNodeId = this.swarm.peerId.toString();
         // const senderNodeId = rawMessage.from;
         const senderNodeId = (() => {
           switch (rawMessage.detail.type) {
@@ -252,12 +302,8 @@ export class CollabswarmNode<
               'pinning-handler',
               (doc, readers, writers, hashes) => {
                 for (const cid of hashes) {
-                  if (!this._seenCids.has(cid)) {
-                    // TODO: Handle this operation failing (retry).
-                    const parsedCid = CID.parse(cid);
-                    this.swarm.ipfsNode.pins.add(parsedCid);
-                    this._seenCids.add(cid);
-                  }
+                  // _pinCID handles dedup, concurrency limiting, and error handling.
+                  this._pinCID(cid).catch(() => {});
                 }
               },
             );
@@ -267,7 +313,9 @@ export class CollabswarmNode<
 
             // Pin all of the files that were received.
             if (message.changeId && message.changes) {
-              this._pinNewCIDs(message.changeId, message.changes);
+              this._pinNewCIDs(message.changeId, message.changes).catch((err) => {
+                console.error('Failed to pin CIDs for message:', message.changeId, err);
+              });
             }
           } else {
             console.warn(
@@ -289,11 +337,11 @@ export class CollabswarmNode<
     };
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
-    this.swarm.ipfsNode.libp2p.services.pubsub.addEventListener(
+    this.swarm.heliaNode.libp2p.services.pubsub.addEventListener(
       'message',
       this._docPublishHandler as EventListener,
     );
-    this.swarm.ipfsNode.libp2p.services.pubsub.subscribe(
+    this.swarm.heliaNode.libp2p.services.pubsub.subscribe(
       this.config.pubsubDocumentPublishPath,
     );
     console.log(
@@ -303,11 +351,11 @@ export class CollabswarmNode<
 
   public stop() {
     if (this._docPublishHandler) {
-      this.swarm.ipfsNode.libp2p.services.pubsub.unsubscribe(
+      this.swarm.heliaNode.libp2p.services.pubsub.unsubscribe(
         this.config.pubsubDocumentPublishPath,
       );
       // Cast required: see addEventListener comment above
-      this.swarm.ipfsNode.libp2p.services.pubsub.removeEventListener(
+      this.swarm.heliaNode.libp2p.services.pubsub.removeEventListener(
         'message',
         this._docPublishHandler as EventListener,
       );

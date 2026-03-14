@@ -1,0 +1,73 @@
+# SwarmDB Production Multi-Server Deployment
+#
+# Runs multiple relay nodes with TLS termination via Caddy reverse proxy.
+# For a real production deployment, run each relay on a separate server.
+# This compose file demonstrates the architecture on a single machine.
+#
+# Usage:
+#   docker compose -f guides/docker/docker-compose.production.yaml up -d
+#
+# Prerequisites:
+#   - Set RELAY_DOMAIN environment variable to your domain
+#   - Ensure DNS A records point to your server
+#   - Ports 80 and 443 must be open for Caddy's automatic TLS
+
+services:
+  # Reverse proxy with automatic TLS (Let's Encrypt)
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      relay-1:
+        condition: service_healthy
+      relay-2:
+        condition: service_healthy
+    environment:
+      - RELAY_DOMAIN=${RELAY_DOMAIN:-relay.localhost}
+
+  # Primary relay / bootstrap node
+  relay-1:
+    build:
+      context: ../../relay-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9002:9002"   # TCP (node-to-node, inter-relay mesh)
+    volumes:
+      - relay-1-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Secondary relay node (run on a separate server in production)
+  relay-2:
+    build:
+      context: ../../relay-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9012:9002"   # TCP (offset ports for single-machine demo)
+    volumes:
+      - relay-2-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  caddy-data:
+  caddy-config:
+  relay-1-data:
+  relay-2-data:

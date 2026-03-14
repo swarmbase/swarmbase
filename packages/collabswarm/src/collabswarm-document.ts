@@ -27,7 +27,9 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentKeyUpdateV1, documentLoadV1 } from './wire-protocols';
+import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
+import { CRDTSnapshotNode } from './snapshot-node';
+import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -155,12 +157,25 @@ export class CollabswarmDocument<
    */
 
   // Last sync message (for populating load requests).
-  private _lastSyncMessage?: CRDTSyncMessage<ChangesType>;
+  private _lastSyncMessage?: CRDTSyncMessage<ChangesType, PublicKey>;
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
   // private _readersHashes = new Set<string>();
   // private _writersHashes = new Set<string>();
+
+  // Compaction state.
+  private _compactionConfig: CompactionConfig;
+  private _latestSnapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
+  private _changesSinceSnapshot = 0;
+  private _compactionInProgress = false;
+  private _snapshotUnsupported = false;
+  // Counts only document-kind changes (excludes ACL reader/writer changes).
+  // Used by _maybeCompact() for the minChangesBeforeSnapshot threshold.
+  // Incremented for both local changes (in _makeChange) and remote changes
+  // (in _syncDocumentChanges). Compaction triggers from both paths, so relay-only
+  // nodes that never make local changes will still compact via remote change processing.
+  private _documentChangeCount = 0;
 
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
@@ -177,7 +192,7 @@ export class CollabswarmDocument<
   } = {};
 
   public get libp2p(): Libp2p {
-    return this.swarm.ipfsNode.libp2p;
+    return this.swarm.heliaNode.libp2p;
   }
 
   public get protocolLoadV1() {
@@ -186,6 +201,15 @@ export class CollabswarmDocument<
 
   public get protocolKeyUpdateV1() {
     return `${documentKeyUpdateV1}${this.documentPath}`;
+  }
+
+  /**
+   * Returns the versioned snapshot-load protocol string for this document.
+   * Used to register and dial the `/collabswarm/snapshot-load/1.0.0` handler
+   * scoped to this document's path.
+   */
+  public get protocolSnapshotLoadV1() {
+    return `${snapshotLoadV1}${this.documentPath}`;
   }
 
   private heliaFs: UnixFS;
@@ -257,25 +281,29 @@ export class CollabswarmDocument<
     /**
      * SyncMessageSerializer is responsible for serializing/deserializing CRDTSyncMessages.
      */
-    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+    private readonly _syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
 
     /**
      * LoadMessageSerializer is responsible for serializing/deserializing CRDTLoadMessages.
      */
     private readonly _loadMessageSerializer: LoadMessageSerializer,
   ) {
-    this.heliaFs = unixfs(this.swarm.ipfsNode);
+    this.heliaFs = unixfs(this.swarm.heliaNode);
 
     this._document = this._crdtProvider.newDocument();
     this._readers = this._aclProvider.initialize();
     this._writers = this._aclProvider.initialize();
     this._keychain = this._keychainProvider.initialize();
+    this._compactionConfig = {
+      ...defaultCompactionConfig,
+      ...(this.swarm.config?.compaction ?? {}),
+    };
   }
 
   // Helpers ------------------------------------------------------------------
 
   private async _shuffledPeers() {
-    const peers = this.swarm.ipfsNode.libp2p
+    const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
     if (peers.length === 0) {
@@ -310,7 +338,7 @@ export class CollabswarmDocument<
   }
 
   private async _getBlock(hash: CID): Promise<ChangesType> {
-    const block = await this.swarm.ipfsNode.blockstore.get(hash);
+    const block = await this.swarm.heliaNode.blockstore.get(hash);
     const blockKeyID = block.slice(0, this._keychainProvider.keyIDLength);
     const blockNonce = block.slice(
       this._keychainProvider.keyIDLength,
@@ -412,8 +440,8 @@ export class CollabswarmDocument<
     }
   }
 
-  private _createSyncMessage(): CRDTSyncMessage<ChangesType> {
-    const message: CRDTSyncMessage<ChangesType> = {
+  private _createSyncMessage(): CRDTSyncMessage<ChangesType, PublicKey> {
+    const message: CRDTSyncMessage<ChangesType, PublicKey> = {
       ...(this._lastSyncMessage || {
         documentId: this.documentPath,
       }),
@@ -447,6 +475,8 @@ export class CollabswarmDocument<
               sentChanges,
             );
             newDocumentHashes.push(sentHash);
+            this._documentChangeCount++;
+            this._changesSinceSnapshot++;
             break;
           }
           case crdtReaderChangeNode: {
@@ -474,47 +504,86 @@ export class CollabswarmDocument<
       await this._fireRemoteUpdateHandlers(newDocumentHashes);
     }
 
-    // Then apply missing hashes by fetching them via IPFS.
+    // Then apply missing hashes by fetching them from the blockstore.
+    // Track all fetch promises so we can compact only after all complete,
+    // avoiding premature snapshots of incomplete state.
+    const fetchPromises: Promise<void>[] = [];
     for (const [missingHash, missingHashKind] of missingDocumentHashes) {
-      // Fetch missing hashes using IPFS.
       const cid = CID.parse(missingHash);
-      this._getBlock(cid)
-        .then((missingChanges) => {
-          if (missingChanges) {
-            switch (missingHashKind) {
-              case crdtDocumentChangeNode: {
-                this._document = this._crdtProvider.remoteChange(
-                  this._document,
-                  missingChanges,
-                );
-                this._hashes.add(missingHash);
-                return this._fireRemoteUpdateHandlers([missingHash]);
+      fetchPromises.push(
+        this._getBlock(cid)
+          .then(async (missingChanges) => {
+            if (missingChanges) {
+              switch (missingHashKind) {
+                case crdtDocumentChangeNode: {
+                  this._document = this._crdtProvider.remoteChange(
+                    this._document,
+                    missingChanges,
+                  );
+                  this._hashes.add(missingHash);
+                  this._documentChangeCount++;
+                  this._changesSinceSnapshot++;
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
+                case crdtReaderChangeNode: {
+                  this._readers.merge(missingChanges);
+                  this._hashes.add(missingHash);
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
+                case crdtWriterChangeNode: {
+                  this._writers.merge(missingChanges);
+                  this._hashes.add(missingHash);
+                  await this._fireRemoteUpdateHandlers([missingHash]);
+                  return;
+                }
               }
-              case crdtReaderChangeNode: {
-                this._readers.merge(missingChanges);
-                this._hashes.add(missingHash);
-                return this._fireRemoteUpdateHandlers([missingHash]);
-              }
-              case crdtWriterChangeNode: {
-                this._writers.merge(missingChanges);
-                this._hashes.add(missingHash);
-                return this._fireRemoteUpdateHandlers([missingHash]);
-              }
+            } else {
+              console.error(
+                `Block '${missingHash}' returned nothing`,
+                missingChanges,
+              );
             }
-          } else {
+          })
+          .catch((err) => {
             console.error(
-              `'/ipfs/${missingHash}' returned nothing`,
-              missingChanges,
+              'Failed to fetch missing change from blockstore:',
+              missingHash,
+              err,
             );
-          }
-        })
-        .catch((err) => {
-          console.error(
-            'Failed to fetch missing change from ipfs:',
-            missingHash,
-            err,
-          );
-        });
+          }),
+      );
+    }
+
+    // Wait for all missing block fetches to complete before checking compaction.
+    // This ensures the snapshot reflects the full document state rather than
+    // a partial view from incomplete fetches.
+    if (fetchPromises.length > 0) {
+      await Promise.all(fetchPromises);
+    }
+    await this._maybeCompact();
+  }
+
+  /**
+   * Walk the change tree and apply only ACL (reader/writer) nodes.
+   * This is a lightweight pre-pass used before snapshot verification to
+   * ensure writer keys are populated without applying document changes.
+   * ACL merges are idempotent, so re-applying them in the subsequent
+   * full _syncDocumentChanges() call is safe.
+   */
+  private _applyACLFromTree(node: CRDTChangeNode<ChangesType>) {
+    if (node.change) {
+      if (node.kind === crdtWriterChangeNode) {
+        this._writers.merge(node.change);
+      } else if (node.kind === crdtReaderChangeNode) {
+        this._readers.merge(node.change);
+      }
+    }
+    if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+      for (const child of Object.values(node.children)) {
+        this._applyACLFromTree(child);
+      }
     }
   }
 
@@ -533,8 +602,25 @@ export class CollabswarmDocument<
     return firstTrue(verificationTasks);
   }
 
+  /**
+   * Verify a snapshot signature by trying all authorized writers.
+   * Unlike sync message signatures (which are string-encoded), snapshot
+   * signatures are raw Uint8Array. This avoids depending on the snapshot's
+   * embedded publicKey field which may not survive serialization for all
+   * key types (e.g. CryptoKey).
+   */
+  private async _verifySnapshotSignature(payload: Uint8Array, signature: Uint8Array) {
+    const verificationTasks: Promise<boolean>[] = [];
+    for (const writerKey of await this._writers.users()) {
+      verificationTasks.push(
+        this._authProvider.verify(payload, writerKey, signature),
+      );
+    }
+    return firstTrue(verificationTasks);
+  }
+
   private async _signAsWriter(
-    message: CRDTSyncMessage<ChangesType>,
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
@@ -559,7 +645,7 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
-    // Store changes in ipfs.
+    // Store changes in blockstore.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
 
@@ -593,13 +679,171 @@ export class CollabswarmDocument<
     if (!nonce) {
       throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
     }
-    await this.swarm.ipfsNode.libp2p.services.pubsub.publish(
+    await this.swarm.heliaNode.libp2p.services.pubsub.publish(
       this.documentPath,
       concatUint8Arrays(documentKeyID, nonce, data),
     );
 
     // Fire change handlers.
     await this._fireLocalUpdateHandlers([hash]);
+
+    // Track document changes for compaction.
+    if (kind === crdtDocumentChangeNode) {
+      this._documentChangeCount++;
+      this._changesSinceSnapshot++;
+      await this._maybeCompact();
+    }
+  }
+
+  /**
+   * Returns the keychain changes to include in a load response based on
+   * the document's history visibility setting.
+   */
+  private async _keychainChangesForVisibility(): Promise<ChangesType> {
+    switch (this._historyVisibility) {
+      case 'full_history':
+        // Send ALL epoch keys — for audit trails and regulatory compliance.
+        return this._keychain.history();
+      case 'since_invited':
+        // TODO: Filter using _invitationEpoch when epoch-based keychain
+        // filtering is fully wired. Falls back to full history for now.
+        return this._keychain.history();
+      case 'current_only':
+      default:
+        // Only send the current key — most private option.
+        return await this._keychain.currentKeyChange();
+    }
+  }
+
+  /**
+   * Check if automatic compaction should be triggered based on the config.
+   */
+  private async _maybeCompact() {
+    if (!this._compactionConfig.enabled || this._snapshotUnsupported) {
+      return;
+    }
+
+    // Prevent overlapping snapshot() calls from concurrent async paths.
+    if (this._compactionInProgress) {
+      return;
+    }
+
+    // Check cheap thresholds before the async writer ACL check to avoid
+    // repeated crypto/ACL work on every change.
+    if (this._documentChangeCount < this._compactionConfig.minChangesBeforeSnapshot) {
+      return;
+    }
+    if (this._changesSinceSnapshot < this._compactionConfig.snapshotInterval) {
+      return;
+    }
+
+    // Only writers can create snapshots; read-only peers must not attempt compaction.
+    if (!(await this._writers.check(this._userPublicKey))) {
+      return;
+    }
+    this._compactionInProgress = true;
+    try {
+      await this.snapshot();
+    } finally {
+      this._compactionInProgress = false;
+    }
+  }
+
+  /**
+   * Prune the change tree in the last sync message to keep only the most recent
+   * N change nodes. Nodes beyond the limit have their children removed, turning
+   * them into leaf nodes. Old blocks remain in the Helia blockstore for peers
+   * that already have them.
+   *
+   * @param keepCount Maximum number of change nodes to retain in the sync tree.
+   */
+  private _pruneChanges(keepCount: number) {
+    if (keepCount <= 0) {
+      // Pruning everything (including root) is destructive and nonsensical; skip.
+      return;
+    }
+    if (!this._lastSyncMessage?.changes || !this._lastSyncMessage.changeId) {
+      return;
+    }
+
+    // Recursively collect all ACL nodes from a subtree that is about to be pruned.
+    // Re-attached ACL nodes are stored as leaf nodes (children stripped) so they
+    // don't pull in the full pre-prune subtree through their parent pointers.
+    const collectACLNodes = (
+      children: Record<string, CRDTChangeNode<ChangesType>>,
+      out: Record<string, CRDTChangeNode<ChangesType>>,
+    ) => {
+      for (const [childHash, childNode] of Object.entries(children)) {
+        if (
+          childNode.kind === crdtReaderChangeNode ||
+          childNode.kind === crdtWriterChangeNode
+        ) {
+          // Shallow copy without children to avoid retaining the full subtree.
+          const { children: _dropped, ...leafNode } = childNode;
+          out[childHash] = leafNode as CRDTChangeNode<ChangesType>;
+        }
+        if (
+          childNode.children !== undefined &&
+          childNode.children !== crdtChangeNodeDeferred
+        ) {
+          collectACLNodes(childNode.children, out);
+        }
+      }
+    };
+
+    // BFS traversal to collect nodes up to the limit.
+    // ACL nodes (reader/writer) are always preserved regardless of keepCount.
+    //
+    // When a document node at the boundary is pruned, ACL nodes from the
+    // entire pruned subtree are collected and re-attached. This prevents
+    // losing ACL state during pruning.
+    //
+    // For branching histories (DAG with multiple branches), keepCount is applied
+    // globally across all branches. Once the limit is reached, all further
+    // document nodes in any branch are pruned.
+    const queue: Array<CRDTChangeNode<ChangesType>> = [
+      this._lastSyncMessage.changes,
+    ];
+    let documentNodesVisited = 0;
+    let qi = 0;
+
+    while (qi < queue.length) {
+      const current = queue[qi++]!;
+
+      // ACL nodes are always kept — never count them toward the limit.
+      const isACLNode =
+        current.kind === crdtReaderChangeNode ||
+        current.kind === crdtWriterChangeNode;
+
+      if (!isACLNode) {
+        documentNodesVisited++;
+      }
+
+      if (
+        current.children !== undefined &&
+        current.children !== crdtChangeNodeDeferred
+      ) {
+        if (!isACLNode && documentNodesVisited >= keepCount) {
+          // This document node is at the boundary — prune its children,
+          // but preserve any ACL nodes within the entire subtree.
+          const preservedACL: Record<string, CRDTChangeNode<ChangesType>> = {};
+          collectACLNodes(current.children, preservedACL);
+          if (Object.keys(preservedACL).length > 0) {
+            current.children = preservedACL;
+          } else {
+            delete current.children;
+          }
+        } else {
+          for (const [, childNode] of Object.entries(current.children)) {
+            queue.push(childNode);
+          }
+        }
+      }
+    }
+
+    console.log(
+      `Pruned change tree for ${this.documentPath}: kept ${documentNodesVisited} document nodes of ${this._hashes.size} total nodes`,
+    );
   }
 
   private _handleLoadRequest: StreamHandler = ({ stream }) => {
@@ -620,6 +864,7 @@ export class CollabswarmDocument<
           console.warn(
             `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
@@ -629,7 +874,6 @@ export class CollabswarmDocument<
         ).flat();
         let requestor: PublicKey | undefined;
         for (const reader of readers) {
-          // TODO: Is this secure? Do we need a salt added to the signed payload?
           if (
             await this._authProvider.verify(
               this._encoder.encode(message.documentId),
@@ -646,37 +890,18 @@ export class CollabswarmDocument<
           console.warn(
             `Detected an unauthorized load request for ${message.documentId}`,
           );
+          await stream.sink([] as Iterable<Uint8Array>);
           return [];
         }
 
         // Construct load response based on history visibility setting.
         const loadMessage = this._createSyncMessage();
 
-        switch (this._historyVisibility) {
-          case 'full_history':
-            // Send ALL epoch keys — for audit trails and regulatory compliance.
-            // The receiver gets the full keychain history and can decrypt any
-            // historical change in the document.
-            loadMessage.keychainChanges = this._keychain.history();
-            break;
-          case 'since_invited':
-            // Send epoch keys from the invitation epoch onward.
-            // TODO: This requires epoch-based keychain filtering using
-            // _invitationEpoch to exclude keys from before the requestor
-            // was invited. Until epochs are fully wired into the keychain
-            // CRDT, we fall back to sending full history.
-            loadMessage.keychainChanges = this._keychain.history();
-            break;
-          case 'current_only':
-          default:
-            // Only send the current key — new member gets a state snapshot,
-            // not individual historical changes. This is the most private
-            // option: the receiver cannot decrypt any prior epoch's data.
-            loadMessage.keychainChanges =
-              await this._keychain.currentKeyChange();
-            // TODO: Once snapshot support is added to CRDTProvider, send
-            // a compacted state snapshot instead of the full change tree.
-            break;
+        loadMessage.keychainChanges = await this._keychainChangesForVisibility();
+
+        // Include the latest snapshot if available, to accelerate initial sync.
+        if (this._latestSnapshot) {
+          loadMessage.snapshot = this._latestSnapshot;
         }
 
         // Sign new message.
@@ -714,6 +939,168 @@ export class CollabswarmDocument<
     });
   };
 
+  private _handleSnapshotLoadRequest: StreamHandler = ({ stream }) => {
+    console.log(`received ${this.protocolSnapshotLoadV1} dial`);
+    pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+        const assembledRequest = await readUint8Iterable(source);
+        const message =
+          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+        console.log(
+          `received ${this.protocolSnapshotLoadV1} request:`,
+          assembledRequest,
+          message,
+        );
+
+        if (message.documentId !== this.documentPath) {
+          console.warn(
+            `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return [];
+        }
+
+        // Verify that this user is a reader or writer.
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        let requestor: PublicKey | undefined;
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            requestor = reader;
+            break;
+          }
+        }
+
+        if (!requestor) {
+          console.warn(
+            `Detected an unauthorized snapshot load request for ${message.documentId}`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return [];
+        }
+
+        if (!this._latestSnapshot) {
+          // No snapshot available — respond with empty payload so the peer
+          // can fall back to the normal doc-load protocol.
+          console.log(
+            `No snapshot available for ${this.documentPath}, sending empty response`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return [];
+        }
+
+        // Build a complete sync message with the snapshot, post-snapshot
+        // changes, and keychain so the peer can fully catch up.
+        const snapshotMessage = this._createSyncMessage();
+        snapshotMessage.snapshot = this._latestSnapshot;
+        snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
+        snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
+
+        const serialized =
+          this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
+
+        // Encrypt the response.
+        const [documentKeyID, documentKey] = await this._keychain.current();
+        if (!documentKey) {
+          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+        }
+        const { nonce, data } = await this._authProvider.encrypt(
+          serialized,
+          documentKey,
+        );
+        if (!nonce) {
+          throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
+        }
+        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+        console.log(
+          `sending ${this.protocolSnapshotLoadV1} response (encrypted)`,
+        );
+
+        await stream.sink([assembled] as Iterable<Uint8Array>);
+        return [];
+      },
+    ).catch((err: unknown) => {
+      console.error(
+        `Error handling ${this.protocolSnapshotLoadV1} snapshot load request:`,
+        err,
+      );
+    });
+  };
+
+  /**
+   * Build the deterministic binary payload used for snapshot signing/verification.
+   *
+   * Binary layout (big-endian integers):
+   *   [0]       uint8   version (1)
+   *   [1..8]    uint64  timestamp
+   *   [9..12]   uint32  compactedCount
+   *   [13..16]  uint32  cidLen
+   *   [17..]    bytes   UTF-8(lastChangeNodeCID)
+   *   [..]      uint32  stateLen
+   *   [..]      bytes   stateBytes
+   */
+  private _buildSnapshotSignPayload(
+    stateBytes: Uint8Array,
+    lastChangeNodeCID: string,
+    timestamp: number,
+    compactedCount: number,
+  ): Uint8Array {
+    // Validate inputs to prevent runtime errors (e.g. BigInt(NaN) throws TypeError)
+    // and silent uint32 overflow/truncation via DataView.setUint32.
+    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+      throw new Error(`Invalid snapshot timestamp: ${timestamp}`);
+    }
+    if (!Number.isInteger(compactedCount) || compactedCount < 0 || compactedCount > 0xFFFFFFFF) {
+      throw new Error(`Invalid snapshot compactedCount: ${compactedCount}`);
+    }
+    const cidBytes = this._encoder.encode(lastChangeNodeCID);
+    if (cidBytes.length > 0xFFFFFFFF) {
+      throw new Error(`lastChangeNodeCID too large: ${cidBytes.length} bytes`);
+    }
+    if (stateBytes.length > 0xFFFFFFFF) {
+      throw new Error(`Snapshot state too large: ${stateBytes.length} bytes`);
+    }
+    // 1 (version) + 8 (timestamp) + 4 (compactedCount) + 4 (cidLen) + cidBytes + 4 (stateLen) + stateBytes
+    const totalLen = 1 + 8 + 4 + 4 + cidBytes.length + 4 + stateBytes.length;
+    const buf = new ArrayBuffer(totalLen);
+    const view = new DataView(buf);
+    const out = new Uint8Array(buf);
+    let offset = 0;
+
+    // version
+    view.setUint8(offset, 1);
+    offset += 1;
+
+    // timestamp as uint64
+    view.setBigUint64(offset, BigInt(timestamp), false);
+    offset += 8;
+
+    // compactedCount as uint32
+    view.setUint32(offset, compactedCount, false);
+    offset += 4;
+
+    // lastChangeNodeCID (length-prefixed)
+    view.setUint32(offset, cidBytes.length, false);
+    offset += 4;
+    out.set(cidBytes, offset);
+    offset += cidBytes.length;
+
+    // stateBytes (length-prefixed)
+    view.setUint32(offset, stateBytes.length, false);
+    offset += 4;
+    out.set(stateBytes, offset);
+
+    return out;
+  }
+
   private async _ensureCurrentUserCanWrite() {
     // Check that we are a writer (allowed to write to this document).
     if (!(await this._writers.check(this._userPublicKey))) {
@@ -721,6 +1108,105 @@ export class CollabswarmDocument<
         `Current user does not have write permissions for: ${this.documentPath}`,
       );
     }
+  }
+
+  /**
+   * Send a load request over the given stream and apply the response.
+   * Returns true if a non-empty response was received and synced,
+   * false if the response was empty (e.g. peer has no snapshot).
+   */
+  private async _sendLoadRequestAndSync(
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
+    serializedRequest: Uint8Array,
+  ): Promise<boolean> {
+    await pipe([serializedRequest], stream.sink);
+    return await pipe(
+      stream.source,
+      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+        const assembled = await readUint8Iterable(source);
+
+        // Empty response means the peer couldn't serve this request.
+        if (assembled.length === 0) {
+          return false;
+        }
+
+        // Decrypt the response. Extract the keyID from the header and
+        // look it up in the keychain. Responses shorter than the encryption
+        // header are treated as malformed and rejected.
+        const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
+        let rawContent: Uint8Array;
+        if (assembled.length <= headerLength) {
+          // Too short to contain a valid encrypted payload — reject.
+          console.warn(
+            `Load response for ${this.documentPath}: payload too short (${assembled.length} <= ${headerLength}), skipping peer`,
+          );
+          return false;
+        }
+
+        const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
+        const key = this._keychain.getKey(blockKeyID);
+        if (key) {
+          const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+          const blockData = assembled.slice(headerLength);
+          const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
+          if (!decrypted) {
+            throw new Error(
+              `Failed to decrypt load response for ${this.documentPath}`,
+            );
+          }
+          rawContent = decrypted;
+        } else {
+          // KeyID not recognized — peer sent encrypted data with a key we
+          // don't have. Fail and let the caller try the next peer.
+          console.warn(
+            `Load response for ${this.documentPath}: unrecognized keyID, skipping peer`,
+          );
+          return false;
+        }
+
+        const message = this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+        if (message.documentId !== this.documentPath) {
+          console.warn(
+            `Load response documentId mismatch: expected ${this.documentPath}, got ${message.documentId}`,
+          );
+          return false;
+        }
+        // Verify the outer message signature before applying changes.
+        // On subsequent loads (writers already known), verify against the
+        // existing trusted writer set BEFORE sync() mutates state. This
+        // prevents a malicious peer from injecting ACL changes that add
+        // its own key.
+        // On first load (_writers is empty / bootstrapping), we cannot
+        // verify — trust relies on the encrypted channel (only peers
+        // with the document key can decrypt the response).
+        const preLoadWriters = await this._writers.users();
+        if (preLoadWriters.length > 0) {
+          if (!message.signature) {
+            console.warn(
+              `Load response for ${this.documentPath}: missing signature, skipping peer`,
+            );
+            return false;
+          }
+          const { signature, ...messageWithoutSignature } = message;
+          const raw = this._syncMessageSerializer.serializeSyncMessage(
+            messageWithoutSignature,
+          );
+          const signatureBytes = this._deserializeSignature(signature);
+          const verifyTasks = preLoadWriters.map((writerKey) =>
+            this._authProvider.verify(raw, writerKey, signatureBytes),
+          );
+          if (!(await firstTrue(verifyTasks))) {
+            console.warn(
+              `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
+            );
+            return false;
+          }
+        }
+
+        await this.sync(message, false);
+        return true;
+      },
+    );
   }
 
   // API Methods --------------------------------------------------------------
@@ -744,110 +1230,52 @@ export class CollabswarmDocument<
       return false;
     }
 
-    const stream = await (async () => {
-      for (const peer of shuffledPeers) {
-        try {
-          console.log('Selected peer addresses:', peer.toString());
-          const docLoadConnection = await this.libp2p.dialProtocol(peer, [
-            this.protocolLoadV1,
-          ]);
-          return docLoadConnection;
-        } catch (err) {
-          console.warn(
-            `Failed to load document from (${this.protocolLoadV1}): `,
-            peer.toString(),
-            err,
-          );
-        }
+    const signatureBytes = await this._authProvider.sign(
+      this._encoder.encode(this.documentPath),
+      this._userKey,
+    );
+    const signature = this._serializeSignature(signatureBytes);
+    const loadRequest: CRDTLoadRequest = {
+      documentId: this.documentPath,
+      signature,
+    };
+    const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
+
+    // Try snapshot-load first for faster initial sync.
+    // If the peer returns an empty response (no snapshot available),
+    // fall back to the regular doc-load protocol.
+    for (const peer of shuffledPeers) {
+      try {
+        console.log('Trying snapshot-load from peer:', peer.toString());
+        const snapshotStream = await this.libp2p.dialProtocol(peer, [
+          this.protocolSnapshotLoadV1,
+        ]);
+        const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
+        if (loaded) return true;
+        // Empty response — peer has no snapshot, try doc-load below.
+      } catch {
+        // Peer doesn't support snapshot-load protocol.
       }
-    })();
 
-    // See: https://stackoverflow.com/questions/53467489/ipfs-how-to-send-message-from-a-peer-to-another
-    // TODO: Close connection upon receipt of data.
-    if (stream) {
-      console.log(`Opening stream for ${this.protocolLoadV1}`, stream);
-
-      const signatureBytes = await this._authProvider.sign(
-        this._encoder.encode(this.documentPath),
-        this._userKey,
-      );
-      const signature = this._serializeSignature(signatureBytes);
-
-      // Construct a load request.
-      const loadRequest: CRDTLoadRequest = {
-        documentId: this.documentPath,
-        signature,
-      };
-
-      // Immediately send a load request.
-      await pipe(
-        [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-        stream.sink,
-      );
-      await pipe(
-        stream.source,
-        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          console.log(`awaiting ${this.protocolLoadV1} response...`);
-          const assembled = await readUint8Iterable(source);
-
-          // Decrypt the load response. If the response is too short to
-          // contain an encryption header (keyIDLength + nonceBits), treat
-          // it as plaintext from a legacy peer. If a header IS present but
-          // decryption fails, propagate the error rather than silently
-          // falling back to plaintext (which would be corrupted data).
-          const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
-          let rawContent: Uint8Array;
-          if (assembled.length > headerLength) {
-            const blockKeyID = assembled.slice(
-              0,
-              this._keychainProvider.keyIDLength,
-            );
-            const blockNonce = assembled.slice(
-              this._keychainProvider.keyIDLength,
-              headerLength,
-            );
-            const blockData = assembled.slice(headerLength);
-            const decrypted = await this._decryptBlock(
-              blockKeyID,
-              blockNonce,
-              blockData,
-            );
-            if (!decrypted) {
-              throw new Error(
-                `Failed to decrypt load response for ${this.documentPath}: ` +
-                'encryption header present but decryption failed',
-              );
-            }
-            rawContent = decrypted;
-          } else {
-            // Response too short for encryption header — legacy plaintext peer
-            rawContent = assembled;
-          }
-
-          const message =
-            this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-          console.log(
-            `received ${this.protocolLoadV1} response (decrypted)`,
-          );
-
-          if (message.documentId === this.documentPath) {
-            await this.sync(message, false);
-          }
-
-          // Return an ACK.
-          return [];
-        },
-      );
-      // await pipe(
-      //   [this._loadMessageSerializer.serializeLoadRequest(loadRequest)],
-      //   stream.sink,
-      // );
-      return true;
-    } else {
-      // Assume new document
-      console.log('Failed to open document on any nodes.', this);
-      return false;
+      try {
+        console.log('Trying doc-load from peer:', peer.toString());
+        const docStream = await this.libp2p.dialProtocol(peer, [
+          this.protocolLoadV1,
+        ]);
+        const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
+        if (loaded) return true;
+      } catch (err) {
+        console.warn(
+          `Failed to load document from (${this.protocolLoadV1}): `,
+          peer.toString(),
+          err,
+        );
+      }
     }
+
+    // No peer could provide the document — assume new document.
+    console.log('Failed to open document on any nodes.', this);
+    return false;
   }
 
   /**
@@ -892,7 +1320,7 @@ export class CollabswarmDocument<
       );
     };
 
-    const pubsub = this.swarm.ipfsNode.libp2p.services
+    const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
@@ -904,6 +1332,9 @@ export class CollabswarmDocument<
     //       right document. This should be more efficient.
     this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
     this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
+    // Snapshot-load protocol: load() tries this first for faster initial sync,
+    // falling back to protocolLoadV1 if the peer doesn't support it or has no snapshot.
+    this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -988,7 +1419,7 @@ export class CollabswarmDocument<
    */
   public async close() {
     if (this._pubsubHandler) {
-      const pubsub = this.swarm.ipfsNode.libp2p.services
+      const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(this.documentPath);
       // Cast required: see addEventListener comment above
@@ -997,17 +1428,18 @@ export class CollabswarmDocument<
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
     await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
   }
 
   /**
    * Given a sync message containing a list of hashes:
-   * - Fetch new changes that are only hashes (missing change itself) from IPFS (using the hash).
+   * - Fetch new changes that are only hashes (missing change itself) from the blockstore (using the hash).
    * - Apply new changes to the existing CRDT document.
    *
    * @param message A sync message to apply.
    */
   public async sync(
-    message: CRDTSyncMessage<ChangesType>,
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
     verifySignature = true,
   ) {
     const { signature, ...messageWithoutSignature } = message;
@@ -1032,8 +1464,6 @@ export class CollabswarmDocument<
       return;
     }
 
-    const syncTasks: Promise<void>[] = [];
-
     // Update/replace list of document keys (if provided).
     if (message.keychainChanges) {
       try {
@@ -1053,14 +1483,84 @@ export class CollabswarmDocument<
       }
     }
 
-    // Sync document changes.
+    // Pre-pass: apply only ACL nodes from the change tree to populate
+    // _writers/_readers. This is needed before snapshot verification since
+    // _verifySnapshotSignature() requires writer keys. ACL merges are
+    // idempotent, so re-applying them in _syncDocumentChanges() is safe.
     if (message.changes) {
-      syncTasks.push(
-        this._syncDocumentChanges(message.changeId, message.changes),
-      );
+      this._applyACLFromTree(message.changes);
     }
 
-    await Promise.all(syncTasks);
+    // Apply snapshot if present and more recent than ours.
+    // Happens before full change sync so document changes that are already
+    // covered by the snapshot don't need to be applied first (CRDTs handle
+    // duplicate application correctly, but this avoids unnecessary work).
+    if (message.snapshot) {
+      const incoming = message.snapshot;
+      if (
+        !this._latestSnapshot ||
+        incoming.compactedCount > this._latestSnapshot.compactedCount ||
+        (incoming.compactedCount === this._latestSnapshot.compactedCount &&
+          String(incoming.lastChangeNodeCID ?? '') >
+            String(this._latestSnapshot.lastChangeNodeCID ?? ''))
+      ) {
+        // Verify the snapshot signature against the deterministic payload
+        // by trying all authorized writers (publicKey may not survive
+        // serialization for all key types, e.g. CryptoKey).
+        let snapshotSignatureValid = false;
+        try {
+          const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
+          const signPayload = this._buildSnapshotSignPayload(
+            stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
+          );
+          snapshotSignatureValid = await this._verifySnapshotSignature(
+            signPayload, incoming.signature,
+          );
+        } catch (e) {
+          console.warn(
+            `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
+            e,
+          );
+        }
+        if (!snapshotSignatureValid) {
+          console.warn(
+            `Rejected snapshot for ${this.documentPath}: no authorized writer produced a valid signature`,
+          );
+        } else {
+          // Apply the snapshot state. Use applySnapshot when available (e.g.
+          // Automerge save format differs from incremental changes), otherwise
+          // fall back to remoteChange (works for Yjs where snapshots are valid updates).
+          this._document = this._crdtProvider.applySnapshot
+            ? this._crdtProvider.applySnapshot(this._document, incoming.state)
+            : this._crdtProvider.remoteChange(this._document, incoming.state);
+          this._latestSnapshot = incoming;
+          // Ensure our local document change count is at least as high as
+          // the snapshot's compactedCount. This prevents re-triggering
+          // compaction below the threshold after applying a remote snapshot.
+          this._documentChangeCount = Math.max(
+            this._documentChangeCount,
+            incoming.compactedCount,
+          );
+          this._changesSinceSnapshot = 0;
+          // Mark the snapshot boundary CID as seen so _mergeSyncTree skips
+          // it and all ancestor nodes. This prevents re-applying pre-snapshot
+          // changes (which the snapshot already covers) and avoids inflating
+          // _documentChangeCount / _changesSinceSnapshot.
+          if (incoming.lastChangeNodeCID) {
+            this._hashes.add(incoming.lastChangeNodeCID);
+          }
+          console.log(
+            `Applied remote snapshot for ${this.documentPath}: ${incoming.compactedCount} nodes compacted`,
+          );
+        }
+      }
+    }
+
+    // Full change sync: process all nodes (document + ACL) from the DAG.
+    // ACL nodes applied in the pre-pass above will be re-merged idempotently.
+    if (message.changes) {
+      await this._syncDocumentChanges(message.changeId, message.changes);
+    }
   }
 
   /**
@@ -1131,6 +1631,84 @@ export class CollabswarmDocument<
     this._document = newDocument;
 
     await this._makeChange(changes);
+  }
+
+  /**
+   * Returns the total number of change nodes (including ACL nodes) tracked
+   * in the current document history. This is a count of all known CIDs,
+   * not the depth of the longest path in the DAG.
+   */
+  public historySize(): number {
+    return this._hashes.size;
+  }
+
+  /**
+   * Returns the current snapshot, if one exists.
+   */
+  public get latestSnapshot(): CRDTSnapshotNode<ChangesType, PublicKey> | undefined {
+    return this._latestSnapshot;
+  }
+
+  /**
+   * Creates a snapshot of the current document state.
+   *
+   * The snapshot compacts all current change nodes into a single state representation.
+   * Requires `CRDTProvider.getSnapshot()` to be implemented.
+   *
+   * @returns The created snapshot node, or undefined if the provider does not support snapshots.
+   * @throws {Error} If the current user does not have write access to this document.
+   *   Only writers are authorized to create snapshots.
+   */
+  public async snapshot(): Promise<CRDTSnapshotNode<ChangesType, PublicKey> | undefined> {
+    await this._ensureCurrentUserCanWrite();
+
+    if (!this._crdtProvider.getSnapshot) {
+      console.warn('CRDTProvider does not implement getSnapshot(); compaction disabled.');
+      this._snapshotUnsupported = true;
+      return undefined;
+    }
+
+    const state = this._crdtProvider.getSnapshot(this._document);
+    const lastChangeNodeCID = this._lastSyncMessage?.changeId ?? '';
+    const timestamp = Date.now();
+
+    // Create a deterministic, unambiguous binary payload to sign.
+    // Use _documentChangeCount (document-kind changes only) rather than
+    // _hashes.size (which includes ACL nodes) to keep the semantic consistent.
+    // Binary layout with length prefixes avoids ambiguity and is efficient
+    // for large state blobs (no JSON/Array.from overhead).
+    const compactedCount = this._documentChangeCount;
+    const stateBytes = this._changesSerializer.serializeChanges(state);
+    const signPayload = this._buildSnapshotSignPayload(
+      stateBytes, lastChangeNodeCID, timestamp, compactedCount,
+    );
+    const signature = await this._authProvider.sign(signPayload, this._userKey);
+
+    const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
+      state,
+      lastChangeNodeCID,
+      compactedCount,
+      signature,
+      publicKey: this._userPublicKey,
+      timestamp,
+    };
+
+    this._latestSnapshot = snapshotNode;
+    this._changesSinceSnapshot = 0;
+
+    // Prune old change nodes from the in-memory sync tree if configured.
+    // The snapshot is NOT stored on _lastSyncMessage — it is only included
+    // in load/snapshot-load responses via _latestSnapshot, to avoid bloating
+    // every incremental pubsub sync message with the full snapshot state.
+    if (this._lastSyncMessage && this._compactionConfig.pruneAfterSnapshot) {
+      this._pruneChanges(this._compactionConfig.keepRecentNodes);
+    }
+
+    console.log(
+      `Created snapshot for ${this.documentPath}: ${snapshotNode.compactedCount} nodes compacted`,
+    );
+
+    return snapshotNode;
   }
 
   /**
@@ -1265,7 +1843,7 @@ export class CollabswarmDocument<
     keychainChanges: ChangesType,
     previousKey: [Uint8Array, DocumentKey],
   ) {
-    const keyUpdateMessage: CRDTSyncMessage<ChangesType> = {
+    const keyUpdateMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: this.documentPath,
       keychainChanges,
     };
@@ -1288,7 +1866,7 @@ export class CollabswarmDocument<
     }
 
     // Send to all connected peers via the key-update protocol.
-    const peers = this.swarm.ipfsNode.libp2p
+    const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
 
@@ -1420,7 +1998,7 @@ export class CollabswarmDocument<
   //   const changes = this._crdtProvider.getHistory(this.document);
 
   //   // Store changes in ipfs.
-  //   const newFileResult = await this.swarm.ipfsNode.add(
+  //   const newFileResult = await this.swarm.heliaNode.add(
   //     this._changesSerializer.serializeChanges(changes),
   //   );
   //   const hash = newFileResult.cid.toString();
@@ -1433,7 +2011,7 @@ export class CollabswarmDocument<
   //   if (!this.swarm.config) {
   //     throw 'Can not pin a file when the node has not been initialized'!;
   //   }
-  //   this.swarm.ipfsNode.pubsub.publish(
+  //   this.swarm.heliaNode.pubsub.publish(
   //     this.swarm.config.pubsubDocumentPublishPath,
   //     this._syncMessageSerializer.serializeSyncMessage(updateMessage),
   //   );

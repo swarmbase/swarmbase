@@ -3,6 +3,7 @@ import {
   CollabswarmConfig,
   defaultConfig,
   defaultBootstrapConfig,
+  getDefaultConfig,
 } from './collabswarm-config';
 import {
   CollabswarmDocument,
@@ -71,7 +72,10 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
-import { bloomFilterUpdateV1 } from './wire-protocols';
+import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import type { CRDTSnapshotNode } from './snapshot-node';
+import type { CompactionConfig } from './compaction-config';
+import { defaultCompactionConfig } from './compaction-config';
 
 export * from './beekem';
 
@@ -118,6 +122,7 @@ export {
   JSONSerializer,
   defaultConfig,
   defaultBootstrapConfig,
+  getDefaultConfig,
   defaultNodeConfig,
   // Capabilities
   CAP_DOC_ADMIN,
@@ -140,9 +145,14 @@ export {
   UCANACLProvider,
   // Wire protocols
   bloomFilterUpdateV1,
+  snapshotLoadV1,
+  // Compaction
+  defaultCompactionConfig,
 };
 
 // Re-export types
 export type { DocumentCapability } from './capabilities';
 export type { UCAN, UCANCapability, UCANPayload } from './ucan';
 export type { UCANACLEntry } from './ucan-acl';
+export type { CRDTSnapshotNode } from './snapshot-node';
+export type { CompactionConfig } from './compaction-config';

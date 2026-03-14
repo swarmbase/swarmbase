@@ -16,7 +16,8 @@ import {
   Collabswarm,
   CollabswarmConfig,
   CollabswarmDocument,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
 import { Doc, BinaryChange } from 'automerge';
 
@@ -73,25 +74,23 @@ class App extends React.Component<
 
   componentDidMount() {
     if (this.props.onInitialize) {
-      const config = process.env.REACT_APP_CLIENT_CONFIG
-        ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
-        : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-      if (process.env.REACT_APP_SIGNALING_SERVER) {
-        config.ipfs.config.Addresses.Swarm.push(
-          process.env.REACT_APP_SIGNALING_SERVER,
-        );
-      }
+      // Get relay/bootstrap address from env. The relay multiaddr
+      // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
+      // for libp2p peer discovery — NOT as a listen address.
+      const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
+      const bootstrapPeers = relayAddr ? [relayAddr] : [];
+      const config = defaultConfig(defaultBootstrapConfig(bootstrapPeers));
       this.props.onInitialize(config);
     }
   }
 
   render() {
-    const ipfsInfo = (() => {
+    const nodeAddresses = (() => {
       try {
-        return this.props.state.node ? this.props.state.node.ipfsInfo : null;
+        return this.props.state.node ? this.props.state.node.libp2p.getMultiaddrs() : null;
       } catch (ex) {
         // No-op.
-        console.warn('Failed to read ipfs info:', ex);
+        console.warn('Failed to read node addresses:', ex);
       }
       return null;
     })();
@@ -103,9 +102,8 @@ class App extends React.Component<
             <strong>Node Addresses:</strong>
           </div>
           <ul>
-            {ipfsInfo &&
-              ipfsInfo.addresses &&
-              ipfsInfo.addresses.map((address: any, i: number) => (
+            {nodeAddresses &&
+              nodeAddresses.map((address: any, i: number) => (
                 <li key={i}>
                   <pre>{address.toString()}</pre>
                 </li>

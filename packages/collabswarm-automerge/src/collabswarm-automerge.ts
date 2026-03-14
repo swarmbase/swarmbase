@@ -6,6 +6,9 @@ import {
   applyChanges,
   Change as BinaryChange,
   getAllChanges,
+  save,
+  load,
+  merge,
   from,
 } from '@automerge/automerge';
 
@@ -13,7 +16,13 @@ import {
   ACL,
   ACLProvider,
   CollabswarmDocumentChangeHandler,
+  CRDTChangeBlock,
+  CRDTChangeNode,
+  CRDTChangeNodeDeferred,
+  crdtChangeNodeDeferred,
+  CRDTChangeNodeKind,
   CRDTProvider,
+  CRDTSyncMessage,
   JSONSerializer,
   Keychain,
   KeychainProvider,
@@ -48,6 +57,20 @@ export class AutomergeProvider<T = any>
   }
   getHistory(document: Doc<T>): BinaryChange[] {
     return getAllChanges(document);
+  }
+  getSnapshot(document: Doc<T>): BinaryChange[] {
+    // Automerge.save() produces a single compact binary blob containing
+    // the full document state. This is much smaller than getAllChanges()
+    // which returns every individual change. The save format is NOT
+    // compatible with applyChanges(), so applySnapshot() must be used.
+    return [save(document) as unknown as BinaryChange];
+  }
+  applySnapshot(document: Doc<T>, snapshot: BinaryChange[]): Doc<T> {
+    // snapshot is [save(doc)] — a single-element array containing a save buffer.
+    // Load it into a new document and merge with the current one to preserve
+    // any concurrent changes not included in the snapshot.
+    const loaded = load<T>(snapshot[0] as unknown as Uint8Array);
+    return merge(document, loaded);
   }
 }
 
@@ -331,4 +354,154 @@ export class AutomergeKeychainProvider
   keyIDLength = 16;
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {}
+/**
+ * Intermediate wire type for Automerge Merkle-DAG nodes where each
+ * BinaryChange[] is represented as base64-encoded strings.
+ */
+type iCRDTChangeNode = {
+  kind: CRDTChangeNodeKind;
+  change?: string[];
+  children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
+};
+
+function serializeBinaryChangesInMerkleDAG(
+  node: CRDTChangeNode<BinaryChange[]>,
+): iCRDTChangeNode {
+  const change = node.change
+    ? node.change.map((c: Uint8Array) => Base64.fromUint8Array(c))
+    : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: iCRDTChangeNode } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = serializeBinaryChangesInMerkleDAG(child);
+    }
+    return { ...node, change, children };
+  }
+  return { ...node, change, children: node.children };
+}
+
+function deserializeBinaryChangesInMerkleDAG(
+  node: iCRDTChangeNode,
+): CRDTChangeNode<BinaryChange[]> {
+  const change = node.change
+    ? (node.change.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[])
+    : undefined;
+  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    const children: { [hash: string]: CRDTChangeNode<BinaryChange[]> } = {};
+    for (const [hash, child] of Object.entries(node.children)) {
+      children[hash] = deserializeBinaryChangesInMerkleDAG(child);
+    }
+    return { ...node, change, children };
+  }
+  return { ...node, change, children: node.children };
+}
+
+function serializeBinaryChanges(changes: BinaryChange[]): string[] {
+  return changes.map((c: Uint8Array) => Base64.fromUint8Array(c));
+}
+
+function deserializeBinaryChanges(changes: string[]): BinaryChange[] {
+  return changes.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[];
+}
+
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
+  serializeChanges(changes: BinaryChange[]): Uint8Array {
+    return this.encode(this.serialize(serializeBinaryChanges(changes)));
+  }
+
+  deserializeChanges(changes: Uint8Array): BinaryChange[] {
+    const raw = this.deserialize(this.decode(changes));
+    if (!Array.isArray(raw)) {
+      throw new Error('Invalid serialized changes: expected string[]');
+    }
+    return deserializeBinaryChanges(raw as string[]);
+  }
+
+  serializeChangeBlock(changes: CRDTChangeBlock<BinaryChange[]>): string {
+    const obj: Record<string, unknown> = {
+      changes: serializeBinaryChanges(changes.changes),
+      nonce: Base64.fromUint8Array(changes.nonce),
+    };
+    if ('blindIndexTokens' in changes) {
+      obj.blindIndexTokens = changes.blindIndexTokens;
+    }
+    return this.serialize(obj);
+  }
+
+  deserializeChangeBlock(changes: string): CRDTChangeBlock<BinaryChange[]> {
+    const raw = this.deserialize(changes);
+    if (
+      typeof raw !== 'object' || raw === null ||
+      !Array.isArray((raw as Record<string, unknown>).changes) ||
+      typeof (raw as Record<string, unknown>).nonce !== 'string'
+    ) {
+      throw new Error('Invalid change block: expected {changes: string[], nonce: string}');
+    }
+    const deserialized = raw as { changes: string[]; nonce: string; blindIndexTokens?: Record<string, string> };
+    const result: CRDTChangeBlock<BinaryChange[]> = {
+      changes: deserializeBinaryChanges(deserialized.changes),
+      nonce: Base64.toUint8Array(deserialized.nonce),
+    };
+    if ('blindIndexTokens' in deserialized) {
+      result.blindIndexTokens = deserialized.blindIndexTokens;
+    }
+    return result;
+  }
+
+  serializeSyncMessage(message: CRDTSyncMessage<BinaryChange[], CryptoKey>): Uint8Array {
+    let snapshotForWire: any;
+    if (message.snapshot) {
+      snapshotForWire = { ...message.snapshot };
+      // Base64-encode each BinaryChange (Uint8Array) in state for JSON safety.
+      if (Array.isArray(snapshotForWire.state)) {
+        snapshotForWire.state = snapshotForWire.state.map(
+          (c: Uint8Array) => Base64.fromUint8Array(c),
+        );
+      }
+      if (snapshotForWire.signature instanceof Uint8Array) {
+        snapshotForWire.signature = Base64.fromUint8Array(snapshotForWire.signature);
+      }
+      // Drop publicKey — CryptoKey is not JSON-serializable and
+      // snapshot verification uses writer ACL keys, not the embedded key.
+      delete snapshotForWire.publicKey;
+    }
+    return this.encode(
+      this.serialize({
+        ...message,
+        changes:
+          message.changes && serializeBinaryChangesInMerkleDAG(message.changes),
+        keychainChanges:
+          message.keychainChanges &&
+          serializeBinaryChanges(message.keychainChanges),
+        snapshot: snapshotForWire,
+      }),
+    );
+  }
+
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[], CryptoKey> {
+    const raw = this.deserialize(this.decode(message)) as any;
+    let snapshot: any;
+    if (raw.snapshot) {
+      snapshot = { ...raw.snapshot };
+      // Decode base64-encoded BinaryChange[] back to Uint8Array[].
+      if (Array.isArray(snapshot.state)) {
+        snapshot.state = snapshot.state.map(
+          (c: string) => Base64.toUint8Array(c),
+        );
+      }
+      if (typeof snapshot.signature === 'string') {
+        snapshot.signature = Base64.toUint8Array(snapshot.signature);
+      }
+    }
+    return {
+      ...raw,
+      changes:
+        raw.changes && deserializeBinaryChangesInMerkleDAG(raw.changes),
+      keychainChanges:
+        raw.keychainChanges
+          ? deserializeBinaryChanges(raw.keychainChanges)
+          : undefined,
+      snapshot,
+    } as CRDTSyncMessage<BinaryChange[], CryptoKey>;
+  }
+}

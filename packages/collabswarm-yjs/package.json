@@ -92,7 +92,8 @@
       "^libp2p$": "<rootDir>/src/__mocks__/empty-module.js",
       "^it-pipe$": "<rootDir>/src/__mocks__/empty-module.js",
       "^bl$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^multiformats$": "<rootDir>/src/__mocks__/empty-module.js"
+      "^multiformats$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.js"
     }
   }
 }

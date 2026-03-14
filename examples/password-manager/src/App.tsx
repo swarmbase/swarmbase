@@ -11,7 +11,8 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {
   CollabswarmDocument,
-  DEFAULT_CONFIG,
+  defaultConfig,
+  defaultBootstrapConfig,
   SubtleCrypto,
 } from '@collabswarm/collabswarm';
 import {
@@ -56,16 +57,12 @@ function App() {
   const [docWritersCache, setDocWritersCache] = React.useState<{
     [docPath: string]: any[];
   }>({});
-  const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); // use copy
-  config &&
-    config.ipfs &&
-    config.ipfs.config &&
-    config.ipfs.config.Addresses &&
-    config.ipfs.config.Addresses.Swarm &&
-    config.ipfs.config.Addresses.Swarm.push(
-      process.env.REACT_APP_SIGNALING_SERVER ||
-        '/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star',
-    );
+  // Get relay/bootstrap address from env. The relay multiaddr
+  // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
+  // for libp2p peer discovery — NOT as a listen address.
+  const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
+  const relayPeers = relayAddr ? [relayAddr] : [];
+  const config = defaultConfig(defaultBootstrapConfig(relayPeers));
   const collabswarm = useCollabswarm(
     privateKey,
     publicKey,

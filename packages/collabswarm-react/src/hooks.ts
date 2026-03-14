@@ -84,7 +84,7 @@ export function useCollabswarm<
   publicKey: PublicKey | undefined,
   provider: CRDTProvider<DocType, ChangesType, ChangeFnType>,
   changesSerializer: ChangesSerializer<ChangesType>,
-  syncMessageSerializer: SyncMessageSerializer<ChangesType>,
+  syncMessageSerializer: SyncMessageSerializer<ChangesType, PublicKey>,
   loadMessageSerializer: LoadMessageSerializer,
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,

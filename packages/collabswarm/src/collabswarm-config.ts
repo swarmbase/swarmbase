@@ -16,6 +16,7 @@ import { ipnsValidator } from 'ipns/validator';
 import { bitswap } from '@helia/block-brokers';
 import { IDBDatastore } from 'datastore-idb';
 import { IDBBlockstore } from 'blockstore-idb';
+import { CompactionConfig } from './compaction-config';
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -25,8 +26,8 @@ import { IDBBlockstore } from 'blockstore-idb';
  */
 export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
   ({
-    // NEW (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
-    ipfs: {
+    // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
+    helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
       blockBrokers: [bitswap()],
@@ -69,38 +70,6 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
       },
     },
 
-    // ipfs: {
-    // OLD
-    // relay: {
-    //   enabled: true, // enable circuit relay dialer and listener
-    //   // TODO: Is this necessary for browser nodes? I don't think they can actually function as a relay...
-    //   hop: {
-    //     enabled: true, // enable circuit relay HOP (make this node a relay)
-    //   },
-    // },
-    // config: {
-    //   Addresses: {
-    //     Swarm: [],
-    //   },
-    //   Bootstrap: [],
-    // },
-    // /OLD
-    // EVEN OLDER
-    // libp2p: {
-    //   config: {
-    //     transport: {
-    //       // This is added for local demo!
-    //       // In a production environment the default filter should be used
-    //       // where only DNS + WSS addresses will be dialed by websockets in the browser.
-    //       [transportKey]: {
-    //         filter: filters.all
-    //       }
-    //     }
-    //   }
-    // }
-    // /EVEN OLDER
-    // },
-
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
@@ -111,9 +80,9 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
  */
 export interface CollabswarmConfig {
   /**
-   * Configuration for IPFS/libp2p.
+   * Configuration for Helia/libp2p.
    */
-  ipfs?: HeliaInit;
+  helia?: HeliaInit;
 
   /**
    * Prefix to apply to newly created documents.
@@ -133,6 +102,13 @@ export interface CollabswarmConfig {
    * Default: false (for backward compatibility).
    */
   enableTopicValidators?: boolean;
+
+  /**
+   * Configuration for history compaction.
+   * When provided with `enabled: true`, the document will periodically
+   * create snapshot nodes to compact the Merkle-DAG change history.
+   */
+  compaction?: Partial<CompactionConfig>;
 }
 
 /**
@@ -146,67 +122,22 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
     list: clientAddresses,
   } as BootstrapInit);
 
-// /**
-//  * Creates a new collabswarm config with an added `.ipfs.config.Bootstrap` entry.
-//  *
-//  * @param clientConfig The config object to start with.
-//  * @param address Entry to add to `.ipfs.config.Bootstrap`.
-//  * @returns A new collabswarm config with the added bootstrap address.
-//  */
-// export function addBootstrapAddr(
-//   clientConfig: CollabswarmConfig,
-//   address: string,
-// ): CollabswarmConfig {
-//   return {
-//     ...clientConfig,
-//     ipfs: {
-//       ...(clientConfig.ipfs || {}),
-//       config: {
-//         ...((clientConfig.ipfs && clientConfig.ipfs.config) || {}),
-//         Bootstrap: [
-//           ...((clientConfig.ipfs &&
-//             clientConfig.ipfs.config &&
-//             clientConfig.ipfs.config.Bootstrap) ||
-//             []),
-//           address,
-//         ],
-//       },
-//     },
-//   };
-// }
-
-// /**
-//  * Creates a new collabswarm config with an added `.ipfs.config.Addresses.Swarm` entry.
-//  *
-//  * @param clientConfig The config object to start with.
-//  * @param address Entry to add to `.ipfs.config.Addresses.Swarm`.
-//  * @returns A new collabswarm config with the added swarm address.
-//  */
-// export function addSwarmAddr(
-//   clientConfig: CollabswarmConfig,
-//   address: string,
-// ): CollabswarmConfig {
-//   return {
-//     ...clientConfig,
-//     ipfs: {
-//       ...(clientConfig.ipfs || {}),
-//       config: {
-//         ...((clientConfig.ipfs && clientConfig.ipfs.config) || {}),
-//         Addresses: {
-//           ...((clientConfig.ipfs &&
-//             clientConfig.ipfs.config &&
-//             clientConfig.ipfs.config.Addresses) ||
-//             {}),
-//           Swarm: [
-//             ...((clientConfig.ipfs &&
-//               clientConfig.ipfs.config &&
-//               clientConfig.ipfs.config.Addresses &&
-//               clientConfig.ipfs.config.Addresses.Swarm) ||
-//               []),
-//             address,
-//           ],
-//         },
-//       },
-//     },
-//   };
-// }
+/**
+ * Returns a fresh default config with no bootstrap peers.
+ *
+ * Use this as a starting point for browser applications. Connect to peers
+ * after initialization via `collabswarm.connect([relayMultiaddr])`.
+ *
+ * For configs with bootstrap peers baked in, use
+ * `defaultConfig(defaultBootstrapConfig(['/ip4/.../ws/p2p/...']))` instead.
+ *
+ * Each call creates new IDB-backed blockstore/datastore instances so callers
+ * can safely mutate the returned config without leaking state across
+ * consumers. For shared/reused configs, store the result in a variable.
+ *
+ * **Note:** Lazily instantiated — safe to import in Node.js test environments
+ * that lack IndexedDB as long as the function is not called.
+ */
+export function getDefaultConfig(): CollabswarmConfig {
+  return defaultConfig(defaultBootstrapConfig([]));
+}
