@@ -6,6 +6,9 @@ import {
   applyChanges,
   Change as BinaryChange,
   getAllChanges,
+  save,
+  load,
+  merge,
   from,
 } from '@automerge/automerge';
 
@@ -56,12 +59,18 @@ export class AutomergeProvider<T = any>
     return getAllChanges(document);
   }
   getSnapshot(document: Doc<T>): BinaryChange[] {
-    // Returns all changes as the snapshot representation. A more compact
-    // approach would use Automerge.save() (returns Uint8Array), but that
-    // requires a different ChangesType and remoteChange() implementation.
-    // For now, getAllChanges() is compatible with the existing applyChanges()
-    // path used by remoteChange().
-    return getAllChanges(document);
+    // Automerge.save() produces a single compact binary blob containing
+    // the full document state. This is much smaller than getAllChanges()
+    // which returns every individual change. The save format is NOT
+    // compatible with applyChanges(), so applySnapshot() must be used.
+    return [save(document) as unknown as BinaryChange];
+  }
+  applySnapshot(document: Doc<T>, snapshot: BinaryChange[]): Doc<T> {
+    // snapshot is [save(doc)] — a single-element array containing a save buffer.
+    // Load it into a new document and merge with the current one to preserve
+    // any concurrent changes not included in the snapshot.
+    const loaded = load<T>(snapshot[0] as unknown as Uint8Array);
+    return merge(document, loaded);
   }
 }
 

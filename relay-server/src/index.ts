@@ -32,7 +32,10 @@ const TOPIC_ALLOWLIST = process.env.TOPIC_ALLOWLIST
   ? process.env.TOPIC_ALLOWLIST.split(',').map(p => p.trim()).filter(Boolean)
   : null
 // Maximum number of auto-subscribed topics before rejecting new ones.
-const MAX_AUTO_TOPICS = parseInt(process.env.MAX_AUTO_TOPICS || '1000', 10)
+const MAX_AUTO_TOPICS = (() => {
+  const parsed = parseInt(process.env.MAX_AUTO_TOPICS || '1000', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000
+})()
 
 async function main() {
   const libp2p = await createLibp2p({

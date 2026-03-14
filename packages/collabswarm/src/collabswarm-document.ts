@@ -874,7 +874,6 @@ export class CollabswarmDocument<
         ).flat();
         let requestor: PublicKey | undefined;
         for (const reader of readers) {
-          // TODO: Is this secure? Do we need a salt added to the signed payload?
           if (
             await this._authProvider.verify(
               this._encoder.encode(message.documentId),
@@ -1528,12 +1527,12 @@ export class CollabswarmDocument<
             `Rejected snapshot for ${this.documentPath}: no authorized writer produced a valid signature`,
           );
         } else {
-          // Apply the snapshot state. CRDTs converge, so applying a full state
-          // snapshot via remoteChange is safe and produces the correct result.
-          this._document = this._crdtProvider.remoteChange(
-            this._document,
-            incoming.state,
-          );
+          // Apply the snapshot state. Use applySnapshot when available (e.g.
+          // Automerge save format differs from incremental changes), otherwise
+          // fall back to remoteChange (works for Yjs where snapshots are valid updates).
+          this._document = this._crdtProvider.applySnapshot
+            ? this._crdtProvider.applySnapshot(this._document, incoming.state)
+            : this._crdtProvider.remoteChange(this._document, incoming.state);
           this._latestSnapshot = incoming;
           // Ensure our local document change count is at least as high as
           // the snapshot's compactedCount. This prevents re-triggering

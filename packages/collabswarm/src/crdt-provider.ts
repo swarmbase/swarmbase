@@ -49,11 +49,26 @@ export interface CRDTProvider<DocType, ChangesType, ChangeFnType> {
    * Get a compacted state snapshot of the document.
    * Used for onboarding new members without replaying individual changes.
    *
-   * For Yjs: `Y.encodeStateAsUpdate(doc)`
-   * For Automerge: `Automerge.save(doc)`
+   * For Yjs: `Y.encodeStateAsUpdateV2(doc)` (directly applicable via `remoteChange()`)
+   * For Automerge: `Automerge.save(doc)` (requires `applySnapshot()` since save format
+   *   differs from the incremental change format used by `remoteChange()`)
    *
    * @param document CRDT document to snapshot.
-   * @returns A snapshot that can be applied via `remoteChange()`.
+   * @returns A snapshot representation. If the snapshot format differs from the
+   *   incremental change format, implement `applySnapshot()` as well.
    */
   getSnapshot?(document: DocType): ChangesType;
+
+  /**
+   * Apply a full-state snapshot produced by `getSnapshot()`.
+   *
+   * Implement this when the snapshot format differs from incremental changes
+   * (e.g. Automerge's `save()` output cannot be applied via `applyChanges()`).
+   * When not implemented, the caller falls back to `remoteChange()`.
+   *
+   * @param document Current CRDT document.
+   * @param snapshot Snapshot state from `getSnapshot()`.
+   * @returns The updated document with the snapshot state merged in.
+   */
+  applySnapshot?(document: DocType, snapshot: ChangesType): DocType;
 }
