@@ -168,11 +168,16 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  * For configs with bootstrap peers baked in, use
  * `defaultConfig(defaultBootstrapConfig(['/ip4/.../ws/p2p/...']))` instead.
  *
- * **Note:** This creates new IDBBlockstore/IDBDatastore instances on each
- * access. Do not call this in a render loop — create the config once and
- * pass it to `initialize()`.
+ * **Note:** This is lazily initialized to avoid instantiating IDBBlockstore
+ * in Node.js environments (tests). Creates new instances on first access.
  */
-export const DEFAULT_CONFIG = defaultConfig(defaultBootstrapConfig([]));
+let _defaultConfig: CollabswarmConfig | undefined;
+export function getDefaultConfig(): CollabswarmConfig {
+  if (!_defaultConfig) {
+    _defaultConfig = defaultConfig(defaultBootstrapConfig([]));
+  }
+  return _defaultConfig;
+}
 
 // /**
 //  * Creates a new collabswarm config with an added `.ipfs.config.Bootstrap` entry.

@@ -3,7 +3,7 @@ import {
   CollabswarmConfig,
   defaultConfig,
   defaultBootstrapConfig,
-  DEFAULT_CONFIG,
+  getDefaultConfig,
 } from './collabswarm-config';
 import {
   CollabswarmDocument,
@@ -122,7 +122,7 @@ export {
   JSONSerializer,
   defaultConfig,
   defaultBootstrapConfig,
-  DEFAULT_CONFIG,
+  getDefaultConfig,
   defaultNodeConfig,
   // Capabilities
   CAP_DOC_ADMIN,
