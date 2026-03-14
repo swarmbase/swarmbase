@@ -37,7 +37,7 @@ import { PubSubBaseProtocol } from '@libp2p/pubsub';
  * Subscribe functions that match this type signature to track peer-connection/peer-disconnection events.
  */
 export type CollabswarmPeersHandler = (
-  address: string,
+  peerId: string,
   connection: CustomEvent<PeerId>,
 ) => void;
 
@@ -104,7 +104,7 @@ export class Collabswarm<
       >
     | undefined;
   private _peerId: PeerId | undefined;
-  private _peerAddrs: string[] = [];
+  private _peerIds: string[] = [];
   private _peerConnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<
     string,
     CollabswarmPeersHandler
@@ -119,19 +119,6 @@ export class Collabswarm<
    */
   public get libp2p(): Libp2p {
     return this.heliaNode.libp2p;
-  }
-
-  /**
-   * Gets the current Helia node instance.
-   *
-   * Only works after `.initialize()` has been called.
-   *
-   * @deprecated Use `heliaNode` instead. Will be removed in a future version.
-   */
-  public get ipfsNode(): Helia<
-    Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
-  > {
-    return this.heliaNode;
   }
 
   /**
@@ -153,17 +140,6 @@ export class Collabswarm<
    * Gets the current peer ID.
    *
    * Only works after `.initialize()` has been called.
-   *
-   * @deprecated Use `peerId` instead. Will be removed in a future version.
-   */
-  public get ipfsInfo(): PeerId {
-    return this.peerId;
-  }
-
-  /**
-   * Gets the current peer ID.
-   *
-   * Only works after `.initialize()` has been called.
    */
   public get peerId(): PeerId {
     if (this._peerId) {
@@ -174,10 +150,10 @@ export class Collabswarm<
   }
 
   /**
-   * Gets the current list of peers that this collabswarm node is connected to.
+   * Gets the current list of peer IDs that this collabswarm node is connected to.
    */
-  public get peerAddrs(): string[] {
-    return this._peerAddrs;
+  public get peerIds(): string[] {
+    return this._peerIds;
   }
 
   /**
@@ -200,7 +176,7 @@ export class Collabswarm<
     this._config = config;
 
     // Setup Helia node.
-    const heliaInit = config.helia ?? config.ipfs;
+    const heliaInit = config.helia;
     this._heliaNode = await (heliaInit
       ? (createHelia(heliaInit) as Promise<
           Helia<
@@ -224,16 +200,16 @@ export class Collabswarm<
     // updated if libp2p is upgraded past v2.x.
     this.libp2p.addEventListener('peer:connect', (event) => {
       const peerId = event.detail.toString();
-      this._peerAddrs.push(peerId);
+      this._peerIds.push(peerId);
       for (const [, handler] of this._peerConnectHandlers) {
         handler(peerId, event);
       }
     });
     this.libp2p.addEventListener('peer:disconnect', (event) => {
       const peerId = event.detail.toString();
-      const peerIndex = this._peerAddrs.indexOf(peerId);
+      const peerIndex = this._peerIds.indexOf(peerId);
       if (peerIndex >= 0) {
-        this._peerAddrs.splice(peerIndex, 1);
+        this._peerIds.splice(peerIndex, 1);
       }
       for (const [, handler] of this._peerDisconnectHandlers) {
         handler(peerId, event);

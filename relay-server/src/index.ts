@@ -84,12 +84,14 @@ async function main() {
   //     Example: TOPIC_ALLOWLIST="/document/,/documents"
   //   MAX_AUTO_TOPICS — hard cap on auto-subscribed topics (default 1000).
   //     Once reached, new subscriptions are silently ignored.
+  // All topics the relay is subscribed to (seed + extra + auto).
   const trackedTopics = new Set<string>([
     PUBSUB_PEER_DISCOVERY_TOPIC,
     DOCUMENT_PUBLISH_PATH,
   ])
-  // Count of topics added via auto-subscribe (excludes seed + EXTRA_TOPICS).
-  let autoSubscribedCount = 0
+  // Topics that were auto-subscribed (not seed or EXTRA_TOPICS).
+  // Only these are eligible for auto-unsubscribe and counted toward the cap.
+  const autoTopics = new Set<string>()
 
   // System/internal topics that should never be auto-subscribed.
   const IGNORED_TOPIC_PREFIXES = ['_', 'floodsub:']
@@ -109,33 +111,30 @@ async function main() {
         continue
       }
       // Enforce hard cap to prevent unbounded growth.
-      if (autoSubscribedCount >= MAX_AUTO_TOPICS) {
+      if (autoTopics.size >= MAX_AUTO_TOPICS) {
         console.warn(`Auto-subscribe cap reached (${MAX_AUTO_TOPICS}), ignoring topic: ${sub.topic}`)
         continue
       }
       trackedTopics.add(sub.topic)
-      autoSubscribedCount++
+      autoTopics.add(sub.topic)
       libp2p.services.pubsub.subscribe(sub.topic)
-      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId}, ${autoSubscribedCount}/${MAX_AUTO_TOPICS})`)
+      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId}, ${autoTopics.size}/${MAX_AUTO_TOPICS})`)
     }
   })
 
   // Clean up auto-subscribed topics when all peers leave them.
+  // Only auto-subscribed topics are eligible — seed and EXTRA_TOPICS are permanent.
   libp2p.services.pubsub.addEventListener('subscription-change', (event: any) => {
     const { subscriptions } = event.detail
     for (const sub of subscriptions) {
-      if (sub.subscribe || !trackedTopics.has(sub.topic)) {
-        continue
-      }
-      // Don't unsubscribe from seed topics.
-      if (sub.topic === PUBSUB_PEER_DISCOVERY_TOPIC || sub.topic === DOCUMENT_PUBLISH_PATH) {
+      if (sub.subscribe || !autoTopics.has(sub.topic)) {
         continue
       }
       // Check if any peers are still subscribed via GossipSub.
       const subscribers = (libp2p.services.pubsub as any).getSubscribers?.(sub.topic)
       if (subscribers && subscribers.length === 0) {
         trackedTopics.delete(sub.topic)
-        autoSubscribedCount = Math.max(0, autoSubscribedCount - 1)
+        autoTopics.delete(sub.topic)
         libp2p.services.pubsub.unsubscribe(sub.topic)
         console.log(`Auto-unsubscribed from topic: ${sub.topic} (no remaining subscribers)`)
       }

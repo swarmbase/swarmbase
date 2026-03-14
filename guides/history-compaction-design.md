@@ -77,7 +77,7 @@ After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can b
 - **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. `_pruneChanges` only removes nodes from the in-memory sync message tree (`_lastSyncMessage.changes`); it does **not** remove or unpin blocks from the Helia blockstore. Blockstore-level garbage collection of old blocks is not yet implemented (TODO: add optional blockstore GC pass after pruning).
 - **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync
 
-The key insight: **CRDTs are designed to converge from any state**. A Yjs `encodeStateAsUpdate` or Automerge `save` produces a snapshot that any peer can apply via `remoteChange()` to arrive at the same state, without needing individual change history.
+The key insight: **CRDTs are designed to converge from any state**. A Yjs `encodeStateAsUpdateV2` produces a snapshot directly applicable via `remoteChange()`. Automerge `save()` produces a compact binary blob that requires `CRDTProvider.applySnapshot()` (which uses `Automerge.load()` + `merge()`) since the save format differs from incremental changes. Either way, the peer arrives at the same state without needing individual change history.
 
 ### 2.5 Sync Protocol Update
 
@@ -104,8 +104,8 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
 ```
 
 When a peer receives a sync message with a `snapshot` field:
-1. Load the snapshot state via `CRDTProvider.remoteChange(newDocument, snapshot.state)`
-2. Then apply any post-snapshot changes from the `changes` tree
+1. Load the snapshot state via `CRDTProvider.applySnapshot(doc, snapshot.state)` when available, or `CRDTProvider.remoteChange(doc, snapshot.state)` as fallback
+2. Then apply any post-snapshot changes from the `changes` tree (the snapshot boundary CID is added to `_hashes` so `_mergeSyncTree` skips pre-snapshot nodes)
 3. Update the hash set to include the snapshot CID and all post-snapshot CIDs
 
 ### 2.6 Snapshot Verification

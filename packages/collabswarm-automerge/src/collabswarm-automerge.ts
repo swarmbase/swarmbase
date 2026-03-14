@@ -448,7 +448,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     return result;
   }
 
-  serializeSyncMessage(message: CRDTSyncMessage<BinaryChange[]>): Uint8Array {
+  serializeSyncMessage(message: CRDTSyncMessage<BinaryChange[], CryptoKey>): Uint8Array {
     let snapshotForWire: any;
     if (message.snapshot) {
       snapshotForWire = { ...message.snapshot };
@@ -478,7 +478,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     );
   }
 
-  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[]> {
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[], CryptoKey> {
     const raw = this.deserialize(this.decode(message)) as any;
     let snapshot: any;
     if (raw.snapshot) {
@@ -502,6 +502,6 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
           ? deserializeBinaryChanges(raw.keychainChanges)
           : undefined,
       snapshot,
-    } as CRDTSyncMessage<BinaryChange[]>;
+    } as CRDTSyncMessage<BinaryChange[], CryptoKey>;
   }
 }

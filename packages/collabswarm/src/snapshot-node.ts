@@ -6,9 +6,11 @@
  *
  * @typeParam ChangesType The serialized CRDT type used for both incremental changes
  *   and full-state snapshots. The `state` field contains a snapshot produced by
- *   `CRDTProvider.getSnapshot()` that can be applied via `remoteChange()`.
+ *   `CRDTProvider.getSnapshot()`. When the snapshot format differs from incremental
+ *   changes, it is applied via `CRDTProvider.applySnapshot()`; otherwise it falls
+ *   back to `remoteChange()`.
  *   For Yjs this is `Uint8Array` (from `encodeStateAsUpdateV2`); for Automerge
- *   this is `BinaryChange[]` (from `getAllChanges`).
+ *   this is `BinaryChange[]` (wrapping `Automerge.save()` output).
  * @typeParam PublicKey The type of key used to identify a user publicly.
  */
 export interface CRDTSnapshotNode<ChangesType, PublicKey> {

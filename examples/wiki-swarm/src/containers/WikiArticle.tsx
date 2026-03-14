@@ -2,8 +2,8 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { Doc } from 'automerge';
+import type { CollabswarmConfig } from '@collabswarm/collabswarm';
 import {
-  CollabswarmConfig,
   defaultConfig,
   defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
@@ -64,15 +64,9 @@ class WikiArticle extends React.Component<
       // Get relay/bootstrap address from env. The relay multiaddr
       // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
       // for libp2p peer discovery — NOT as a listen address.
-      // REACT_APP_RELAY_MULTIADDR is the preferred env var;
-      // REACT_APP_SIGNALING_SERVER is accepted for backward compatibility.
-      const relayAddr =
-        process.env.REACT_APP_RELAY_MULTIADDR ||
-        process.env.REACT_APP_SIGNALING_SERVER;
+      const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
       const bootstrapPeers = relayAddr ? [relayAddr] : [];
-      const config = process.env.REACT_APP_CLIENT_CONFIG
-        ? JSON.parse(process.env.REACT_APP_CLIENT_CONFIG)
-        : defaultConfig(defaultBootstrapConfig(bootstrapPeers));
+      const config = defaultConfig(defaultBootstrapConfig(bootstrapPeers));
       this.props
         .onInitialize(config)
         .then(() =>
