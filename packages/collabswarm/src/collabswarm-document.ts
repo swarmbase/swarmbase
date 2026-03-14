@@ -1150,18 +1150,22 @@ export class CollabswarmDocument<
           );
           return false;
         }
-        // Capture the pre-load writer set for signature verification.
-        // On first load, _writers is empty (bootstrapping) — we must trust
-        // the encrypted channel (only peers with the document key can respond).
-        // On subsequent loads, verify against the pre-existing trusted writers
-        // to prevent a malicious peer from injecting ACL changes that add its
-        // own key and then passing verification.
+        // Verify the outer message signature before applying changes.
+        // On subsequent loads (writers already known), verify against the
+        // existing trusted writer set BEFORE sync() mutates state. This
+        // prevents a malicious peer from injecting ACL changes that add
+        // its own key.
+        // On first load (_writers is empty / bootstrapping), we cannot
+        // verify — trust relies on the encrypted channel (only peers
+        // with the document key can decrypt the response).
         const preLoadWriters = await this._writers.users();
-
-        await this.sync(message, false);
-
-        // Verify the outer message signature if we had a trusted writer set.
-        if (preLoadWriters.length > 0 && message.signature) {
+        if (preLoadWriters.length > 0) {
+          if (!message.signature) {
+            console.warn(
+              `Load response for ${this.documentPath}: missing signature, skipping peer`,
+            );
+            return false;
+          }
           const { signature, ...messageWithoutSignature } = message;
           const raw = this._syncMessageSerializer.serializeSyncMessage(
             messageWithoutSignature,
@@ -1172,11 +1176,13 @@ export class CollabswarmDocument<
           );
           if (!(await firstTrue(verifyTasks))) {
             console.warn(
-              `Load response for ${this.documentPath} failed writer signature verification against pre-load writer set, skipping peer`,
+              `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
             );
             return false;
           }
         }
+
+        await this.sync(message, false);
         return true;
       },
     );
