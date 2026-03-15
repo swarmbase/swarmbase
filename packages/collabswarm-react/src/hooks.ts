@@ -169,6 +169,11 @@ export function useCollabswarmDocumentState<
   } = useContext(CollabswarmContext);
 
   useEffect(() => {
+    // Track whether this effect's subscription is still active and what doc path was subscribed.
+    // The async IIFE updates subscribedDocPath once subscription succeeds; the synchronous
+    // cleanup function uses it to unsubscribe and remove cache entries on unmount or dep change.
+    let subscribedDocPath: string | null = null;
+
     (async () => {
       let newDocCache: {
         [docPath: string]: CollabswarmDocument<
@@ -304,7 +309,8 @@ export function useCollabswarmDocumentState<
               originFilter,
             );
 
-            // TODO: Return an unsubscribe function for react to call during cleanup.
+            // Mark that we subscribed so the cleanup function can unsubscribe.
+            subscribedDocPath = documentPath;
           }
         }
       }
@@ -329,6 +335,19 @@ export function useCollabswarmDocumentState<
         setDocWritersCache(newDocWritersCache);
       }
     })();
+
+    // Cleanup: unsubscribe from document changes and remove cache entries to prevent memory leaks.
+    return () => {
+      if (subscribedDocPath) {
+        const taskResult = openTaskResults.get(subscribedDocPath);
+        if (taskResult?.docRef) {
+          taskResult.docRef.unsubscribe('useCollabswarmDocumentState');
+        }
+      }
+      // Remove entries from module-level caches to prevent infinite growth.
+      openTasks.delete(documentPath);
+      openTaskResults.delete(documentPath);
+    };
   }, [documentPath]);
 
   return [

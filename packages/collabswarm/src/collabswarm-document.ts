@@ -1771,15 +1771,22 @@ export class CollabswarmDocument<
   /**
    * Returns a list of all public keys with read access.
    *
-   * Note: expects readers and writers are disjoint.
+   * Deduplicates users that appear in both reader and writer ACLs,
+   * which can occur due to concurrent edits or manual addition to both lists.
    *
    * @return List of public keys with read access.
    */
   public async getReaders(): Promise<PublicKey[]> {
-    // TODO: This breaks if there are duplicate entries in reader/writer ACL. This case may occur if
-    //       the user is manually added to both or due to simultaneous editing this results in a merge
-    //       state result with a user in both acls.
-    return [...(await this._readers.users()), ...(await this._writers.users())];
+    const readers = await this._readers.users();
+    const writers = await this._writers.users();
+    // Filter out any writers that also appear in the readers list to avoid duplicates.
+    const filteredWriters: PublicKey[] = [];
+    for (const writer of writers) {
+      if (!(await this._readers.check(writer))) {
+        filteredWriters.push(writer);
+      }
+    }
+    return [...readers, ...filteredWriters];
   }
 
   /**
