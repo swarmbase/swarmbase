@@ -9,7 +9,16 @@ import {
   defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
 
-// TODO: Add an optional trace option that records the async call-site in the action for debugging purposes.
+/**
+ * Captures the current call stack for debugging when in development mode.
+ * Returns undefined in production to avoid performance overhead.
+ */
+function captureTrace(): string | undefined {
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+    return new Error().stack;
+  }
+  return undefined;
+}
 
 export function initializeAsync<
   DocType,
@@ -76,13 +85,13 @@ export function initializeAsync<
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
     node.subscribeToPeerConnect('peer-connect', (address: string) => {
-      dispatch(peerConnect(address));
+      dispatch(peerConnect(address, captureTrace()));
     });
     node.subscribeToPeerDisconnect('peer-disconnect', (address: string) => {
-      dispatch(peerDisconnect(address));
+      dispatch(peerDisconnect(address, captureTrace()));
     });
     await node.initialize(config);
-    dispatch(initialize(node));
+    dispatch(initialize(node, captureTrace()));
     console.log('Node information:', node);
     return node;
   };
@@ -105,6 +114,7 @@ export interface InitializeAction<
     PublicKey,
     DocumentKey
   >;
+  _trace?: string;
 }
 export function initialize<
   DocType,
@@ -122,6 +132,7 @@ export function initialize<
     PublicKey,
     DocumentKey
   >,
+  _trace?: string,
 ): InitializeAction<
   DocType,
   ChangesType,
@@ -130,7 +141,7 @@ export function initialize<
   PublicKey,
   DocumentKey
 > {
-  return { type: INITIALIZE, node };
+  return { type: INITIALIZE, node, _trace };
 }
 
 export function connectAsync<
@@ -179,7 +190,7 @@ export function connectAsync<
       return;
     }
     await node.connect(addresses);
-    dispatch(connect(addresses));
+    dispatch(connect(addresses, captureTrace()));
     console.log('Node information:', node);
     console.log('Connected to:', addresses);
   };
@@ -188,9 +199,10 @@ export function connectAsync<
 export const CONNECT = 'COLLABSWARM_CONNECT';
 export interface ConnectAction extends Action<typeof CONNECT> {
   addresses: string[];
+  _trace?: string;
 }
-export function connect(addresses: string[]): ConnectAction {
-  return { type: CONNECT, addresses };
+export function connect(addresses: string[], _trace?: string): ConnectAction {
+  return { type: CONNECT, addresses, _trace };
 }
 
 export function openDocumentAsync<
@@ -247,6 +259,7 @@ export function openDocumentAsync<
       PublicKey,
       DocumentKey
     >
+  | CloseDocumentAction
   | SyncDocumentAction<DocType>
 > {
   return async (dispatch, getState) => {
@@ -258,13 +271,21 @@ export function openDocumentAsync<
       );
       return null;
     }
+    // Close previous document if one is already open with this ID.
+    const { documents } = selectCollabswarmState(getState());
+    if (documents[documentId] && documents[documentId].documentRef) {
+      const prevRef = documents[documentId].documentRef;
+      prevRef.unsubscribe(documentId);
+      await prevRef.close();
+      dispatch(closeDocument(documentId));
+    }
+
     const documentRef = node.doc(documentId);
-    // TODO: Close previous document (if any).
     if (documentRef) {
       documentRef.subscribe(
         documentId,
         (document) => {
-          dispatch(syncDocument(documentId, document));
+          dispatch(syncDocument(documentId, document, captureTrace()));
         },
         'remote',
       );
@@ -277,7 +298,7 @@ export function openDocumentAsync<
         );
         // await documentRef.pin();
       }
-      dispatch(openDocument(documentId, documentRef));
+      dispatch(openDocument(documentId, documentRef, captureTrace()));
       return documentRef;
     } else {
       console.warn('Unable to find document:', documentId);
@@ -304,6 +325,7 @@ export interface OpenDocumentAction<
     PublicKey,
     DocumentKey
   >;
+  _trace?: string;
 }
 export function openDocument<
   DocType,
@@ -322,6 +344,7 @@ export function openDocument<
     PublicKey,
     DocumentKey
   >,
+  _trace?: string,
 ): OpenDocumentAction<
   DocType,
   ChangesType,
@@ -330,7 +353,7 @@ export function openDocument<
   PublicKey,
   DocumentKey
 > {
-  return { type: OPEN_DOCUMENT, documentId, documentRef };
+  return { type: OPEN_DOCUMENT, documentId, documentRef, _trace };
 }
 
 export function closeDocumentAsync<
@@ -380,7 +403,7 @@ export function closeDocumentAsync<
       const documentRef = documents[documentId].documentRef;
       documentRef.unsubscribe(documentId);
       await documentRef.close();
-      dispatch(closeDocument(documentId));
+      dispatch(closeDocument(documentId, captureTrace()));
     } else {
       console.warn('Closing a document that was not opened:', documentId);
     }
@@ -390,9 +413,10 @@ export function closeDocumentAsync<
 export const CLOSE_DOCUMENT = 'COLLABSWARM_CLOSE_DOCUMENT';
 export interface CloseDocumentAction extends Action<typeof CLOSE_DOCUMENT> {
   documentId: string;
+  _trace?: string;
 }
-export function closeDocument(documentId: string): CloseDocumentAction {
-  return { type: CLOSE_DOCUMENT, documentId };
+export function closeDocument(documentId: string, _trace?: string): CloseDocumentAction {
+  return { type: CLOSE_DOCUMENT, documentId, _trace };
 }
 
 export const SYNC_DOCUMENT = 'COLLABSWARM_SYNC_DOCUMENT';
@@ -400,12 +424,14 @@ export interface SyncDocumentAction<DocType>
   extends Action<typeof SYNC_DOCUMENT> {
   documentId: string;
   document: DocType;
+  _trace?: string;
 }
 export function syncDocument<DocType>(
   documentId: string,
   document: DocType,
+  _trace?: string,
 ): SyncDocumentAction<DocType> {
-  return { type: SYNC_DOCUMENT, documentId, document };
+  return { type: SYNC_DOCUMENT, documentId, document, _trace };
 }
 
 export function changeDocumentAsync<
@@ -456,7 +482,7 @@ export function changeDocumentAsync<
     if (documents[documentId] && documents[documentId].documentRef) {
       const documentRef = documents[documentId].documentRef;
       const changePromise = documentRef.change(changeFn, message);
-      dispatch(changeDocument(documentId, documentRef.document));
+      dispatch(changeDocument(documentId, documentRef.document, captureTrace()));
       await changePromise;
       return documentRef.document;
     } else {
@@ -472,28 +498,32 @@ export interface ChangeDocumentAction<DocType>
   extends Action<typeof CHANGE_DOCUMENT> {
   documentId: string;
   document: DocType;
+  _trace?: string;
 }
 export function changeDocument<DocType>(
   documentId: string,
   document: DocType,
+  _trace?: string,
 ): ChangeDocumentAction<DocType> {
-  return { type: CHANGE_DOCUMENT, documentId, document };
+  return { type: CHANGE_DOCUMENT, documentId, document, _trace };
 }
 
 export const PEER_CONNECT = 'COLLABSWARM_PEER_CONNECT';
 export interface PeerConnectAction extends Action<typeof PEER_CONNECT> {
   peerAddress: string;
+  _trace?: string;
 }
-export function peerConnect(peerAddress: string): PeerConnectAction {
-  return { type: PEER_CONNECT, peerAddress };
+export function peerConnect(peerAddress: string, _trace?: string): PeerConnectAction {
+  return { type: PEER_CONNECT, peerAddress, _trace };
 }
 
 export const PEER_DISCONNECT = 'COLLABSWARM_PEER_DISCONNECT';
 export interface PeerDisconnectAction extends Action<typeof PEER_DISCONNECT> {
   peerAddress: string;
+  _trace?: string;
 }
-export function peerDisconnect(peerAddress: string): PeerDisconnectAction {
-  return { type: PEER_DISCONNECT, peerAddress };
+export function peerDisconnect(peerAddress: string, _trace?: string): PeerDisconnectAction {
+  return { type: PEER_DISCONNECT, peerAddress, _trace };
 }
 
 export type CollabswarmActions<

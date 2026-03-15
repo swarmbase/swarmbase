@@ -223,6 +223,44 @@ export function deserializeKey(
   };
 }
 
+/**
+ * Simple LRU cache with bounded size using Map insertion order.
+ * Evicts the least-recently-used entry when the cache is full.
+ */
+class LRUCache<K, V> {
+  private readonly _map = new Map<K, V>();
+  private readonly _maxSize: number;
+
+  constructor(maxSize: number = 1000) {
+    this._maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const value = this._map.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this._map.delete(key);
+      this._map.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    if (this._map.has(key)) {
+      this._map.delete(key);
+    } else if (this._map.size >= this._maxSize) {
+      // Evict oldest (first) entry
+      const firstKey = this._map.keys().next().value!;
+      this._map.delete(firstKey);
+    }
+    this._map.set(key, value);
+  }
+
+  has(key: K): boolean {
+    return this._map.has(key);
+  }
+}
+
 export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
   initialize(): ACL<Uint8Array, CryptoKey> {
     return new YjsACL();
@@ -231,6 +269,7 @@ export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
 
 export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   private readonly _acl = new Doc();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
 
   async add(publicKey: CryptoKey): Promise<Uint8Array> {
     const hash = await serializeKey(publicKey);
@@ -258,19 +297,20 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
     const hash = await serializeKey(publicKey);
     return this._acl.getMap('users').has(hash);
   }
-  users(): Promise<CryptoKey[]> {
-    // TODO: Cache deserialized keys to make this faster.
-    return Promise.all(
-      [...this._acl.getMap('users').keys()].map(
-        deserializeKey(
-          {
-            name: 'ECDSA',
-            namedCurve: 'P-384',
-          },
+  async users(): Promise<CryptoKey[]> {
+    const keys: CryptoKey[] = [];
+    for (const serializedKey of this._acl.getMap('users').keys()) {
+      let key = this._keyCache.get(serializedKey);
+      if (!key) {
+        key = await deserializeKey(
+          { name: 'ECDSA', namedCurve: 'P-384' },
           ['verify'],
-        ),
-      ),
-    );
+        )(serializedKey);
+        this._keyCache.set(serializedKey, key);
+      }
+      keys.push(key);
+    }
+    return keys;
   }
 }
 
@@ -321,8 +361,7 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
 }
 
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
-  // TODO: Replace this with a LRU cache of bounded size.
-  private readonly _keyCache = new Map<string, CryptoKey>();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private readonly _keychain = new Doc();
 
   async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {
