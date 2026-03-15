@@ -1,11 +1,12 @@
 /**
- * Benchmark: CRDT Sync Latency
+ * Benchmark: Sync Pipeline Latency
  *
- * Measures the time to perform core operations in the SwarmDB change pipeline:
- * - Apply local changes at varying document sizes (1KB, 10KB, 100KB, 1MB)
+ * Measures per-operation latency of the SwarmDB change pipeline at varying
+ * payload sizes (1KB, 10KB, 100KB, 1MB):
+ * - Sign and verify (ECDSA P-384)
+ * - Encrypt and decrypt (AES-GCM)
+ * - Combined sign+encrypt and decrypt+verify pipelines
  * - Serialize and deserialize change blocks (JSON wire format)
- * - Sign and verify changes (ECDSA P-384)
- * - Encrypt and decrypt changes (AES-GCM)
  */
 import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner';
 import { SubtleCrypto } from '../auth-subtlecrypto';

@@ -4,6 +4,7 @@
  * extended with min, max, stddev, and the JSON output format required for publication.
  */
 
+/** Statistical summary for a single benchmark run. */
 export interface BenchmarkStats {
   min: number;
   max: number;
@@ -13,6 +14,7 @@ export interface BenchmarkStats {
   stddev: number;
 }
 
+/** One benchmark entry with computed statistics and optional memory delta. */
 export interface BenchmarkResultEntry {
   name: string;
   iterations: number;
@@ -21,6 +23,7 @@ export interface BenchmarkResultEntry {
   memoryDeltaBytes?: number;
 }
 
+/** Aggregated results for a benchmark suite including runtime metadata. */
 export interface BenchmarkSuiteResult {
   benchmark: string;
   timestamp: string;
@@ -32,6 +35,7 @@ export interface BenchmarkSuiteResult {
   results: BenchmarkResultEntry[];
 }
 
+/** Benchmark runner that executes named cases and aggregates paper-ready statistics. */
 export class PaperBenchmarkRunner {
   private _results: BenchmarkResultEntry[] = [];
   private _suiteName: string;

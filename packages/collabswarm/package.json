@@ -8,7 +8,7 @@
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
     "doc": "typedoc --excludePrivate --excludeProtected --excludeInternal",
-    "benchmark": "tsc -p tsconfig.benchmark.json && echo '{\"type\":\"commonjs\"}' > dist-bench/package.json && node dist-bench/__benchmarks__/run.js"
+    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
