@@ -239,12 +239,11 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   }
   async remove(publicKey: CryptoKey): Promise<Uint8Array> {
     const hash = await serializeKey(publicKey);
+    const beforeSV = encodeStateVector(this._acl);
     if (this._acl.getMap('users').has(hash)) {
-      const beforeSV = encodeStateVector(this._acl);
       this._acl.getMap('users').delete(hash);
-      return encodeStateAsUpdateV2(this._acl, beforeSV);
     }
-    return encodeStateAsUpdateV2(this._acl);
+    return encodeStateAsUpdateV2(this._acl, beforeSV);
   }
   current(): Uint8Array {
     return encodeStateAsUpdateV2(this._acl);
