@@ -1780,12 +1780,11 @@ export class CollabswarmDocument<
     const readers = await this._readers.users();
     const writers = await this._writers.users();
     // Filter out any writers that also appear in the readers list to avoid duplicates.
-    const filteredWriters: PublicKey[] = [];
-    for (const writer of writers) {
-      if (!(await this._readers.check(writer))) {
-        filteredWriters.push(writer);
-      }
-    }
+    // Run checks in parallel to avoid sequential async overhead with many writers.
+    const checkResults = await Promise.all(
+      writers.map(writer => this._readers.check(writer))
+    );
+    const filteredWriters = writers.filter((_, i) => !checkResults[i]);
     return [...readers, ...filteredWriters];
   }
 

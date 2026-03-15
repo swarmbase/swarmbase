@@ -277,7 +277,7 @@ export function openDocumentAsync<
       const prevRef = documents[documentId].documentRef;
       prevRef.unsubscribe(documentId);
       await prevRef.close();
-      dispatch(closeDocument(documentId));
+      dispatch(closeDocument(documentId, captureTrace()));
     }
 
     const documentRef = node.doc(documentId);

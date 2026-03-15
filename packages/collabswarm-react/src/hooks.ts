@@ -169,9 +169,9 @@ export function useCollabswarmDocumentState<
   } = useContext(CollabswarmContext);
 
   useEffect(() => {
-    // Track whether this effect's subscription is still active and what doc path was subscribed.
-    // The async IIFE updates subscribedDocPath once subscription succeeds; the synchronous
-    // cleanup function uses it to unsubscribe and remove cache entries on unmount or dep change.
+    // Track whether this effect is still active (not unmounted/dep-changed).
+    // The async IIFE checks this after each await to avoid operating on stale state.
+    let active = true;
     let subscribedDocPath: string | null = null;
 
     (async () => {
@@ -224,6 +224,7 @@ export function useCollabswarmDocumentState<
             PublicKey,
             DocumentKey
           > = await openPromise;
+          if (!active) return;
           openTaskResults.set(documentPath, openTaskResult);
           const { docRef: currentDocRef, readers, writers } = openTaskResult;
           if (currentDocRef) {
@@ -258,7 +259,8 @@ export function useCollabswarmDocumentState<
               },
             );
 
-            // Subscribe to document changes.
+            // Subscribe to document changes (skip if effect was cancelled during open).
+            if (!active) return;
             currentDocRef.subscribe(
               'useCollabswarmDocumentState',
               (current, readers, writers) => {
@@ -336,8 +338,9 @@ export function useCollabswarmDocumentState<
       }
     })();
 
-    // Cleanup: unsubscribe from document changes and remove cache entries to prevent memory leaks.
+    // Cleanup: cancel async work, unsubscribe, and remove cache entries to prevent memory leaks.
     return () => {
+      active = false;
       if (subscribedDocPath) {
         const taskResult = openTaskResults.get(subscribedDocPath);
         if (taskResult?.docRef) {
