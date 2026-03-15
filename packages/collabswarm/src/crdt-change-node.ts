@@ -21,8 +21,9 @@ export type CRDTChangeNode<ChangesType> = {
   /**
    * Identifier for the document encryption key used to encrypt this node's change.
    * Allows recipients to select the correct decryption key from their keychain.
+   * Encoded as a base64 string for JSON serialization safety.
    */
-  keyId?: Uint8Array;
+  keyId?: string;
 
   kind: CRDTChangeNodeKind;
 

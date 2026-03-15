@@ -6,9 +6,10 @@ export interface CRDTChangeBlock<ChangesType> {
   /**
    * Identifier for the document encryption key used to encrypt this block.
    * Allows recipients to select the correct decryption key from their keychain.
+   * Encoded as a base64 string for JSON serialization safety.
    * When absent, recipients must try all available keys.
    */
-  keyId?: Uint8Array;
+  keyId?: string;
 
   /**
    * Stored nonce for decryption purposes.
