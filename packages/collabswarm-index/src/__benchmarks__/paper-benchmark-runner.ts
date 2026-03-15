@@ -1,7 +1,7 @@
 /**
  * Enhanced benchmark runner producing paper-quality statistical results.
  * Mirrors the version in @collabswarm/collabswarm but avoids cross-package import
- * since the index package benchmarks run via ts-node without building core first.
+ * to keep the index benchmark suite self-contained.
  */
 
 export interface BenchmarkStats {

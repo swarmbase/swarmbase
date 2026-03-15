@@ -13,7 +13,6 @@
 import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner';
 import { SubtleCrypto } from '../auth-subtlecrypto';
 import { JSONSerializer } from '../json-serializer';
-import { CRDTChangeBlock } from '../crdt-change-block';
 import {
   generateSigningKeyPair,
   generateEncryptionKey,
@@ -74,7 +73,6 @@ export async function runConvergenceSimulationBenchmarks(
       // Phase 1: Each peer generates local changes
       const allMessages: Array<{
         fromPeer: number;
-        serialized: string;
         encryptedPayload: Uint8Array;
         nonce: Uint8Array;
         signature: Uint8Array;
@@ -86,19 +84,13 @@ export async function runConvergenceSimulationBenchmarks(
           const changeData = `peer-${peer.id}-edit-${e}`;
           const changeBytes = serializer.serializeChanges(changeData);
 
-          // Sign
+          // Sign the serialized changes
           const signature = await auth.sign(changeBytes, peer.keyPair.privateKey);
 
-          // Encrypt
+          // Encrypt the serialized changes
           const encrypted = await auth.encrypt(changeBytes, documentKey);
 
-          // Serialize change block
-          const block: CRDTChangeBlock<string> = {
-            changes: changeData,
-            nonce: encrypted.nonce,
-          };
-          const serialized = serializer.serializeChangeBlock(block);
-          const byteSize = new TextEncoder().encode(serialized).length + signature.length + encrypted.data.length;
+          const byteSize = signature.length + encrypted.data.length + encrypted.nonce.length;
 
           // Apply locally before broadcast — each peer must have its own edits
           peer.document[`peer-${peer.id}-${changeData}`] = 'applied';
@@ -107,7 +99,6 @@ export async function runConvergenceSimulationBenchmarks(
           peer.bytesSent += byteSize;
           allMessages.push({
             fromPeer: peer.id,
-            serialized,
             encryptedPayload: encrypted.data,
             nonce: encrypted.nonce,
             signature,
@@ -124,16 +115,16 @@ export async function runConvergenceSimulationBenchmarks(
           // Decrypt
           const decrypted = await auth.decrypt(msg.encryptedPayload, documentKey, msg.nonce);
 
-          // Verify
+          // Verify the decrypted payload
           const senderKey = peerKeys[msg.fromPeer].publicKey;
           const valid = await auth.verify(decrypted, senderKey, msg.signature);
           if (!valid) {
             throw new Error(`Signature verification failed for message from peer ${msg.fromPeer}`);
           }
 
-          // Deserialize and apply
-          const block = serializer.deserializeChangeBlock(msg.serialized);
-          peer.document[`peer-${msg.fromPeer}-${block.changes}`] = 'applied';
+          // Deserialize from verified/decrypted bytes and apply
+          const decryptedChanges = serializer.deserializeChanges(decrypted);
+          peer.document[`peer-${msg.fromPeer}-${decryptedChanges}`] = 'applied';
 
           peer.messagesReceived++;
           peer.bytesReceived += msg.byteSize;
@@ -175,17 +166,13 @@ export async function runConvergenceSimulationBenchmarks(
     const sampleBytes = serializer.serializeChanges(sampleChange);
     const sampleSig = await auth.sign(sampleBytes, peerKeys[0].privateKey);
     const sampleEnc = await auth.encrypt(sampleBytes, documentKey);
-    const sampleBlock: CRDTChangeBlock<string> = {
-      changes: sampleChange,
-      nonce: sampleEnc.nonce,
-    };
-    const sampleSerialized = serializer.serializeChangeBlock(sampleBlock);
-    const singleMsgBytes = new TextEncoder().encode(sampleSerialized).length
-      + sampleSig.length + sampleEnc.data.length;
+    const singleMsgBytes = sampleSig.length + sampleEnc.data.length + sampleEnc.nonce.length;
 
+    const sentBytesPerPeer = expectedMsgsSent * singleMsgBytes;
+    const recvBytesPerPeer = expectedMsgsReceived * singleMsgBytes;
     // Log bandwidth stats (not timed, but recorded as metadata)
     console.log(`  [${peerCount} peers] msgs/peer: sent=${expectedMsgsSent}, recv=${expectedMsgsReceived}`);
-    console.log(`  [${peerCount} peers] bytes/msg: ~${singleMsgBytes}, total bytes/peer: ~${expectedMsgsReceived * singleMsgBytes}`);
+    console.log(`  [${peerCount} peers] bytes/msg: ~${singleMsgBytes}, sent/peer: ~${sentBytesPerPeer}, recv/peer: ~${recvBytesPerPeer}, total/peer: ~${sentBytesPerPeer + recvBytesPerPeer}`);
   }
 
   return runner.toSuiteResult();

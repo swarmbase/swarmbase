@@ -90,16 +90,16 @@ export async function runCryptoOverheadBenchmarks(
     // Encrypted pipeline: serialize + sign + encrypt + decrypt + verify + deserialize
     await runner.run(`encrypted-pipeline-${label}`, async () => {
       // Sender side
-      const serialized = serializer.serializeChanges(changeData);
-      const sig = await auth.sign(payload, signingKeyPair.privateKey);
-      const enc = await auth.encrypt(payload, encryptionKey);
+      const changeBytes = serializer.serializeChanges(changeData);
+      const sig = await auth.sign(changeBytes, signingKeyPair.privateKey);
+      const enc = await auth.encrypt(changeBytes, encryptionKey);
       // Receiver side
       const dec = await auth.decrypt(enc.data, encryptionKey, enc.nonce);
       const valid = await auth.verify(dec, signingKeyPair.publicKey, sig);
       if (!valid) {
         throw new Error(`Signature verification failed for encrypted-pipeline-${label}`);
       }
-      serializer.deserializeChanges(serialized);
+      serializer.deserializeChanges(dec);
     }, iterations);
 
     // Isolated: signing overhead only
@@ -122,9 +122,9 @@ export async function runCryptoOverheadBenchmarks(
     }, iterations);
 
     // Isolated: decryption overhead only
-    const enc = await auth.encrypt(payload, encryptionKey);
+    const encrypted = await auth.encrypt(payload, encryptionKey);
     await runner.run(`isolated-decrypt-${label}`, async () => {
-      await auth.decrypt(enc.data, encryptionKey, enc.nonce);
+      await auth.decrypt(encrypted.data, encryptionKey, encrypted.nonce);
     }, iterations);
   }
 
