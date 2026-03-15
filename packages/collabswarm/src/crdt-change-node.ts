@@ -18,7 +18,11 @@ export type CRDTChangeNodeKind =
  * @typeParam ChangesType A block of CRDT change(s).
  */
 export type CRDTChangeNode<ChangesType> = {
-  // TODO: Add identifier for document key that should be used to decrypt (or just prepend it to the Uint8Array).
+  /**
+   * Identifier for the document encryption key used to encrypt this node's change.
+   * Allows recipients to select the correct decryption key from their keychain.
+   */
+  keyId?: Uint8Array;
 
   kind: CRDTChangeNodeKind;
 
