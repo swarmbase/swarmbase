@@ -89,14 +89,12 @@ export class SubtleCrypto
         const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits));
         return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
       }
-      case 'AES-CTR': {
-        const counter = nonce ?? crypto.getRandomValues(new Uint8Array(16));
-        return { name: 'AES-CTR', counter: counter as Uint8Array<ArrayBuffer>, length: 64 };
-      }
-      case 'AES-CBC': {
-        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(16));
-        return { name: 'AES-CBC', iv: iv as Uint8Array<ArrayBuffer> };
-      }
+      case 'AES-CTR':
+      case 'AES-CBC':
+        // AES-CTR and AES-CBC require different nonce sizes (16 bytes) and
+        // key import parameters than AES-GCM. Support is deferred until the
+        // key derivation paths and wire format header parsing are updated.
+        throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
     }
   }
 
