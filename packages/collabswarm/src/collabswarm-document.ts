@@ -193,6 +193,10 @@ export class CollabswarmDocument<
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
+  // Transaction state for batching multiple changes atomically.
+  private _pendingChangeFns: ChangeFnType[] = [];
+  private _inTransaction = false;
+
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
     [id: string]: CollabswarmDocumentChangeHandler<DocType, PublicKey>;
@@ -1303,12 +1307,24 @@ export class CollabswarmDocument<
   // Key exchange happens during:
   // - Load messages.
   // - ACL updates via /collabswarm/key-update/1.0.0 protocol
-  public async load(): Promise<boolean> {
-    // Pick a peer.
-    // TODO: In the future, try to re-use connections that already are open.
+  public async load(preferredPeer?: any): Promise<boolean> {
+    // Pick a peer. All peers come from getConnections() so they already have
+    // open connections. libp2p v2's dialProtocol reuses existing connections
+    // internally, so no additional connection management is needed here.
     const shuffledPeers = await this._shuffledPeers();
     if (shuffledPeers.length === 0) {
       return false;
+    }
+
+    const orderedPeers = [...shuffledPeers];
+
+    // If a preferred peer is specified, move it to the front.
+    if (preferredPeer) {
+      const preferredIdx = orderedPeers.findIndex(p => p.toString() === preferredPeer.toString());
+      if (preferredIdx > 0) {
+        const [preferred] = orderedPeers.splice(preferredIdx, 1);
+        orderedPeers.unshift(preferred);
+      }
     }
 
     let signature = '';
@@ -1328,7 +1344,7 @@ export class CollabswarmDocument<
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
-    for (const peer of shuffledPeers) {
+    for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
@@ -1445,8 +1461,10 @@ export class CollabswarmDocument<
             console.warn(
               'Trying to re-load document... Unable to decrypt incoming message',
             );
-            // TODO: Specifically try to load from the sending peer. This peer is the one who created this change, so they should have the document key(s) needed to read it.
-            return this.load();
+            // Prefer loading from the sending peer — they created this change
+            // and should have the document key(s) needed to read it.
+            const senderPeer = rawMessage.detail.type === 'signed' ? rawMessage.detail.from : undefined;
+            return this.load(senderPeer);
           }
 
           const message =
@@ -1782,7 +1800,59 @@ export class CollabswarmDocument<
     }
   }
 
-  // TODO: Add a startChange() method that starts a change "transaction" block.
+  /**
+   * Start a change transaction. Changes made via `addChange()` will be batched
+   * and applied atomically when `endChange()` is called.
+   */
+  public startChange() {
+    if (this._inTransaction) {
+      throw new Error('Transaction already in progress');
+    }
+    this._inTransaction = true;
+    this._pendingChangeFns = [];
+  }
+
+  /**
+   * Queue a change function within an active transaction.
+   * Must be called between `startChange()` and `endChange()`.
+   */
+  public addChange(changeFn: ChangeFnType) {
+    if (!this._inTransaction) {
+      throw new Error('No transaction in progress. Call startChange() first.');
+    }
+    this._pendingChangeFns.push(changeFn);
+  }
+
+  /**
+   * End the transaction and apply all queued changes atomically.
+   * This sends a single sync message for all batched changes.
+   */
+  public async endChange(message?: string) {
+    if (!this._inTransaction) {
+      throw new Error('No transaction in progress. Call startChange() first.');
+    }
+    this._inTransaction = false;
+    const pendingFns = this._pendingChangeFns;
+    this._pendingChangeFns = [];
+
+    if (pendingFns.length === 0) return;
+
+    await this._ensureCurrentUserCanWrite();
+
+    // Apply all change functions as one local change batch.
+    let currentDoc = this.document;
+    let allChanges: ChangesType | undefined;
+    for (const fn of pendingFns) {
+      const [newDoc, changes] = this._crdtProvider.localChange(currentDoc, message || '', fn);
+      currentDoc = newDoc;
+      allChanges = changes; // The last localChange captures all accumulated state
+    }
+    this._document = currentDoc;
+
+    if (allChanges) {
+      await this._makeChange(allChanges);
+    }
+  }
 
   /**
    * Applies a new local change (defined by `changeFn`) to the collabswarm document and updates
@@ -1984,7 +2054,15 @@ export class CollabswarmDocument<
     const changes = await this._readers.add(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // TODO: Consider sending document key to the new reader as a speedup.
+    // Send the current document key to the new reader for faster onboarding.
+    try {
+      const currentKeyChange = await this._keychain.currentKeyChange();
+      const [currentKeyID, currentKey] = await this._keychain.current();
+      await this._distributeKeyUpdate(currentKeyChange, [currentKeyID, currentKey]);
+    } catch (err) {
+      // Non-fatal: the reader will get the key via normal sync.
+      console.warn('Failed to send document key to new reader:', err);
+    }
   }
 
   /**
