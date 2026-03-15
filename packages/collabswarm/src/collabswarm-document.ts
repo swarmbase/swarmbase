@@ -1250,8 +1250,14 @@ export class CollabswarmDocument<
     const orderedPeers = [...shuffledPeers];
 
     // If a preferred peer is specified, move it to the front.
+    // The peer list contains Multiaddrs while preferredPeer is typically a PeerId,
+    // so we compare by extracting the PeerId component from each Multiaddr.
     if (preferredPeer) {
-      const preferredIdx = orderedPeers.findIndex(p => p.toString() === preferredPeer.toString());
+      const preferredId = preferredPeer.toString();
+      const preferredIdx = orderedPeers.findIndex(p => {
+        const peerId = p.getPeerId?.() ?? p.toString();
+        return peerId === preferredId;
+      });
       if (preferredIdx > 0) {
         const [preferred] = orderedPeers.splice(preferredIdx, 1);
         orderedPeers.unshift(preferred);
@@ -1679,19 +1685,22 @@ export class CollabswarmDocument<
 
     await this._ensureCurrentUserCanWrite();
 
-    // Apply all change functions as one local change batch.
-    let currentDoc = this.document;
-    let allChanges: ChangesType | undefined;
-    for (const fn of pendingFns) {
-      const [newDoc, changes] = this._crdtProvider.localChange(currentDoc, message || '', fn);
-      currentDoc = newDoc;
-      allChanges = changes; // The last localChange captures all accumulated state
-    }
-    this._document = currentDoc;
+    // Compose all queued change functions into a single localChange call
+    // to produce one atomic delta. This ensures providers like Automerge
+    // (which return incremental deltas) don't drop earlier changes.
+    const composedFn = ((doc: any) => {
+      for (const fn of pendingFns) {
+        (fn as any)(doc);
+      }
+    }) as ChangeFnType;
 
-    if (allChanges) {
-      await this._makeChange(allChanges);
-    }
+    const [newDocument, changes] = this._crdtProvider.localChange(
+      this.document,
+      message || '',
+      composedFn,
+    );
+    this._document = newDocument;
+    await this._makeChange(changes);
   }
 
   /**
@@ -1889,15 +1898,10 @@ export class CollabswarmDocument<
     const changes = await this._readers.add(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // Send the current document key to the new reader for faster onboarding.
-    try {
-      const currentKeyChange = await this._keychain.currentKeyChange();
-      const [currentKeyID, currentKey] = await this._keychain.current();
-      await this._distributeKeyUpdate(currentKeyChange, [currentKeyID, currentKey]);
-    } catch (err) {
-      // Non-fatal: the reader will get the key via normal sync.
-      console.warn('Failed to send document key to new reader:', err);
-    }
+    // TODO: Send document key to new reader via BeeKEM Welcome flow
+    // or asymmetric encryption to reader's public key. Cannot use
+    // _distributeKeyUpdate() because it encrypts with the existing
+    // document key that the new reader doesn't yet possess.
   }
 
   /**
