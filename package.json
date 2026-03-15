@@ -21,6 +21,7 @@
     "build": "yarn workspaces foreach -Atpvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run tsc",
     "test": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run test",
     "test:e2e": "playwright test",
-    "test:integration": "playwright test --config=playwright.integration.config.ts"
+    "test:integration": "playwright test --config=playwright.integration.config.ts",
+    "benchmark:all": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-index' run benchmark"
   }
 }

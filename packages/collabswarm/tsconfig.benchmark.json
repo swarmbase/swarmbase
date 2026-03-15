@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-bench",
+    "composite": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src"],
+  "references": []
+}

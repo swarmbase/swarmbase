@@ -7,7 +7,8 @@
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
-    "doc": "typedoc --excludePrivate --excludeProtected --excludeInternal"
+    "doc": "typedoc --excludePrivate --excludeProtected --excludeInternal",
+    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -81,7 +82,8 @@
       "ts-jest"
     ],
     "testPathIgnorePatterns": [
-      "/node_modules/"
+      "/node_modules/",
+      "__benchmarks__"
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
