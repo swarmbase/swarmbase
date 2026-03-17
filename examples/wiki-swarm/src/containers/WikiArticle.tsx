@@ -166,7 +166,7 @@ class WikiArticle extends React.Component<
             </button>
             {this.state.aclReaders.length > 0 && (
               <div className="mt-1">
-                <em>Readers ({this.state.aclReaders.length}):</em>{' '}
+                <em>Read access incl. writers ({this.state.aclReaders.length}):</em>{' '}
                 {this.state.aclReaders.map((id, i) => (
                   <code key={id} className="me-1">{id}…</code>
                 ))}
