@@ -107,6 +107,16 @@ export interface CollabswarmConfig {
   enableTopicValidators?: boolean;
 
   /**
+   * Enable cryptographic signing and verification of sync messages.
+   * When false, signing is skipped (empty signature) and verification
+   * always succeeds. Useful for development, testing, or performance-
+   * sensitive scenarios where authentication is handled elsewhere.
+   *
+   * Default: true (signatures are computed and verified).
+   */
+  enableSigning?: boolean;
+
+  /**
    * Configuration for history compaction.
    * When provided with `enabled: true`, the document will periodically
    * create snapshot nodes to compact the Merkle-DAG change history.
