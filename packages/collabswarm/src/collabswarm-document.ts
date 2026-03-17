@@ -1417,10 +1417,11 @@ export class CollabswarmDocument<
       // Validate document path before creating a new document.
       // Wrap in try/catch to ensure close() runs even if the callback throws,
       // cleaning up pubsub subscriptions and protocol handlers registered by open().
-      if (this.swarm.config?.validateDocumentPath) {
+      const validateFn = this.swarm.config?.validateDocumentPath;
+      if (validateFn) {
         let allowed: boolean;
         try {
-          allowed = this.swarm.config.validateDocumentPath(this.documentPath, this._userPublicKey);
+          allowed = await validateFn(this.documentPath, this._userPublicKey);
         } catch (err) {
           await this.close();
           throw err;
