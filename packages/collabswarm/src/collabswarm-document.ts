@@ -1262,11 +1262,14 @@ export class CollabswarmDocument<
       return false;
     }
 
-    const signatureBytes = await this._authProvider.sign(
-      this._encoder.encode(this.documentPath),
-      this._userKey,
-    );
-    const signature = this._serializeSignature(signatureBytes);
+    let signature = '';
+    if (this.swarm.config?.enableSigning !== false) {
+      const signatureBytes = await this._authProvider.sign(
+        this._encoder.encode(this.documentPath),
+        this._userKey,
+      );
+      signature = this._serializeSignature(signatureBytes);
+    }
     const loadRequest: CRDTLoadRequest = {
       documentId: this.documentPath,
       signature,
@@ -1423,7 +1426,8 @@ export class CollabswarmDocument<
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
     // transport layer with a P4 penalty in peer scoring.
-    if (this.swarm.config?.enableTopicValidators) {
+    // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
+    if (this.swarm.config?.enableTopicValidators && this.swarm.config?.enableSigning !== false) {
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.set === 'function') {
         gossipsubService.topicValidators.set(
