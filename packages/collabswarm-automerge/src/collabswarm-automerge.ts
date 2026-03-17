@@ -187,19 +187,21 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   // The capability parameter is accepted for interface compatibility but ignored here;
   // capability-based filtering is handled at the UCANACL wrapper level.
   async users(capability?: string): Promise<CryptoKey[]> {
-    const keys: CryptoKey[] = [];
-    for (const serializedKey of Object.keys(this._acl.users)) {
-      let key = this._keyCache.get(serializedKey);
-      if (!key) {
-        key = await deserializeKey(
-          { name: 'ECDSA', namedCurve: 'P-384' },
-          ['verify'],
-        )(serializedKey);
-        this._keyCache.set(serializedKey, key);
-      }
-      keys.push(key);
-    }
-    return keys;
+    // Parallel deserialization for cold cache performance.
+    const entries = Object.keys(this._acl.users);
+    return Promise.all(
+      entries.map(async (serializedKey) => {
+        let key = this._keyCache.get(serializedKey);
+        if (!key) {
+          key = await deserializeKey(
+            { name: 'ECDSA', namedCurve: 'P-384' },
+            ['verify'],
+          )(serializedKey);
+          this._keyCache.set(serializedKey, key);
+        }
+        return key;
+      }),
+    );
   }
 }
 

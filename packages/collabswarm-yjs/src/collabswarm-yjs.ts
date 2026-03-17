@@ -298,19 +298,22 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
     return this._acl.getMap('users').has(hash);
   }
   async users(): Promise<CryptoKey[]> {
-    const keys: CryptoKey[] = [];
-    for (const serializedKey of this._acl.getMap('users').keys()) {
-      let key = this._keyCache.get(serializedKey);
-      if (!key) {
-        key = await deserializeKey(
-          { name: 'ECDSA', namedCurve: 'P-384' },
-          ['verify'],
-        )(serializedKey);
-        this._keyCache.set(serializedKey, key);
-      }
-      keys.push(key);
-    }
-    return keys;
+    // Parallel deserialization for cold cache performance.
+    const entries = [...this._acl.getMap('users').keys()];
+    const results = await Promise.all(
+      entries.map(async (serializedKey) => {
+        let key = this._keyCache.get(serializedKey);
+        if (!key) {
+          key = await deserializeKey(
+            { name: 'ECDSA', namedCurve: 'P-384' },
+            ['verify'],
+          )(serializedKey);
+          this._keyCache.set(serializedKey, key);
+        }
+        return key;
+      }),
+    );
+    return results;
   }
 }
 
