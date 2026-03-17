@@ -23,7 +23,7 @@ export type CRDTChangeNode<ChangesType> = {
    * Not yet wired through serializers or producers — present for forward compatibility.
    * Encoded as a base64 string for JSON serialization safety.
    */
-  keyId?: string;
+  keyID?: string;
 
   kind: CRDTChangeNodeKind;
 
