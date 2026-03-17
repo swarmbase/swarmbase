@@ -61,16 +61,21 @@ export class SubtleCrypto
 
   /**
    * Extract the nonce/IV from encryption algorithm parameters.
-   * Supports AES-GCM (iv), AES-CTR (counter), and AES-CBC (iv).
+   * Currently only AES-GCM is supported; AES-CTR and AES-CBC are reserved.
+   * Normalizes BufferSource values to Uint8Array.
    */
   private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {
+    let raw: BufferSource | undefined;
     if ('iv' in params) {
-      return params.iv as Uint8Array;
+      raw = params.iv;
+    } else if ('counter' in params) {
+      raw = params.counter;
     }
-    if ('counter' in params) {
-      return params.counter as Uint8Array;
+    if (!raw) {
+      throw new Error(`Cannot extract nonce from algorithm: ${(params as any).name}`);
     }
-    throw new Error(`Cannot extract nonce from algorithm: ${(params as any).name}`);
+    // Normalize BufferSource to Uint8Array
+    return raw instanceof Uint8Array ? raw : new Uint8Array(raw instanceof ArrayBuffer ? raw : raw.buffer);
   }
 
   /**

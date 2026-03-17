@@ -9,7 +9,7 @@ export interface CRDTChangeBlock<ChangesType> {
    * When implemented, will allow recipients to select the correct decryption key
    * from their keychain. Encoded as a base64 string for JSON serialization safety.
    */
-  keyId?: string;
+  keyID?: string;
 
   /**
    * Stored nonce for decryption purposes.
