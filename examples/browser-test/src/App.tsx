@@ -82,8 +82,8 @@ class App extends React.Component<
     try {
       const readers = await docState.documentRef.getReaders();
       const writers = await docState.documentRef.getWriters();
-      const serializeKeys = async (keys: CryptoKey[]) =>
-        Promise.all(
+      const serializeKeys = async (keys: CryptoKey[]) => {
+        const results = await Promise.allSettled(
           keys.map(async (k) => {
             const raw = await crypto.subtle.exportKey('raw', k);
             return Array.from(new Uint8Array(raw).slice(0, 8))
@@ -91,10 +91,10 @@ class App extends React.Component<
               .join('');
           }),
         );
-      this.setState((prev) => ({
-        aclReaders: { ...prev.aclReaders, [documentPath]: [] },
-        aclWriters: { ...prev.aclWriters, [documentPath]: [] },
-      }));
+        return results
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+          .map((r) => r.value);
+      };
       const readerIds = await serializeKeys(readers);
       const writerIds = await serializeKeys(writers);
       this.setState((prev) => ({
@@ -220,7 +220,7 @@ class App extends React.Component<
                   <div>
                     <em>Readers ({this.state.aclReaders[documentPath].length}):</em>{' '}
                     {this.state.aclReaders[documentPath].map((id, i) => (
-                      <code key={i} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
@@ -228,7 +228,7 @@ class App extends React.Component<
                   <div>
                     <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
                     {this.state.aclWriters[documentPath].map((id, i) => (
-                      <code key={i} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
