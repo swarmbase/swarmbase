@@ -113,8 +113,12 @@ export interface CollabswarmConfig {
    * key update verification. Topic validators are not registered at all
    * when signing is disabled to avoid unnecessary per-message overhead.
    *
-   * Useful for development, testing, or performance-sensitive scenarios
-   * where authentication is handled elsewhere.
+   * **WARNING: Disabling signing removes all authentication and authorization
+   * checks. Any peer that can decrypt traffic (e.g., possesses a previous
+   * document key) can forge sync, key-update, and load messages. Peers with
+   * `enableSigning: false` will NOT interoperate with peers that have signing
+   * enabled (they will reject empty/missing signatures). Only use in trusted
+   * development/testing environments.**
    *
    * Default: true (signatures are computed and verified).
    */
