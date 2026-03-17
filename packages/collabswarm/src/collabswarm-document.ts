@@ -1415,8 +1415,11 @@ export class CollabswarmDocument<
     const isExisting = await this.load(); // new document would return false; then a key is needed
     if (!isExisting) {
       // Validate document path before creating a new document.
+      // Close first to clean up pubsub subscriptions and protocol handlers
+      // that were registered earlier in open().
       if (this.swarm.config?.validateDocumentPath) {
         if (!this.swarm.config.validateDocumentPath(this.documentPath, this._userPublicKey)) {
+          await this.close();
           throw new Error(
             `Document path "${this.documentPath}" is not allowed for the current user`,
           );
