@@ -348,6 +348,10 @@ export function useCollabswarmDocumentState<
         }
       }
       // Remove entries from module-level caches to prevent infinite growth.
+      // NOTE: This does not evict docCache/docDataCache from the context, so a later
+      // mount of the same documentPath will reuse the cached docRef without re-subscribing.
+      // A proper fix requires ref-counting by documentPath so cache entries are only evicted
+      // when the last subscriber unmounts. This is tracked as a known limitation.
       openTasks.delete(documentPath);
       openTaskResults.delete(documentPath);
     };
