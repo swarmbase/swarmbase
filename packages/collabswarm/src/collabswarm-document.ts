@@ -1488,22 +1488,20 @@ export class CollabswarmDocument<
       return false;
     }
 
-    // TODO: Is there a way to avoid this serialization step:
-    const raw = this._syncMessageSerializer.serializeSyncMessage(
-      messageWithoutSignature,
-    );
-
-    if (
-      signingEnabled &&
-      verifySignature &&
-      !(await this._verifyWriterSignature(raw, signature!))
-    ) {
-      console.warn(
-        `Received a sync message with an invalid signature for ${message.documentId}`,
-        signature,
+    // Only serialize for signature verification — skip when signing is disabled
+    // to avoid expensive serialization of large messages.
+    if (signingEnabled && verifySignature) {
+      const raw = this._syncMessageSerializer.serializeSyncMessage(
         messageWithoutSignature,
       );
-      return;
+      if (!(await this._verifyWriterSignature(raw, signature!))) {
+        console.warn(
+          `Received a sync message with an invalid signature for ${message.documentId}`,
+          signature,
+          messageWithoutSignature,
+        );
+        return;
+      }
     }
 
     // Update/replace list of document keys (if provided).
