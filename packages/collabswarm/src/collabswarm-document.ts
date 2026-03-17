@@ -600,6 +600,10 @@ export class CollabswarmDocument<
   }
 
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
+    if (this.swarm.config?.enableSigning === false) {
+      return true;
+    }
+
     // TODO: Cache list of current writers per dag node for now.
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
@@ -622,6 +626,10 @@ export class CollabswarmDocument<
    * key types (e.g. CryptoKey).
    */
   private async _verifySnapshotSignature(payload: Uint8Array, signature: Uint8Array) {
+    if (this.swarm.config?.enableSigning === false) {
+      return true;
+    }
+
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
       verificationTasks.push(
@@ -634,6 +642,10 @@ export class CollabswarmDocument<
   private async _signAsWriter(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
+    if (this.swarm.config?.enableSigning === false) {
+      return '';
+    }
+
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
     const raw = this._syncMessageSerializer.serializeSyncMessage(
@@ -885,16 +897,20 @@ export class CollabswarmDocument<
           await Promise.all([this._readers.users(), this._writers.users()])
         ).flat();
         let requestor: PublicKey | undefined;
-        for (const reader of readers) {
-          if (
-            await this._authProvider.verify(
-              this._encoder.encode(message.documentId),
-              reader,
-              this._deserializeSignature(message.signature),
-            )
-          ) {
-            requestor = reader;
-            break;
+        if (this.swarm.config?.enableSigning === false) {
+          requestor = readers[0];
+        } else {
+          for (const reader of readers) {
+            if (
+              await this._authProvider.verify(
+                this._encoder.encode(message.documentId),
+                reader,
+                this._deserializeSignature(message.signature),
+              )
+            ) {
+              requestor = reader;
+              break;
+            }
           }
         }
 
@@ -978,16 +994,20 @@ export class CollabswarmDocument<
           await Promise.all([this._readers.users(), this._writers.users()])
         ).flat();
         let requestor: PublicKey | undefined;
-        for (const reader of readers) {
-          if (
-            await this._authProvider.verify(
-              this._encoder.encode(message.documentId),
-              reader,
-              this._deserializeSignature(message.signature),
-            )
-          ) {
-            requestor = reader;
-            break;
+        if (this.swarm.config?.enableSigning === false) {
+          requestor = readers[0];
+        } else {
+          for (const reader of readers) {
+            if (
+              await this._authProvider.verify(
+                this._encoder.encode(message.documentId),
+                reader,
+                this._deserializeSignature(message.signature),
+              )
+            ) {
+              requestor = reader;
+              break;
+            }
           }
         }
 
@@ -1192,7 +1212,7 @@ export class CollabswarmDocument<
         // verify — trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
         const preLoadWriters = await this._writers.users();
-        if (preLoadWriters.length > 0) {
+        if (preLoadWriters.length > 0 && this.swarm.config?.enableSigning !== false) {
           if (!message.signature) {
             console.warn(
               `Load response for ${this.documentPath}: missing signature, skipping peer`,
@@ -1387,6 +1407,10 @@ export class CollabswarmDocument<
               const syncMessage =
                 this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
+              if (this.swarm.config?.enableSigning === false) {
+                return 'Accept';
+              }
+
               if (!syncMessage.signature) {
                 return 'Reject';
               }
@@ -1455,7 +1479,8 @@ export class CollabswarmDocument<
     verifySignature = true,
   ) {
     const { signature, ...messageWithoutSignature } = message;
-    if (!signature) {
+    const signingEnabled = this.swarm.config?.enableSigning !== false;
+    if (signingEnabled && !signature) {
       return false;
     }
 
@@ -1465,8 +1490,9 @@ export class CollabswarmDocument<
     );
 
     if (
+      signingEnabled &&
       verifySignature &&
-      !(await this._verifyWriterSignature(raw, signature))
+      !(await this._verifyWriterSignature(raw, signature!))
     ) {
       console.warn(
         `Received a sync message with an invalid signature for ${message.documentId}`,
@@ -1969,23 +1995,25 @@ export class CollabswarmDocument<
           this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
         // Verify the sender is an authorized writer.
-        if (message.signature) {
-          const { signature, ...messageWithoutSignature } = message;
-          const raw =
-            this._syncMessageSerializer.serializeSyncMessage(
-              messageWithoutSignature,
-            );
-          if (!(await this._verifyWriterSignature(raw, signature))) {
+        if (this.swarm.config?.enableSigning !== false) {
+          if (message.signature) {
+            const { signature, ...messageWithoutSignature } = message;
+            const raw =
+              this._syncMessageSerializer.serializeSyncMessage(
+                messageWithoutSignature,
+              );
+            if (!(await this._verifyWriterSignature(raw, signature))) {
+              console.warn(
+                `Received key update with invalid signature for ${this.documentPath}`,
+              );
+              return [];
+            }
+          } else {
             console.warn(
-              `Received key update with invalid signature for ${this.documentPath}`,
+              `Received unsigned key update for ${this.documentPath}`,
             );
             return [];
           }
-        } else {
-          console.warn(
-            `Received unsigned key update for ${this.documentPath}`,
-          );
-          return [];
         }
 
         // Merge keychain changes.
