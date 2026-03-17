@@ -1677,13 +1677,15 @@ export class CollabswarmDocument<
    * End the transaction and apply all queued changes atomically.
    * This sends a single sync message for all batched changes.
    *
-   * On failure, the transaction is aborted (cleared) and the document is
-   * rolled back to its pre-transaction state. For immutable CRDT providers
-   * (e.g. Automerge), rollback is reliable. For in-place mutating providers
-   * (e.g. Yjs), rollback is best-effort as the document may already be mutated.
-   * A new transaction must be started after a failure.
+   * On failure (from any step: write check, CRDT apply, or network publish),
+   * the transaction is aborted and the document reference is rolled back.
+   * For immutable CRDT providers (e.g. Automerge), rollback is reliable.
+   * For in-place mutating providers (e.g. Yjs), rollback is best-effort.
+   * Note: if the network publish step fails, internal metadata (_hashes,
+   * _lastSyncMessage) may be partially updated. A new transaction must
+   * be started after a failure.
    *
-   * @throws {Error} If `_makeChange()` or `_ensureCurrentUserCanWrite()` fails.
+   * @throws {Error} If any step in the commit pipeline fails.
    */
   public async endChange(message?: string) {
     if (!this._inTransaction) {
@@ -1699,6 +1701,7 @@ export class CollabswarmDocument<
       return;
     }
 
+    const originalDocument = this.document;
     this._committing = true;
     try {
       await this._ensureCurrentUserCanWrite();
@@ -1715,26 +1718,28 @@ export class CollabswarmDocument<
       // Note: YjsProvider.localChange mutates the document in-place and returns
       // the same reference, so rollback on failure is best-effort for Yjs.
       // Automerge returns a new immutable document, so rollback is reliable.
-      const originalDocument = this.document;
       const [newDocument, changes] = this._crdtProvider.localChange(
         this.document,
         message || '',
         composedFn,
       );
       this._document = newDocument;
-      try {
-        await this._makeChange(changes);
-        // Clear transaction state only after successful commit.
-        this._inTransaction = false;
-        this._pendingChangeFns = [];
-      } catch (err) {
-        // Roll back document on failure (best-effort for mutating providers).
-        // Abort the transaction so the document is not left stuck.
-        this._document = originalDocument;
-        this._inTransaction = false;
-        this._pendingChangeFns = [];
-        throw err;
-      }
+
+      // Note: _makeChange may partially mutate _hashes/_lastSyncMessage before
+      // throwing. Full metadata rollback is not feasible, but the document
+      // reference is restored so subsequent operations start from a clean state.
+      await this._makeChange(changes);
+
+      // Success — clear transaction state.
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+    } catch (err) {
+      // Abort transaction on ANY error (ensureWrite, localChange, or makeChange).
+      // Roll back document (best-effort for in-place mutating providers like Yjs).
+      this._document = originalDocument;
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+      throw err;
     } finally {
       this._committing = false;
     }
