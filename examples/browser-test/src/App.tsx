@@ -219,16 +219,16 @@ class App extends React.Component<
                 {this.state.aclReaders[documentPath] && (
                   <div>
                     <em>Read access incl. writers ({this.state.aclReaders[documentPath].length}):</em>{' '}
-                    {this.state.aclReaders[documentPath].map((id) => (
-                      <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
+                    {this.state.aclReaders[documentPath].map((id, i) => (
+                      <code key={`${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
                 {this.state.aclWriters[documentPath] && (
                   <div>
                     <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
-                    {this.state.aclWriters[documentPath].map((id) => (
-                      <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
+                    {this.state.aclWriters[documentPath].map((id, i) => (
+                      <code key={`${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
