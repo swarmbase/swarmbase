@@ -85,19 +85,26 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  * Any edits made to the document should go through its corresponding CollabswarmDocument's
  * `.change(...)` method:
  *
- * @example
+ * @example Automerge usage
  * ```ts
- * // Create/open a document.
+ * // Open a document (Automerge-based collabswarm instance).
  * const doc1 = collabswarm.doc("/my-doc1-path");
+ * if (!doc1) throw new Error("Failed to create document reference");
  * await doc1.open();
  *
- * // Make a change (Automerge example).
  * await doc1.change(doc => {
  *   doc.field1 = "new-value";
  * });
+ * ```
  *
- * // Make a change (Yjs example).
- * await doc1.change(doc => {
+ * @example Yjs usage
+ * ```ts
+ * // Open a document (Yjs-based collabswarm instance).
+ * const doc2 = collabswarmYjs.doc("/my-doc2-path");
+ * if (!doc2) throw new Error("Failed to create document reference");
+ * await doc2.open();
+ *
+ * await doc2.change(doc => {
  *   doc.getMap('data').set('field1', 'new-value');
  * });
  * ```
