@@ -112,9 +112,9 @@ export interface CollabswarmConfig {
 
   /**
    * Enable network statistics tracking.
-   * When true, the Collabswarm instance will track message counts,
-   * byte totals, document open/close, and peer connect/disconnect events.
-   * Access via `collabswarm.networkStats`.
+   * When true, a `NetworkStats` counter container is created and accessible
+   * via `collabswarm.networkStats`. Callers must invoke `record*()` methods
+   * explicitly; automatic event wiring will be added in a follow-up.
    *
    * Default: false.
    */

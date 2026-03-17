@@ -1,8 +1,10 @@
 /**
- * Tracks network statistics for a Collabswarm node.
+ * Counter container for network statistics.
  *
  * Enable via `enableNetworkStats: true` in CollabswarmConfig, then access
- * via `collabswarm.networkStats`.
+ * via `collabswarm.networkStats`. Callers must invoke `record*()` methods
+ * explicitly to update counters — automatic event wiring is not yet
+ * implemented and will be added in a follow-up.
  */
 export class NetworkStats {
   private _messagesSent = 0;
