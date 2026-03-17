@@ -1777,8 +1777,10 @@ export class CollabswarmDocument<
    * @return List of public keys with read access.
    */
   public async getReaders(): Promise<PublicKey[]> {
-    const readers = await this._readers.users();
-    const writers = await this._writers.users();
+    const [readers, writers] = await Promise.all([
+      this._readers.users(),
+      this._writers.users(),
+    ]);
     // Filter out any writers that also appear in the readers list to avoid duplicates.
     // Run checks in parallel to avoid sequential async overhead with many writers.
     const checkResults = await Promise.all(
