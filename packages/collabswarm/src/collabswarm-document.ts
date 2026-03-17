@@ -1836,6 +1836,14 @@ export class CollabswarmDocument<
   /**
    * End the transaction and apply all queued changes atomically.
    * This sends a single sync message for all batched changes.
+   *
+   * On failure, the transaction is aborted (cleared) and the document is
+   * rolled back to its pre-transaction state. For immutable CRDT providers
+   * (e.g. Automerge), rollback is reliable. For in-place mutating providers
+   * (e.g. Yjs), rollback is best-effort as the document may already be mutated.
+   * A new transaction must be started after a failure.
+   *
+   * @throws {Error} If `_makeChange()` or `_ensureCurrentUserCanWrite()` fails.
    */
   public async endChange(message?: string) {
     if (!this._inTransaction) {
@@ -1881,7 +1889,10 @@ export class CollabswarmDocument<
         this._pendingChangeFns = [];
       } catch (err) {
         // Roll back document on failure (best-effort for mutating providers).
+        // Abort the transaction so the document is not left stuck.
         this._document = originalDocument;
+        this._inTransaction = false;
+        this._pendingChangeFns = [];
         throw err;
       }
     } finally {
