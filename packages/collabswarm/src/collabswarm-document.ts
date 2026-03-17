@@ -893,13 +893,15 @@ export class CollabswarmDocument<
         }
 
         // Verify that this user is a reader.
-        const readers = (
-          await Promise.all([this._readers.users(), this._writers.users()])
-        ).flat();
         let requestor: PublicKey | undefined;
         if (this.swarm.config?.enableSigning === false) {
-          requestor = readers[0];
+          // Skip ACL lookup entirely when signing is disabled — treat as authorized.
+          const allUsers = await this._writers.users();
+          requestor = allUsers[0];
         } else {
+          const readers = (
+            await Promise.all([this._readers.users(), this._writers.users()])
+          ).flat();
           for (const reader of readers) {
             if (
               await this._authProvider.verify(
@@ -990,13 +992,15 @@ export class CollabswarmDocument<
         }
 
         // Verify that this user is a reader or writer.
-        const readers = (
-          await Promise.all([this._readers.users(), this._writers.users()])
-        ).flat();
         let requestor: PublicKey | undefined;
         if (this.swarm.config?.enableSigning === false) {
-          requestor = readers[0];
+          // Skip ACL lookup entirely when signing is disabled — treat as authorized.
+          const allUsers = await this._writers.users();
+          requestor = allUsers[0];
         } else {
+          const readers = (
+            await Promise.all([this._readers.users(), this._writers.users()])
+          ).flat();
           for (const reader of readers) {
             if (
               await this._authProvider.verify(
@@ -1559,7 +1563,7 @@ export class CollabswarmDocument<
           signature,
           messageWithoutSignature,
         );
-        return;
+        return false;
       }
     }
 
