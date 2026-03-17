@@ -85,17 +85,29 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  * Any edits made to the document should go through its corresponding CollabswarmDocument's
  * `.change(...)` method:
  *
- * @example
- * // Open a document.
+ * @example Automerge usage
+ * ```ts
+ * // Open a document (Automerge-based collabswarm instance).
  * const doc1 = collabswarm.doc("/my-doc1-path");
+ * if (!doc1) throw new Error("Failed to create document reference");
+ * await doc1.open();
  *
- * // Make a change to the CRDT document (example is written assuming the CRDT document is
- * // an automerge doc).
- * doc1.change(doc => {
- *   // After the change function is completed, this updated field `field1` will be sent
- *   // to all peers connected to the document.
+ * await doc1.change(doc => {
  *   doc.field1 = "new-value";
  * });
+ * ```
+ *
+ * @example Yjs usage
+ * ```ts
+ * // Open a document (Yjs-based collabswarm instance).
+ * const doc2 = collabswarmYjs.doc("/my-doc2-path");
+ * if (!doc2) throw new Error("Failed to create document reference");
+ * await doc2.open();
+ *
+ * await doc2.change(doc => {
+ *   doc.getMap('data').set('field1', 'new-value');
+ * });
+ * ```
  * @typeParam DocType The CRDT document type
  * @typeParam ChangesType A block of CRDT change(s)
  * @typeParam ChangeFnType A function for applying changes to a document
