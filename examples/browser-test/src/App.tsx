@@ -56,6 +56,8 @@ interface AppProps {
 interface AppState {
   connectionAddress: string;
   documentId: string;
+  aclReaders: { [docPath: string]: string[] };
+  aclWriters: { [docPath: string]: string[] };
 }
 
 class App extends React.Component<
@@ -69,7 +71,39 @@ class App extends React.Component<
     this.state = {
       connectionAddress: '',
       documentId: '',
+      aclReaders: {},
+      aclWriters: {},
     };
+  }
+
+  async refreshACL(documentPath: string) {
+    const docState = this.props.state.documents[documentPath];
+    if (!docState?.documentRef) return;
+    try {
+      const readers = await docState.documentRef.getReaders();
+      const writers = await docState.documentRef.getWriters();
+      const serializeKeys = async (keys: CryptoKey[]) =>
+        Promise.all(
+          keys.map(async (k) => {
+            const raw = await crypto.subtle.exportKey('raw', k);
+            return Array.from(new Uint8Array(raw).slice(0, 8))
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('');
+          }),
+        );
+      this.setState((prev) => ({
+        aclReaders: { ...prev.aclReaders, [documentPath]: [] },
+        aclWriters: { ...prev.aclWriters, [documentPath]: [] },
+      }));
+      const readerIds = await serializeKeys(readers);
+      const writerIds = await serializeKeys(writers);
+      this.setState((prev) => ({
+        aclReaders: { ...prev.aclReaders, [documentPath]: readerIds },
+        aclWriters: { ...prev.aclWriters, [documentPath]: writerIds },
+      }));
+    } catch (err) {
+      console.warn('Failed to refresh ACL:', err);
+    }
   }
 
   componentDidMount() {
@@ -177,6 +211,28 @@ class App extends React.Component<
                   }
                 }}
               />
+              <div style={{ marginTop: '8px' }}>
+                <strong>ACL:</strong>{' '}
+                <button onClick={() => this.refreshACL(documentPath)}>
+                  Refresh ACL
+                </button>
+                {this.state.aclReaders[documentPath] && (
+                  <div>
+                    <em>Readers ({this.state.aclReaders[documentPath].length}):</em>{' '}
+                    {this.state.aclReaders[documentPath].map((id, i) => (
+                      <code key={i} style={{ marginRight: '4px' }}>{id}…</code>
+                    ))}
+                  </div>
+                )}
+                {this.state.aclWriters[documentPath] && (
+                  <div>
+                    <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
+                    {this.state.aclWriters[documentPath].map((id, i) => (
+                      <code key={i} style={{ marginRight: '4px' }}>{id}…</code>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div>
                 <button
                   onClick={() => {
