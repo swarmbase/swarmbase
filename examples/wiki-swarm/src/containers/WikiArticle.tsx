@@ -56,6 +56,8 @@ class WikiArticle extends React.Component<
   WikiArticleState,
   RootState
 > {
+  private _mounted = false;
+
   constructor(public props: WikiArticleProps) {
     super(props);
     this.state = { aclReaders: [], aclWriters: [] };
@@ -76,10 +78,11 @@ class WikiArticle extends React.Component<
               .join('');
           }),
         );
-        return results
-          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-          .map((r) => r.value);
+        return results.map((r) =>
+          r.status === 'fulfilled' ? r.value : '<unexportable>',
+        );
       };
+      if (!this._mounted) return;
       this.setState({
         aclReaders: await serializeKeys(readers),
         aclWriters: await serializeKeys(writers),
@@ -90,6 +93,7 @@ class WikiArticle extends React.Component<
   }
 
   componentDidMount() {
+    this._mounted = true;
     // Load this article upon component mount.
     if (this.props.onDocumentOpen && this.props.match.params.documentId) {
       console.log('Loading article at:', this.props.match.params.documentId);
@@ -110,6 +114,7 @@ class WikiArticle extends React.Component<
   }
 
   componentWillUnmount() {
+    this._mounted = false;
     // Close this article upon component unmount.
     if (this.props.onDocumentClose && this.props.match.params.documentId) {
       console.log('Closing article at:', this.props.match.params.documentId);
@@ -168,7 +173,7 @@ class WikiArticle extends React.Component<
               <div className="mt-1">
                 <em>Read access incl. writers ({this.state.aclReaders.length}):</em>{' '}
                 {this.state.aclReaders.map((id, i) => (
-                  <code key={id} className="me-1">{id}…</code>
+                  <code key={`${id}-${i}`} className="me-1">{id}…</code>
                 ))}
               </div>
             )}
@@ -176,7 +181,7 @@ class WikiArticle extends React.Component<
               <div className="mt-1">
                 <em>Writers ({this.state.aclWriters.length}):</em>{' '}
                 {this.state.aclWriters.map((id, i) => (
-                  <code key={id} className="me-1">{id}…</code>
+                  <code key={`${id}-${i}`} className="me-1">{id}…</code>
                 ))}
               </div>
             )}
