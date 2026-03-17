@@ -1414,6 +1414,15 @@ export class CollabswarmDocument<
     // Load initial document from peers.
     const isExisting = await this.load(); // new document would return false; then a key is needed
     if (!isExisting) {
+      // Validate document path before creating a new document.
+      if (this.swarm.config?.validateDocumentPath) {
+        if (!this.swarm.config.validateDocumentPath(this.documentPath, this._userPublicKey)) {
+          throw new Error(
+            `Document path "${this.documentPath}" is not allowed for the current user`,
+          );
+        }
+      }
+
       // Add current user as a writer.
       await this._writers.add(this._userPublicKey);
 
