@@ -77,4 +77,17 @@ describe('NetworkStats', () => {
     expect(snap1.messagesSent).toBe(0);
     expect(snap2.messagesSent).toBe(1);
   });
+
+  test('negative/NaN/Infinity bytes are clamped to 0', () => {
+    const stats = new NetworkStats();
+    stats.recordSent(-10);
+    stats.recordSent(NaN);
+    stats.recordSent(Infinity);
+    stats.recordReceived(-5);
+    const snap = stats.snapshot();
+    expect(snap.bytesSent).toBe(0);
+    expect(snap.bytesReceived).toBe(0);
+    expect(snap.messagesSent).toBe(3);
+    expect(snap.messagesReceived).toBe(1);
+  });
 });

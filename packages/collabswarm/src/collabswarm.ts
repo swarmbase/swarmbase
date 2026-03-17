@@ -185,9 +185,7 @@ export class Collabswarm<
 
     this._config = config;
 
-    if (config.enableNetworkStats) {
-      this._networkStats = new NetworkStats();
-    }
+    this._networkStats = config.enableNetworkStats ? new NetworkStats() : undefined;
 
     // Setup Helia node.
     const heliaInit = config.helia;

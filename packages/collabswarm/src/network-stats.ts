@@ -16,16 +16,21 @@ export class NetworkStats {
   private _peersConnected = 0;
   private _peersDisconnected = 0;
 
+  private static _validateBytes(bytes: number): number {
+    if (!Number.isFinite(bytes) || bytes < 0) return 0;
+    return bytes;
+  }
+
   /** Record an outgoing message. */
   recordSent(bytes: number): void {
     this._messagesSent++;
-    this._bytesSent += bytes;
+    this._bytesSent += NetworkStats._validateBytes(bytes);
   }
 
   /** Record an incoming message. */
   recordReceived(bytes: number): void {
     this._messagesReceived++;
-    this._bytesReceived += bytes;
+    this._bytesReceived += NetworkStats._validateBytes(bytes);
   }
 
   /** Record a document open. */
