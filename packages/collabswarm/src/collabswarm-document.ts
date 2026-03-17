@@ -1678,7 +1678,9 @@ export class CollabswarmDocument<
       throw new Error('No transaction in progress. Call startChange() first.');
     }
 
-    const pendingFns = this._pendingChangeFns;
+    // Snapshot pending fns so late addChange() calls during await don't
+    // unpredictably modify the batch being committed.
+    const pendingFns = [...this._pendingChangeFns];
     if (pendingFns.length === 0) {
       this._inTransaction = false;
       this._pendingChangeFns = [];
@@ -1696,18 +1698,23 @@ export class CollabswarmDocument<
       }
     }) as ChangeFnType;
 
+    const originalDocument = this.document;
     const [newDocument, changes] = this._crdtProvider.localChange(
       this.document,
       message || '',
       composedFn,
     );
     this._document = newDocument;
-    await this._makeChange(changes);
-
-    // Only clear transaction state after successful commit.
-    // On failure, the transaction remains active so changes can be retried.
-    this._inTransaction = false;
-    this._pendingChangeFns = [];
+    try {
+      await this._makeChange(changes);
+      // Clear transaction state only after successful commit.
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+    } catch (err) {
+      // Roll back document on failure so retries don't re-apply to stale state.
+      this._document = originalDocument;
+      throw err;
+    }
   }
 
   /**
