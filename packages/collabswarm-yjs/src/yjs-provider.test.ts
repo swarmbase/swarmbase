@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeAll } from '@jest/globals';
-import { Doc } from 'yjs';
+import { Doc, encodeStateAsUpdateV2 } from 'yjs';
 import {
   YjsProvider,
   YjsACL,
@@ -107,6 +107,78 @@ describe('YjsProvider', () => {
     provider.remoteChange(doc2, changes);
     expect(doc2.getMap('shared').get('x')).toBe('synced');
     expect(doc2.getArray('list').get(0)).toBe('item1');
+  });
+});
+
+describe('YjsProvider delta encoding', () => {
+  test('localChange returns delta smaller than full state after first change', () => {
+    const provider = new YjsProvider();
+    const doc = provider.newDocument();
+
+    // Make initial change
+    provider.localChange(doc, 'init', (d) => {
+      d.getMap('data').set('key1', 'value1');
+    });
+
+    // Make second change — should return only the delta
+    const [, changes2] = provider.localChange(doc, 'update', (d) => {
+      d.getMap('data').set('key2', 'value2');
+    });
+
+    const fullState = encodeStateAsUpdateV2(doc);
+    expect(changes2.byteLength).toBeLessThan(fullState.byteLength);
+  });
+
+  test('delta from localChange applies correctly to a synced peer', () => {
+    const provider = new YjsProvider();
+    const doc1 = provider.newDocument();
+
+    // Initial change
+    provider.localChange(doc1, 'init', (d) => {
+      d.getMap('data').set('key1', 'value1');
+    });
+
+    // Sync doc2 with full history
+    const doc2 = provider.newDocument();
+    provider.remoteChange(doc2, provider.getHistory(doc1));
+    expect(doc2.getMap('data').get('key1')).toBe('value1');
+
+    // Second change on doc1 — returns delta
+    const [, changes2] = provider.localChange(doc1, 'update', (d) => {
+      d.getMap('data').set('key2', 'value2');
+    });
+
+    // Apply delta to doc2
+    provider.remoteChange(doc2, changes2);
+    expect(doc2.getMap('data').get('key1')).toBe('value1');
+    expect(doc2.getMap('data').get('key2')).toBe('value2');
+  });
+});
+
+describe('YjsACL delta encoding', () => {
+  test('add returns delta that merges correctly into another ACL', async () => {
+    const acl1 = new YjsACL();
+    const changes1 = await acl1.add(key1);
+    expect(changes1.byteLength).toBeGreaterThan(0);
+    const changes2 = await acl1.add(key2);
+
+    // Delta should merge correctly
+    const acl2 = new YjsACL();
+    acl2.merge(changes1);
+    acl2.merge(changes2);
+    expect(await acl2.check(key1)).toBe(true);
+    expect(await acl2.check(key2)).toBe(true);
+  });
+
+  test('remove no-op produces delta that is a no-op when merged', async () => {
+    const acl = new YjsACL();
+    // Remove a key that was never added — should produce a no-op delta
+    const changes = await acl.remove(key1);
+    // Applying a no-op delta should not add any users
+    const acl2 = new YjsACL();
+    acl2.merge(changes);
+    const users = await acl2.users();
+    expect(users).toHaveLength(0);
   });
 });
 
