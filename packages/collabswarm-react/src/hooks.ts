@@ -352,14 +352,22 @@ export function useCollabswarmDocumentState<
       openTasks.delete(documentPath);
       openTaskResults.delete(documentPath);
       // Evict from context caches so the effect re-enters the open/subscribe path on remount.
-      const { [documentPath]: _d, ...restDocCache } = docCache;
-      const { [documentPath]: _dd, ...restDocDataCache } = docDataCache;
-      const { [documentPath]: _dr, ...restDocReadersCache } = docReadersCache;
-      const { [documentPath]: _dw, ...restDocWritersCache } = docWritersCache;
-      setDocCache(restDocCache);
-      setDocDataCache(restDocDataCache);
-      setDocReadersCache(restDocReadersCache);
-      setDocWritersCache(restDocWritersCache);
+      setDocCache((prev) => {
+        const { [documentPath]: _d, ...rest } = prev;
+        return rest;
+      });
+      setDocDataCache((prev) => {
+        const { [documentPath]: _dd, ...rest } = prev;
+        return rest;
+      });
+      setDocReadersCache((prev) => {
+        const { [documentPath]: _dr, ...rest } = prev;
+        return rest;
+      });
+      setDocWritersCache((prev) => {
+        const { [documentPath]: _dw, ...rest } = prev;
+        return rest;
+      });
     };
   }, [documentPath]);
 
