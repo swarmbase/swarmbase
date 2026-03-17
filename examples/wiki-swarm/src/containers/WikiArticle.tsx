@@ -45,7 +45,10 @@ interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   ) => Promise<Doc<WikiSwarmArticle>>;
 }
 
-interface WikiArticleState {}
+interface WikiArticleState {
+  aclReaders: string[];
+  aclWriters: string[];
+}
 
 class WikiArticle extends React.Component<
   WikiArticleProps,
@@ -54,6 +57,32 @@ class WikiArticle extends React.Component<
 > {
   constructor(public props: WikiArticleProps) {
     super(props);
+    this.state = { aclReaders: [], aclWriters: [] };
+  }
+
+  async refreshACL() {
+    const docId = this.props.match.params.documentId;
+    const docState = (this.props as any).documentRef;
+    if (!docState) return;
+    try {
+      const readers = await docState.getReaders();
+      const writers = await docState.getWriters();
+      const serializeKeys = async (keys: CryptoKey[]) =>
+        Promise.all(
+          keys.map(async (k) => {
+            const raw = await crypto.subtle.exportKey('raw', k);
+            return Array.from(new Uint8Array(raw).slice(0, 8))
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('');
+          }),
+        );
+      this.setState({
+        aclReaders: await serializeKeys(readers),
+        aclWriters: await serializeKeys(writers),
+      });
+    } catch (err) {
+      console.warn('Failed to refresh ACL:', err);
+    }
   }
 
   componentDidMount() {
@@ -126,6 +155,28 @@ class WikiArticle extends React.Component<
               }}
             />
           </div>
+          <div className="mt-3 p-2 border rounded">
+            <strong>ACL</strong>{' '}
+            <button className="btn btn-sm btn-outline-secondary ms-2" onClick={() => this.refreshACL()}>
+              Refresh
+            </button>
+            {this.state.aclReaders.length > 0 && (
+              <div className="mt-1">
+                <em>Readers ({this.state.aclReaders.length}):</em>{' '}
+                {this.state.aclReaders.map((id, i) => (
+                  <code key={i} className="me-1">{id}…</code>
+                ))}
+              </div>
+            )}
+            {this.state.aclWriters.length > 0 && (
+              <div className="mt-1">
+                <em>Writers ({this.state.aclWriters.length}):</em>{' '}
+                {this.state.aclWriters.map((id, i) => (
+                  <code key={i} className="me-1">{id}…</code>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       );
     } else {
@@ -147,6 +198,7 @@ function mapStateToProps(state: RootState, ownProps: WikiArticleProps) {
     state.automergeSwarm.documents[ownProps.match.params.documentId];
   return {
     document: documentState ? documentState.document : null,
+    documentRef: documentState ? documentState.documentRef : null,
   };
 }
 
