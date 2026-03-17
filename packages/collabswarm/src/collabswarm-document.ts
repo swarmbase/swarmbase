@@ -1296,7 +1296,9 @@ export class CollabswarmDocument<
    *
    * Once opened, a document can be closed with `.close()`.
    *
-   * @returns false if this is a new document (no peers exist).
+   * @returns Resolves to `false` if this is a new document (no peers exist).
+   * @throws {Error} If `validateDocumentPath` is configured and rejects the path
+   *   for a new document. In this case, `close()` is called before throwing.
    */
   public async open(): Promise<boolean> {
     // Open pubsub connection.
