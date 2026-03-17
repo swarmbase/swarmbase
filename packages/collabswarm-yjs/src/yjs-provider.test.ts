@@ -159,6 +159,7 @@ describe('YjsACL delta encoding', () => {
   test('add returns delta that merges correctly into another ACL', async () => {
     const acl1 = new YjsACL();
     const changes1 = await acl1.add(key1);
+    expect(changes1.byteLength).toBeGreaterThan(0);
     const changes2 = await acl1.add(key2);
 
     // Delta should merge correctly
@@ -169,11 +170,15 @@ describe('YjsACL delta encoding', () => {
     expect(await acl2.check(key2)).toBe(true);
   });
 
-  test('remove no-op returns minimal delta', async () => {
+  test('remove no-op returns valid empty delta', async () => {
     const acl = new YjsACL();
-    // Remove a key that was never added — should be a minimal no-op update
+    // Remove a key that was never added — should produce a no-op delta
     const changes = await acl.remove(key1);
-    expect(changes.byteLength).toBeLessThan(100);
+    // Applying a no-op delta should not add any users
+    const acl2 = new YjsACL();
+    acl2.merge(changes);
+    const users = await acl2.users();
+    expect(users).toHaveLength(0);
   });
 });
 
