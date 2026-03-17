@@ -111,7 +111,7 @@ describe('YjsProvider', () => {
 });
 
 describe('YjsProvider delta encoding', () => {
-  test('localChange returns delta smaller than full state after initial sync', () => {
+  test('localChange returns delta smaller than full state after first change', () => {
     const provider = new YjsProvider();
     const doc = provider.newDocument();
 
@@ -134,7 +134,7 @@ describe('YjsProvider delta encoding', () => {
     const doc1 = provider.newDocument();
 
     // Initial change
-    const [, changes1] = provider.localChange(doc1, 'init', (d) => {
+    provider.localChange(doc1, 'init', (d) => {
       d.getMap('data').set('key1', 'value1');
     });
 
@@ -170,7 +170,7 @@ describe('YjsACL delta encoding', () => {
     expect(await acl2.check(key2)).toBe(true);
   });
 
-  test('remove no-op returns valid empty delta', async () => {
+  test('remove no-op produces delta that is a no-op when merged', async () => {
     const acl = new YjsACL();
     // Remove a key that was never added — should produce a no-op delta
     const changes = await acl.remove(key1);
