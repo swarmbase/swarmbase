@@ -32,6 +32,7 @@ interface MatchParams {
 
 interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   document: WikiSwarmArticle | null;
+  documentRef: AutomergeSwarmDocument<WikiSwarmArticle> | null;
 
   onInitialize: (config: CollabswarmConfig) => Promise<AutomergeSwarm>;
   onDocumentOpen: (
@@ -61,14 +62,13 @@ class WikiArticle extends React.Component<
   }
 
   async refreshACL() {
-    const docId = this.props.match.params.documentId;
-    const docState = (this.props as any).documentRef;
-    if (!docState) return;
+    const docRef = this.props.documentRef;
+    if (!docRef) return;
     try {
-      const readers = await docState.getReaders();
-      const writers = await docState.getWriters();
-      const serializeKeys = async (keys: CryptoKey[]) =>
-        Promise.all(
+      const readers = await docRef.getReaders();
+      const writers = await docRef.getWriters();
+      const serializeKeys = async (keys: CryptoKey[]) => {
+        const results = await Promise.allSettled(
           keys.map(async (k) => {
             const raw = await crypto.subtle.exportKey('raw', k);
             return Array.from(new Uint8Array(raw).slice(0, 8))
@@ -76,6 +76,10 @@ class WikiArticle extends React.Component<
               .join('');
           }),
         );
+        return results
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+          .map((r) => r.value);
+      };
       this.setState({
         aclReaders: await serializeKeys(readers),
         aclWriters: await serializeKeys(writers),
@@ -164,7 +168,7 @@ class WikiArticle extends React.Component<
               <div className="mt-1">
                 <em>Readers ({this.state.aclReaders.length}):</em>{' '}
                 {this.state.aclReaders.map((id, i) => (
-                  <code key={i} className="me-1">{id}…</code>
+                  <code key={id} className="me-1">{id}…</code>
                 ))}
               </div>
             )}
@@ -172,7 +176,7 @@ class WikiArticle extends React.Component<
               <div className="mt-1">
                 <em>Writers ({this.state.aclWriters.length}):</em>{' '}
                 {this.state.aclWriters.map((id, i) => (
-                  <code key={i} className="me-1">{id}…</code>
+                  <code key={id} className="me-1">{id}…</code>
                 ))}
               </div>
             )}
