@@ -1307,7 +1307,7 @@ export class CollabswarmDocument<
   // Key exchange happens during:
   // - Load messages.
   // - ACL updates via /collabswarm/key-update/1.0.0 protocol
-  public async load(preferredPeer?: any): Promise<boolean> {
+  public async load(preferredPeer?: { toString(): string }): Promise<boolean> {
     // Pick a peer. All peers come from getConnections() so they already have
     // open connections. libp2p v2's dialProtocol reuses existing connections
     // internally, so no additional connection management is needed here.
@@ -1837,11 +1837,13 @@ export class CollabswarmDocument<
     if (!this._inTransaction) {
       throw new Error('No transaction in progress. Call startChange() first.');
     }
-    this._inTransaction = false;
-    const pendingFns = this._pendingChangeFns;
-    this._pendingChangeFns = [];
 
-    if (pendingFns.length === 0) return;
+    const pendingFns = this._pendingChangeFns;
+    if (pendingFns.length === 0) {
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+      return;
+    }
 
     await this._ensureCurrentUserCanWrite();
 
@@ -1861,6 +1863,11 @@ export class CollabswarmDocument<
     );
     this._document = newDocument;
     await this._makeChange(changes);
+
+    // Only clear transaction state after successful commit.
+    // On failure, the transaction remains active so changes can be retried.
+    this._inTransaction = false;
+    this._pendingChangeFns = [];
   }
 
   /**
@@ -1871,6 +1878,9 @@ export class CollabswarmDocument<
    * @param message An optional change message/description to include.
    */
   public async change(changeFn: ChangeFnType, message?: string) {
+    if (this._inTransaction) {
+      throw new Error('Cannot call change() during an active transaction. Use addChange() instead.');
+    }
     await this._ensureCurrentUserCanWrite();
 
     const [newDocument, changes] = this._crdtProvider.localChange(
