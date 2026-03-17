@@ -104,11 +104,13 @@ export interface CollabswarmConfig {
   enableTopicValidators?: boolean;
 
   /**
-   * Enable cryptographic signing and verification of all messages.
-   * When false, all signing paths are bypassed: sync message signatures,
-   * load request signatures, topic validator signature checks, and
-   * key update verification. Topic validators are not registered at all
-   * when signing is disabled to avoid unnecessary per-message overhead.
+   * Enable Collabswarm application-level signing and verification.
+   * When false, application-level signing is bypassed: sync message signatures,
+   * load request signatures, snapshot signatures, topic validator signature
+   * checks, and key update verification. Topic validators are not registered
+   * at all when signing is disabled to avoid unnecessary per-message overhead.
+   * Note: libp2p/GossipSub transport-level signing (e.g., `globalSignaturePolicy`)
+   * is NOT affected by this flag.
    *
    * **WARNING: Disabling signing removes all authentication and authorization
    * checks. Any peer that can decrypt traffic (e.g., possesses a previous
