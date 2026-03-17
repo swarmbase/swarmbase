@@ -218,7 +218,7 @@ class App extends React.Component<
                 </button>
                 {this.state.aclReaders[documentPath] && (
                   <div>
-                    <em>Readers ({this.state.aclReaders[documentPath].length}):</em>{' '}
+                    <em>Read access incl. writers ({this.state.aclReaders[documentPath].length}):</em>{' '}
                     {this.state.aclReaders[documentPath].map((id, i) => (
                       <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
