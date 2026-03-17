@@ -196,6 +196,7 @@ export class CollabswarmDocument<
   // Transaction state for batching multiple changes atomically.
   private _pendingChangeFns: ChangeFnType[] = [];
   private _inTransaction = false;
+  private _committing = false;
 
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
@@ -1826,6 +1827,9 @@ export class CollabswarmDocument<
     if (!this._inTransaction) {
       throw new Error('No transaction in progress. Call startChange() first.');
     }
+    if (this._committing) {
+      throw new Error('Cannot add changes while endChange() is committing.');
+    }
     this._pendingChangeFns.push(changeFn);
   }
 
@@ -1847,33 +1851,41 @@ export class CollabswarmDocument<
       return;
     }
 
-    await this._ensureCurrentUserCanWrite();
-
-    // Compose all queued change functions into a single localChange call
-    // to produce one atomic delta. This ensures providers like Automerge
-    // (which return incremental deltas) don't drop earlier changes.
-    const composedFn = ((doc: any) => {
-      for (const fn of pendingFns) {
-        (fn as any)(doc);
-      }
-    }) as ChangeFnType;
-
-    const originalDocument = this.document;
-    const [newDocument, changes] = this._crdtProvider.localChange(
-      this.document,
-      message || '',
-      composedFn,
-    );
-    this._document = newDocument;
+    this._committing = true;
     try {
-      await this._makeChange(changes);
-      // Clear transaction state only after successful commit.
-      this._inTransaction = false;
-      this._pendingChangeFns = [];
-    } catch (err) {
-      // Roll back document on failure so retries don't re-apply to stale state.
-      this._document = originalDocument;
-      throw err;
+      await this._ensureCurrentUserCanWrite();
+
+      // Compose all queued change functions into a single localChange call
+      // to produce one atomic delta. This ensures providers like Automerge
+      // (which return incremental deltas) don't drop earlier changes.
+      const composedFn = ((doc: any) => {
+        for (const fn of pendingFns) {
+          (fn as any)(doc);
+        }
+      }) as ChangeFnType;
+
+      // Note: YjsProvider.localChange mutates the document in-place and returns
+      // the same reference, so rollback on failure is best-effort for Yjs.
+      // Automerge returns a new immutable document, so rollback is reliable.
+      const originalDocument = this.document;
+      const [newDocument, changes] = this._crdtProvider.localChange(
+        this.document,
+        message || '',
+        composedFn,
+      );
+      this._document = newDocument;
+      try {
+        await this._makeChange(changes);
+        // Clear transaction state only after successful commit.
+        this._inTransaction = false;
+        this._pendingChangeFns = [];
+      } catch (err) {
+        // Roll back document on failure (best-effort for mutating providers).
+        this._document = originalDocument;
+        throw err;
+      }
+    } finally {
+      this._committing = false;
     }
   }
 
