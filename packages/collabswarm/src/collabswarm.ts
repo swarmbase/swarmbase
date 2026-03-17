@@ -18,6 +18,7 @@ import {
   defaultBootstrapConfig,
 } from './collabswarm-config';
 import { CollabswarmDocument } from './collabswarm-document';
+import { NetworkStats } from './network-stats';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
@@ -111,6 +112,15 @@ export class Collabswarm<
   >();
   private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
     new Map<string, CollabswarmPeersHandler>();
+  private _networkStats?: NetworkStats;
+
+  /**
+   * Network statistics tracker. Only available when `enableNetworkStats`
+   * is set to `true` in the config passed to `initialize()`.
+   */
+  public get networkStats(): NetworkStats | undefined {
+    return this._networkStats;
+  }
 
   /**
    * Gets the current libp2p node instance.
@@ -174,6 +184,10 @@ export class Collabswarm<
     }
 
     this._config = config;
+
+    if (config.enableNetworkStats) {
+      this._networkStats = new NetworkStats();
+    }
 
     // Setup Helia node.
     const heliaInit = config.helia;

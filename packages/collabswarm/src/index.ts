@@ -72,6 +72,7 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
+import { NetworkStats, NetworkStatsSnapshot } from './network-stats';
 import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -148,7 +149,11 @@ export {
   snapshotLoadV1,
   // Compaction
   defaultCompactionConfig,
+  // Network statistics
+  NetworkStats,
 };
+
+export type { NetworkStatsSnapshot } from './network-stats';
 
 // Re-export types
 export type { DocumentCapability } from './capabilities';
