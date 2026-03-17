@@ -347,13 +347,19 @@ export function useCollabswarmDocumentState<
           taskResult.docRef.unsubscribe('useCollabswarmDocumentState');
         }
       }
-      // Remove entries from module-level caches to prevent infinite growth.
-      // NOTE: This does not evict docCache/docDataCache from the context, so a later
-      // mount of the same documentPath will reuse the cached docRef without re-subscribing.
-      // A proper fix requires ref-counting by documentPath so cache entries are only evicted
-      // when the last subscriber unmounts. This is tracked as a known limitation.
+      // Remove entries from all caches so a later remount re-opens and re-subscribes.
+      // This ensures the hook doesn't skip the subscribe path due to a stale docCache hit.
       openTasks.delete(documentPath);
       openTaskResults.delete(documentPath);
+      // Evict from context caches so the effect re-enters the open/subscribe path on remount.
+      const { [documentPath]: _d, ...restDocCache } = docCache;
+      const { [documentPath]: _dd, ...restDocDataCache } = docDataCache;
+      const { [documentPath]: _dr, ...restDocReadersCache } = docReadersCache;
+      const { [documentPath]: _dw, ...restDocWritersCache } = docWritersCache;
+      setDocCache(restDocCache);
+      setDocDataCache(restDocDataCache);
+      setDocReadersCache(restDocReadersCache);
+      setDocWritersCache(restDocWritersCache);
     };
   }, [documentPath]);
 

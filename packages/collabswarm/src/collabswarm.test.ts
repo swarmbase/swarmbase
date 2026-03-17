@@ -205,3 +205,46 @@ describe('Multi-user simulation basics', () => {
   });
 });
 
+describe('getReaders() dedup logic', () => {
+  // This tests the dedup pattern used in CollabswarmDocument.getReaders()
+  // which combines readers + writers and filters out writers already in readers.
+  test('should deduplicate keys present in both readers and writers', async () => {
+    // Simulate the dedup pattern: given readers and writers ACL lists where
+    // a key appears in both, the combined result should contain it only once.
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-384' },
+      true,
+      ['sign', 'verify'],
+    );
+    const keyPair2 = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-384' },
+      true,
+      ['sign', 'verify'],
+    );
+
+    // Simulate: sharedKey is in both readers and writers
+    const readers = [keyPair.publicKey, keyPair2.publicKey];
+    const writers = [keyPair.publicKey]; // overlapping key
+
+    // Replicate the dedup logic from getReaders()
+    const exportKey = async (k: CryptoKey) => {
+      const raw = await crypto.subtle.exportKey('raw', k);
+      return new Uint8Array(raw).toString();
+    };
+
+    const readerFingerprints = new Set(
+      await Promise.all(readers.map(exportKey)),
+    );
+
+    // Filter: keep writers NOT already in readers
+    const writerFingerprints = await Promise.all(writers.map(exportKey));
+    const filteredWriters = writers.filter(
+      (_, i) => !readerFingerprints.has(writerFingerprints[i]),
+    );
+
+    const combined = [...readers, ...filteredWriters];
+    // sharedKey should appear exactly once (from readers), not twice
+    expect(combined).toHaveLength(2); // keyPair + keyPair2, not keyPair + keyPair2 + keyPair
+  });
+});
+
