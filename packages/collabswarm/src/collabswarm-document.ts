@@ -1463,10 +1463,6 @@ export class CollabswarmDocument<
               const syncMessage =
                 this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
-              if (this.swarm.config?.enableSigning === false) {
-                return 'Accept';
-              }
-
               if (!syncMessage.signature) {
                 return 'Reject';
               }
@@ -1782,10 +1778,15 @@ export class CollabswarmDocument<
     // for large state blobs (no JSON/Array.from overhead).
     const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
-    const signPayload = this._buildSnapshotSignPayload(
-      stateBytes, lastChangeNodeCID, timestamp, compactedCount,
-    );
-    const signature = await this._authProvider.sign(signPayload, this._userKey);
+    let signature: Uint8Array;
+    if (this.swarm.config?.enableSigning !== false) {
+      const signPayload = this._buildSnapshotSignPayload(
+        stateBytes, lastChangeNodeCID, timestamp, compactedCount,
+      );
+      signature = await this._authProvider.sign(signPayload, this._userKey);
+    } else {
+      signature = new Uint8Array(0);
+    }
 
     const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
       state,
