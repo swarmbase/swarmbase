@@ -95,6 +95,8 @@ export class SubtleCrypto
         // key import parameters than AES-GCM. Support is deferred until the
         // key derivation paths and wire format header parsing are updated.
         throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
+      default:
+        throw new Error(`Unknown encryption algorithm: ${this._encryptionAlgorithmName}`);
     }
   }
 
