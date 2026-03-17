@@ -10,7 +10,7 @@ import {
   CollabswarmDocument,
   CollabswarmConfig,
 } from '@collabswarm/collabswarm';
-import { useEffect, useState, useContext, createContext } from 'react';
+import { useEffect, useState, useContext, useRef, createContext } from 'react';
 
 export type CollabswarmContextOpenResult<
   DocType,
@@ -168,6 +168,10 @@ export function useCollabswarmDocumentState<
     setDocWritersCache,
   } = useContext(CollabswarmContext);
 
+  // Unique subscription ID per hook instance to avoid collisions when
+  // multiple components subscribe to the same or different documents.
+  const subscriptionIdRef = useRef(`useCollabswarmDocumentState-${Math.random().toString(36).slice(2)}`);
+
   useEffect(() => {
     // Track whether this effect is still active (not unmounted/dep-changed).
     // The async IIFE checks this after each await to avoid operating on stale state.
@@ -262,7 +266,7 @@ export function useCollabswarmDocumentState<
             // Subscribe to document changes (skip if effect was cancelled during open).
             if (!active) return;
             currentDocRef.subscribe(
-              'useCollabswarmDocumentState',
+              subscriptionIdRef.current,
               (current, readers, writers) => {
                 // We can't use the values from the CollabswarmContext created above as those may be "stale"/out of date.
                 // Instead we use a global cache (ew, global state) for now to rebuild these caches as they should be.
@@ -344,7 +348,7 @@ export function useCollabswarmDocumentState<
       if (subscribedDocPath) {
         const taskResult = openTaskResults.get(subscribedDocPath);
         if (taskResult?.docRef) {
-          taskResult.docRef.unsubscribe('useCollabswarmDocumentState');
+          taskResult.docRef.unsubscribe(subscriptionIdRef.current);
         }
       }
       // Remove entries from all caches so a later remount re-opens and re-subscribes.

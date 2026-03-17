@@ -1,6 +1,6 @@
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import React, { useState } from 'react';
-import { render, act, cleanup } from '@testing-library/react';
+import { render, act, cleanup, waitFor } from '@testing-library/react';
 import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
 
 // Mock document with subscribe/unsubscribe tracking
@@ -67,13 +67,13 @@ describe('useCollabswarmDocumentState lifecycle', () => {
       );
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => {
+      expect(mockDoc.open).toHaveBeenCalled();
     });
 
     expect(mockDoc.open).toHaveBeenCalled();
     expect(mockDoc.subscribe).toHaveBeenCalledWith(
-      'useCollabswarmDocumentState',
+      expect.stringMatching(/^useCollabswarmDocumentState-/),
       expect.any(Function),
       'all',
     );
@@ -93,14 +93,16 @@ describe('useCollabswarmDocumentState lifecycle', () => {
       unmount = result.unmount;
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => {
+      expect(mockDoc.open).toHaveBeenCalled();
     });
 
     act(() => {
       unmount!();
     });
 
-    expect(mockDoc.unsubscribe).toHaveBeenCalledWith('useCollabswarmDocumentState');
+    expect(mockDoc.unsubscribe).toHaveBeenCalledWith(
+      expect.stringMatching(/^useCollabswarmDocumentState-/),
+    );
   });
 });
