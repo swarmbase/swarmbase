@@ -91,9 +91,9 @@ class App extends React.Component<
               .join('');
           }),
         );
-        return results
-          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-          .map((r) => r.value);
+        return results.map((r) =>
+          r.status === 'fulfilled' ? r.value : '<unexportable>',
+        );
       };
       const readerIds = await serializeKeys(readers);
       const writerIds = await serializeKeys(writers);
@@ -219,7 +219,7 @@ class App extends React.Component<
                 {this.state.aclReaders[documentPath] && (
                   <div>
                     <em>Read access incl. writers ({this.state.aclReaders[documentPath].length}):</em>{' '}
-                    {this.state.aclReaders[documentPath].map((id, i) => (
+                    {this.state.aclReaders[documentPath].map((id) => (
                       <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
@@ -227,7 +227,7 @@ class App extends React.Component<
                 {this.state.aclWriters[documentPath] && (
                   <div>
                     <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
-                    {this.state.aclWriters[documentPath].map((id, i) => (
+                    {this.state.aclWriters[documentPath].map((id) => (
                       <code key={id} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
