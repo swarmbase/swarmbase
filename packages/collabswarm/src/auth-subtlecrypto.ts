@@ -60,6 +60,28 @@ export class SubtleCrypto
   ) {}
 
   /**
+   * Extract the nonce/IV from encryption algorithm parameters.
+   * Currently only AES-GCM is supported; AES-CTR and AES-CBC are reserved.
+   * Normalizes BufferSource values to Uint8Array.
+   */
+  private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {
+    let raw: BufferSource | undefined;
+    if ('iv' in params) {
+      raw = params.iv;
+    } else if ('counter' in params) {
+      raw = params.counter;
+    }
+    if (!raw) {
+      throw new Error(`Cannot extract nonce from algorithm: ${(params as any).name}`);
+    }
+    // Normalize BufferSource to Uint8Array, respecting byteOffset/byteLength for views.
+    if (raw instanceof Uint8Array) return raw;
+    if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+    // ArrayBufferView — respect offset and length to avoid reading unrelated bytes.
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  }
+
+  /**
    * An internal function used to generate a new initialized vector / counter for each encryption.
    *
    * @param nonce - unique value generated during encryption and used during decryption
@@ -67,21 +89,22 @@ export class SubtleCrypto
    * @returns a parameter object to be used directly in the encrypt function.
    *
    * @remarks
-   * Currently, only supports AesGcmParams.
    * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
    */
-  _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams {
+  _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams | AesCtrParams | AesCbcParams {
     switch (this._encryptionAlgorithmName) {
-      case 'AES-GCM':
-        const iv = nonce
-          ? nonce
-          : crypto.getRandomValues(new Uint8Array(this.nonceBits));
-        return {
-          name: 'AES-GCM',
-          iv: iv as Uint8Array<ArrayBuffer>,
-        };
+      case 'AES-GCM': {
+        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits));
+        return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
+      }
+      case 'AES-CTR':
+      case 'AES-CBC':
+        // AES-CTR and AES-CBC require different nonce sizes (16 bytes) and
+        // key import parameters than AES-GCM. Support is deferred until the
+        // key derivation paths and wire format header parsing are updated.
+        throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
       default:
-        throw 'Encryption is only supported with AesGcmParams currently'!;
+        throw new Error(`Unknown encryption algorithm: ${this._encryptionAlgorithmName}`);
     }
   }
 
@@ -174,9 +197,7 @@ export class SubtleCrypto
     );
     return {
       data: new Uint8Array(ciphertext),
-      // TODO: Replace this with a generic way to extract/get nonce for generic
-      //       subtle crypto algorithm
-      nonce: algorithmParams.iv as Uint8Array,
+      nonce: this._extractNonce(algorithmParams),
     };
   }
 }

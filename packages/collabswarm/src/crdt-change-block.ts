@@ -3,7 +3,13 @@
  * and tamper prevention.
  */
 export interface CRDTChangeBlock<ChangesType> {
-  // TODO: Add identifier for document key that should be used to decrypt (or just prepend it to the Uint8Array).
+  /**
+   * Identifier for the document encryption key used to encrypt this block.
+   * Allows recipients to select the correct decryption key from their keychain
+   * without trying all available keys. Encoded as a base64 string for JSON
+   * serialization safety. Preserved through serialize/deserialize round-trips.
+   */
+  keyID?: string;
 
   /**
    * Stored nonce for decryption purposes.
