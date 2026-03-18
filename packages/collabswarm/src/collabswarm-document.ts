@@ -896,8 +896,8 @@ export class CollabswarmDocument<
         let requestor: PublicKey | undefined;
         if (this.swarm.config?.enableSigning === false) {
           // Skip ACL lookup entirely when signing is disabled — treat as authorized.
-          const allUsers = await this._writers.users();
-          requestor = allUsers[0];
+          // Use the local user's public key as a guaranteed non-undefined requestor.
+          requestor = this._userPublicKey;
         } else {
           const readers = (
             await Promise.all([this._readers.users(), this._writers.users()])
@@ -995,8 +995,8 @@ export class CollabswarmDocument<
         let requestor: PublicKey | undefined;
         if (this.swarm.config?.enableSigning === false) {
           // Skip ACL lookup entirely when signing is disabled — treat as authorized.
-          const allUsers = await this._writers.users();
-          requestor = allUsers[0];
+          // Use the local user's public key as a guaranteed non-undefined requestor.
+          requestor = this._userPublicKey;
         } else {
           const readers = (
             await Promise.all([this._readers.users(), this._writers.users()])
