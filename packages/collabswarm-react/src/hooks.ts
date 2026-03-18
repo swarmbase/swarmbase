@@ -449,7 +449,21 @@ export function useCollabswarmDocumentState<
       const count = (subscriberCounts.get(documentPath) || 1) - 1;
       if (count <= 0) {
         subscriberCounts.delete(documentPath);
-        openTasks.delete(documentPath);
+        // Only delete openTasks once the promise has settled to prevent a
+        // rapid remount (e.g. React strict-mode) from calling open() again
+        // on an already-opened document. openTaskResults is safe to delete
+        // immediately since it's only populated after the promise resolves.
+        const pendingTask = openTasks.get(documentPath);
+        if (pendingTask) {
+          pendingTask.then(() => {
+            // Re-check: if a new subscriber appeared while we waited, don't evict.
+            if ((subscriberCounts.get(documentPath) || 0) === 0) {
+              openTasks.delete(documentPath);
+            }
+          }).catch(() => {
+            openTasks.delete(documentPath);
+          });
+        }
         openTaskResults.delete(documentPath);
         // Rebuild context caches from openTaskResults (the source of truth) rather than
         // using stale captured values, which could clobber entries from other documents.

@@ -8,7 +8,7 @@ export class LRUCache<K, V> {
 
   constructor(maxSize: number = 1000) {
     if (!Number.isFinite(maxSize) || maxSize < 1) {
-      throw new RangeError(`LRUCache maxSize must be a finite integer >= 1, got ${maxSize}`);
+      throw new RangeError(`LRUCache maxSize must be a finite number >= 1, got ${maxSize}`);
     }
     this._maxSize = Math.floor(maxSize);
   }
