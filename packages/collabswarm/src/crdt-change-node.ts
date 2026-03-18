@@ -19,8 +19,8 @@ export type CRDTChangeNodeKind =
  */
 export type CRDTChangeNode<ChangesType> = {
   /**
-   * Reserved: Identifier for the document encryption key used to encrypt this node's change.
-   * Not yet wired through serializers or producers — present for forward compatibility.
+   * Identifier for the document encryption key used to encrypt this node's change.
+   * Preserved through serialize/deserialize round-trips in sync messages.
    * Encoded as a base64 string for JSON serialization safety.
    */
   keyID?: string;
