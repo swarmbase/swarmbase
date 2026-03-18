@@ -26,6 +26,7 @@ import {
   JSONSerializer,
   Keychain,
   KeychainProvider,
+  LRUCache,
 } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
 
@@ -95,6 +96,8 @@ export function deserializeKey(
   };
 }
 
+
+
 export type AutomergeACLDoc = Doc<{
   users: { [hash: string]: true };
 }>;
@@ -103,6 +106,7 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   private _acl: AutomergeACLDoc = from({
     users: {},
   });
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
 
   async add(publicKey: CryptoKey): Promise<BinaryChange[]> {
     const hash = await serializeKey(publicKey);
@@ -148,17 +152,22 @@ export class AutomergeACL implements ACL<BinaryChange[], CryptoKey> {
   // The capability parameter is accepted for interface compatibility but ignored here;
   // capability-based filtering is handled at the UCANACL wrapper level.
   async users(capability?: string): Promise<CryptoKey[]> {
-    // TODO: Cache deserialized keys to make this faster.
+    // Parallel deserialization for cold cache performance.
+    // Create importer once to avoid per-miss closure allocation.
+    const importKey = deserializeKey(
+      { name: 'ECDSA', namedCurve: 'P-384' },
+      ['verify'],
+    );
+    const entries = Object.keys(this._acl.users);
     return Promise.all(
-      Object.keys(this._acl.users).map(
-        deserializeKey(
-          {
-            name: 'ECDSA',
-            namedCurve: 'P-384',
-          },
-          ['verify'],
-        ),
-      ),
+      entries.map(async (serializedKey) => {
+        let key = this._keyCache.get(serializedKey);
+        if (!key) {
+          key = await importKey(serializedKey);
+          this._keyCache.set(serializedKey, key);
+        }
+        return key;
+      }),
     );
   }
 }
@@ -222,8 +231,7 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
 }
 
 export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
-  // TODO: Replace this with a LRU cache of bounded size.
-  private readonly _keyCache = new Map<string, CryptoKey>();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private _keychain: AutomergeKeychainDoc = from({
     keys: [],
   });

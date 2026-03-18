@@ -12,8 +12,9 @@ import {
   JSONSerializer,
   Keychain,
   KeychainProvider,
+  LRUCache,
 } from '@collabswarm/collabswarm';
-import { applyUpdateV2, Doc, encodeStateAsUpdateV2 } from 'yjs';
+import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
@@ -179,10 +180,9 @@ export class YjsProvider
     message: string,
     changeFn: (doc: Doc) => void,
   ): [Doc, Uint8Array] {
+    const beforeSV = encodeStateVector(document);
     changeFn(document);
-
-    // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
-    const changes = encodeStateAsUpdateV2(document);
+    const changes = encodeStateAsUpdateV2(document, beforeSV);
 
     // TODO: This doesn't return a new reference.
     return [document, changes];
@@ -223,6 +223,7 @@ export function deserializeKey(
   };
 }
 
+
 export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
   initialize(): ACL<Uint8Array, CryptoKey> {
     return new YjsACL();
@@ -231,22 +232,21 @@ export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
 
 export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   private readonly _acl = new Doc();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
 
   async add(publicKey: CryptoKey): Promise<Uint8Array> {
     const hash = await serializeKey(publicKey);
+    const beforeSV = encodeStateVector(this._acl);
     this._acl.getMap('users').set(hash, true);
-    // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
-    const aclChanges = encodeStateAsUpdateV2(this._acl);
-    return aclChanges;
+    return encodeStateAsUpdateV2(this._acl, beforeSV);
   }
   async remove(publicKey: CryptoKey): Promise<Uint8Array> {
     const hash = await serializeKey(publicKey);
+    const beforeSV = encodeStateVector(this._acl);
     if (this._acl.getMap('users').has(hash)) {
       this._acl.getMap('users').delete(hash);
     }
-    // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
-    const aclChanges = encodeStateAsUpdateV2(this._acl);
-    return aclChanges;
+    return encodeStateAsUpdateV2(this._acl, beforeSV);
   }
   current(): Uint8Array {
     return encodeStateAsUpdateV2(this._acl);
@@ -258,18 +258,23 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
     const hash = await serializeKey(publicKey);
     return this._acl.getMap('users').has(hash);
   }
-  users(): Promise<CryptoKey[]> {
-    // TODO: Cache deserialized keys to make this faster.
+  async users(): Promise<CryptoKey[]> {
+    // Parallel deserialization for cold cache performance.
+    // Create importer once to avoid per-miss closure allocation.
+    const importKey = deserializeKey(
+      { name: 'ECDSA', namedCurve: 'P-384' },
+      ['verify'],
+    );
+    const entries = [...this._acl.getMap('users').keys()];
     return Promise.all(
-      [...this._acl.getMap('users').keys()].map(
-        deserializeKey(
-          {
-            name: 'ECDSA',
-            namedCurve: 'P-384',
-          },
-          ['verify'],
-        ),
-      ),
+      entries.map(async (serializedKey) => {
+        let key = this._keyCache.get(serializedKey);
+        if (!key) {
+          key = await importKey(serializedKey);
+          this._keyCache.set(serializedKey, key);
+        }
+        return key;
+      }),
     );
   }
 }
@@ -321,8 +326,7 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
 }
 
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
-  // TODO: Replace this with a LRU cache of bounded size.
-  private readonly _keyCache = new Map<string, CryptoKey>();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private readonly _keychain = new Doc();
 
   async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {
@@ -346,11 +350,11 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
 
     this._keyCache.set(keyID, key);
     const serialized = await serializeKey(key);
+    const beforeSV = encodeStateVector(this._keychain);
     this._keychain
       .getArray<[string, string]>('keys')
       .push([[keyID, serialized]]);
-    // TODO: This might send the whole document state. Trim this down to only changes not sent yet.
-    const keychainChanges = encodeStateAsUpdateV2(this._keychain);
+    const keychainChanges = encodeStateAsUpdateV2(this._keychain, beforeSV);
     return [keyIDBytes, key, keychainChanges];
   }
 
@@ -369,10 +373,11 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     const epochIdHex = toHex(epochId);
     this._keyCache.set(epochIdHex, key);
     const serialized = await serializeKey(key);
+    const beforeSV = encodeStateVector(this._keychain);
     this._keychain
       .getArray<[string, string]>('keys')
       .push([[epochIdHex, serialized]]);
-    return encodeStateAsUpdateV2(this._keychain);
+    return encodeStateAsUpdateV2(this._keychain, beforeSV);
   }
 
   history(): Uint8Array {

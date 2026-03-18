@@ -85,17 +85,29 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  * Any edits made to the document should go through its corresponding CollabswarmDocument's
  * `.change(...)` method:
  *
- * @example
- * // Open a document.
+ * @example Automerge usage
+ * ```ts
+ * // Open a document (Automerge-based collabswarm instance).
  * const doc1 = collabswarm.doc("/my-doc1-path");
+ * if (!doc1) throw new Error("Failed to create document reference");
+ * await doc1.open();
  *
- * // Make a change to the CRDT document (example is written assuming the CRDT document is
- * // an automerge doc).
- * doc1.change(doc => {
- *   // After the change function is completed, this updated field `field1` will be sent
- *   // to all peers connected to the document.
+ * await doc1.change(doc => {
  *   doc.field1 = "new-value";
  * });
+ * ```
+ *
+ * @example Yjs usage
+ * ```ts
+ * // Open a document (Yjs-based collabswarm instance).
+ * const doc2 = collabswarmYjs.doc("/my-doc2-path");
+ * if (!doc2) throw new Error("Failed to create document reference");
+ * await doc2.open();
+ *
+ * await doc2.change(doc => {
+ *   doc.getMap('data').set('field1', 'new-value');
+ * });
+ * ```
  * @typeParam DocType The CRDT document type
  * @typeParam ChangesType A block of CRDT change(s)
  * @typeParam ChangeFnType A function for applying changes to a document
@@ -1771,15 +1783,23 @@ export class CollabswarmDocument<
   /**
    * Returns a list of all public keys with read access.
    *
-   * Note: expects readers and writers are disjoint.
+   * Deduplicates users that appear in both reader and writer ACLs,
+   * which can occur due to concurrent edits or manual addition to both lists.
    *
    * @return List of public keys with read access.
    */
   public async getReaders(): Promise<PublicKey[]> {
-    // TODO: This breaks if there are duplicate entries in reader/writer ACL. This case may occur if
-    //       the user is manually added to both or due to simultaneous editing this results in a merge
-    //       state result with a user in both acls.
-    return [...(await this._readers.users()), ...(await this._writers.users())];
+    const [readers, writers] = await Promise.all([
+      this._readers.users(),
+      this._writers.users(),
+    ]);
+    // Filter out any writers that also appear in the readers list to avoid duplicates.
+    // Run checks in parallel to avoid sequential async overhead with many writers.
+    const checkResults = await Promise.all(
+      writers.map(writer => this._readers.check(writer))
+    );
+    const filteredWriters = writers.filter((_, i) => !checkResults[i]);
+    return [...readers, ...filteredWriters];
   }
 
   /**

@@ -73,6 +73,7 @@ import {
   UCANACLProvider,
 } from './ucan-acl';
 import { NetworkStats } from './network-stats';
+import { LRUCache } from './lru-cache';
 import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -151,6 +152,8 @@ export {
   defaultCompactionConfig,
   // Network statistics
   NetworkStats,
+  // Utilities
+  LRUCache,
 };
 
 export type { NetworkStatsSnapshot } from './network-stats';

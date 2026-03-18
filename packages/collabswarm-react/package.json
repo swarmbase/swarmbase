@@ -62,6 +62,21 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^@chainsafe/(.*)$": "<rootDir>/jest.empty-mock.js",
+      "^@libp2p/(.*)$": "<rootDir>/jest.empty-mock.js",
+      "^@helia/(.*)$": "<rootDir>/jest.empty-mock.js",
+      "^helia$": "<rootDir>/jest.empty-mock.js",
+      "^libp2p$": "<rootDir>/jest.empty-mock.js",
+      "^ipns/(.*)$": "<rootDir>/jest.empty-mock.js",
+      "^datastore-idb$": "<rootDir>/jest.empty-mock.js",
+      "^blockstore-idb$": "<rootDir>/jest.empty-mock.js",
+      "^it-pipe$": "<rootDir>/jest.empty-mock.js",
+      "^bl$": "<rootDir>/jest.empty-mock.js",
+      "^multiformats$": "<rootDir>/jest.empty-mock.js",
+      "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js",
+      "^uint8arraylist$": "<rootDir>/jest.empty-mock.js"
+    }
   }
 }
