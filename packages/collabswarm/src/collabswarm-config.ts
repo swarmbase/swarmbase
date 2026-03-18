@@ -109,6 +109,16 @@ export interface CollabswarmConfig {
    * create snapshot nodes to compact the Merkle-DAG change history.
    */
   compaction?: Partial<CompactionConfig>;
+
+  /**
+   * Enable network statistics tracking.
+   * When true, a `NetworkStats` counter container is created and accessible
+   * via `collabswarm.networkStats`. Callers must invoke `record*()` methods
+   * explicitly; automatic event wiring will be added in a follow-up.
+   *
+   * Default: false.
+   */
+  enableNetworkStats?: boolean;
 }
 
 /**
