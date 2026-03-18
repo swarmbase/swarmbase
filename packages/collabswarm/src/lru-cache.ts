@@ -14,11 +14,13 @@ export class LRUCache<K, V> {
   }
 
   get(key: K): V | undefined {
-    if (this._map.has(key)) {
-      const value = this._map.get(key)!;
+    // Single lookup: get() returns undefined for missing keys which we
+    // distinguish from a stored undefined via the delete+set succeeding.
+    const value = this._map.get(key);
+    if (value !== undefined || this._map.has(key)) {
       // Move to end (most recently used)
       this._map.delete(key);
-      this._map.set(key, value);
+      this._map.set(key, value!);
       return value;
     }
     return undefined;

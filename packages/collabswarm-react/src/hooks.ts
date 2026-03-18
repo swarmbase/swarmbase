@@ -257,6 +257,8 @@ export function useCollabswarmDocumentState<
                     if (r.readers) newReadersCache[p] = r.readers;
                     if (r.writers) newWritersCache[p] = r.writers;
                   });
+                  // Always set current path explicitly in case openTaskResults is missing it.
+                  newDataCache[documentPath] = current;
                   newReadersCache[documentPath] = readers;
                   newWritersCache[documentPath] = writers;
                   setDocDataCache(newDataCache);
@@ -398,7 +400,8 @@ export function useCollabswarmDocumentState<
               if (r.readers) newDocReadersCache[path] = r.readers;
               if (r.writers) newDocWritersCache[path] = r.writers;
             });
-            // Update the current path's readers/writers from this callback
+            // Always set current path explicitly in case openTaskResults is missing it.
+            newDocDataCache[documentPath] = current;
             const currentResults = openTaskResults.get(documentPath);
             if (currentResults) {
               openTaskResults.set(documentPath, { ...currentResults, readers, writers });
@@ -455,10 +458,14 @@ export function useCollabswarmDocumentState<
         // immediately since it's only populated after the promise resolves.
         const pendingTask = openTasks.get(documentPath);
         if (pendingTask) {
-          pendingTask.then(() => {
+          pendingTask.then((result) => {
             // Re-check: if a new subscriber appeared while we waited, don't evict.
             if ((subscriberCounts.get(documentPath) || 0) === 0) {
               openTasks.delete(documentPath);
+              // Close orphaned document to free network/pubsub resources.
+              if (result?.docRef && typeof result.docRef.close === 'function') {
+                result.docRef.close().catch(() => {});
+              }
             }
           }).catch(() => {
             openTasks.delete(documentPath);
