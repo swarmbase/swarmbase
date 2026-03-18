@@ -44,6 +44,9 @@ const openTaskResults = new Map<
   CollabswarmContextOpenResult<any, any, any, any, any, any>
 >();
 
+// Reference count per documentPath — only evict shared caches when the last subscriber unmounts.
+const subscriberCounts = new Map<string, number>();
+
 export const CollabswarmContext = createContext<{
   // TODO: These caches grow infinitely.
   docCache: {
@@ -177,6 +180,9 @@ export function useCollabswarmDocumentState<
     // The async IIFE checks this after each await to avoid operating on stale state.
     let active = true;
     let subscribedDocPath: string | null = null;
+
+    // Increment subscriber count for this documentPath.
+    subscriberCounts.set(documentPath, (subscriberCounts.get(documentPath) || 0) + 1);
 
     (async () => {
       let newDocCache: {
@@ -342,7 +348,7 @@ export function useCollabswarmDocumentState<
       }
     })();
 
-    // Cleanup: cancel async work, unsubscribe, and remove cache entries to prevent memory leaks.
+    // Cleanup: cancel async work, unsubscribe this instance's handler.
     return () => {
       active = false;
       if (subscribedDocPath) {
@@ -351,23 +357,29 @@ export function useCollabswarmDocumentState<
           taskResult.docRef.unsubscribe(subscriptionIdRef.current);
         }
       }
-      // Remove entries from all caches so a later remount re-opens and re-subscribes.
-      // This ensures the hook doesn't skip the subscribe path due to a stale docCache hit.
-      openTasks.delete(documentPath);
-      openTaskResults.delete(documentPath);
-      // Evict from context caches so the effect re-enters the open/subscribe path on remount.
-      const newDocCache = { ...docCache };
-      delete newDocCache[documentPath];
-      setDocCache(newDocCache);
-      const newDocDataCache = { ...docDataCache };
-      delete newDocDataCache[documentPath];
-      setDocDataCache(newDocDataCache);
-      const newDocReadersCache = { ...docReadersCache };
-      delete newDocReadersCache[documentPath];
-      setDocReadersCache(newDocReadersCache);
-      const newDocWritersCache = { ...docWritersCache };
-      delete newDocWritersCache[documentPath];
-      setDocWritersCache(newDocWritersCache);
+
+      // Decrement subscriber count — only evict shared caches when the last subscriber unmounts.
+      const count = (subscriberCounts.get(documentPath) || 1) - 1;
+      if (count <= 0) {
+        subscriberCounts.delete(documentPath);
+        openTasks.delete(documentPath);
+        openTaskResults.delete(documentPath);
+        // Evict from context caches so a later remount re-enters the open/subscribe path.
+        const newDocCache = { ...docCache };
+        delete newDocCache[documentPath];
+        setDocCache(newDocCache);
+        const newDocDataCache = { ...docDataCache };
+        delete newDocDataCache[documentPath];
+        setDocDataCache(newDocDataCache);
+        const newDocReadersCache = { ...docReadersCache };
+        delete newDocReadersCache[documentPath];
+        setDocReadersCache(newDocReadersCache);
+        const newDocWritersCache = { ...docWritersCache };
+        delete newDocWritersCache[documentPath];
+        setDocWritersCache(newDocWritersCache);
+      } else {
+        subscriberCounts.set(documentPath, count);
+      }
     };
   }, [documentPath]);
 
