@@ -32,6 +32,7 @@ interface MatchParams {
 
 interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   document: WikiSwarmArticle | null;
+  documentRef: AutomergeSwarmDocument<WikiSwarmArticle> | null;
 
   onInitialize: (config: CollabswarmConfig) => Promise<AutomergeSwarm>;
   onDocumentOpen: (
@@ -45,18 +46,55 @@ interface WikiArticleProps extends RouteComponentProps<MatchParams> {
   ) => Promise<Doc<WikiSwarmArticle>>;
 }
 
-interface WikiArticleState {}
+interface WikiArticleState {
+  aclReaders: string[];
+  aclWriters: string[];
+}
 
 class WikiArticle extends React.Component<
   WikiArticleProps,
   WikiArticleState,
   RootState
 > {
+  private _mounted = false;
+
   constructor(public props: WikiArticleProps) {
     super(props);
+    this.state = { aclReaders: [], aclWriters: [] };
+  }
+
+  async refreshACL() {
+    const docRef = this.props.documentRef;
+    if (!docRef) return;
+    try {
+      const readers = await docRef.getReaders();
+      const writers = await docRef.getWriters();
+      const serializeKeys = async (keys: CryptoKey[]) => {
+        const results = await Promise.allSettled(
+          keys.map(async (k) => {
+            const raw = await crypto.subtle.exportKey('raw', k);
+            const hash = await crypto.subtle.digest('SHA-256', raw);
+            return Array.from(new Uint8Array(hash).slice(0, 8))
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('');
+          }),
+        );
+        return results.map((r) =>
+          r.status === 'fulfilled' ? r.value : '<unexportable>',
+        );
+      };
+      const aclReaders = await serializeKeys(readers);
+      const aclWriters = await serializeKeys(writers);
+      // Re-check mounted after all async work completes
+      if (!this._mounted) return;
+      this.setState({ aclReaders, aclWriters });
+    } catch (err) {
+      console.warn('Failed to refresh ACL:', err);
+    }
   }
 
   componentDidMount() {
+    this._mounted = true;
     // Load this article upon component mount.
     if (this.props.onDocumentOpen && this.props.match.params.documentId) {
       console.log('Loading article at:', this.props.match.params.documentId);
@@ -77,6 +115,7 @@ class WikiArticle extends React.Component<
   }
 
   componentWillUnmount() {
+    this._mounted = false;
     // Close this article upon component unmount.
     if (this.props.onDocumentClose && this.props.match.params.documentId) {
       console.log('Closing article at:', this.props.match.params.documentId);
@@ -126,6 +165,28 @@ class WikiArticle extends React.Component<
               }}
             />
           </div>
+          <div className="mt-3 p-2 border rounded">
+            <strong>ACL</strong>{' '}
+            <button className="btn btn-sm btn-outline-secondary ms-2" onClick={() => this.refreshACL()}>
+              Refresh
+            </button>
+            {this.state.aclReaders.length > 0 && (
+              <div className="mt-1">
+                <em>Read access incl. writers ({this.state.aclReaders.length}):</em>{' '}
+                {this.state.aclReaders.map((id, i) => (
+                  <code key={`${id}-${i}`} className="me-1">{id}…</code>
+                ))}
+              </div>
+            )}
+            {this.state.aclWriters.length > 0 && (
+              <div className="mt-1">
+                <em>Writers ({this.state.aclWriters.length}):</em>{' '}
+                {this.state.aclWriters.map((id, i) => (
+                  <code key={`${id}-${i}`} className="me-1">{id}…</code>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       );
     } else {
@@ -147,6 +208,7 @@ function mapStateToProps(state: RootState, ownProps: WikiArticleProps) {
     state.automergeSwarm.documents[ownProps.match.params.documentId];
   return {
     document: documentState ? documentState.document : null,
+    documentRef: documentState ? documentState.documentRef : null,
   };
 }
 
