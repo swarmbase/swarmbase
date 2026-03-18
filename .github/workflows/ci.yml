@@ -32,6 +32,7 @@ jobs:
           - collabswarm-react
           - collabswarm-automerge
           - collabswarm-redux
+          - collabswarm-index
     steps:
       - uses: actions/checkout@v6
       - id: nodeversion

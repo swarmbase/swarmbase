@@ -12,6 +12,7 @@ import {
   JSONSerializer,
   Keychain,
   KeychainProvider,
+  LRUCache,
 } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
@@ -222,6 +223,7 @@ export function deserializeKey(
   };
 }
 
+
 export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
   initialize(): ACL<Uint8Array, CryptoKey> {
     return new YjsACL();
@@ -230,6 +232,7 @@ export class YjsACLProvider implements ACLProvider<Uint8Array, CryptoKey> {
 
 export class YjsACL implements ACL<Uint8Array, CryptoKey> {
   private readonly _acl = new Doc();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
 
   async add(publicKey: CryptoKey): Promise<Uint8Array> {
     const hash = await serializeKey(publicKey);
@@ -255,18 +258,23 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
     const hash = await serializeKey(publicKey);
     return this._acl.getMap('users').has(hash);
   }
-  users(): Promise<CryptoKey[]> {
-    // TODO: Cache deserialized keys to make this faster.
+  async users(): Promise<CryptoKey[]> {
+    // Parallel deserialization for cold cache performance.
+    // Create importer once to avoid per-miss closure allocation.
+    const importKey = deserializeKey(
+      { name: 'ECDSA', namedCurve: 'P-384' },
+      ['verify'],
+    );
+    const entries = [...this._acl.getMap('users').keys()];
     return Promise.all(
-      [...this._acl.getMap('users').keys()].map(
-        deserializeKey(
-          {
-            name: 'ECDSA',
-            namedCurve: 'P-384',
-          },
-          ['verify'],
-        ),
-      ),
+      entries.map(async (serializedKey) => {
+        let key = this._keyCache.get(serializedKey);
+        if (!key) {
+          key = await importKey(serializedKey);
+          this._keyCache.set(serializedKey, key);
+        }
+        return key;
+      }),
     );
   }
 }
@@ -318,8 +326,7 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
 }
 
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
-  // TODO: Replace this with a LRU cache of bounded size.
-  private readonly _keyCache = new Map<string, CryptoKey>();
+  private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private readonly _keychain = new Doc();
 
   async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {

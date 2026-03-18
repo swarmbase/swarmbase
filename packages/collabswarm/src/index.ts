@@ -72,6 +72,7 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
+import { LRUCache } from './lru-cache';
 import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -148,6 +149,8 @@ export {
   snapshotLoadV1,
   // Compaction
   defaultCompactionConfig,
+  // Utilities
+  LRUCache,
 };
 
 // Re-export types
