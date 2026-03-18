@@ -73,7 +73,8 @@ class WikiArticle extends React.Component<
         const results = await Promise.allSettled(
           keys.map(async (k) => {
             const raw = await crypto.subtle.exportKey('raw', k);
-            return Array.from(new Uint8Array(raw).slice(0, 8))
+            const hash = await crypto.subtle.digest('SHA-256', raw);
+            return Array.from(new Uint8Array(hash).slice(0, 8))
               .map((b) => b.toString(16).padStart(2, '0'))
               .join('');
           }),
