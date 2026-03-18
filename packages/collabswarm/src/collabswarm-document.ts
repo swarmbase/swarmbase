@@ -1229,7 +1229,7 @@ export class CollabswarmDocument<
    * response from a load request is a sync message containing all document change hashes.
    *
    * Load is used to fetch any new changes that a connecting node is missing.
-   * @returns false if this is a new document (no peers exist).
+   * @returns false if no peers could provide the document (new document or network partition).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -1296,7 +1296,9 @@ export class CollabswarmDocument<
    *
    * Once opened, a document can be closed with `.close()`.
    *
-   * @returns false if this is a new document (no peers exist).
+   * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
+   * @throws {Error} If `validateDocumentPath` is configured and rejects the path
+   *   for a new document. In this case, `close()` is called before throwing.
    */
   public async open(): Promise<boolean> {
     // Open pubsub connection.
@@ -1414,6 +1416,26 @@ export class CollabswarmDocument<
     // Load initial document from peers.
     const isExisting = await this.load(); // new document would return false; then a key is needed
     if (!isExisting) {
+      // Validate document path before creating a new document.
+      // Wrap in try/catch to ensure close() runs even if the callback throws,
+      // cleaning up pubsub subscriptions and protocol handlers registered by open().
+      const validateFn = this.swarm.config?.validateDocumentPath;
+      if (validateFn) {
+        let allowed: boolean;
+        try {
+          allowed = await validateFn(this.documentPath, this._userPublicKey);
+        } catch (err) {
+          await this.close();
+          throw err;
+        }
+        if (!allowed) {
+          await this.close();
+          throw new Error(
+            `Document path "${this.documentPath}" is not allowed for the current user`,
+          );
+        }
+      }
+
       // Add current user as a writer.
       await this._writers.add(this._userPublicKey);
 
