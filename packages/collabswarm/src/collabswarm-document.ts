@@ -1229,7 +1229,7 @@ export class CollabswarmDocument<
    * response from a load request is a sync message containing all document change hashes.
    *
    * Load is used to fetch any new changes that a connecting node is missing.
-   * @returns false if this is a new document (no peers exist).
+   * @returns false if no peers could provide the document (new document or network partition).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -1296,7 +1296,7 @@ export class CollabswarmDocument<
    *
    * Once opened, a document can be closed with `.close()`.
    *
-   * @returns Resolves to `false` if this is a new document (no peers exist).
+   * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
    *   for a new document. In this case, `close()` is called before throwing.
    */
