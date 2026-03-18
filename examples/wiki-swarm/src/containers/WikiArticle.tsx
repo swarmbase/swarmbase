@@ -82,11 +82,11 @@ class WikiArticle extends React.Component<
           r.status === 'fulfilled' ? r.value : '<unexportable>',
         );
       };
+      const aclReaders = await serializeKeys(readers);
+      const aclWriters = await serializeKeys(writers);
+      // Re-check mounted after all async work completes
       if (!this._mounted) return;
-      this.setState({
-        aclReaders: await serializeKeys(readers),
-        aclWriters: await serializeKeys(writers),
-      });
+      this.setState({ aclReaders, aclWriters });
     } catch (err) {
       console.warn('Failed to refresh ACL:', err);
     }
