@@ -104,6 +104,26 @@ export interface CollabswarmConfig {
   enableTopicValidators?: boolean;
 
   /**
+   * Enable Collabswarm application-level signing and verification.
+   * When false, application-level signing is bypassed: sync message signatures,
+   * load request signatures, snapshot signatures, topic validator signature
+   * checks, and key update verification. Topic validators are not registered
+   * at all when signing is disabled to avoid unnecessary per-message overhead.
+   * Note: libp2p/GossipSub transport-level signing (e.g., `globalSignaturePolicy`)
+   * is NOT affected by this flag.
+   *
+   * **WARNING: Disabling signing removes all authentication and authorization
+   * checks. Any peer that can decrypt traffic (e.g., possesses a previous
+   * document key) can forge sync, key-update, and load messages. Peers with
+   * `enableSigning: false` will NOT interoperate with peers that have signing
+   * enabled (they will reject empty/missing signatures). Only use in trusted
+   * development/testing environments.**
+   *
+   * Default: true (signatures are computed and verified).
+   */
+  enableSigning?: boolean;
+
+  /**
    * Configuration for history compaction.
    * When provided with `enabled: true`, the document will periodically
    * create snapshot nodes to compact the Merkle-DAG change history.
