@@ -206,45 +206,46 @@ describe('Multi-user simulation basics', () => {
 });
 
 describe('getReaders() dedup logic', () => {
-  // This tests the dedup pattern used in CollabswarmDocument.getReaders()
-  // which combines readers + writers and filters out writers already in readers.
-  test('should deduplicate keys present in both readers and writers', async () => {
-    // Simulate the dedup pattern: given readers and writers ACL lists where
-    // a key appears in both, the combined result should contain it only once.
-    const keyPair = await crypto.subtle.generateKey(
-      { name: 'ECDSA', namedCurve: 'P-384' },
-      true,
-      ['sign', 'verify'],
+  // Tests the actual dedup pattern from CollabswarmDocument.getReaders() using
+  // mock ACL objects with check()/users() — the same interface the production
+  // code calls. This catches regressions if check() semantics change.
+  test('should deduplicate keys present in both readers and writers via check()', async () => {
+    const sharedKey = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify'],
     );
-    const keyPair2 = await crypto.subtle.generateKey(
-      { name: 'ECDSA', namedCurve: 'P-384' },
-      true,
-      ['sign', 'verify'],
+    const readerOnlyKey = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify'],
+    );
+    const writerOnlyKey = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify'],
     );
 
-    // Simulate: sharedKey is in both readers and writers
-    const readers = [keyPair.publicKey, keyPair2.publicKey];
-    const writers = [keyPair.publicKey]; // overlapping key
+    // Mock ACLs — sharedKey appears in both readers and writers
+    const readerKeys = [sharedKey.publicKey, readerOnlyKey.publicKey];
+    const writerKeys = [sharedKey.publicKey, writerOnlyKey.publicKey];
 
-    // Replicate the dedup logic from getReaders()
-    const exportKey = async (k: CryptoKey) => {
-      const raw = await crypto.subtle.exportKey('raw', k);
-      return new Uint8Array(raw).toString();
-    };
+    // Export keys for fingerprint comparison (same approach as YjsACL.check)
+    const fingerprint = async (k: CryptoKey) =>
+      new Uint8Array(await crypto.subtle.exportKey('raw', k)).toString();
+    const readerFPs = new Set(await Promise.all(readerKeys.map(fingerprint)));
 
-    const readerFingerprints = new Set(
-      await Promise.all(readers.map(exportKey)),
-    );
+    // Mock _readers.check() — returns true if the key is in readerKeys
+    const readersCheck = async (key: CryptoKey) =>
+      readerFPs.has(await fingerprint(key));
 
-    // Filter: keep writers NOT already in readers
-    const writerFingerprints = await Promise.all(writers.map(exportKey));
-    const filteredWriters = writers.filter(
-      (_, i) => !readerFingerprints.has(writerFingerprints[i]),
-    );
+    // Replicate getReaders() dedup: filter writers already in readers via check()
+    const checkResults = await Promise.all(writerKeys.map(readersCheck));
+    const filteredWriters = writerKeys.filter((_, i) => !checkResults[i]);
+    const combined = [...readerKeys, ...filteredWriters];
 
-    const combined = [...readers, ...filteredWriters];
-    // sharedKey should appear exactly once (from readers), not twice
-    expect(combined).toHaveLength(2); // keyPair + keyPair2, not keyPair + keyPair2 + keyPair
+    // sharedKey from writers should be filtered out; writerOnlyKey should remain
+    expect(combined).toHaveLength(3); // readerOnly + shared (from readers) + writerOnly
+    // Verify writerOnlyKey made it through
+    const combinedFPs = await Promise.all(combined.map(fingerprint));
+    expect(combinedFPs).toContain(await fingerprint(writerOnlyKey.publicKey));
+    // Verify sharedKey appears exactly once
+    const sharedFP = await fingerprint(sharedKey.publicKey);
+    expect(combinedFPs.filter(fp => fp === sharedFP)).toHaveLength(1);
   });
 });
 

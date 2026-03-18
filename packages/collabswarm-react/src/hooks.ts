@@ -212,7 +212,33 @@ export function useCollabswarmDocumentState<
       > | null = docCache[documentPath] || null;
       const taskExists = openTasks.has(documentPath);
       if (!docRef) {
-        if (!taskExists) {
+        if (taskExists) {
+          // Another hook instance is already opening this document.
+          // Await its completion and subscribe this instance.
+          const existingTask = openTasks.get(documentPath);
+          if (existingTask) {
+            const result = await existingTask;
+            if (!active) return;
+            if (result.docRef) {
+              docRef = result.docRef as CollabswarmDocument<
+                DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey
+              >;
+              // Subscribe this late-arriving instance.
+              docRef.subscribe(
+                subscriptionIdRef.current,
+                (current, readers, writers) => {
+                  const freshDataCache: { [p: string]: DocType } = {};
+                  openTaskResults.forEach((r, p) => {
+                    if (r.docRef) freshDataCache[p] = p === documentPath ? current : r.docRef.document;
+                  });
+                  setDocDataCache(freshDataCache);
+                },
+                originFilter,
+              );
+              subscribedDocPath = documentPath;
+            }
+          }
+        } else {
           docRef = collabswarm.doc(documentPath);
           const openPromise: Promise<
             CollabswarmContextOpenResult<any, any, any, any, any, any>
