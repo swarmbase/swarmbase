@@ -14,8 +14,8 @@ export class LRUCache<K, V> {
   }
 
   get(key: K): V | undefined {
-    // Single lookup: get() returns undefined for missing keys which we
-    // distinguish from a stored undefined via the delete+set succeeding.
+    // get() returns undefined for both missing keys and stored undefined;
+    // use has() to distinguish those cases before updating recency.
     const value = this._map.get(key);
     if (value !== undefined || this._map.has(key)) {
       // Move to end (most recently used)
