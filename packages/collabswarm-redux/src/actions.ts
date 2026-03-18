@@ -141,7 +141,7 @@ export function initialize<
   PublicKey,
   DocumentKey
 > {
-  return { type: INITIALIZE, node, _trace };
+  return { type: INITIALIZE, node, ...(_trace != null && { _trace }) };
 }
 
 export function connectAsync<
@@ -202,7 +202,7 @@ export interface ConnectAction extends Action<typeof CONNECT> {
   _trace?: string;
 }
 export function connect(addresses: string[], _trace?: string): ConnectAction {
-  return { type: CONNECT, addresses, _trace };
+  return { type: CONNECT, addresses, ...(_trace != null && { _trace }) };
 }
 
 export function openDocumentAsync<
@@ -353,7 +353,7 @@ export function openDocument<
   PublicKey,
   DocumentKey
 > {
-  return { type: OPEN_DOCUMENT, documentId, documentRef, _trace };
+  return { type: OPEN_DOCUMENT, documentId, documentRef, ...(_trace != null && { _trace }) };
 }
 
 export function closeDocumentAsync<
@@ -416,7 +416,7 @@ export interface CloseDocumentAction extends Action<typeof CLOSE_DOCUMENT> {
   _trace?: string;
 }
 export function closeDocument(documentId: string, _trace?: string): CloseDocumentAction {
-  return { type: CLOSE_DOCUMENT, documentId, _trace };
+  return { type: CLOSE_DOCUMENT, documentId, ...(_trace != null && { _trace }) };
 }
 
 export const SYNC_DOCUMENT = 'COLLABSWARM_SYNC_DOCUMENT';
@@ -431,7 +431,7 @@ export function syncDocument<DocType>(
   document: DocType,
   _trace?: string,
 ): SyncDocumentAction<DocType> {
-  return { type: SYNC_DOCUMENT, documentId, document, _trace };
+  return { type: SYNC_DOCUMENT, documentId, document, ...(_trace != null && { _trace }) };
 }
 
 export function changeDocumentAsync<
@@ -505,7 +505,7 @@ export function changeDocument<DocType>(
   document: DocType,
   _trace?: string,
 ): ChangeDocumentAction<DocType> {
-  return { type: CHANGE_DOCUMENT, documentId, document, _trace };
+  return { type: CHANGE_DOCUMENT, documentId, document, ...(_trace != null && { _trace }) };
 }
 
 export const PEER_CONNECT = 'COLLABSWARM_PEER_CONNECT';
@@ -514,7 +514,7 @@ export interface PeerConnectAction extends Action<typeof PEER_CONNECT> {
   _trace?: string;
 }
 export function peerConnect(peerAddress: string, _trace?: string): PeerConnectAction {
-  return { type: PEER_CONNECT, peerAddress, _trace };
+  return { type: PEER_CONNECT, peerAddress, ...(_trace != null && { _trace }) };
 }
 
 export const PEER_DISCONNECT = 'COLLABSWARM_PEER_DISCONNECT';
@@ -523,7 +523,7 @@ export interface PeerDisconnectAction extends Action<typeof PEER_DISCONNECT> {
   _trace?: string;
 }
 export function peerDisconnect(peerAddress: string, _trace?: string): PeerDisconnectAction {
-  return { type: PEER_DISCONNECT, peerAddress, _trace };
+  return { type: PEER_DISCONNECT, peerAddress, ...(_trace != null && { _trace }) };
 }
 
 export type CollabswarmActions<

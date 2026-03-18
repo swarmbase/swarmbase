@@ -325,6 +325,37 @@ export function useCollabswarmDocumentState<
             subscribedDocPath = documentPath;
           }
         }
+      } else {
+        // Doc is already cached — subscribe this instance so it receives updates.
+        // Each hook instance uses a unique subscription ID so they don't collide.
+        if (!active) return;
+        docRef.subscribe(
+          subscriptionIdRef.current,
+          (current, readers, writers) => {
+            const newDocDataCache: { [docPath: string]: DocType } = {};
+            const newDocReadersCache: { [docPath: string]: PublicKey[] } = {};
+            const newDocWritersCache: { [docPath: string]: PublicKey[] } = {};
+            openTaskResults.forEach((r, path) => {
+              if (r.docRef) {
+                newDocDataCache[path] = path === documentPath ? current : r.docRef.document;
+              }
+              if (r.readers) newDocReadersCache[path] = r.readers;
+              if (r.writers) newDocWritersCache[path] = r.writers;
+            });
+            // Update the current path's readers/writers from this callback
+            const currentResults = openTaskResults.get(documentPath);
+            if (currentResults) {
+              openTaskResults.set(documentPath, { ...currentResults, readers, writers });
+            }
+            newDocReadersCache[documentPath] = readers;
+            newDocWritersCache[documentPath] = writers;
+            setDocDataCache(newDocDataCache);
+            setDocReadersCache(newDocReadersCache);
+            setDocWritersCache(newDocWritersCache);
+          },
+          originFilter,
+        );
+        subscribedDocPath = documentPath;
       }
 
       if (!docRef) {
@@ -364,19 +395,24 @@ export function useCollabswarmDocumentState<
         subscriberCounts.delete(documentPath);
         openTasks.delete(documentPath);
         openTaskResults.delete(documentPath);
-        // Evict from context caches so a later remount re-enters the open/subscribe path.
-        const newDocCache = { ...docCache };
-        delete newDocCache[documentPath];
-        setDocCache(newDocCache);
-        const newDocDataCache = { ...docDataCache };
-        delete newDocDataCache[documentPath];
-        setDocDataCache(newDocDataCache);
-        const newDocReadersCache = { ...docReadersCache };
-        delete newDocReadersCache[documentPath];
-        setDocReadersCache(newDocReadersCache);
-        const newDocWritersCache = { ...docWritersCache };
-        delete newDocWritersCache[documentPath];
-        setDocWritersCache(newDocWritersCache);
+        // Rebuild context caches from openTaskResults (the source of truth) rather than
+        // using stale captured values, which could clobber entries from other documents.
+        const freshDocCache: typeof docCache = {};
+        const freshDocDataCache: typeof docDataCache = {};
+        const freshDocReadersCache: typeof docReadersCache = {};
+        const freshDocWritersCache: typeof docWritersCache = {};
+        openTaskResults.forEach((result, path) => {
+          if (result.docRef) {
+            freshDocCache[path] = result.docRef;
+            freshDocDataCache[path] = result.docRef.document;
+          }
+          if (result.readers) freshDocReadersCache[path] = result.readers;
+          if (result.writers) freshDocWritersCache[path] = result.writers;
+        });
+        setDocCache(freshDocCache);
+        setDocDataCache(freshDocDataCache);
+        setDocReadersCache(freshDocReadersCache);
+        setDocWritersCache(freshDocWritersCache);
       } else {
         subscriberCounts.set(documentPath, count);
       }

@@ -7,17 +7,21 @@ export class LRUCache<K, V> {
   private readonly _maxSize: number;
 
   constructor(maxSize: number = 1000) {
+    if (maxSize < 1) {
+      throw new RangeError(`LRUCache maxSize must be >= 1, got ${maxSize}`);
+    }
     this._maxSize = maxSize;
   }
 
   get(key: K): V | undefined {
-    const value = this._map.get(key);
-    if (value !== undefined) {
+    if (this._map.has(key)) {
+      const value = this._map.get(key)!;
       // Move to end (most recently used)
       this._map.delete(key);
       this._map.set(key, value);
+      return value;
     }
-    return value;
+    return undefined;
   }
 
   set(key: K, value: V): void {
