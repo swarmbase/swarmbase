@@ -223,6 +223,17 @@ export function useCollabswarmDocumentState<
               docRef = result.docRef as CollabswarmDocument<
                 DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey
               >;
+              // If the opener unmounted before populating caches, do it here.
+              if (!openTaskResults.has(documentPath)) {
+                openTaskResults.set(documentPath, result);
+                const freshDocCache: { [p: string]: any } = {};
+                const freshDataCache: { [p: string]: any } = {};
+                openTaskResults.forEach((r, p) => {
+                  if (r.docRef) { freshDocCache[p] = r.docRef; freshDataCache[p] = r.docRef.document; }
+                });
+                setDocCache(freshDocCache);
+                setDocDataCache(freshDataCache);
+              }
               // Subscribe this late-arriving instance.
               docRef.subscribe(
                 subscriptionIdRef.current,
@@ -443,7 +454,7 @@ export function useCollabswarmDocumentState<
         subscriberCounts.set(documentPath, count);
       }
     };
-  }, [documentPath]);
+  }, [documentPath, collabswarm, originFilter]);
 
   return [
     docDataCache[documentPath],

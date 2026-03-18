@@ -7,10 +7,10 @@ export class LRUCache<K, V> {
   private readonly _maxSize: number;
 
   constructor(maxSize: number = 1000) {
-    if (maxSize < 1) {
-      throw new RangeError(`LRUCache maxSize must be >= 1, got ${maxSize}`);
+    if (!Number.isFinite(maxSize) || maxSize < 1) {
+      throw new RangeError(`LRUCache maxSize must be a finite integer >= 1, got ${maxSize}`);
     }
-    this._maxSize = maxSize;
+    this._maxSize = Math.floor(maxSize);
   }
 
   get(key: K): V | undefined {
