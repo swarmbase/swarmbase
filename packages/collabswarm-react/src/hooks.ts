@@ -226,23 +226,42 @@ export function useCollabswarmDocumentState<
               // If the opener unmounted before populating caches, do it here.
               if (!openTaskResults.has(documentPath)) {
                 openTaskResults.set(documentPath, result);
-                const freshDocCache: { [p: string]: any } = {};
-                const freshDataCache: { [p: string]: any } = {};
-                openTaskResults.forEach((r, p) => {
-                  if (r.docRef) { freshDocCache[p] = r.docRef; freshDataCache[p] = r.docRef.document; }
-                });
-                setDocCache(freshDocCache);
-                setDocDataCache(freshDataCache);
               }
+              // Rebuild all caches (doc, data, readers, writers) from openTaskResults.
+              const freshDocCache: { [p: string]: any } = {};
+              const freshDataCache: { [p: string]: any } = {};
+              const freshReadersCache: { [p: string]: any[] } = {};
+              const freshWritersCache: { [p: string]: any[] } = {};
+              openTaskResults.forEach((r, p) => {
+                if (r.docRef) { freshDocCache[p] = r.docRef; freshDataCache[p] = r.docRef.document; }
+                if (r.readers) freshReadersCache[p] = r.readers;
+                if (r.writers) freshWritersCache[p] = r.writers;
+              });
+              setDocCache(freshDocCache);
+              setDocDataCache(freshDataCache);
+              setDocReadersCache(freshReadersCache);
+              setDocWritersCache(freshWritersCache);
               // Subscribe this late-arriving instance.
               docRef.subscribe(
                 subscriptionIdRef.current,
                 (current, readers, writers) => {
-                  const freshDataCache: { [p: string]: DocType } = {};
+                  const currentResults = openTaskResults.get(documentPath);
+                  if (currentResults) {
+                    openTaskResults.set(documentPath, { ...currentResults, readers, writers });
+                  }
+                  const newDataCache: { [p: string]: DocType } = {};
+                  const newReadersCache: { [p: string]: PublicKey[] } = {};
+                  const newWritersCache: { [p: string]: PublicKey[] } = {};
                   openTaskResults.forEach((r, p) => {
-                    if (r.docRef) freshDataCache[p] = p === documentPath ? current : r.docRef.document;
+                    if (r.docRef) newDataCache[p] = p === documentPath ? current : r.docRef.document;
+                    if (r.readers) newReadersCache[p] = r.readers;
+                    if (r.writers) newWritersCache[p] = r.writers;
                   });
-                  setDocDataCache(freshDataCache);
+                  newReadersCache[documentPath] = readers;
+                  newWritersCache[documentPath] = writers;
+                  setDocDataCache(newDataCache);
+                  setDocReadersCache(newReadersCache);
+                  setDocWritersCache(newWritersCache);
                 },
                 originFilter,
               );
