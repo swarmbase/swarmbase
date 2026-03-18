@@ -74,8 +74,11 @@ export class SubtleCrypto
     if (!raw) {
       throw new Error(`Cannot extract nonce from algorithm: ${(params as any).name}`);
     }
-    // Normalize BufferSource to Uint8Array
-    return raw instanceof Uint8Array ? raw : new Uint8Array(raw instanceof ArrayBuffer ? raw : raw.buffer);
+    // Normalize BufferSource to Uint8Array, respecting byteOffset/byteLength for views.
+    if (raw instanceof Uint8Array) return raw;
+    if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+    // ArrayBufferView — respect offset and length to avoid reading unrelated bytes.
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
   }
 
   /**
