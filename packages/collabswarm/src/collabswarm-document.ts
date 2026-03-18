@@ -1234,7 +1234,11 @@ export class CollabswarmDocument<
    * response from a load request is a sync message containing all document change hashes.
    *
    * Load is used to fetch any new changes that a connecting node is missing.
-   * @returns false if this is a new document (no peers exist).
+   *
+   * @param preferredPeer Optional peer to try first (typically a PeerId from a
+   *   pubsub message sender). Matched against peers by extracting the PeerId
+   *   component from their Multiaddr via `getPeerId()`.
+   * @returns false if this is a new document (no peers could provide it).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -1690,6 +1694,9 @@ export class CollabswarmDocument<
   public async endChange(message?: string) {
     if (!this._inTransaction) {
       throw new Error('No transaction in progress. Call startChange() first.');
+    }
+    if (this._committing) {
+      throw new Error('endChange() is already in progress. Await the previous call.');
     }
 
     // Snapshot pending fns so late addChange() calls during await don't
