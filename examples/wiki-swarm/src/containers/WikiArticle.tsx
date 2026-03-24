@@ -57,6 +57,7 @@ class WikiArticle extends React.Component<
   RootState
 > {
   private _mounted = false;
+  private _refreshCounter = 0;
 
   constructor(public props: WikiArticleProps) {
     super(props);
@@ -66,27 +67,29 @@ class WikiArticle extends React.Component<
   async refreshACL() {
     const docRef = this.props.documentRef;
     if (!docRef) return;
+    const thisRefresh = ++this._refreshCounter;
     try {
       const readers = await docRef.getReaders();
       const writers = await docRef.getWriters();
+      const serializeKey = async (k: CryptoKey): Promise<string> => {
+        const raw = await crypto.subtle.exportKey('raw', k);
+        const hash = await crypto.subtle.digest('SHA-256', raw);
+        return Array.from(new Uint8Array(hash).slice(0, 8))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      };
       const serializeKeys = async (keys: CryptoKey[]) => {
-        const results = await Promise.allSettled(
-          keys.map(async (k) => {
-            const raw = await crypto.subtle.exportKey('raw', k);
-            const hash = await crypto.subtle.digest('SHA-256', raw);
-            return Array.from(new Uint8Array(hash).slice(0, 8))
-              .map((b) => b.toString(16).padStart(2, '0'))
-              .join('');
-          }),
-        );
+        const results = await Promise.allSettled(keys.map(serializeKey));
         return results.map((r) =>
           r.status === 'fulfilled' ? r.value : '<unexportable>',
         );
       };
-      const aclReaders = await serializeKeys(readers);
       const aclWriters = await serializeKeys(writers);
-      // Re-check mounted after all async work completes
-      if (!this._mounted) return;
+      const writerSet = new Set(aclWriters);
+      const allReaders = await serializeKeys(readers);
+      const aclReaders = allReaders.filter((id) => !writerSet.has(id));
+      // Re-check mounted and that no newer refresh has started
+      if (!this._mounted || thisRefresh !== this._refreshCounter) return;
       this.setState({ aclReaders, aclWriters });
     } catch (err) {
       console.warn('Failed to refresh ACL:', err);
@@ -172,7 +175,7 @@ class WikiArticle extends React.Component<
             </button>
             {this.state.aclReaders.length > 0 && (
               <div className="mt-1">
-                <em>Read access incl. writers ({this.state.aclReaders.length}):</em>{' '}
+                <em>Readers ({this.state.aclReaders.length}):</em>{' '}
                 {this.state.aclReaders.map((id, i) => (
                   <code key={`${id}-${i}`} className="me-1">{id}…</code>
                 ))}
@@ -203,7 +206,7 @@ class WikiArticle extends React.Component<
   }
 }
 
-function mapStateToProps(state: RootState, ownProps: WikiArticleProps) {
+function mapStateToProps(state: RootState, ownProps: RouteComponentProps<MatchParams>) {
   const documentState =
     state.automergeSwarm.documents[ownProps.match.params.documentId];
   return {
