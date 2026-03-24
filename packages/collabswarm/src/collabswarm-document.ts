@@ -1310,13 +1310,44 @@ export class CollabswarmDocument<
    * subscribing to pubsub to prevent briefly joining an unauthorized topic, and
    * the document is not yet fully open so it has nothing to serve.
    *
+   * **Race window:** Messages published by peers between the `load()` response
+   * and the `pubsub.subscribe()` call will be missed. This is mitigated by the
+   * fact that subsequent messages will arrive once subscribed, and the underlying
+   * CRDT guarantees eventual consistency. If the missed message is critical, the
+   * caller can invoke `load()` again to re-sync from a peer.
+   *
    * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
    *   for a new document. Validation runs before subscribing to pubsub or
    *   registering protocol handlers, so no cleanup is needed on rejection.
    */
   public async open(): Promise<boolean> {
-    // Prepare pubsub handler (assigned to instance but not yet subscribed).
+    // Load initial document from peers via direct dial (no subscription needed).
+    const isExisting = await this.load();
+
+    // Validate document path BEFORE subscribing to pubsub or registering
+    // protocol handlers. This prevents temporarily joining an unauthorized topic.
+    // _pubsubHandler is not yet assigned, so if validation throws, close() will
+    // not attempt to unsubscribe from a subscription that was never created.
+    if (!isExisting) {
+      const validateFn = this.swarm.config?.validateDocumentPath;
+      if (validateFn) {
+        let allowed: boolean;
+        try {
+          allowed = await validateFn(this.documentPath, this._userPublicKey);
+        } catch (err) {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+        if (!allowed) {
+          throw new Error(
+            `Document path "${this.documentPath}" is not allowed for the current user`,
+          );
+        }
+      }
+    }
+
+    // Assign pubsub handler AFTER validation succeeds. This ensures close()
+    // won't try to unsubscribe if open() failed during validation.
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
       const blockKeyID = rawMessage.detail.data.slice(
@@ -1348,32 +1379,6 @@ export class CollabswarmDocument<
         },
       );
     };
-
-    // Load initial document from peers via direct dial (no subscription needed).
-    const isExisting = await this.load();
-
-    // Validate document path BEFORE subscribing to pubsub or registering
-    // protocol handlers. This prevents temporarily joining an unauthorized topic.
-    if (!isExisting) {
-      const validateFn = this.swarm.config?.validateDocumentPath;
-      if (validateFn) {
-        let allowed: boolean;
-        try {
-          allowed = await validateFn(this.documentPath, this._userPublicKey);
-        } catch (err) {
-          // Clear the handler so close() won't try to unsubscribe from a
-          // subscription that was never created.
-          this._pubsubHandler = undefined;
-          throw err instanceof Error ? err : new Error(String(err));
-        }
-        if (!allowed) {
-          this._pubsubHandler = undefined;
-          throw new Error(
-            `Document path "${this.documentPath}" is not allowed for the current user`,
-          );
-        }
-      }
-    }
 
     // Subscribe to pubsub topic and register protocol handlers.
     const pubsub = this.swarm.heliaNode.libp2p.services
@@ -1470,6 +1475,11 @@ export class CollabswarmDocument<
   /**
    * Disconnects from this collabswarm document. Running this method disconnects from the
    * document pubsub topic.
+   *
+   * **Limitation:** Multiple `CollabswarmDocument` instances sharing the same
+   * `documentPath` are not supported. Calling `close()` on one instance will
+   * remove the GossipSub topic validator and unsubscribe from the pubsub topic,
+   * breaking any other instance using the same path.
    */
   public async close() {
     if (this._pubsubHandler) {
