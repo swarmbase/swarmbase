@@ -28,11 +28,15 @@ export class SubtleCrypto
      * @remarks
      * This is not Node’s Crypto API; that API is not expected to be as performant.
      *
-     * @remarks Despite the name, this value is in **bytes** (not bits).
-     * The default 12 corresponds to the 96-bit IV recommended for AES-GCM.
-     * The name is kept for backward compatibility.
+     * @remarks Despite the name "nonceBits", this value is used as a **byte
+     * count** throughout the codebase (passed directly to
+     * `new Uint8Array(nonceBits)`). The default of 96 is historically
+     * consistent with all existing encrypted data and must not be changed
+     * without a migration, even though 12 bytes would be the correct size
+     * for a 96-bit AES-GCM IV. The field name is kept for backward
+     * compatibility.
      */
-    public readonly nonceBits = 12,
+    public readonly nonceBits = 96,
 
     /**
      * The type of algorithm used for signature and verification keys.
@@ -102,8 +106,9 @@ export class SubtleCrypto
       }
       case 'AES-CTR':
       case 'AES-CBC':
-        // AES-CTR and AES-CBC require different nonce sizes (16 bytes) and
-        // key import parameters than AES-GCM. Support is deferred until the
+        // TODO: AES-CTR and AES-CBC support is planned but not yet implemented.
+        // They require different nonce sizes (16 bytes) and key import
+        // parameters than AES-GCM. Implementation is deferred until the
         // key derivation paths and wire format header parsing are updated.
         throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
       default:

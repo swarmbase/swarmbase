@@ -13,6 +13,7 @@ import {
   Keychain,
   KeychainProvider,
   LRUCache,
+  validateChangeBlockMetadata,
 } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
@@ -102,32 +103,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if ('keyID' in deserialized) {
-      if (typeof deserialized.keyID !== 'string') {
-        throw new Error('keyID must be a string');
-      }
-      result.keyID = deserialized.keyID;
-    }
-    if ('blindIndexTokens' in deserialized) {
-      if (deserialized.blindIndexTokens === null || typeof deserialized.blindIndexTokens !== 'object' || Array.isArray(deserialized.blindIndexTokens)) {
-        throw new Error('blindIndexTokens must be a plain object');
-      }
-      const tokens = deserialized.blindIndexTokens;
-      const proto = Object.getPrototypeOf(tokens);
-      if (proto !== Object.prototype && proto !== null) {
-        throw new Error('blindIndexTokens must be a plain object');
-      }
-      const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-      const sanitized: Record<string, string> = {};
-      for (const [key, val] of Object.entries(tokens)) {
-        if (DANGEROUS_KEYS.has(key)) continue;
-        if (typeof key !== 'string' || typeof val !== 'string') {
-          throw new Error(`blindIndexTokens values must be strings, got non-string at key "${key}"`);
-        }
-        sanitized[key] = val;
-      }
-      result.blindIndexTokens = sanitized;
-    }
+    validateChangeBlockMetadata(deserialized, result);
     return result;
   }
   serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {

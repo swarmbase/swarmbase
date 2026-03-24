@@ -6,6 +6,57 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 
+/**
+ * Dangerous property keys that should be stripped from deserialized objects
+ * to prevent prototype pollution attacks.
+ */
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Validate and sanitize keyID and blindIndexTokens fields from a deserialized
+ * change block. Shared across JSONSerializer, YjsJSONSerializer, and
+ * AutomergeJSONSerializer to avoid duplicating validation logic.
+ *
+ * Mutates the result object in place by setting keyID and blindIndexTokens
+ * if present and valid on the deserialized input.
+ *
+ * @throws {Error} If keyID is not a string, or blindIndexTokens is not a
+ *   plain object with string values.
+ */
+export function validateChangeBlockMetadata<ChangesType>(
+  deserialized: { keyID?: unknown; blindIndexTokens?: unknown },
+  result: CRDTChangeBlock<ChangesType>,
+): void {
+  if ('keyID' in deserialized) {
+    if (typeof deserialized.keyID !== 'string') {
+      throw new Error('keyID must be a string');
+    }
+    result.keyID = deserialized.keyID;
+  }
+  if ('blindIndexTokens' in deserialized) {
+    const tokens = deserialized.blindIndexTokens;
+    // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
+    if (tokens === null || typeof tokens !== 'object' || Array.isArray(tokens)) {
+      throw new Error('blindIndexTokens must be a plain object');
+    }
+    const proto = Object.getPrototypeOf(tokens);
+    if (proto !== Object.prototype && proto !== null) {
+      throw new Error('blindIndexTokens must be a plain object');
+    }
+    const sanitized: Record<string, string> = {};
+    for (const [key, val] of Object.entries(tokens as Record<string, unknown>)) {
+      if (DANGEROUS_KEYS.has(key)) {
+        continue; // silently drop dangerous keys
+      }
+      if (typeof key !== 'string' || typeof val !== 'string') {
+        throw new Error(`blindIndexTokens values must be strings, got non-string at key "${key}"`);
+      }
+      sanitized[key] = val;
+    }
+    result.blindIndexTokens = sanitized;
+  }
+}
+
 export class JSONSerializer<ChangesType>
   implements
     ChangesSerializer<ChangesType>,
@@ -63,35 +114,7 @@ export class JSONSerializer<ChangesType>
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if ('keyID' in deserialized) {
-      if (typeof deserialized.keyID !== 'string') {
-        throw new Error('keyID must be a string');
-      }
-      result.keyID = deserialized.keyID;
-    }
-    if ('blindIndexTokens' in deserialized) {
-      // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
-      if (deserialized.blindIndexTokens === null || typeof deserialized.blindIndexTokens !== 'object' || Array.isArray(deserialized.blindIndexTokens)) {
-        throw new Error('blindIndexTokens must be a plain object');
-      }
-      const tokens = deserialized.blindIndexTokens;
-      const proto = Object.getPrototypeOf(tokens);
-      if (proto !== Object.prototype && proto !== null) {
-        throw new Error('blindIndexTokens must be a plain object');
-      }
-      const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-      const sanitized: Record<string, string> = {};
-      for (const [key, val] of Object.entries(tokens)) {
-        if (DANGEROUS_KEYS.has(key)) {
-          continue; // silently drop dangerous keys
-        }
-        if (typeof key !== 'string' || typeof val !== 'string') {
-          throw new Error(`blindIndexTokens values must be strings, got non-string at key "${key}"`);
-        }
-        sanitized[key] = val;
-      }
-      result.blindIndexTokens = sanitized;
-    }
+    validateChangeBlockMetadata(deserialized, result);
     return result;
   }
   serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {

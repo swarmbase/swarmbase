@@ -238,14 +238,14 @@ describe('encrypt and decrypt', () => {
 });
 
 describe('nonce size', () => {
-  test('encrypt produces a 12-byte nonce for AES-GCM (96 bits / 8)', async () => {
+  test('encrypt generates nonce of nonceBits bytes', async () => {
     const documentKey = await importKey(
       docKeyData1,
       ['encrypt', 'decrypt'],
       'AES-GCM',
     );
     const result = await auth.encrypt(new Uint8Array([1, 2, 3]), documentKey);
-    expect(result.nonce.length).toBe(12);
+    expect(result.nonce.length).toBe(auth.nonceBits);
   });
 });
 
