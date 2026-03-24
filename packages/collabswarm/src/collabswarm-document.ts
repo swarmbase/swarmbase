@@ -41,7 +41,7 @@ import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { EventHandler, Message, StreamHandler } from '@libp2p/interface';
+import { EventHandler, Message, PeerId, StreamHandler } from '@libp2p/interface';
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -1312,7 +1312,7 @@ export class CollabswarmDocument<
   // Key exchange happens during:
   // - Load messages.
   // - ACL updates via /collabswarm/key-update/1.0.0 protocol
-  public async load(preferredPeer?: { toString(): string }): Promise<boolean> {
+  public async load(preferredPeer?: PeerId | string): Promise<boolean> {
     // Pick a peer. All peers come from getConnections() so they already have
     // open connections. libp2p v2's dialProtocol reuses existing connections
     // internally, so no additional connection management is needed here.
