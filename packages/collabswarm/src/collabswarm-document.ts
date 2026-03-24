@@ -1858,17 +1858,35 @@ export class CollabswarmDocument<
    * For immutable CRDT providers (e.g. Automerge), rollback is reliable
    * because `localChange()` returns a new document object.
    *
-   * **Known limitation:** For in-place mutating CRDT providers (e.g. Yjs),
-   * rollback does NOT undo mutations. Yjs's `localChange()` mutates the
-   * document object directly and returns the same reference, so restoring
-   * the saved reference after failure has no effect — the mutations have
-   * already been applied to the shared Y.Doc. Callers using Yjs should
-   * treat a failed transaction as leaving the local document in a
-   * potentially inconsistent state and consider re-syncing from peers.
+   * **Known limitation — in-place mutating providers:** For CRDT providers
+   * that mutate in place (e.g. Yjs), rollback does NOT undo mutations.
+   * Yjs's `localChange()` mutates the document object directly and returns
+   * the same reference, so restoring the saved reference after failure has
+   * no effect — the mutations have already been applied to the shared
+   * Y.Doc. Callers using Yjs should treat a failed transaction as leaving
+   * the local document in a potentially inconsistent state and consider
+   * re-syncing from peers.
    *
-   * Note: if the network publish step fails, internal metadata (_hashes,
-   * _lastSyncMessage) may be partially updated. A new transaction must
-   * be started after a failure.
+   * **Known limitation — concurrent remote changes during rollback:** The
+   * rollback sets `_document` back to the snapshot taken at the start of
+   * the transaction. Because `_makeChange()` is async, remote sync messages
+   * may arrive and be applied to `_document` between the start and the
+   * failure. Rolling back to the original snapshot silently discards those
+   * remote changes from the local state. This is acceptable because the
+   * CRDT layer guarantees eventual consistency — the discarded remote
+   * changes will be re-applied on the next sync cycle or document load.
+   * The transaction API is designed for local change batching; concurrent
+   * remote changes are reconciled by the underlying CRDT provider.
+   *
+   * **Known limitation — partial internal state on failure:** If
+   * `_makeChange()` fails partway through (e.g. encryption succeeds but
+   * pubsub publish throws), internal metadata (`_hashes`,
+   * `_lastSyncMessage`) may be left in an inconsistent state because
+   * `_makeChange` mutates them before completing all steps. These partial
+   * mutations are not rolled back. Callers should treat a failed
+   * transaction as requiring a fresh document load or re-sync from peers
+   * to restore consistent internal state. A new transaction must be
+   * started after a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
