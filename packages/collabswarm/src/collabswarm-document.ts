@@ -1298,10 +1298,11 @@ export class CollabswarmDocument<
    *
    * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
-   *   for a new document. In this case, `close()` is called before throwing.
+   *   for a new document. Validation runs before subscribing to pubsub or
+   *   registering protocol handlers, so no cleanup is needed on rejection.
    */
   public async open(): Promise<boolean> {
-    // Open pubsub connection.
+    // Prepare pubsub handler (assigned to instance but not yet subscribed).
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
       const blockKeyID = rawMessage.detail.data.slice(
@@ -1334,6 +1335,29 @@ export class CollabswarmDocument<
       );
     };
 
+    // Load initial document from peers via direct dial (no subscription needed).
+    const isExisting = await this.load();
+
+    // Validate document path BEFORE subscribing to pubsub or registering
+    // protocol handlers. This prevents temporarily joining an unauthorized topic.
+    if (!isExisting) {
+      const validateFn = this.swarm.config?.validateDocumentPath;
+      if (validateFn) {
+        let allowed: boolean;
+        try {
+          allowed = await validateFn(this.documentPath, this._userPublicKey);
+        } catch (err) {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+        if (!allowed) {
+          throw new Error(
+            `Document path "${this.documentPath}" is not allowed for the current user`,
+          );
+        }
+      }
+    }
+
+    // Subscribe to pubsub topic and register protocol handlers.
     const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
@@ -1413,29 +1437,7 @@ export class CollabswarmDocument<
       }
     }
 
-    // Load initial document from peers.
-    const isExisting = await this.load(); // new document would return false; then a key is needed
     if (!isExisting) {
-      // Validate document path before creating a new document.
-      // Wrap in try/catch to ensure close() runs even if the callback throws,
-      // cleaning up pubsub subscriptions and protocol handlers registered by open().
-      const validateFn = this.swarm.config?.validateDocumentPath;
-      if (validateFn) {
-        let allowed: boolean;
-        try {
-          allowed = await validateFn(this.documentPath, this._userPublicKey);
-        } catch (err) {
-          await this.close();
-          throw err instanceof Error ? err : new Error(String(err));
-        }
-        if (!allowed) {
-          await this.close();
-          throw new Error(
-            `Document path "${this.documentPath}" is not allowed for the current user`,
-          );
-        }
-      }
-
       // Add current user as a writer.
       await this._writers.add(this._userPublicKey);
 

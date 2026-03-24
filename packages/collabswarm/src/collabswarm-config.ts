@@ -99,6 +99,9 @@ export interface CollabswarmConfig {
    * When enabled, messages from unauthorized peers are rejected at the
    * transport layer (P4 penalty in peer scoring).
    *
+   * Topic validators are registered during `open()` and properly removed
+   * during `close()` to prevent stale validator references.
+   *
    * Default: false (for backward compatibility).
    */
   enableTopicValidators?: boolean;
@@ -127,10 +130,10 @@ export interface CollabswarmConfig {
    * false — no peers could provide the document). Note that `load()` can also
    * return false during network partitions when peers are unavailable.
    *
-   * If the callback returns `false` (or throws), `open()` calls `close()` to
-   * clean up resources and then rethrows the error (or throws an Error with
-   * a descriptive message). Note: `open()` normally resolves to a `boolean`
-   * (`Promise<boolean>`), but will reject/throw when validation fails.
+   * Validation runs before pubsub subscription and protocol handler registration,
+   * so rejected paths never temporarily join the topic. If the callback returns
+   * `false` (or throws), `open()` throws an Error with a descriptive message.
+   * `close()` properly removes any registered topic validators during cleanup.
    *
    * May return a boolean or a Promise<boolean> for async validation.
    * Return `true` to allow creation, `false` to reject it.
