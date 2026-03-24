@@ -96,8 +96,11 @@ class App extends React.Component<
           r.status === 'fulfilled' ? r.value : '<unexportable>',
         );
       };
-      const readerIds = await serializeKeys(readers);
       const writerIds = await serializeKeys(writers);
+      const allReaderIds = await serializeKeys(readers);
+      // getReaders() returns both readers and writers; filter out writers to avoid duplicates.
+      const writerIdSet = new Set(writerIds);
+      const readerIds = allReaderIds.filter((id) => !writerIdSet.has(id));
       this.setState((prev) => ({
         aclReaders: { ...prev.aclReaders, [documentPath]: readerIds },
         aclWriters: { ...prev.aclWriters, [documentPath]: writerIds },
@@ -219,9 +222,9 @@ class App extends React.Component<
                 </button>
                 {this.state.aclReaders[documentPath] && (
                   <div>
-                    <em>Read access incl. writers ({this.state.aclReaders[documentPath].length}):</em>{' '}
+                    <em>Readers ({this.state.aclReaders[documentPath].length}):</em>{' '}
                     {this.state.aclReaders[documentPath].map((id, i) => (
-                      <code key={`${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={`reader-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
@@ -229,7 +232,7 @@ class App extends React.Component<
                   <div>
                     <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
                     {this.state.aclWriters[documentPath].map((id, i) => (
-                      <code key={`${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={`writer-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
@@ -238,6 +241,11 @@ class App extends React.Component<
                 <button
                   onClick={() => {
                     this.props.onDocumentClose(documentPath);
+                    this.setState((prev) => {
+                      const { [documentPath]: _r, ...remainingReaders } = prev.aclReaders;
+                      const { [documentPath]: _w, ...remainingWriters } = prev.aclWriters;
+                      return { aclReaders: remainingReaders, aclWriters: remainingWriters };
+                    });
                   }}
                 >
                   Close Document
