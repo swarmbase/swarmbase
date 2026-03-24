@@ -1869,14 +1869,16 @@ export class CollabswarmDocument<
    *
    * **Known limitation — concurrent remote changes during rollback:** The
    * rollback sets `_document` back to the snapshot taken at the start of
-   * the transaction. Because `_makeChange()` is async, remote sync messages
-   * may arrive and be applied to `_document` between the start and the
-   * failure. Rolling back to the original snapshot silently discards those
-   * remote changes from the local state. This is acceptable because the
-   * CRDT layer guarantees eventual consistency — the discarded remote
-   * changes will be re-applied on the next sync cycle or document load.
-   * The transaction API is designed for local change batching; concurrent
-   * remote changes are reconciled by the underlying CRDT provider.
+   * the transaction. Because `_makeChange()` is async and the node remains
+   * subscribed to pubsub throughout, remote sync messages may arrive and be
+   * applied to `_document` between the start of the transaction and the
+   * point of failure. Rolling back to the original snapshot **reverts those
+   * remote changes as well**, not just the local batch. This is acceptable
+   * because the CRDT layer guarantees eventual consistency — the reverted
+   * remote changes will be re-applied on the next sync cycle or document
+   * load. If transaction failure is critical, callers should re-sync the
+   * document after a failed transaction (e.g. call `load()` or wait for
+   * the next pubsub round) to ensure remote state is promptly restored.
    *
    * **Known limitation — partial internal state on failure:** If
    * `_makeChange()` fails partway through (e.g. encryption succeeds but
