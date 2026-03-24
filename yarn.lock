@@ -1973,7 +1973,7 @@ __metadata:
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
-    yjs: "npm:^13.6.29"
+    yjs: "npm:^13.6.30"
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
   languageName: unknown
@@ -20756,12 +20756,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yjs@npm:^13.6.29":
-  version: 13.6.29
-  resolution: "yjs@npm:13.6.29"
+"yjs@npm:^13.6.30":
+  version: 13.6.30
+  resolution: "yjs@npm:13.6.30"
   dependencies:
     lib0: "npm:^0.2.99"
-  checksum: 10/4fcba2974913c522c9b2b767a22f9d50617ffbddeb229a8eb5dd740df03d3145a757aff7a039b1546d5c62b3fda1af2b2e9ca2dba23af3a1df2158db21f3c516
+  checksum: 10/0414a42da1f2a9a99b8eb1821c7586eaa7a519833a949fac7c95609f6ea915a148371ba48abfc10328af7fdf5bf3be8992c62f590c5c8ab79810eb23be33c5c8
   languageName: node
   linkType: hard
 
