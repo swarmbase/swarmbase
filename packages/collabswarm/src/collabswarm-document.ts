@@ -1426,7 +1426,7 @@ export class CollabswarmDocument<
           allowed = await validateFn(this.documentPath, this._userPublicKey);
         } catch (err) {
           await this.close();
-          throw err;
+          throw err instanceof Error ? err : new Error(String(err));
         }
         if (!allowed) {
           await this.close();
@@ -1458,6 +1458,14 @@ export class CollabswarmDocument<
       pubsub.unsubscribe(this.documentPath);
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
+
+      // Remove GossipSub topic validator if one was registered.
+      if (this.swarm.config?.enableTopicValidators) {
+        const gossipsubService = pubsub as any;
+        if (typeof gossipsubService.topicValidators?.delete === 'function') {
+          gossipsubService.topicValidators.delete(this.documentPath);
+        }
+      }
     }
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
