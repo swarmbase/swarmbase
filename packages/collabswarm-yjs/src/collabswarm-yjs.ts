@@ -102,7 +102,12 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID) result.keyID = deserialized.keyID;
+    if (deserialized.keyID) {
+      if (typeof deserialized.keyID !== 'string') {
+        throw new Error('keyID must be a string');
+      }
+      result.keyID = deserialized.keyID;
+    }
     if (deserialized.blindIndexTokens) {
       const tokens = deserialized.blindIndexTokens;
       if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {

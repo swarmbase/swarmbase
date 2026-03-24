@@ -63,7 +63,12 @@ export class JSONSerializer<ChangesType>
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID) result.keyID = deserialized.keyID;
+    if (deserialized.keyID) {
+      if (typeof deserialized.keyID !== 'string') {
+        throw new Error('keyID must be a string');
+      }
+      result.keyID = deserialized.keyID;
+    }
     if ('blindIndexTokens' in deserialized) {
       // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
       const tokens = deserialized.blindIndexTokens;
