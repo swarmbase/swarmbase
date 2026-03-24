@@ -228,7 +228,7 @@ class App extends React.Component<
                   <div>
                     <em>Readers ({this.state.aclReaders[documentPath].length}):</em>{' '}
                     {this.state.aclReaders[documentPath].map((id, i) => (
-                      <code key={`reader-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={`reader-${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
@@ -236,7 +236,7 @@ class App extends React.Component<
                   <div>
                     <em>Writers ({this.state.aclWriters[documentPath].length}):</em>{' '}
                     {this.state.aclWriters[documentPath].map((id, i) => (
-                      <code key={`writer-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
+                      <code key={`writer-${id}-${i}`} style={{ marginRight: '4px' }}>{id}…</code>
                     ))}
                   </div>
                 )}
