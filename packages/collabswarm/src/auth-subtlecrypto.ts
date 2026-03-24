@@ -30,6 +30,10 @@ export class SubtleCrypto
      *
      * @remarks 96 bits length is recommended in docs; though example uses only 12
      */
+    // NOTE: Despite the name "nonceBits", this value is divided by 8 when
+    // generating nonces (see _encryptionAlgorithmParams). The value represents
+    // bits, but callers that slice encrypted blocks using this field directly
+    // should be aware they need to convert to bytes first (nonceBits / 8).
     public readonly nonceBits = 96,
 
     /**
@@ -62,8 +66,7 @@ export class SubtleCrypto
 
   /**
    * Extract the nonce/IV from encryption algorithm parameters.
-   * Currently only AES-GCM is supported; AES-CTR and AES-CBC are not yet supported
-   * and will throw if used.
+   * Supports AES-GCM (via `iv`), AES-CTR (via `counter`), and AES-CBC (via `iv`).
    * Normalizes BufferSource values to Uint8Array.
    */
   private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {

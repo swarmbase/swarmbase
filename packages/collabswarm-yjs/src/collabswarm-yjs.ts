@@ -84,8 +84,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes: Base64.fromUint8Array(changes.changes),
       nonce: Base64.fromUint8Array(changes.nonce),
     };
-    if (changes.keyID) obj.keyID = changes.keyID;
-    if (changes.blindIndexTokens) obj.blindIndexTokens = changes.blindIndexTokens;
+    if (changes.keyID !== undefined) obj.keyID = changes.keyID;
+    if (changes.blindIndexTokens !== undefined && changes.blindIndexTokens !== null) obj.blindIndexTokens = changes.blindIndexTokens;
     return this.serialize(obj);
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<Uint8Array> {
@@ -102,13 +102,13 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID) {
+    if (deserialized.keyID !== undefined) {
       if (typeof deserialized.keyID !== 'string') {
         throw new Error('keyID must be a string');
       }
       result.keyID = deserialized.keyID;
     }
-    if (deserialized.blindIndexTokens) {
+    if (deserialized.blindIndexTokens !== undefined && deserialized.blindIndexTokens !== null) {
       const tokens = deserialized.blindIndexTokens;
       if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
         throw new Error('blindIndexTokens must be a plain object');

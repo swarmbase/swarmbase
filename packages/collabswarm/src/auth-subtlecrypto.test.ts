@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { SubtleCrypto, SubtleCryptoEncryptionResult } from './auth-subtlecrypto';
+import { SubtleCrypto } from './auth-subtlecrypto';
 
 const auth = new SubtleCrypto();
 

@@ -45,7 +45,7 @@ export class JSONSerializer<ChangesType>
       changes: changes.changes,
       nonce: Base64.fromUint8Array(changes.nonce),
     };
-    if (changes.keyID) obj.keyID = changes.keyID;
+    if (changes.keyID !== undefined) obj.keyID = changes.keyID;
     if ('blindIndexTokens' in changes) {
       obj.blindIndexTokens = changes.blindIndexTokens;
     }
@@ -63,7 +63,7 @@ export class JSONSerializer<ChangesType>
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID) {
+    if (deserialized.keyID !== undefined) {
       if (typeof deserialized.keyID !== 'string') {
         throw new Error('keyID must be a string');
       }
