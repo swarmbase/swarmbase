@@ -1307,7 +1307,12 @@ export class CollabswarmDocument<
    * @param preferredPeer Optional peer to try first (typically a PeerId from a
    *   pubsub message sender). Matched against peers by extracting the PeerId
    *   component from their Multiaddr via `getPeerId()`.
-   * @returns false if no peers could provide the document (new document or network partition).
+   * @returns `true` if the document was successfully loaded from a peer.
+   *   `false` if no peer could provide the document — this is ambiguous: it
+   *   may mean the document is brand new (no peers have it) OR that all peers
+   *   failed to respond, failed to decrypt, or failed signature verification.
+   *   Note: `open()` treats `false` as "new document" and initializes a fresh
+   *   document with the current user as writer and a new encryption key.
    */
   // Key exchange happens during:
   // - Load messages.
@@ -1329,8 +1334,12 @@ export class CollabswarmDocument<
     if (preferredPeer) {
       const preferredId = preferredPeer.toString();
       const preferredIdx = orderedPeers.findIndex(p => {
-        const peerId = p.getPeerId?.() ?? p.toString();
-        return peerId === preferredId;
+        // Only compare against the PeerId component of the Multiaddr.
+        // Falling back to p.toString() would compare against the full
+        // multiaddr string (e.g. "/ip4/.../p2p/<id>") which will never
+        // match a plain PeerId string.
+        const peerId = p.getPeerId?.();
+        return peerId != null && peerId === preferredId;
       });
       if (preferredIdx > 0) {
         const [preferred] = orderedPeers.splice(preferredIdx, 1);
@@ -1420,7 +1429,10 @@ export class CollabswarmDocument<
    * were missed should call `load()` again after `open()` resolves to re-sync
    * the latest state from a peer.
    *
-   * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
+   * @returns `false` if `load()` returned `false` — which `open()` treats as
+   *   "new document" by adding the current user as a writer and generating an
+   *   initial encryption key. Note that `load()` returning `false` is ambiguous:
+   *   it may also mean all peers failed (see `load()` docs for details).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
    *   for a new document. Validation runs before subscribing to pubsub or
    *   registering protocol handlers, so no cleanup is needed on rejection.
@@ -1843,8 +1855,17 @@ export class CollabswarmDocument<
    *
    * On failure (from any step: write check, CRDT apply, or network publish),
    * the transaction is aborted and the document reference is rolled back.
-   * For immutable CRDT providers (e.g. Automerge), rollback is reliable.
-   * For in-place mutating providers (e.g. Yjs), rollback is best-effort.
+   * For immutable CRDT providers (e.g. Automerge), rollback is reliable
+   * because `localChange()` returns a new document object.
+   *
+   * **Known limitation:** For in-place mutating CRDT providers (e.g. Yjs),
+   * rollback does NOT undo mutations. Yjs's `localChange()` mutates the
+   * document object directly and returns the same reference, so restoring
+   * the saved reference after failure has no effect — the mutations have
+   * already been applied to the shared Y.Doc. Callers using Yjs should
+   * treat a failed transaction as leaving the local document in a
+   * potentially inconsistent state and consider re-syncing from peers.
+   *
    * Note: if the network publish step fails, internal metadata (_hashes,
    * _lastSyncMessage) may be partially updated. A new transaction must
    * be started after a failure.
