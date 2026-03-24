@@ -599,8 +599,16 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Whether application-level signing is enabled for this document's swarm.
+   * Centralizes the `enableSigning` config check to avoid drift across many call sites.
+   */
+  private _isSigningEnabled(): boolean {
+    return this.swarm.config?.enableSigning !== false;
+  }
+
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
-    if (this.swarm.config?.enableSigning === false) {
+    if (!this._isSigningEnabled()) {
       return true;
     }
 
@@ -626,7 +634,7 @@ export class CollabswarmDocument<
    * key types (e.g. CryptoKey).
    */
   private async _verifySnapshotSignature(payload: Uint8Array, signature: Uint8Array) {
-    if (this.swarm.config?.enableSigning === false) {
+    if (!this._isSigningEnabled()) {
       return true;
     }
 
@@ -642,7 +650,7 @@ export class CollabswarmDocument<
   private async _signAsWriter(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
-    if (this.swarm.config?.enableSigning === false) {
+    if (!this._isSigningEnabled()) {
       return '';
     }
 
@@ -892,13 +900,22 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Verify that this user is a reader.
-        let requestor: PublicKey | undefined;
-        if (this.swarm.config?.enableSigning === false) {
-          // Skip ACL lookup entirely when signing is disabled — treat as authorized.
-          // Use the local user's public key as a guaranteed non-undefined requestor.
-          requestor = this._userPublicKey;
+        // Authorize the requestor. When signing is disabled, skip ACL/signature
+        // checks entirely — any peer is treated as authorized.
+        let authorized = false;
+        if (!this._isSigningEnabled()) {
+          // Bypass: signing disabled, no signature verification needed.
+          authorized = true;
         } else {
+          if (!message.signature) {
+            // Reject requests with missing/empty signatures (e.g. from peers
+            // that have signing disabled — they cannot interoperate).
+            console.warn(
+              `Rejected load request for ${message.documentId}: missing signature`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
           const readers = (
             await Promise.all([this._readers.users(), this._writers.users()])
           ).flat();
@@ -910,13 +927,13 @@ export class CollabswarmDocument<
                 this._deserializeSignature(message.signature),
               )
             ) {
-              requestor = reader;
+              authorized = true;
               break;
             }
           }
         }
 
-        if (!requestor) {
+        if (!authorized) {
           console.warn(
             `Detected an unauthorized load request for ${message.documentId}`,
           );
@@ -991,13 +1008,22 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Verify that this user is a reader or writer.
-        let requestor: PublicKey | undefined;
-        if (this.swarm.config?.enableSigning === false) {
-          // Skip ACL lookup entirely when signing is disabled — treat as authorized.
-          // Use the local user's public key as a guaranteed non-undefined requestor.
-          requestor = this._userPublicKey;
+        // Authorize the requestor. When signing is disabled, skip ACL/signature
+        // checks entirely — any peer is treated as authorized.
+        let authorized = false;
+        if (!this._isSigningEnabled()) {
+          // Bypass: signing disabled, no signature verification needed.
+          authorized = true;
         } else {
+          if (!message.signature) {
+            // Reject requests with missing/empty signatures (e.g. from peers
+            // that have signing disabled — they cannot interoperate).
+            console.warn(
+              `Rejected snapshot load request for ${message.documentId}: missing signature`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
           const readers = (
             await Promise.all([this._readers.users(), this._writers.users()])
           ).flat();
@@ -1009,13 +1035,13 @@ export class CollabswarmDocument<
                 this._deserializeSignature(message.signature),
               )
             ) {
-              requestor = reader;
+              authorized = true;
               break;
             }
           }
         }
 
-        if (!requestor) {
+        if (!authorized) {
           console.warn(
             `Detected an unauthorized snapshot load request for ${message.documentId}`,
           );
@@ -1216,7 +1242,7 @@ export class CollabswarmDocument<
         // verify — trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
         const preLoadWriters = await this._writers.users();
-        if (preLoadWriters.length > 0 && this.swarm.config?.enableSigning !== false) {
+        if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
           if (!message.signature) {
             console.warn(
               `Load response for ${this.documentPath}: missing signature, skipping peer`,
@@ -1267,7 +1293,7 @@ export class CollabswarmDocument<
     }
 
     let signature = '';
-    if (this.swarm.config?.enableSigning !== false) {
+    if (this._isSigningEnabled()) {
       const signatureBytes = await this._authProvider.sign(
         this._encoder.encode(this.documentPath),
         this._userKey,
@@ -1431,7 +1457,7 @@ export class CollabswarmDocument<
     // When enabled, messages from unauthorized peers are rejected at the
     // transport layer with a P4 penalty in peer scoring.
     // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
-    if (this.swarm.config?.enableTopicValidators && this.swarm.config?.enableSigning !== false) {
+    if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.set === 'function') {
         gossipsubService.topicValidators.set(
@@ -1540,13 +1566,14 @@ export class CollabswarmDocument<
    * - Apply new changes to the existing CRDT document.
    *
    * @param message A sync message to apply.
+   * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
     verifySignature = true,
-  ) {
+  ): Promise<boolean> {
     const { signature, ...messageWithoutSignature } = message;
-    const signingEnabled = this.swarm.config?.enableSigning !== false;
+    const signingEnabled = this._isSigningEnabled();
     if (signingEnabled && !signature) {
       return false;
     }
@@ -1664,6 +1691,8 @@ export class CollabswarmDocument<
     if (message.changes) {
       await this._syncDocumentChanges(message.changeId, message.changes);
     }
+
+    return true;
   }
 
   /**
@@ -1783,7 +1812,7 @@ export class CollabswarmDocument<
     const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
     let signature: Uint8Array;
-    if (this.swarm.config?.enableSigning !== false) {
+    if (this._isSigningEnabled()) {
       const signPayload = this._buildSnapshotSignPayload(
         stateBytes, lastChangeNodeCID, timestamp, compactedCount,
       );
@@ -2065,7 +2094,7 @@ export class CollabswarmDocument<
           this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
         // Verify the sender is an authorized writer.
-        if (this.swarm.config?.enableSigning !== false) {
+        if (this._isSigningEnabled()) {
           if (message.signature) {
             const { signature, ...messageWithoutSignature } = message;
             const raw =
