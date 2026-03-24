@@ -1291,10 +1291,24 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Connects to a collabswarm document. Running this method connects to the document pubsub topic
-   * and starts the document `.load()` process.
+   * Opens this collabswarm document. The sequence of operations is:
+   *
+   * 1. Prepare a pubsub handler (not yet subscribed).
+   * 2. Call `.load()` to fetch the document from an existing peer via direct dial.
+   * 3. If the document is new (load returned false), run `validateDocumentPath`
+   *    (if configured) to ensure the path is allowed before proceeding.
+   * 4. Subscribe to the document's GossipSub pubsub topic and register protocol
+   *    handlers for load, key-update, and snapshot-load requests.
+   * 5. For new documents, add the current user as a writer and generate an
+   *    initial document encryption key.
    *
    * Once opened, a document can be closed with `.close()`.
+   *
+   * **Design note:** `load()` runs before protocol handlers are registered, so
+   * this node cannot serve incoming load/key-update requests for *this* document
+   * during the load window. This is intentional — validation must complete before
+   * subscribing to pubsub to prevent briefly joining an unauthorized topic, and
+   * the document is not yet fully open so it has nothing to serve.
    *
    * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
@@ -1347,9 +1361,13 @@ export class CollabswarmDocument<
         try {
           allowed = await validateFn(this.documentPath, this._userPublicKey);
         } catch (err) {
+          // Clear the handler so close() won't try to unsubscribe from a
+          // subscription that was never created.
+          this._pubsubHandler = undefined;
           throw err instanceof Error ? err : new Error(String(err));
         }
         if (!allowed) {
+          this._pubsubHandler = undefined;
           throw new Error(
             `Document path "${this.documentPath}" is not allowed for the current user`,
           );
@@ -1461,12 +1479,12 @@ export class CollabswarmDocument<
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
 
-      // Remove GossipSub topic validator if one was registered.
-      if (this.swarm.config?.enableTopicValidators) {
-        const gossipsubService = pubsub as any;
-        if (typeof gossipsubService.topicValidators?.delete === 'function') {
-          gossipsubService.topicValidators.delete(this.documentPath);
-        }
+      // Always attempt to remove the GossipSub topic validator. This is safe
+      // even if none was registered (Map.delete is a no-op for missing keys),
+      // and ensures cleanup regardless of config changes between open() and close().
+      const gossipsubService = pubsub as any;
+      if (typeof gossipsubService.topicValidators?.delete === 'function') {
+        gossipsubService.topicValidators.delete(this.documentPath);
       }
     }
     // Unregister protocol handlers.
