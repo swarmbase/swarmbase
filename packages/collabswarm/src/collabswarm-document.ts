@@ -1265,7 +1265,14 @@ export class CollabswarmDocument<
           }
         }
 
-        await this.sync(message, false);
+        const syncResult = await this.sync(message, false);
+        if (!syncResult) {
+          console.warn(
+            `sync rejected message during load for ${this.documentPath}`,
+          );
+          // Return false so the caller tries the next peer.
+          return false;
+        }
         return true;
       },
     );
@@ -1566,7 +1573,11 @@ export class CollabswarmDocument<
    * - Apply new changes to the existing CRDT document.
    *
    * @param message A sync message to apply.
+   * @param verifySignature Whether to verify the message signature (default: true).
    * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
+   * @since 0.4.0 Return type changed from `Promise<void>` to `Promise<boolean>`.
+   *   This is an additive change — callers that previously ignored the return value
+   *   are unaffected.
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
@@ -1637,20 +1648,24 @@ export class CollabswarmDocument<
         // Verify the snapshot signature against the deterministic payload
         // by trying all authorized writers (publicKey may not survive
         // serialization for all key types, e.g. CryptoKey).
-        let snapshotSignatureValid = false;
-        try {
-          const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
-          const signPayload = this._buildSnapshotSignPayload(
-            stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
-          );
-          snapshotSignatureValid = await this._verifySnapshotSignature(
-            signPayload, incoming.signature,
-          );
-        } catch (e) {
-          console.warn(
-            `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
-            e,
-          );
+        // When signing is disabled, skip serialization and signature
+        // verification — accept the snapshot unconditionally.
+        let snapshotSignatureValid = !signingEnabled;
+        if (signingEnabled) {
+          try {
+            const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
+            const signPayload = this._buildSnapshotSignPayload(
+              stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
+            );
+            snapshotSignatureValid = await this._verifySnapshotSignature(
+              signPayload, incoming.signature,
+            );
+          } catch (e) {
+            console.warn(
+              `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
+              e,
+            );
+          }
         }
         if (!snapshotSignatureValid) {
           console.warn(
