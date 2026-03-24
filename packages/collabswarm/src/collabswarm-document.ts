@@ -1174,8 +1174,15 @@ export class CollabswarmDocument<
 
   /**
    * Send a load request over the given stream and apply the response.
-   * Returns true if a non-empty response was received and synced,
-   * false if the response was empty (e.g. peer has no snapshot).
+   *
+   * @returns `true` if a non-empty response was received and successfully synced.
+   *   Returns `false` when:
+   *   - The peer responded with an empty payload (e.g., peer has no snapshot).
+   *   - The response payload was malformed or could not be decrypted.
+   *   - The response documentId did not match the expected document.
+   *   - Writer signature verification failed (when signing is enabled).
+   *   - `sync()` rejected the response (e.g., invalid inner signatures or auth failure).
+   *   Callers (e.g., `load()`) handle `false` by trying the next available peer.
    */
   private async _sendLoadRequestAndSync(
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
@@ -1576,8 +1583,10 @@ export class CollabswarmDocument<
    * @param verifySignature Whether to verify the message signature (default: true).
    * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
    * @since 0.4.0 Return type changed from `Promise<void>` to `Promise<boolean>`.
-   *   This is an additive change — callers that previously ignored the return value
-   *   are unaffected.
+   *   This is a breaking change from the previous `Promise<void>` return type.
+   *   TypeScript callers with explicit `Promise<void>` type annotations will need
+   *   to update. Callers should now check the returned boolean to determine whether
+   *   the message was applied successfully.
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
@@ -1650,6 +1659,9 @@ export class CollabswarmDocument<
         // serialization for all key types, e.g. CryptoKey).
         // When signing is disabled, skip serialization and signature
         // verification — accept the snapshot unconditionally.
+        // WARNING: This means any peer can inject arbitrary snapshot state when
+        // signing is disabled. Only disable signing in trusted or development
+        // environments where all peers are known and authenticated by other means.
         let snapshotSignatureValid = !signingEnabled;
         if (signingEnabled) {
           try {
