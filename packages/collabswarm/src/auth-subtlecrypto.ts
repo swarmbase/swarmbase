@@ -28,13 +28,11 @@ export class SubtleCrypto
      * @remarks
      * This is not Node’s Crypto API; that API is not expected to be as performant.
      *
-     * @remarks 96 bits length is recommended in docs; though example uses only 12
+     * @remarks Despite the name, this value is in **bytes** (not bits).
+     * The default 12 corresponds to the 96-bit IV recommended for AES-GCM.
+     * The name is kept for backward compatibility.
      */
-    // NOTE: Despite the name "nonceBits", this value is divided by 8 when
-    // generating nonces (see _encryptionAlgorithmParams). The value represents
-    // bits, but callers that slice encrypted blocks using this field directly
-    // should be aware they need to convert to bytes first (nonceBits / 8).
-    public readonly nonceBits = 96,
+    public readonly nonceBits = 12,
 
     /**
      * The type of algorithm used for signature and verification keys.
@@ -65,8 +63,8 @@ export class SubtleCrypto
   ) {}
 
   /**
-   * Extract the nonce/IV from encryption algorithm parameters.
-   * Supports AES-GCM (via `iv`), AES-CTR (via `counter`), and AES-CBC (via `iv`).
+   * Extract the nonce/IV/counter from encryption algorithm parameters.
+   * Supports AES-GCM (iv), AES-CTR (counter), and AES-CBC (iv).
    * Normalizes BufferSource values to Uint8Array.
    */
   private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {
@@ -99,7 +97,7 @@ export class SubtleCrypto
   _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams | AesCtrParams | AesCbcParams {
     switch (this._encryptionAlgorithmName) {
       case 'AES-GCM': {
-        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits / 8));
+        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits));
         return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
       }
       case 'AES-CTR':

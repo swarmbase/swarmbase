@@ -63,7 +63,7 @@ export class JSONSerializer<ChangesType>
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID !== undefined) {
+    if ('keyID' in deserialized) {
       if (typeof deserialized.keyID !== 'string') {
         throw new Error('keyID must be a string');
       }
@@ -71,10 +71,10 @@ export class JSONSerializer<ChangesType>
     }
     if ('blindIndexTokens' in deserialized) {
       // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
-      const tokens = deserialized.blindIndexTokens;
-      if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
+      if (deserialized.blindIndexTokens === null || typeof deserialized.blindIndexTokens !== 'object' || Array.isArray(deserialized.blindIndexTokens)) {
         throw new Error('blindIndexTokens must be a plain object');
       }
+      const tokens = deserialized.blindIndexTokens;
       const proto = Object.getPrototypeOf(tokens);
       if (proto !== Object.prototype && proto !== null) {
         throw new Error('blindIndexTokens must be a plain object');

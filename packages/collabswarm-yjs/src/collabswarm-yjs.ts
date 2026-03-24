@@ -102,17 +102,17 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if (deserialized.keyID !== undefined) {
+    if ('keyID' in deserialized) {
       if (typeof deserialized.keyID !== 'string') {
         throw new Error('keyID must be a string');
       }
       result.keyID = deserialized.keyID;
     }
-    if (deserialized.blindIndexTokens !== undefined && deserialized.blindIndexTokens !== null) {
-      const tokens = deserialized.blindIndexTokens;
-      if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
+    if ('blindIndexTokens' in deserialized) {
+      if (deserialized.blindIndexTokens === null || typeof deserialized.blindIndexTokens !== 'object' || Array.isArray(deserialized.blindIndexTokens)) {
         throw new Error('blindIndexTokens must be a plain object');
       }
+      const tokens = deserialized.blindIndexTokens;
       const proto = Object.getPrototypeOf(tokens);
       if (proto !== Object.prototype && proto !== null) {
         throw new Error('blindIndexTokens must be a plain object');
