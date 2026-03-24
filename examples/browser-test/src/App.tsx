@@ -98,6 +98,10 @@ class App extends React.Component<
       };
       const writerIds = await serializeKeys(writers);
       const allReaderIds = await serializeKeys(readers);
+
+      // Guard: document may have been closed while async work was in progress.
+      if (!this.props.state.documents[documentPath]) return;
+
       // getReaders() returns both readers and writers; filter out writers to avoid duplicates.
       const writerIdSet = new Set(writerIds);
       const readerIds = allReaderIds.filter((id) => !writerIdSet.has(id));
