@@ -103,7 +103,26 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
     if (deserialized.keyID) result.keyID = deserialized.keyID;
-    if (deserialized.blindIndexTokens) result.blindIndexTokens = deserialized.blindIndexTokens;
+    if (deserialized.blindIndexTokens) {
+      const tokens = deserialized.blindIndexTokens;
+      if (typeof tokens !== 'object' || tokens === null || Array.isArray(tokens)) {
+        throw new Error('blindIndexTokens must be a plain object');
+      }
+      const proto = Object.getPrototypeOf(tokens);
+      if (proto !== Object.prototype && proto !== null) {
+        throw new Error('blindIndexTokens must be a plain object');
+      }
+      const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+      const sanitized: Record<string, string> = {};
+      for (const [key, val] of Object.entries(tokens)) {
+        if (DANGEROUS_KEYS.has(key)) continue;
+        if (typeof key !== 'string' || typeof val !== 'string') {
+          throw new Error(`blindIndexTokens values must be strings, got non-string at key "${key}"`);
+        }
+        sanitized[key] = val;
+      }
+      result.blindIndexTokens = sanitized;
+    }
     return result;
   }
   serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {

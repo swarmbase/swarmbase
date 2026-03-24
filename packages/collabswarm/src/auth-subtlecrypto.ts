@@ -52,6 +52,7 @@ export class SubtleCrypto
      *
      * @remarks
      * "RSA-OAEP" is not supported at this time because it is a key pair.
+     * AES-CTR and AES-CBC are not yet supported; only AES-GCM is implemented.
      */
     public readonly _encryptionAlgorithmName:
       | 'AES-GCM'
@@ -61,7 +62,8 @@ export class SubtleCrypto
 
   /**
    * Extract the nonce/IV from encryption algorithm parameters.
-   * Currently only AES-GCM is supported; AES-CTR and AES-CBC are reserved.
+   * Currently only AES-GCM is supported; AES-CTR and AES-CBC are not yet supported
+   * and will throw if used.
    * Normalizes BufferSource values to Uint8Array.
    */
   private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {
@@ -94,7 +96,7 @@ export class SubtleCrypto
   _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams | AesCtrParams | AesCbcParams {
     switch (this._encryptionAlgorithmName) {
       case 'AES-GCM': {
-        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits));
+        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits / 8));
         return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
       }
       case 'AES-CTR':

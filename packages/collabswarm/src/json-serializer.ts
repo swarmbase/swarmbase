@@ -45,6 +45,7 @@ export class JSONSerializer<ChangesType>
       changes: changes.changes,
       nonce: Base64.fromUint8Array(changes.nonce),
     };
+    if (changes.keyID) obj.keyID = changes.keyID;
     if ('blindIndexTokens' in changes) {
       obj.blindIndexTokens = changes.blindIndexTokens;
     }
@@ -55,12 +56,14 @@ export class JSONSerializer<ChangesType>
     const deserialized = this.deserialize(changes) as {
       changes: ChangesType;
       nonce: string;
+      keyID?: string;
       blindIndexTokens?: Record<string, string>;
     };
     const result: CRDTChangeBlock<ChangesType> = {
       changes: deserialized.changes,
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
+    if (deserialized.keyID) result.keyID = deserialized.keyID;
     if ('blindIndexTokens' in deserialized) {
       // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
       const tokens = deserialized.blindIndexTokens;

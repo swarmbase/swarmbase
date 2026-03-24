@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { SubtleCrypto } from './auth-subtlecrypto';
+import { SubtleCrypto, SubtleCryptoEncryptionResult } from './auth-subtlecrypto';
 
 const auth = new SubtleCrypto();
 
@@ -235,4 +235,82 @@ describe('encrypt and decrypt', () => {
       }
     },
   );
+});
+
+describe('nonce size', () => {
+  test('encrypt produces a 12-byte nonce for AES-GCM (96 bits / 8)', async () => {
+    const documentKey = await importKey(
+      docKeyData1,
+      ['encrypt', 'decrypt'],
+      'AES-GCM',
+    );
+    const result = await auth.encrypt(new Uint8Array([1, 2, 3]), documentKey);
+    expect(result.nonce.length).toBe(12);
+  });
+});
+
+describe('_extractNonce', () => {
+  const extractNonce = (params: any) => (auth as any)._extractNonce(params);
+
+  test('extracts iv from AesGcmParams', () => {
+    const iv = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    const result = extractNonce({ name: 'AES-GCM', iv });
+    expect(result).toBe(iv);
+  });
+
+  test('extracts counter from AesCtrParams', () => {
+    const counter = new Uint8Array(16);
+    const result = extractNonce({ name: 'AES-CTR', counter, length: 64 });
+    expect(result).toBe(counter);
+  });
+
+  test('handles ArrayBuffer input', () => {
+    const buf = new ArrayBuffer(12);
+    new Uint8Array(buf).set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    const result = extractNonce({ name: 'AES-GCM', iv: buf });
+    expect(result).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
+  });
+
+  test('handles ArrayBufferView with byteOffset', () => {
+    const buf = new ArrayBuffer(20);
+    // Create a view starting at offset 4 with length 12
+    const view = new DataView(buf, 4, 12);
+    // Write known values into the view region
+    for (let i = 0; i < 12; i++) {
+      view.setUint8(i, i + 1);
+    }
+    const result = extractNonce({ name: 'AES-GCM', iv: view });
+    expect(result.length).toBe(12);
+    expect(result[0]).toBe(1);
+    expect(result[11]).toBe(12);
+  });
+
+  test('throws for params without iv or counter', () => {
+    expect(() => extractNonce({ name: 'unknown' })).toThrow(
+      'Cannot extract nonce from algorithm',
+    );
+  });
+});
+
+describe('_encryptionAlgorithmParams error cases', () => {
+  test('throws for AES-CTR', () => {
+    const aesCtr = new SubtleCrypto(96, undefined as any, 'AES-CTR');
+    expect(() => aesCtr._encryptionAlgorithmParams()).toThrow(
+      'AES-CTR is not yet supported',
+    );
+  });
+
+  test('throws for AES-CBC', () => {
+    const aesCbc = new SubtleCrypto(96, undefined as any, 'AES-CBC');
+    expect(() => aesCbc._encryptionAlgorithmParams()).toThrow(
+      'AES-CBC is not yet supported',
+    );
+  });
+
+  test('throws for unknown algorithm', () => {
+    const unknown = new SubtleCrypto(96, undefined as any, 'UNKNOWN' as any);
+    expect(() => unknown._encryptionAlgorithmParams()).toThrow(
+      'Unknown encryption algorithm: UNKNOWN',
+    );
+  });
 });

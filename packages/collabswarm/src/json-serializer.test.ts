@@ -29,6 +29,33 @@ test('decode Uint8Array to string', () => {
   expect(jsonSerializer.decode(testStringAsUint8Array)).toMatch(testString);
 });
 
+describe('keyID in serializeChangeBlock / deserializeChangeBlock', () => {
+  const nonce = new Uint8Array([1, 2, 3, 4]);
+
+  test('round-trips a change block with keyID', () => {
+    const block: CRDTChangeBlock<any> = {
+      changes: { foo: 'bar' },
+      nonce,
+      keyID: 'dGVzdC1rZXktaWQ=',
+    };
+    const serialized = jsonSerializer.serializeChangeBlock(block);
+    const deserialized = jsonSerializer.deserializeChangeBlock(serialized);
+
+    expect(deserialized.keyID).toBe('dGVzdC1rZXktaWQ=');
+  });
+
+  test('round-trips a change block without keyID', () => {
+    const block: CRDTChangeBlock<any> = {
+      changes: { foo: 'bar' },
+      nonce,
+    };
+    const serialized = jsonSerializer.serializeChangeBlock(block);
+    const deserialized = jsonSerializer.deserializeChangeBlock(serialized);
+
+    expect(deserialized.keyID).toBeUndefined();
+  });
+});
+
 describe('blindIndexTokens in serializeChangeBlock / deserializeChangeBlock', () => {
   const nonce = new Uint8Array([1, 2, 3, 4]);
 
