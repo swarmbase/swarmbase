@@ -76,12 +76,15 @@ class App extends React.Component<
     };
   }
 
+  // Demo-only helper: fetches and displays the current ACL for a document.
   async refreshACL(documentPath: string) {
     const docState = this.props.state.documents[documentPath];
     if (!docState?.documentRef) return;
     try {
-      const readers = await docState.documentRef.getReaders();
-      const writers = await docState.documentRef.getWriters();
+      const [readers, writers] = await Promise.all([
+        docState.documentRef.getReaders(),
+        docState.documentRef.getWriters(),
+      ]);
       const serializeKeys = async (keys: CryptoKey[]) => {
         const results = await Promise.allSettled(
           keys.map(async (k) => {
