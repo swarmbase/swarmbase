@@ -40,8 +40,7 @@ export interface CollabswarmDocumentState<
     DocumentKey
   >;
   document: DocType;
-
-  // TODO: Add peers list.
+  peers: string[];
 }
 
 export interface CollabswarmState<
@@ -196,6 +195,7 @@ export function collabswarmReducer<
         documents[action.documentId] = {
           documentRef: action.documentRef,
           document: action.documentRef.document,
+          peers: [],
         };
 
         return {
