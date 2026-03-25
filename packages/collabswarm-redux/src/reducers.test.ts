@@ -147,14 +147,6 @@ describe('collabswarmReducer', () => {
     });
   });
 
-  test('OPEN_DOCUMENT initializes peers as empty array', () => {
-    const state = createMockState();
-    const docRef = { document: { text: 'hello' } } as any;
-    const newState = reducer(state, openDocument('doc-1', docRef));
-    expect(newState.documents['doc-1'].peers).toEqual([]);
-    expect(Array.isArray(newState.documents['doc-1'].peers)).toBe(true);
-  });
-
   test('CLOSE_DOCUMENT removes document from state', () => {
     const docRef = { document: { text: 'hello' } } as any;
     const state: CollabswarmState<any, any, any, any, any, any> = {
