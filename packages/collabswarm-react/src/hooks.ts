@@ -47,6 +47,28 @@ const openTaskResults = new Map<
 // Reference count per documentPath -- only evict shared caches when the last subscriber unmounts.
 const subscriberCounts = new Map<string, number>();
 
+/**
+ * Reset module-level caches. Intended for use in tests only.
+ * @internal
+ */
+export function _resetCaches() {
+  openTasks.clear();
+  openTaskResults.clear();
+  subscriberCounts.clear();
+}
+
+/**
+ * Read-only access to module-level cache sizes. Intended for use in tests only.
+ * @internal
+ */
+export function _getCacheSizes() {
+  return {
+    openTasks: openTasks.size,
+    openTaskResults: openTaskResults.size,
+    subscriberCounts: subscriberCounts.size,
+  };
+}
+
 export const CollabswarmContext = createContext<{
   // Caches are evicted when the last subscriber for a document path unmounts (see cleanup below).
   docCache: {
