@@ -1594,12 +1594,10 @@ export class CollabswarmDocument<
    * @param verifySignature Whether to verify the message signature (default: true).
    * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
    *
-   * **BREAKING CHANGE (0.4.0):** Return type changed from `Promise<void>` to
+   * **BREAKING CHANGE:** Return type changed from `Promise<void>` to
    * `Promise<boolean>`. TypeScript callers with explicit `Promise<void>` type
    * annotations will need to update. Callers should now check the returned
    * boolean to determine whether the message was applied successfully.
-   *
-   * @since 0.4.0
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
