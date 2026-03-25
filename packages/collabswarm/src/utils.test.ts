@@ -1,13 +1,40 @@
 import { describe, expect, test } from '@jest/globals';
+import BufferList from 'bl';
 import {
   shuffleArray,
   firstTrue,
   concatUint8Arrays,
+  isBufferList,
+  readUint8Iterable,
   generateAndExportHmacKey,
   generateAndExportSymmetricKey,
   importHmacKey,
   importSymmetricKey,
 } from './utils';
+
+/**
+ * Minimal Uint8ArrayList stand-in for testing. The real package is ESM-only
+ * and cannot be imported by Jest in CJS mode. This mock replicates the
+ * subset used by readUint8Iterable: `.length` and `.subarray()`.
+ */
+class MockUint8ArrayList {
+  private _data: Uint8Array;
+  get length() {
+    return this._data.length;
+  }
+  constructor(...arrays: Uint8Array[]) {
+    const totalLength = arrays.reduce((acc, a) => acc + a.length, 0);
+    this._data = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const a of arrays) {
+      this._data.set(a, offset);
+      offset += a.length;
+    }
+  }
+  subarray(): Uint8Array {
+    return this._data;
+  }
+}
 
 describe('shuffleArray', () => {
   test('should shuffle array elements', () => {
@@ -85,6 +112,76 @@ describe('concatUint8Arrays', () => {
   test('should handle no arrays', () => {
     const result = concatUint8Arrays();
     expect(result).toEqual(new Uint8Array([]));
+  });
+});
+
+describe('isBufferList', () => {
+  test('returns true for BufferList instances', () => {
+    const bl = new BufferList();
+    expect(isBufferList(bl)).toBe(true);
+  });
+
+  test('returns true for BufferList with data', () => {
+    const bl = new BufferList(Buffer.from([1, 2, 3]));
+    expect(isBufferList(bl)).toBe(true);
+  });
+
+  test('returns false for Uint8Array', () => {
+    const arr = new Uint8Array([1, 2, 3]);
+    expect(isBufferList(arr)).toBe(false);
+  });
+
+  test('returns false for Uint8ArrayList-like object', () => {
+    const list = new MockUint8ArrayList(new Uint8Array([1, 2, 3]));
+    expect(isBufferList(list as any)).toBe(false);
+  });
+});
+
+describe('readUint8Iterable', () => {
+  async function* toAsyncIterable<T>(items: T[]): AsyncIterable<T> {
+    for (const item of items) {
+      yield item;
+    }
+  }
+
+  test('correctly reads a stream of Uint8Array chunks', async () => {
+    const chunks = [
+      new Uint8Array([1, 2, 3]),
+      new Uint8Array([4, 5]),
+      new Uint8Array([6]),
+    ];
+    const result = await readUint8Iterable(toAsyncIterable(chunks));
+    expect(result).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
+  });
+
+  test('correctly reads a stream with BufferList chunks', async () => {
+    const bl1 = new BufferList(Buffer.from([10, 20, 30]));
+    const bl2 = new BufferList(Buffer.from([40, 50]));
+    const result = await readUint8Iterable(toAsyncIterable([bl1, bl2]));
+    expect(result).toEqual(new Uint8Array([10, 20, 30, 40, 50]));
+  });
+
+  test('correctly reads a stream with Uint8ArrayList chunks', async () => {
+    const list1 = new MockUint8ArrayList(new Uint8Array([7, 8]));
+    const list2 = new MockUint8ArrayList(new Uint8Array([9, 10, 11]));
+    const result = await readUint8Iterable(toAsyncIterable([list1, list2]) as any);
+    expect(result).toEqual(new Uint8Array([7, 8, 9, 10, 11]));
+  });
+
+  test('handles mixed chunk types', async () => {
+    const chunks = [
+      new Uint8Array([1, 2]),
+      new BufferList(Buffer.from([3, 4])),
+      new MockUint8ArrayList(new Uint8Array([5, 6])),
+    ];
+    const result = await readUint8Iterable(toAsyncIterable(chunks) as any);
+    expect(result).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
+  });
+
+  test('returns empty Uint8Array for empty stream', async () => {
+    const result = await readUint8Iterable(toAsyncIterable([]));
+    expect(result).toEqual(new Uint8Array([]));
+    expect(result.length).toBe(0);
   });
 });
 
