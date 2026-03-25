@@ -28,6 +28,7 @@ import {
   KeychainProvider,
   LRUCache,
 } from '@collabswarm/collabswarm';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';
@@ -368,6 +369,7 @@ export class AutomergeKeychainProvider
  */
 type iCRDTChangeNode = {
   kind: CRDTChangeNodeKind;
+  keyID?: string;
   change?: string[];
   children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
 };
@@ -430,9 +432,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       changes: serializeBinaryChanges(changes.changes),
       nonce: Base64.fromUint8Array(changes.nonce),
     };
-    if ('blindIndexTokens' in changes) {
-      obj.blindIndexTokens = changes.blindIndexTokens;
-    }
+    if (changes.keyID !== undefined) obj.keyID = changes.keyID;
+    if (changes.blindIndexTokens !== undefined && changes.blindIndexTokens !== null) obj.blindIndexTokens = changes.blindIndexTokens;
     return this.serialize(obj);
   }
 
@@ -445,14 +446,12 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     ) {
       throw new Error('Invalid change block: expected {changes: string[], nonce: string}');
     }
-    const deserialized = raw as { changes: string[]; nonce: string; blindIndexTokens?: Record<string, string> };
+    const deserialized = raw as { changes: string[]; nonce: string; keyID?: string; blindIndexTokens?: Record<string, string> };
     const result: CRDTChangeBlock<BinaryChange[]> = {
       changes: deserializeBinaryChanges(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
-    if ('blindIndexTokens' in deserialized) {
-      result.blindIndexTokens = deserialized.blindIndexTokens;
-    }
+    validateChangeBlockMetadata(deserialized, result);
     return result;
   }
 

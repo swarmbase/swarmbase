@@ -28,7 +28,13 @@ export class SubtleCrypto
      * @remarks
      * This is not Node’s Crypto API; that API is not expected to be as performant.
      *
-     * @remarks 96 bits length is recommended in docs; though example uses only 12
+     * @remarks Despite the name "nonceBits", this value is used as a **byte
+     * count** throughout the codebase (passed directly to
+     * `new Uint8Array(nonceBits)`). The default of 96 is historically
+     * consistent with all existing encrypted data and must not be changed
+     * without a migration, even though 12 bytes would be the correct size
+     * for a 96-bit AES-GCM IV. The field name is kept for backward
+     * compatibility.
      */
     public readonly nonceBits = 96,
 
@@ -52,12 +58,35 @@ export class SubtleCrypto
      *
      * @remarks
      * "RSA-OAEP" is not supported at this time because it is a key pair.
+     * AES-CTR and AES-CBC are not yet supported; only AES-GCM is implemented.
      */
     public readonly _encryptionAlgorithmName:
       | 'AES-GCM'
       | 'AES-CTR'
       | 'AES-CBC' = 'AES-GCM',
   ) {}
+
+  /**
+   * Extract the nonce/IV/counter from encryption algorithm parameters.
+   * Supports AES-GCM (iv), AES-CTR (counter), and AES-CBC (iv).
+   * Normalizes BufferSource values to Uint8Array.
+   */
+  private _extractNonce(params: AesGcmParams | AesCtrParams | AesCbcParams): Uint8Array {
+    let raw: BufferSource | undefined;
+    if ('iv' in params) {
+      raw = params.iv;
+    } else if ('counter' in params) {
+      raw = params.counter;
+    }
+    if (!raw) {
+      throw new Error(`Cannot extract nonce from algorithm: ${(params as any).name}`);
+    }
+    // Normalize BufferSource to Uint8Array, respecting byteOffset/byteLength for views.
+    if (raw instanceof Uint8Array) return raw;
+    if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+    // ArrayBufferView — respect offset and length to avoid reading unrelated bytes.
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  }
 
   /**
    * An internal function used to generate a new initialized vector / counter for each encryption.
@@ -67,21 +96,24 @@ export class SubtleCrypto
    * @returns a parameter object to be used directly in the encrypt function.
    *
    * @remarks
-   * Currently, only supports AesGcmParams.
    * Reference: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt
    */
-  _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams {
+  _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams | AesCtrParams | AesCbcParams {
     switch (this._encryptionAlgorithmName) {
-      case 'AES-GCM':
-        const iv = nonce
-          ? nonce
-          : crypto.getRandomValues(new Uint8Array(this.nonceBits));
-        return {
-          name: 'AES-GCM',
-          iv: iv as Uint8Array<ArrayBuffer>,
-        };
+      case 'AES-GCM': {
+        const iv = nonce ?? crypto.getRandomValues(new Uint8Array(this.nonceBits));
+        return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
+      }
+      case 'AES-CTR':
+      case 'AES-CBC':
+        // NOTE: Only AES-GCM is currently supported. AES-CTR and AES-CBC throw — see PR description.
+        // TODO: AES-CTR and AES-CBC support is planned but not yet implemented.
+        // They require different nonce sizes (16 bytes) and key import
+        // parameters than AES-GCM. Implementation is deferred until the
+        // key derivation paths and wire format header parsing are updated.
+        throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
       default:
-        throw 'Encryption is only supported with AesGcmParams currently'!;
+        throw new Error(`Unknown encryption algorithm: ${this._encryptionAlgorithmName}`);
     }
   }
 
@@ -174,9 +206,7 @@ export class SubtleCrypto
     );
     return {
       data: new Uint8Array(ciphertext),
-      // TODO: Replace this with a generic way to extract/get nonce for generic
-      //       subtle crypto algorithm
-      nonce: algorithmParams.iv as Uint8Array,
+      nonce: this._extractNonce(algorithmParams),
     };
   }
 }

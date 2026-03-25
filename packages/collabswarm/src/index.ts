@@ -15,7 +15,7 @@ import { CollabswarmNode, defaultNodeConfig } from './collabswarm-node';
 import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
-import { JSONSerializer } from './json-serializer';
+import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer';
 import { AuthProvider } from './auth-provider';
 import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
@@ -122,6 +122,7 @@ export {
   SyncMessageSerializer,
   LoadMessageSerializer,
   JSONSerializer,
+  validateChangeBlockMetadata,
   defaultConfig,
   defaultBootstrapConfig,
   getDefaultConfig,

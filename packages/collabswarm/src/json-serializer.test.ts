@@ -29,6 +29,68 @@ test('decode Uint8Array to string', () => {
   expect(jsonSerializer.decode(testStringAsUint8Array)).toMatch(testString);
 });
 
+describe('keyID in serializeChangeBlock / deserializeChangeBlock', () => {
+  const nonce = new Uint8Array([1, 2, 3, 4]);
+
+  test('round-trips a change block with keyID', () => {
+    const block: CRDTChangeBlock<any> = {
+      changes: { foo: 'bar' },
+      nonce,
+      keyID: 'dGVzdC1rZXktaWQ=',
+    };
+    const serialized = jsonSerializer.serializeChangeBlock(block);
+    const deserialized = jsonSerializer.deserializeChangeBlock(serialized);
+
+    expect(deserialized.keyID).toBe('dGVzdC1rZXktaWQ=');
+  });
+
+  test('round-trips a change block without keyID', () => {
+    const block: CRDTChangeBlock<any> = {
+      changes: { foo: 'bar' },
+      nonce,
+    };
+    const serialized = jsonSerializer.serializeChangeBlock(block);
+    const deserialized = jsonSerializer.deserializeChangeBlock(serialized);
+
+    expect(deserialized.keyID).toBeUndefined();
+  });
+});
+
+describe('keyID validation in deserializeChangeBlock', () => {
+  test('rejects keyID that is a number', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: 123,
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+
+  test('rejects keyID that is an object', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: {},
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+
+  test('rejects keyID that is null', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: null,
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+});
+
 describe('blindIndexTokens in serializeChangeBlock / deserializeChangeBlock', () => {
   const nonce = new Uint8Array([1, 2, 3, 4]);
 

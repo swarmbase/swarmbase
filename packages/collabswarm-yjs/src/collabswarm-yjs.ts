@@ -14,12 +14,14 @@ import {
   KeychainProvider,
   LRUCache,
 } from '@collabswarm/collabswarm';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
 type iCRDTChangeNode = {
   kind: CRDTChangeNodeKind;
+  keyID?: string;
   // TODO: Change this to something more efficient.
   change?: string;
   children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
@@ -80,10 +82,13 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
   }
 
   serializeChangeBlock(changes: CRDTChangeBlock<Uint8Array>): string {
-    return this.serialize({
+    const obj: Record<string, unknown> = {
       changes: Base64.fromUint8Array(changes.changes),
       nonce: Base64.fromUint8Array(changes.nonce),
-    });
+    };
+    if (changes.keyID !== undefined) obj.keyID = changes.keyID;
+    if (changes.blindIndexTokens !== undefined && changes.blindIndexTokens !== null) obj.blindIndexTokens = changes.blindIndexTokens;
+    return this.serialize(obj);
   }
   deserializeChangeBlock(changes: string): CRDTChangeBlock<Uint8Array> {
     const raw = this.deserialize(changes);
@@ -94,11 +99,13 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     ) {
       throw new Error('Invalid change block: expected {changes: string, nonce: string}');
     }
-    const deserialized = raw as { changes: string; nonce: string };
-    return {
+    const deserialized = raw as { changes: string; nonce: string; keyID?: string; blindIndexTokens?: Record<string, string> };
+    const result: CRDTChangeBlock<Uint8Array> = {
       changes: Base64.toUint8Array(deserialized.changes),
       nonce: Base64.toUint8Array(deserialized.nonce),
     };
+    validateChangeBlockMetadata(deserialized, result);
+    return result;
   }
   serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {
     // Encode snapshot Uint8Array fields (state, signature) as base64 for JSON safety.
