@@ -65,10 +65,11 @@ class App extends React.Component<
   AppState,
   AutomergeSwarmState<any>
 > {
-  // Monotonically increasing counter used to detect stale refreshACL calls.
-  // Each call captures the current value; if it changes before setState,
-  // a newer refresh has been initiated and the stale one is discarded.
-  private _refreshCounter = 0;
+  // Per-document monotonically increasing counters used to detect stale
+  // refreshACL calls. Each call captures the current value for its document;
+  // if it changes before setState, a newer refresh has been initiated and
+  // the stale one is discarded.
+  private _refreshCounters: Record<string, number> = {};
 
   constructor(public props: AppProps) {
     super(props);
@@ -86,7 +87,8 @@ class App extends React.Component<
     const docState = this.props.state.documents[documentPath];
     if (!docState?.documentRef) return;
 
-    const thisRefresh = ++this._refreshCounter;
+    this._refreshCounters[documentPath] = (this._refreshCounters[documentPath] ?? 0) + 1;
+    const thisRefresh = this._refreshCounters[documentPath];
 
     try {
       const [readers, writers] = await Promise.all([
@@ -95,7 +97,7 @@ class App extends React.Component<
       ]);
 
       // Bail out if a newer refreshACL call has been initiated.
-      if (this._refreshCounter !== thisRefresh) return;
+      if (this._refreshCounters[documentPath] !== thisRefresh) return;
 
       // Serialize each CryptoKey to { fullHex, displayHex }.
       // fullHex is the complete SHA-256 hash used for de-duplication;
@@ -118,17 +120,17 @@ class App extends React.Component<
         );
         // Unexportable keys get a fallback string. React key collisions are
         // avoided because the key prop includes the array index (e.g. `reader-${id}-${i}`).
-        return results.map((r) =>
+        return results.map((r, index) =>
           r.status === 'fulfilled'
             ? r.value
-            : { fullHex: '<unexportable>', displayHex: '<unexportable>' },
+            : { fullHex: `<unexportable-${index}>`, displayHex: '<unexportable>' },
         );
       };
       const writerEntries = await serializeKeys(writers);
       const allReaderEntries = await serializeKeys(readers);
 
       // Final guard: a newer refresh may have started during serializeKeys.
-      if (this._refreshCounter !== thisRefresh) return;
+      if (this._refreshCounters[documentPath] !== thisRefresh) return;
 
       // getReaders() returns both readers and writers; filter out writers
       // using the full hash to avoid incorrect matches from truncation collisions.
@@ -283,8 +285,8 @@ class App extends React.Component<
                 <button
                   onClick={() => {
                     this.props.onDocumentClose(documentPath);
-                    // Invalidate any in-flight refreshACL calls.
-                    ++this._refreshCounter;
+                    // Invalidate any in-flight refreshACL calls for this document.
+                    this._refreshCounters[documentPath] = (this._refreshCounters[documentPath] ?? 0) + 1;
                     this.setState((prev) => {
                       const { [documentPath]: _r, ...remainingReaders } = prev.aclReaders;
                       const { [documentPath]: _w, ...remainingWriters } = prev.aclWriters;
