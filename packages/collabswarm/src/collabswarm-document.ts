@@ -1293,13 +1293,13 @@ export class CollabswarmDocument<
   /**
    * Opens this collabswarm document. The sequence of operations is:
    *
-   * 1. Prepare a pubsub handler (not yet subscribed).
-   * 2. Call `.load()` to fetch the document from an existing peer via direct dial.
-   * 3. If the document is new (load returned false), run `validateDocumentPath`
+   * 1. Call `.load()` to fetch the document from an existing peer via direct dial.
+   * 2. If the document is new (load returned false), run `validateDocumentPath`
    *    (if configured) to ensure the path is allowed before proceeding.
-   * 4. Subscribe to the document's GossipSub pubsub topic and register protocol
-   *    handlers for load, key-update, and snapshot-load requests.
-   * 5. For new documents, add the current user as a writer and generate an
+   * 3. Prepare a pubsub handler and subscribe to the document's GossipSub pubsub
+   *    topic, registering protocol handlers for load, key-update, and
+   *    snapshot-load requests.
+   * 4. For new documents, add the current user as a writer and generate an
    *    initial document encryption key.
    *
    * Once opened, a document can be closed with `.close()`.

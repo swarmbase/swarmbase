@@ -218,8 +218,8 @@ describe('validateDocumentPath control flow', () => {
   /**
    * Replicates the validation block from CollabswarmDocument.open() so we can
    * test the three code paths (returns true, returns false, throws) in
-   * isolation. The real implementation lives in collabswarm-document.ts lines
-   * ~1332-1347.
+   * isolation. The real implementation lives in CollabswarmDocument.open()
+   * within collabswarm-document.ts.
    */
   async function runValidation(
     validateFn: ((path: string, key: unknown) => boolean | Promise<boolean>) | undefined,
