@@ -1868,8 +1868,9 @@ export class CollabswarmDocument<
    * re-syncing from peers.
    *
    * **Known limitation — concurrent remote changes during rollback:** The
-   * rollback sets `_document` back to the snapshot taken at the start of
-   * the transaction. Because `_makeChange()` is async and the node remains
+   * rollback sets `_document` back to the snapshot captured when
+   * `endChange()` is called (before applying the pending change functions).
+   * Because `_makeChange()` is async and the node remains
    * subscribed to pubsub throughout, remote sync messages may arrive and be
    * applied to `_document` between the start of the transaction and the
    * point of failure. Rolling back to the original snapshot **reverts those
@@ -1884,11 +1885,13 @@ export class CollabswarmDocument<
    * `_makeChange()` fails partway through (e.g. encryption succeeds but
    * pubsub publish throws), internal metadata (`_hashes`,
    * `_lastSyncMessage`) may be left in an inconsistent state because
-   * `_makeChange` mutates them before completing all steps. These partial
-   * mutations are not rolled back. Callers should treat a failed
-   * transaction as requiring a fresh document load or re-sync from peers
-   * to restore consistent internal state. A new transaction must be
-   * started after a failure.
+   * `_makeChange` mutates them before completing all steps. Compaction
+   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
+   * NOT rolled back. These partial mutations are not reversed. Callers
+   * should treat a failed transaction as potentially leaving internal
+   * metadata inconsistent and should re-sync the document (e.g., call
+   * `load()`) to restore consistency. A new transaction must be started
+   * after a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
