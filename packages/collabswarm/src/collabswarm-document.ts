@@ -1884,23 +1884,12 @@ export class CollabswarmDocument<
    * document after a failed transaction (e.g. call `load()` or wait for
    * the next pubsub round) to ensure remote state is promptly restored.
    *
-   * **Known limitation — partial internal state on failure:** If
-   * `_makeChange()` fails partway through (e.g. encryption succeeds but
-   * pubsub publish throws), internal metadata (`_hashes`,
-   * `_lastSyncMessage`) may be left in an inconsistent state because
-   * `_makeChange` mutates them before completing all steps. Compaction
-   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
-   * NOT rolled back. These partial mutations are not reversed.
-   *
-   * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
-   * Because `_hashes` is used to skip already-seen changes during sync,
-   * any CID added before the failure will cause that change to be silently
-   * skipped if it arrives again via pubsub or `load()`. This means the
-   * rolled-back change is effectively "lost" from this peer's perspective
-   * until `_hashes` is rebuilt. **Callers should call `load()` after a
-   * failed transaction** to re-sync the full document state from a peer
-   * and restore consistency. A new transaction must be started after a
-   * failure.
+   * **Internal metadata rollback:** On failure, `_hashes`,
+   * `_lastSyncMessage`, `_documentChangeCount`, and
+   * `_changesSinceSnapshot` are all restored from snapshots captured
+   * before `_makeChange()`, so phantom CIDs, stale sync messages, and
+   * incorrect compaction counters are prevented. A new transaction must
+   * be started after a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
@@ -1922,6 +1911,12 @@ export class CollabswarmDocument<
     }
 
     const originalDocument = this.document;
+    // Snapshot internal metadata so we can restore on failure.
+    const hashesSnapshot = new Set(this._hashes);
+    const lastSyncSnapshot = this._lastSyncMessage;
+    const changeCountSnapshot = this._documentChangeCount;
+    const compactionCountSnapshot = this._changesSinceSnapshot;
+
     this._committing = true;
     try {
       await this._ensureCurrentUserCanWrite();
@@ -1945,9 +1940,6 @@ export class CollabswarmDocument<
       );
       this._document = newDocument;
 
-      // Note: _makeChange may partially mutate _hashes/_lastSyncMessage before
-      // throwing. Full metadata rollback is not feasible, but the document
-      // reference is restored so subsequent operations start from a clean state.
       await this._makeChange(changes);
 
       // Success — clear transaction state.
@@ -1955,8 +1947,13 @@ export class CollabswarmDocument<
       this._pendingChangeFns = [];
     } catch (err) {
       // Abort transaction on ANY error (ensureWrite, localChange, or makeChange).
-      // Roll back document (best-effort for in-place mutating providers like Yjs).
+      // Roll back document and internal metadata (best-effort for in-place
+      // mutating providers like Yjs).
       this._document = originalDocument;
+      this._hashes = hashesSnapshot;
+      this._lastSyncMessage = lastSyncSnapshot;
+      this._documentChangeCount = changeCountSnapshot;
+      this._changesSinceSnapshot = compactionCountSnapshot;
       this._inTransaction = false;
       this._pendingChangeFns = [];
       throw err;
