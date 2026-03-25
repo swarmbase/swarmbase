@@ -102,7 +102,10 @@ class App extends React.Component<
       // Serialize each CryptoKey to { fullHex, displayHex }.
       // fullHex is the complete SHA-256 hash used for de-duplication;
       // displayHex is the truncated 8-byte prefix shown in the UI.
-      const serializeKeys = async (keys: CryptoKey[]) => {
+      // Promise.allSettled is ES2020. The tsconfig targets ES5 but includes
+      // "esnext" in `lib`, and CRA's default browserslist polyfills it for
+      // older browsers, so this is safe at runtime.
+      const serializeKeys = async (keys: CryptoKey[], fallbackPrefix: string) => {
         const results = await Promise.allSettled(
           keys.map(async (k) => {
             const raw = await crypto.subtle.exportKey('raw', k);
@@ -123,11 +126,11 @@ class App extends React.Component<
         return results.map((r, index) =>
           r.status === 'fulfilled'
             ? r.value
-            : { fullHex: `<unexportable-${index}>`, displayHex: '<unexportable>' },
+            : { fullHex: `<unexportable-${fallbackPrefix}-${index}>`, displayHex: '<unexportable>' },
         );
       };
-      const writerEntries = await serializeKeys(writers);
-      const allReaderEntries = await serializeKeys(readers);
+      const writerEntries = await serializeKeys(writers, 'writer');
+      const allReaderEntries = await serializeKeys(readers, 'reader');
 
       // Final guard: a newer refresh may have started during serializeKeys.
       if (this._refreshCounters[documentPath] !== thisRefresh) return;
@@ -285,8 +288,10 @@ class App extends React.Component<
                 <button
                   onClick={() => {
                     this.props.onDocumentClose(documentPath);
-                    // Invalidate any in-flight refreshACL calls for this document.
+                    // Invalidate any in-flight refreshACL calls for this document,
+                    // then clean up the counter to avoid leaking entries.
                     this._refreshCounters[documentPath] = (this._refreshCounters[documentPath] ?? 0) + 1;
+                    delete this._refreshCounters[documentPath];
                     this.setState((prev) => {
                       const { [documentPath]: _r, ...remainingReaders } = prev.aclReaders;
                       const { [documentPath]: _w, ...remainingWriters } = prev.aclWriters;
