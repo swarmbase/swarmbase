@@ -131,8 +131,13 @@ export interface CollabswarmConfig {
    * return false during network partitions when peers are unavailable.
    *
    * Validation runs before pubsub subscription and protocol handler registration,
-   * so rejected paths never temporarily join the topic. If the callback returns
-   * `false` (or throws), `open()` throws an Error with a descriptive message.
+   * so rejected paths never temporarily join the topic.
+   *
+   * - If the callback returns `false`, `open()` throws
+   *   `new Error('Document path "<path>" is not allowed for the current user')`.
+   * - If the callback throws, `open()` rethrows the error as-is (if it is
+   *   already an `Error`) or wraps it via `new Error(String(err))`.
+   *
    * `close()` properly removes any registered topic validators during cleanup.
    *
    * May return a boolean or a Promise<boolean> for async validation.
