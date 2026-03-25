@@ -41,7 +41,7 @@ import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { EventHandler, Message, StreamHandler } from '@libp2p/interface';
+import { EventHandler, Message, PeerId, StreamHandler } from '@libp2p/interface';
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -192,6 +192,11 @@ export class CollabswarmDocument<
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
+
+  // Transaction state for batching multiple changes atomically.
+  private _pendingChangeFns: ChangeFnType[] = [];
+  private _inTransaction = false;
+  private _committing = false;
 
   // Handlers registered by users of `CollabswarmDocument` that fire on remote changes.
   private _remoteHandlers: {
@@ -1298,17 +1303,48 @@ export class CollabswarmDocument<
    * response from a load request is a sync message containing all document change hashes.
    *
    * Load is used to fetch any new changes that a connecting node is missing.
-   * @returns false if no peers could provide the document (new document or network partition).
+   *
+   * @param preferredPeer Optional peer to try first (typically a PeerId from a
+   *   pubsub message sender). Matched against peers by extracting the PeerId
+   *   component from their Multiaddr via `getPeerId()`.
+   * @returns `true` if the document was successfully loaded from a peer.
+   *   `false` if no peer could provide the document — this is ambiguous: it
+   *   may mean the document is brand new (no peers have it) OR that all peers
+   *   failed to respond, failed to decrypt, or failed signature verification.
+   *   Note: `open()` treats `false` as "new document" and initializes a fresh
+   *   document with the current user as writer and a new encryption key.
    */
   // Key exchange happens during:
   // - Load messages.
   // - ACL updates via /collabswarm/key-update/1.0.0 protocol
-  public async load(): Promise<boolean> {
-    // Pick a peer.
-    // TODO: In the future, try to re-use connections that already are open.
+  public async load(preferredPeer?: PeerId | string): Promise<boolean> {
+    // Pick a peer. All peers come from getConnections() so they already have
+    // open connections. libp2p v2's dialProtocol reuses existing connections
+    // internally, so no additional connection management is needed here.
     const shuffledPeers = await this._shuffledPeers();
     if (shuffledPeers.length === 0) {
       return false;
+    }
+
+    const orderedPeers = [...shuffledPeers];
+
+    // If a preferred peer is specified, move it to the front.
+    // The peer list contains Multiaddrs while preferredPeer is typically a PeerId,
+    // so we compare by extracting the PeerId component from each Multiaddr.
+    if (preferredPeer) {
+      const preferredId = preferredPeer.toString();
+      const preferredIdx = orderedPeers.findIndex(p => {
+        // Only compare against the PeerId component of the Multiaddr.
+        // Falling back to p.toString() would compare against the full
+        // multiaddr string (e.g. "/ip4/.../p2p/<id>") which will never
+        // match a plain PeerId string.
+        const peerId = p.getPeerId?.();
+        return peerId != null && peerId === preferredId;
+      });
+      if (preferredIdx > 0) {
+        const [preferred] = orderedPeers.splice(preferredIdx, 1);
+        orderedPeers.unshift(preferred);
+      }
     }
 
     let signature = '';
@@ -1328,7 +1364,7 @@ export class CollabswarmDocument<
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
-    for (const peer of shuffledPeers) {
+    for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
@@ -1393,7 +1429,10 @@ export class CollabswarmDocument<
    * were missed should call `load()` again after `open()` resolves to re-sync
    * the latest state from a peer.
    *
-   * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
+   * @returns `false` if `load()` returned `false` — which `open()` treats as
+   *   "new document" by adding the current user as a writer and generating an
+   *   initial encryption key. Note that `load()` returning `false` is ambiguous:
+   *   it may also mean all peers failed (see `load()` docs for details).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
    *   for a new document. Validation runs before subscribing to pubsub or
    *   registering protocol handlers, so no cleanup is needed on rejection.
@@ -1445,8 +1484,10 @@ export class CollabswarmDocument<
             console.warn(
               'Trying to re-load document... Unable to decrypt incoming message',
             );
-            // TODO: Specifically try to load from the sending peer. This peer is the one who created this change, so they should have the document key(s) needed to read it.
-            return this.load();
+            // Prefer loading from the sending peer — they created this change
+            // and should have the document key(s) needed to read it.
+            const senderPeer = rawMessage.detail.type === 'signed' ? rawMessage.detail.from : undefined;
+            return this.load(senderPeer);
           }
 
           const message =
@@ -1782,7 +1823,147 @@ export class CollabswarmDocument<
     }
   }
 
-  // TODO: Add a startChange() method that starts a change "transaction" block.
+  // TODO: Unit tests for CollabswarmDocument require mocking libp2p, IPFS/Helia,
+  // and all providers — deferred to integration testing (see e2e/).
+
+  /**
+   * Start a change transaction. Changes made via `addChange()` will be batched
+   * and applied atomically when `endChange()` is called.
+   */
+  public startChange() {
+    if (this._inTransaction) {
+      throw new Error('Transaction already in progress');
+    }
+    this._inTransaction = true;
+    this._pendingChangeFns = [];
+  }
+
+  /**
+   * Queue a change function within an active transaction.
+   * Must be called between `startChange()` and `endChange()`.
+   */
+  public addChange(changeFn: ChangeFnType) {
+    if (!this._inTransaction) {
+      throw new Error('No transaction in progress. Call startChange() first.');
+    }
+    if (this._committing) {
+      throw new Error('Cannot add changes while endChange() is committing.');
+    }
+    this._pendingChangeFns.push(changeFn);
+  }
+
+  /**
+   * End the transaction and apply all queued changes atomically.
+   * This sends a single sync message for all batched changes.
+   *
+   * On failure (from any step: write check, CRDT apply, or network publish),
+   * the transaction is aborted and the document reference is rolled back.
+   * For immutable CRDT providers (e.g. Automerge), rollback is reliable
+   * because `localChange()` returns a new document object.
+   *
+   * **Known limitation — in-place mutating providers:** For CRDT providers
+   * that mutate in place (e.g. Yjs), rollback does NOT undo mutations.
+   * Yjs's `localChange()` mutates the document object directly and returns
+   * the same reference, so restoring the saved reference after failure has
+   * no effect — the mutations have already been applied to the shared
+   * Y.Doc. Callers using Yjs should treat a failed transaction as leaving
+   * the local document in a potentially inconsistent state and consider
+   * re-syncing from peers.
+   *
+   * **Known limitation — concurrent remote changes during rollback:** The
+   * rollback sets `_document` back to the snapshot captured when
+   * `endChange()` is called (before applying the pending change functions).
+   * Because `_makeChange()` is async and the node remains
+   * subscribed to pubsub throughout, remote sync messages may arrive and be
+   * applied to `_document` between the start of the transaction and the
+   * point of failure. Rolling back to the original snapshot **reverts those
+   * remote changes as well**, not just the local batch. This is acceptable
+   * because the CRDT layer guarantees eventual consistency — the reverted
+   * remote changes will be re-applied on the next sync cycle or document
+   * load. If transaction failure is critical, callers should re-sync the
+   * document after a failed transaction (e.g. call `load()` or wait for
+   * the next pubsub round) to ensure remote state is promptly restored.
+   *
+   * **Known limitation — partial internal state on failure:** If
+   * `_makeChange()` fails partway through (e.g. encryption succeeds but
+   * pubsub publish throws), internal metadata (`_hashes`,
+   * `_lastSyncMessage`) may be left in an inconsistent state because
+   * `_makeChange` mutates them before completing all steps. Compaction
+   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
+   * NOT rolled back. These partial mutations are not reversed.
+   *
+   * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
+   * Because `_hashes` is used to skip already-seen changes during sync,
+   * any CID added before the failure will cause that change to be silently
+   * skipped if it arrives again via pubsub or `load()`. This means the
+   * rolled-back change is effectively "lost" from this peer's perspective
+   * until `_hashes` is rebuilt. **Callers should call `load()` after a
+   * failed transaction** to re-sync the full document state from a peer
+   * and restore consistency. A new transaction must be started after a
+   * failure.
+   *
+   * @throws {Error} If any step in the commit pipeline fails.
+   */
+  public async endChange(message?: string) {
+    if (!this._inTransaction) {
+      throw new Error('No transaction in progress. Call startChange() first.');
+    }
+    if (this._committing) {
+      throw new Error('endChange() is already in progress. Await the previous call.');
+    }
+
+    // Snapshot pending fns so late addChange() calls during await don't
+    // unpredictably modify the batch being committed.
+    const pendingFns = [...this._pendingChangeFns];
+    if (pendingFns.length === 0) {
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+      return;
+    }
+
+    const originalDocument = this.document;
+    this._committing = true;
+    try {
+      await this._ensureCurrentUserCanWrite();
+
+      // Compose all queued change functions into a single localChange call
+      // to produce one atomic delta. This ensures providers like Automerge
+      // (which return incremental deltas) don't drop earlier changes.
+      const composedFn = ((doc: any) => {
+        for (const fn of pendingFns) {
+          (fn as any)(doc);
+        }
+      }) as ChangeFnType;
+
+      // Note: YjsProvider.localChange mutates the document in-place and returns
+      // the same reference, so rollback on failure is best-effort for Yjs.
+      // Automerge returns a new immutable document, so rollback is reliable.
+      const [newDocument, changes] = this._crdtProvider.localChange(
+        this.document,
+        message || '',
+        composedFn,
+      );
+      this._document = newDocument;
+
+      // Note: _makeChange may partially mutate _hashes/_lastSyncMessage before
+      // throwing. Full metadata rollback is not feasible, but the document
+      // reference is restored so subsequent operations start from a clean state.
+      await this._makeChange(changes);
+
+      // Success — clear transaction state.
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+    } catch (err) {
+      // Abort transaction on ANY error (ensureWrite, localChange, or makeChange).
+      // Roll back document (best-effort for in-place mutating providers like Yjs).
+      this._document = originalDocument;
+      this._inTransaction = false;
+      this._pendingChangeFns = [];
+      throw err;
+    } finally {
+      this._committing = false;
+    }
+  }
 
   /**
    * Applies a new local change (defined by `changeFn`) to the collabswarm document and updates
@@ -1792,6 +1973,9 @@ export class CollabswarmDocument<
    * @param message An optional change message/description to include.
    */
   public async change(changeFn: ChangeFnType, message?: string) {
+    if (this._inTransaction) {
+      throw new Error('Cannot call change() during an active transaction. Use addChange() instead.');
+    }
     await this._ensureCurrentUserCanWrite();
 
     const [newDocument, changes] = this._crdtProvider.localChange(
@@ -1984,7 +2168,10 @@ export class CollabswarmDocument<
     const changes = await this._readers.add(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // TODO: Consider sending document key to the new reader as a speedup.
+    // TODO: Send document key to new reader via BeeKEM Welcome flow
+    // or asymmetric encryption to reader's public key. Cannot use
+    // _distributeKeyUpdate() because it encrypts with the existing
+    // document key that the new reader doesn't yet possess.
   }
 
   /**
