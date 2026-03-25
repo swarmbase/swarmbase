@@ -1300,7 +1300,7 @@ export class CollabswarmDocument<
    *    pubsub topic, and register protocol handlers for load, key-update, and
    *    snapshot-load requests.
    * 4. If `enableTopicValidators` is set, register a GossipSub topic validator
-   *    that rejects messages from unauthorized peers.
+   *    that rejects messages that fail signature verification.
    * 5. For new documents, add the current user as a writer and generate an
    *    initial document encryption key.
    *
@@ -1403,8 +1403,8 @@ export class CollabswarmDocument<
     this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
 
     // Register GossipSub topic validator for authorization enforcement.
-    // When enabled, messages from unauthorized peers are rejected at the
-    // transport layer with a P4 penalty in peer scoring.
+    // When enabled, messages that fail signature verification are rejected at
+    // the transport layer with a P4 penalty in peer scoring.
     if (this.swarm.config?.enableTopicValidators) {
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.set === 'function') {
