@@ -40,7 +40,7 @@ export interface CollabswarmDocumentState<
     DocumentKey
   >;
   document: DocType;
-  peers: string[];
+  peers?: string[];
 }
 
 export interface CollabswarmState<
