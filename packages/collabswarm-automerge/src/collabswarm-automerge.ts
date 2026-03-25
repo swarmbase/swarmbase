@@ -27,8 +27,8 @@ import {
   Keychain,
   KeychainProvider,
   LRUCache,
-  validateChangeBlockMetadata,
 } from '@collabswarm/collabswarm';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm/dist/src/json-serializer';
 import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';

@@ -27,13 +27,13 @@ export function validateChangeBlockMetadata<ChangesType>(
   deserialized: { keyID?: unknown; blindIndexTokens?: unknown },
   result: CRDTChangeBlock<ChangesType>,
 ): void {
-  if ('keyID' in deserialized) {
+  if (Object.prototype.hasOwnProperty.call(deserialized, 'keyID')) {
     if (typeof deserialized.keyID !== 'string') {
       throw new Error('keyID must be a string');
     }
     result.keyID = deserialized.keyID;
   }
-  if ('blindIndexTokens' in deserialized) {
+  if (Object.prototype.hasOwnProperty.call(deserialized, 'blindIndexTokens')) {
     const tokens = deserialized.blindIndexTokens;
     // Validate blindIndexTokens shape: must be a plain object mapping string keys to string values
     if (tokens === null || typeof tokens !== 'object' || Array.isArray(tokens)) {

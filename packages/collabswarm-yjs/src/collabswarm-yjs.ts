@@ -13,8 +13,8 @@ import {
   Keychain,
   KeychainProvider,
   LRUCache,
-  validateChangeBlockMetadata,
 } from '@collabswarm/collabswarm';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm/dist/src/json-serializer';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
