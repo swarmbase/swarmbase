@@ -138,8 +138,6 @@ export interface CollabswarmConfig {
    * - If the callback throws, `open()` rethrows the error as-is (if it is
    *   already an `Error`) or wraps it via `new Error(String(err))`.
    *
-   * `close()` properly removes any registered topic validators during cleanup.
-   *
    * May return a boolean or a Promise<boolean> for async validation.
    * Return `true` to allow creation, `false` to reject it.
    * When absent, all document paths are allowed.
