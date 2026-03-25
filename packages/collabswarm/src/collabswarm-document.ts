@@ -1178,11 +1178,14 @@ export class CollabswarmDocument<
    * @returns `true` if a non-empty response was received and successfully synced.
    *   Returns `false` when:
    *   - The peer responded with an empty payload (e.g., peer has no snapshot).
-   *   - The response payload was malformed or could not be decrypted.
    *   - The response documentId did not match the expected document.
    *   - Writer signature verification failed (when signing is enabled).
    *   - `sync()` rejected the response (e.g., invalid inner signatures or auth failure).
-   *   Callers (e.g., `load()`) handle `false` by trying the next available peer.
+   *
+   *   In contrast, certain errors (for example, a malformed or undecryptable response
+   *   payload, or other unexpected protocol violations) will cause this method to throw.
+   *   Callers (e.g., `load()`) should wrap calls in a try/catch and handle both a
+   *   `false` return value (by trying the next available peer) and thrown errors.
    */
   private async _sendLoadRequestAndSync(
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
