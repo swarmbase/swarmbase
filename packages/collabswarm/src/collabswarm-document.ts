@@ -1912,6 +1912,8 @@ export class CollabswarmDocument<
 
     const originalDocument = this.document;
     // Snapshot internal metadata so we can restore on failure.
+    // The Set clone is O(n) but unavoidable: _makeChange may add hashes before
+    // a later step throws, so we need the pre-mutation state for rollback.
     const hashesSnapshot = new Set(this._hashes);
     const lastSyncSnapshot = this._lastSyncMessage;
     const changeCountSnapshot = this._documentChangeCount;
@@ -1950,7 +1952,12 @@ export class CollabswarmDocument<
       // Roll back document and internal metadata (best-effort for in-place
       // mutating providers like Yjs).
       this._document = originalDocument;
-      this._hashes = hashesSnapshot;
+      // Restore _hashes in-place to preserve the Set identity — concurrent
+      // sync may hold a reference to the same Set instance.
+      this._hashes.clear();
+      for (const hash of hashesSnapshot) {
+        this._hashes.add(hash);
+      }
       this._lastSyncMessage = lastSyncSnapshot;
       this._documentChangeCount = changeCountSnapshot;
       this._changesSinceSnapshot = compactionCountSnapshot;
