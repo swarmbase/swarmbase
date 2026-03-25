@@ -1568,6 +1568,12 @@ export class CollabswarmDocument<
         gossipsubService.topicValidators.delete(this.documentPath);
       }
     }
+    // Remove topicValidators entry if one was registered during open().
+    const gossipsub = this.swarm.libp2p?.services?.pubsub as any;
+    if (gossipsub?.topicValidators) {
+      gossipsub.topicValidators.delete(this.documentPath);
+    }
+
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
     await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
