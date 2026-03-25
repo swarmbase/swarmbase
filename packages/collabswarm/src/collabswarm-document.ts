@@ -1884,12 +1884,13 @@ export class CollabswarmDocument<
    * document after a failed transaction (e.g. call `load()` or wait for
    * the next pubsub round) to ensure remote state is promptly restored.
    *
-   * **Internal metadata rollback:** On failure, `_hashes`,
-   * `_lastSyncMessage`, `_documentChangeCount`, and
-   * `_changesSinceSnapshot` are all restored from snapshots captured
-   * before `_makeChange()`, so phantom CIDs, stale sync messages, and
-   * incorrect compaction counters are prevented. A new transaction must
-   * be started after a failure.
+   * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
+   * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
+   * snapshots captured before `_makeChange()`. For `_hashes`, only the
+   * CIDs appended since the transaction began are removed (delta-based
+   * rollback), avoiding the cost of cloning the entire Set and preventing
+   * mutation of the Set during concurrent sync iteration. A new
+   * transaction must be started after a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
@@ -1912,9 +1913,10 @@ export class CollabswarmDocument<
 
     const originalDocument = this.document;
     // Snapshot internal metadata so we can restore on failure.
-    // The Set clone is O(n) but unavoidable: _makeChange may add hashes before
-    // a later step throws, so we need the pre-mutation state for rollback.
-    const hashesSnapshot = new Set(this._hashes);
+    // Only track the Set size (O(1)) instead of cloning the entire Set (O(n)):
+    // _makeChange adds at most one CID, and JS Sets iterate in insertion order,
+    // so on rollback we remove only entries appended after this point.
+    const hashSizeBefore = this._hashes.size;
     const lastSyncSnapshot = this._lastSyncMessage;
     const changeCountSnapshot = this._documentChangeCount;
     const compactionCountSnapshot = this._changesSinceSnapshot;
@@ -1952,11 +1954,15 @@ export class CollabswarmDocument<
       // Roll back document and internal metadata (best-effort for in-place
       // mutating providers like Yjs).
       this._document = originalDocument;
-      // Restore _hashes in-place to preserve the Set identity — concurrent
-      // sync may hold a reference to the same Set instance.
-      this._hashes.clear();
-      for (const hash of hashesSnapshot) {
-        this._hashes.add(hash);
+      // Remove only the CIDs appended by _makeChange instead of clearing and
+      // re-populating the entire Set. This avoids mutating the Set during
+      // concurrent sync (clear() would disrupt any in-progress iteration)
+      // and is O(delta) instead of O(n).
+      if (this._hashes.size > hashSizeBefore) {
+        const entries = [...this._hashes];
+        for (let i = hashSizeBefore; i < entries.length; i++) {
+          this._hashes.delete(entries[i]!);
+        }
       }
       this._lastSyncMessage = lastSyncSnapshot;
       this._documentChangeCount = changeCountSnapshot;
