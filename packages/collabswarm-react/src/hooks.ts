@@ -48,7 +48,7 @@ const openTaskResults = new Map<
 const subscriberCounts = new Map<string, number>();
 
 export const CollabswarmContext = createContext<{
-  // TODO: These caches grow infinitely.
+  // Caches are evicted when the last subscriber for a document path unmounts (see cleanup below).
   docCache: {
     [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
   };
@@ -62,7 +62,7 @@ export const CollabswarmContext = createContext<{
   setDocReadersCache: (docReadersCache: { [docPath: string]: any[] }) => void;
   setDocWritersCache: (docWritersCache: { [docPath: string]: any[] }) => void;
 }>({
-  // TODO: These defaults are ineffective. Is there a better way to populate these (such returning this context from a hook?)
+  // Default no-op setters; real implementations are provided by the context provider component.
   docCache: {},
   docDataCache: {},
   docReadersCache: {},
