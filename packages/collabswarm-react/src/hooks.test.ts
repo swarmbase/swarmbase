@@ -1,7 +1,7 @@
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
-import React, { useState } from 'react';
-import { render, act } from '@testing-library/react';
-import { CollabswarmContext, useCollabswarm, _resetCaches, _getCacheSizes } from './hooks';
+import { describe, expect, test, jest } from '@jest/globals';
+import React from 'react';
+import { render, act, waitFor } from '@testing-library/react';
+import { CollabswarmContext, useCollabswarm } from './hooks';
 
 // ---------------------------------------------------------------------------
 // CollabswarmContext defaults
@@ -143,19 +143,20 @@ describe('useCollabswarm hook', () => {
       );
     });
 
-    // After the async effect runs, the instance should be set.
-    expect(captureRef.current).toBeDefined();
-    expect(captureRef.current.initialize).toBeDefined();
+    // Wait for the async useEffect IIFE to complete and update state.
+    await waitFor(() => {
+      expect(captureRef.current).toBeDefined();
+      expect(captureRef.current.initialize).toBeDefined();
+    });
+
     expect(captureRef.current.initialize).toHaveBeenCalled();
   });
 
   test('returns undefined initially then resolves after effect', async () => {
     const captureRef = { current: 'SENTINEL' as any };
 
-    // Synchronous render: effect hasn't fired yet.
-    let renderResult: any;
     await act(async () => {
-      renderResult = render(
+      render(
         React.createElement(HookConsumer, {
           privateKey: 'priv-key',
           publicKey: 'pub-key',
@@ -164,8 +165,10 @@ describe('useCollabswarm hook', () => {
       );
     });
 
-    // After act, the effect should have completed.
-    expect(captureRef.current).toBeDefined();
-    expect(captureRef.current).not.toBe('SENTINEL');
+    // Wait for the async useEffect IIFE to complete and update state.
+    await waitFor(() => {
+      expect(captureRef.current).toBeDefined();
+      expect(captureRef.current).not.toBe('SENTINEL');
+    });
   });
 });

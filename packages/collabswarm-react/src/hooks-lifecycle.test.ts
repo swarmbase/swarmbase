@@ -1,12 +1,8 @@
 import { describe, expect, test, jest, beforeEach, afterEach } from '@jest/globals';
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
-import {
-  CollabswarmContext,
-  useCollabswarmDocumentState,
-  _resetCaches,
-  _getCacheSizes,
-} from './hooks';
+import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
+import { resetCaches, getCacheSizes } from './hooks-cache';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,12 +77,12 @@ function TestConsumer(props: {
 
 describe('useCollabswarmDocumentState lifecycle', () => {
   beforeEach(() => {
-    _resetCaches();
+    resetCaches();
     cleanup();
   });
 
   afterEach(() => {
-    _resetCaches();
+    resetCaches();
   });
 
   test('subscribe is called on mount', async () => {
@@ -189,12 +185,12 @@ describe('useCollabswarmDocumentState lifecycle', () => {
 
 describe('Cache cleanup on unmount', () => {
   beforeEach(() => {
-    _resetCaches();
+    resetCaches();
     cleanup();
   });
 
   afterEach(() => {
-    _resetCaches();
+    resetCaches();
   });
 
   test('caches are populated after mount and cleared after last subscriber unmounts', async () => {
@@ -216,7 +212,7 @@ describe('Cache cleanup on unmount', () => {
     });
 
     // After mount, caches should be populated.
-    const sizesAfterMount = _getCacheSizes();
+    const sizesAfterMount = getCacheSizes();
     expect(sizesAfterMount.openTasks).toBeGreaterThanOrEqual(1);
     expect(sizesAfterMount.openTaskResults).toBeGreaterThanOrEqual(1);
     expect(sizesAfterMount.subscriberCounts).toBeGreaterThanOrEqual(1);
@@ -228,7 +224,7 @@ describe('Cache cleanup on unmount', () => {
     // After unmount of the last subscriber, openTaskResults and subscriberCounts
     // should be cleared. openTasks is cleared asynchronously after the promise settles.
     await waitFor(() => {
-      const sizesAfterUnmount = _getCacheSizes();
+      const sizesAfterUnmount = getCacheSizes();
       expect(sizesAfterUnmount.openTaskResults).toBe(0);
       expect(sizesAfterUnmount.subscriberCounts).toBe(0);
     });
@@ -265,12 +261,12 @@ describe('Cache cleanup on unmount', () => {
 
 describe('Multiple subscribers to the same document', () => {
   beforeEach(() => {
-    _resetCaches();
+    resetCaches();
     cleanup();
   });
 
   afterEach(() => {
-    _resetCaches();
+    resetCaches();
   });
 
   test('ref-counting: caches persist when one of two subscribers unmounts', async () => {
@@ -305,7 +301,7 @@ describe('Multiple subscribers to the same document', () => {
     });
 
     // Two subscribers should be tracked.
-    const sizesWithBoth = _getCacheSizes();
+    const sizesWithBoth = getCacheSizes();
     expect(sizesWithBoth.subscriberCounts).toBeGreaterThanOrEqual(1);
 
     // Unmount one subscriber by hiding the second consumer.
@@ -314,7 +310,7 @@ describe('Multiple subscribers to the same document', () => {
     });
 
     // Caches should still be populated because one subscriber remains.
-    const sizesAfterPartialUnmount = _getCacheSizes();
+    const sizesAfterPartialUnmount = getCacheSizes();
     expect(sizesAfterPartialUnmount.openTaskResults).toBeGreaterThanOrEqual(1);
     // subscriberCounts entry should still exist (decremented but not zero).
     expect(sizesAfterPartialUnmount.subscriberCounts).toBeGreaterThanOrEqual(1);
@@ -380,12 +376,12 @@ describe('Multiple subscribers to the same document', () => {
 
 describe('useCollabswarmDocumentState return value', () => {
   beforeEach(() => {
-    _resetCaches();
+    resetCaches();
     cleanup();
   });
 
   afterEach(() => {
-    _resetCaches();
+    resetCaches();
   });
 
   test('returns a change function that delegates to docRef.change', async () => {
