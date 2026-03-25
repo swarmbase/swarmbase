@@ -1823,11 +1823,8 @@ export class CollabswarmDocument<
     }
   }
 
-  // TODO: Unit tests for the transaction API (startChange/addChange/endChange) and
-  // load() preferredPeer parameter are deferred pending test infrastructure. The
-  // core package has no test harness yet — CollabswarmDocument requires mocking
-  // libp2p, IPFS/Helia, CRDTProvider, AuthProvider, and ACLProvider, which is
-  // non-trivial to set up. See: https://github.com/swarmbase/swarmbase/pull/176
+  // TODO: Unit tests for CollabswarmDocument require mocking libp2p, IPFS/Helia,
+  // and all providers — deferred to integration testing (see e2e/).
 
   /**
    * Start a change transaction. Changes made via `addChange()` will be batched
