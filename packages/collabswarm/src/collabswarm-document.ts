@@ -1823,6 +1823,12 @@ export class CollabswarmDocument<
     }
   }
 
+  // TODO: Unit tests for the transaction API (startChange/addChange/endChange) and
+  // load() preferredPeer parameter are deferred pending test infrastructure. The
+  // core package has no test harness yet — CollabswarmDocument requires mocking
+  // libp2p, IPFS/Helia, CRDTProvider, AuthProvider, and ACLProvider, which is
+  // non-trivial to set up. See: https://github.com/swarmbase/swarmbase/pull/176
+
   /**
    * Start a change transaction. Changes made via `addChange()` will be batched
    * and applied atomically when `endChange()` is called.
@@ -1887,11 +1893,17 @@ export class CollabswarmDocument<
    * `_lastSyncMessage`) may be left in an inconsistent state because
    * `_makeChange` mutates them before completing all steps. Compaction
    * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
-   * NOT rolled back. These partial mutations are not reversed. Callers
-   * should treat a failed transaction as potentially leaving internal
-   * metadata inconsistent and should re-sync the document (e.g., call
-   * `load()`) to restore consistency. A new transaction must be started
-   * after a failure.
+   * NOT rolled back. These partial mutations are not reversed.
+   *
+   * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
+   * Because `_hashes` is used to skip already-seen changes during sync,
+   * any CID added before the failure will cause that change to be silently
+   * skipped if it arrives again via pubsub or `load()`. This means the
+   * rolled-back change is effectively "lost" from this peer's perspective
+   * until `_hashes` is rebuilt. **Callers should call `load()` after a
+   * failed transaction** to re-sync the full document state from a peer
+   * and restore consistency. A new transaction must be started after a
+   * failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
