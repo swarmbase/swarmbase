@@ -599,7 +599,19 @@ export class CollabswarmDocument<
     }
   }
 
+  /**
+   * Whether application-level signing is enabled for this document's swarm.
+   * Centralizes the `enableSigning` config check to avoid drift across many call sites.
+   */
+  private _isSigningEnabled(): boolean {
+    return this.swarm.config?.enableSigning !== false;
+  }
+
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
+    if (!this._isSigningEnabled()) {
+      return true;
+    }
+
     // TODO: Cache list of current writers per dag node for now.
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
@@ -622,6 +634,10 @@ export class CollabswarmDocument<
    * key types (e.g. CryptoKey).
    */
   private async _verifySnapshotSignature(payload: Uint8Array, signature: Uint8Array) {
+    if (!this._isSigningEnabled()) {
+      return true;
+    }
+
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of await this._writers.users()) {
       verificationTasks.push(
@@ -634,6 +650,10 @@ export class CollabswarmDocument<
   private async _signAsWriter(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
   ): Promise<string> {
+    if (!this._isSigningEnabled()) {
+      return '';
+    }
+
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
     const raw = this._syncMessageSerializer.serializeSyncMessage(
@@ -880,25 +900,40 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Verify that this user is a reader.
-        const readers = (
-          await Promise.all([this._readers.users(), this._writers.users()])
-        ).flat();
-        let requestor: PublicKey | undefined;
-        for (const reader of readers) {
-          if (
-            await this._authProvider.verify(
-              this._encoder.encode(message.documentId),
-              reader,
-              this._deserializeSignature(message.signature),
-            )
-          ) {
-            requestor = reader;
-            break;
+        // Authorize the requestor. When signing is disabled, skip ACL/signature
+        // checks entirely — any peer is treated as authorized.
+        let authorized = false;
+        if (!this._isSigningEnabled()) {
+          // Bypass: signing disabled, no signature verification needed.
+          authorized = true;
+        } else {
+          if (!message.signature) {
+            // Reject requests with missing/empty signatures (e.g. from peers
+            // that have signing disabled — they cannot interoperate).
+            console.warn(
+              `Rejected load request for ${message.documentId}: missing signature`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          const readers = (
+            await Promise.all([this._readers.users(), this._writers.users()])
+          ).flat();
+          for (const reader of readers) {
+            if (
+              await this._authProvider.verify(
+                this._encoder.encode(message.documentId),
+                reader,
+                this._deserializeSignature(message.signature),
+              )
+            ) {
+              authorized = true;
+              break;
+            }
           }
         }
 
-        if (!requestor) {
+        if (!authorized) {
           console.warn(
             `Detected an unauthorized load request for ${message.documentId}`,
           );
@@ -973,25 +1008,40 @@ export class CollabswarmDocument<
           return [];
         }
 
-        // Verify that this user is a reader or writer.
-        const readers = (
-          await Promise.all([this._readers.users(), this._writers.users()])
-        ).flat();
-        let requestor: PublicKey | undefined;
-        for (const reader of readers) {
-          if (
-            await this._authProvider.verify(
-              this._encoder.encode(message.documentId),
-              reader,
-              this._deserializeSignature(message.signature),
-            )
-          ) {
-            requestor = reader;
-            break;
+        // Authorize the requestor. When signing is disabled, skip ACL/signature
+        // checks entirely — any peer is treated as authorized.
+        let authorized = false;
+        if (!this._isSigningEnabled()) {
+          // Bypass: signing disabled, no signature verification needed.
+          authorized = true;
+        } else {
+          if (!message.signature) {
+            // Reject requests with missing/empty signatures (e.g. from peers
+            // that have signing disabled — they cannot interoperate).
+            console.warn(
+              `Rejected snapshot load request for ${message.documentId}: missing signature`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          const readers = (
+            await Promise.all([this._readers.users(), this._writers.users()])
+          ).flat();
+          for (const reader of readers) {
+            if (
+              await this._authProvider.verify(
+                this._encoder.encode(message.documentId),
+                reader,
+                this._deserializeSignature(message.signature),
+              )
+            ) {
+              authorized = true;
+              break;
+            }
           }
         }
 
-        if (!requestor) {
+        if (!authorized) {
           console.warn(
             `Detected an unauthorized snapshot load request for ${message.documentId}`,
           );
@@ -1124,8 +1174,20 @@ export class CollabswarmDocument<
 
   /**
    * Send a load request over the given stream and apply the response.
-   * Returns true if a non-empty response was received and synced,
-   * false if the response was empty (e.g. peer has no snapshot).
+   *
+   * @returns `true` if a non-empty response was received and successfully synced.
+   *   Returns `false` when:
+   *   - The peer responded with an empty payload (e.g., peer has no snapshot).
+   *   - The response payload is too short to contain a valid encrypted header.
+   *   - The encryption keyID is not recognized (key not in our keychain).
+   *   - The response documentId did not match the expected document.
+   *   - Writer signature verification failed (when signing is enabled).
+   *   - `sync()` rejected the response (e.g., invalid inner signatures or auth failure).
+   *
+   * @throws When `decrypt()` itself fails (i.e., the keyID was recognized but
+   *   decryption produced no output), or on other unexpected protocol errors.
+   *   Callers (e.g., `load()`) should wrap calls in a try/catch and handle both a
+   *   `false` return value (by trying the next available peer) and thrown errors.
    */
   private async _sendLoadRequestAndSync(
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
@@ -1192,7 +1254,7 @@ export class CollabswarmDocument<
         // verify — trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
         const preLoadWriters = await this._writers.users();
-        if (preLoadWriters.length > 0) {
+        if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
           if (!message.signature) {
             console.warn(
               `Load response for ${this.documentPath}: missing signature, skipping peer`,
@@ -1215,7 +1277,14 @@ export class CollabswarmDocument<
           }
         }
 
-        await this.sync(message, false);
+        const syncResult = await this.sync(message, false);
+        if (!syncResult) {
+          console.warn(
+            `sync rejected message during load for ${this.documentPath}`,
+          );
+          // Return false so the caller tries the next peer.
+          return false;
+        }
         return true;
       },
     );
@@ -1242,11 +1311,14 @@ export class CollabswarmDocument<
       return false;
     }
 
-    const signatureBytes = await this._authProvider.sign(
-      this._encoder.encode(this.documentPath),
-      this._userKey,
-    );
-    const signature = this._serializeSignature(signatureBytes);
+    let signature = '';
+    if (this._isSigningEnabled()) {
+      const signatureBytes = await this._authProvider.sign(
+        this._encoder.encode(this.documentPath),
+        this._userKey,
+      );
+      signature = this._serializeSignature(signatureBytes);
+    }
     const loadRequest: CRDTLoadRequest = {
       documentId: this.documentPath,
       signature,
@@ -1403,7 +1475,8 @@ export class CollabswarmDocument<
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
     // transport layer with a P4 penalty in peer scoring.
-    if (this.swarm.config?.enableTopicValidators) {
+    // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
+    if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.set === 'function') {
         gossipsubService.topicValidators.set(
@@ -1500,6 +1573,12 @@ export class CollabswarmDocument<
         gossipsubService.topicValidators.delete(this.documentPath);
       }
     }
+    // Remove topicValidators entry if one was registered during open().
+    const gossipsub = this.swarm.libp2p?.services?.pubsub as any;
+    if (gossipsub?.topicValidators) {
+      gossipsub.topicValidators.delete(this.documentPath);
+    }
+
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
     await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
@@ -1512,31 +1591,38 @@ export class CollabswarmDocument<
    * - Apply new changes to the existing CRDT document.
    *
    * @param message A sync message to apply.
+   * @param verifySignature Whether to verify the message signature (default: true).
+   * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
+   *
+   * **BREAKING CHANGE:** Return type changed from `Promise<void>` to
+   * `Promise<boolean>`. TypeScript callers with explicit `Promise<void>` type
+   * annotations will need to update. Callers should now check the returned
+   * boolean to determine whether the message was applied successfully.
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
     verifySignature = true,
-  ) {
+  ): Promise<boolean> {
     const { signature, ...messageWithoutSignature } = message;
-    if (!signature) {
+    const signingEnabled = this._isSigningEnabled();
+    if (signingEnabled && !signature) {
       return false;
     }
 
-    // TODO: Is there a way to avoid this serialization step:
-    const raw = this._syncMessageSerializer.serializeSyncMessage(
-      messageWithoutSignature,
-    );
-
-    if (
-      verifySignature &&
-      !(await this._verifyWriterSignature(raw, signature))
-    ) {
-      console.warn(
-        `Received a sync message with an invalid signature for ${message.documentId}`,
-        signature,
+    // Only serialize for signature verification — skip when signing is disabled
+    // to avoid expensive serialization of large messages.
+    if (signingEnabled && verifySignature) {
+      const raw = this._syncMessageSerializer.serializeSyncMessage(
         messageWithoutSignature,
       );
-      return;
+      if (!(await this._verifyWriterSignature(raw, signature!))) {
+        console.warn(
+          `Received a sync message with an invalid signature for ${message.documentId}`,
+          signature,
+          messageWithoutSignature,
+        );
+        return false;
+      }
     }
 
     // Update/replace list of document keys (if provided).
@@ -1582,20 +1668,27 @@ export class CollabswarmDocument<
         // Verify the snapshot signature against the deterministic payload
         // by trying all authorized writers (publicKey may not survive
         // serialization for all key types, e.g. CryptoKey).
-        let snapshotSignatureValid = false;
-        try {
-          const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
-          const signPayload = this._buildSnapshotSignPayload(
-            stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
-          );
-          snapshotSignatureValid = await this._verifySnapshotSignature(
-            signPayload, incoming.signature,
-          );
-        } catch (e) {
-          console.warn(
-            `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
-            e,
-          );
+        // When signing is disabled, skip serialization and signature
+        // verification — accept the snapshot unconditionally.
+        // WARNING: This means any peer can inject arbitrary snapshot state when
+        // signing is disabled. Only disable signing in trusted or development
+        // environments where all peers are known and authenticated by other means.
+        let snapshotSignatureValid = !signingEnabled;
+        if (signingEnabled) {
+          try {
+            const stateBytes = this._changesSerializer.serializeChanges(incoming.state);
+            const signPayload = this._buildSnapshotSignPayload(
+              stateBytes, incoming.lastChangeNodeCID, incoming.timestamp, incoming.compactedCount,
+            );
+            snapshotSignatureValid = await this._verifySnapshotSignature(
+              signPayload, incoming.signature,
+            );
+          } catch (e) {
+            console.warn(
+              `Rejected snapshot for ${this.documentPath}: malformed snapshot fields`,
+              e,
+            );
+          }
         }
         if (!snapshotSignatureValid) {
           console.warn(
@@ -1636,6 +1729,8 @@ export class CollabswarmDocument<
     if (message.changes) {
       await this._syncDocumentChanges(message.changeId, message.changes);
     }
+
+    return true;
   }
 
   /**
@@ -1754,10 +1849,15 @@ export class CollabswarmDocument<
     // for large state blobs (no JSON/Array.from overhead).
     const compactedCount = this._documentChangeCount;
     const stateBytes = this._changesSerializer.serializeChanges(state);
-    const signPayload = this._buildSnapshotSignPayload(
-      stateBytes, lastChangeNodeCID, timestamp, compactedCount,
-    );
-    const signature = await this._authProvider.sign(signPayload, this._userKey);
+    let signature: Uint8Array;
+    if (this._isSigningEnabled()) {
+      const signPayload = this._buildSnapshotSignPayload(
+        stateBytes, lastChangeNodeCID, timestamp, compactedCount,
+      );
+      signature = await this._authProvider.sign(signPayload, this._userKey);
+    } else {
+      signature = new Uint8Array(0);
+    }
 
     const snapshotNode: CRDTSnapshotNode<ChangesType, PublicKey> = {
       state,
@@ -2032,23 +2132,25 @@ export class CollabswarmDocument<
           this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
         // Verify the sender is an authorized writer.
-        if (message.signature) {
-          const { signature, ...messageWithoutSignature } = message;
-          const raw =
-            this._syncMessageSerializer.serializeSyncMessage(
-              messageWithoutSignature,
-            );
-          if (!(await this._verifyWriterSignature(raw, signature))) {
+        if (this._isSigningEnabled()) {
+          if (message.signature) {
+            const { signature, ...messageWithoutSignature } = message;
+            const raw =
+              this._syncMessageSerializer.serializeSyncMessage(
+                messageWithoutSignature,
+              );
+            if (!(await this._verifyWriterSignature(raw, signature))) {
+              console.warn(
+                `Received key update with invalid signature for ${this.documentPath}`,
+              );
+              return [];
+            }
+          } else {
             console.warn(
-              `Received key update with invalid signature for ${this.documentPath}`,
+              `Received unsigned key update for ${this.documentPath}`,
             );
             return [];
           }
-        } else {
-          console.warn(
-            `Received unsigned key update for ${this.documentPath}`,
-          );
-          return [];
         }
 
         // Merge keychain changes.
