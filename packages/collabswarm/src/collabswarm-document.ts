@@ -1178,12 +1178,14 @@ export class CollabswarmDocument<
    * @returns `true` if a non-empty response was received and successfully synced.
    *   Returns `false` when:
    *   - The peer responded with an empty payload (e.g., peer has no snapshot).
+   *   - The response payload is too short to contain a valid encrypted header.
+   *   - The encryption keyID is not recognized (key not in our keychain).
    *   - The response documentId did not match the expected document.
    *   - Writer signature verification failed (when signing is enabled).
    *   - `sync()` rejected the response (e.g., invalid inner signatures or auth failure).
    *
-   *   In contrast, certain errors (for example, a malformed or undecryptable response
-   *   payload, or other unexpected protocol violations) will cause this method to throw.
+   * @throws When `decrypt()` itself fails (i.e., the keyID was recognized but
+   *   decryption produced no output), or on other unexpected protocol errors.
    *   Callers (e.g., `load()`) should wrap calls in a try/catch and handle both a
    *   `false` return value (by trying the next available peer) and thrown errors.
    */
@@ -1591,11 +1593,13 @@ export class CollabswarmDocument<
    * @param message A sync message to apply.
    * @param verifySignature Whether to verify the message signature (default: true).
    * @returns `true` if the message was applied successfully, `false` if rejected due to auth failure.
-   * @since 0.4.0 Return type changed from `Promise<void>` to `Promise<boolean>`.
-   *   This is a breaking change from the previous `Promise<void>` return type.
-   *   TypeScript callers with explicit `Promise<void>` type annotations will need
-   *   to update. Callers should now check the returned boolean to determine whether
-   *   the message was applied successfully.
+   *
+   * **BREAKING CHANGE (0.4.0):** Return type changed from `Promise<void>` to
+   * `Promise<boolean>`. TypeScript callers with explicit `Promise<void>` type
+   * annotations will need to update. Callers should now check the returned
+   * boolean to determine whether the message was applied successfully.
+   *
+   * @since 0.4.0
    */
   public async sync(
     message: CRDTSyncMessage<ChangesType, PublicKey>,
