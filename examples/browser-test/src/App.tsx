@@ -65,6 +65,10 @@ class App extends React.Component<
   AppState,
   AutomergeSwarmState<any>
 > {
+  // Tracks which document path is currently being refreshed. Set to null
+  // when a document is closed to prevent stale async setState calls.
+  private _refreshingPath: string | null = null;
+
   constructor(public props: AppProps) {
     super(props);
 
@@ -80,11 +84,18 @@ class App extends React.Component<
   async refreshACL(documentPath: string) {
     const docState = this.props.state.documents[documentPath];
     if (!docState?.documentRef) return;
+
+    this._refreshingPath = documentPath;
+
     try {
       const [readers, writers] = await Promise.all([
         docState.documentRef.getReaders(),
         docState.documentRef.getWriters(),
       ]);
+
+      // Bail out if the document was closed while we were awaiting.
+      if (this._refreshingPath !== documentPath) return;
+
       const serializeKeys = async (keys: CryptoKey[]) => {
         const results = await Promise.allSettled(
           keys.map(async (k) => {
@@ -95,6 +106,8 @@ class App extends React.Component<
               .join('');
           }),
         );
+        // Unexportable keys get a fallback string. React key collisions are
+        // avoided because the key prop includes the array index (e.g. `reader-${id}-${i}`).
         return results.map((r) =>
           r.status === 'fulfilled' ? r.value : '<unexportable>',
         );
@@ -102,8 +115,8 @@ class App extends React.Component<
       const writerIds = await serializeKeys(writers);
       const allReaderIds = await serializeKeys(readers);
 
-      // Guard: document may have been closed while async work was in progress.
-      if (!this.props.state.documents[documentPath]) return;
+      // Final guard: document may have been closed during serializeKeys.
+      if (this._refreshingPath !== documentPath) return;
 
       // getReaders() returns both readers and writers; filter out writers to avoid duplicates.
       const writerIdSet = new Set(writerIds);
@@ -248,6 +261,10 @@ class App extends React.Component<
                 <button
                   onClick={() => {
                     this.props.onDocumentClose(documentPath);
+                    // Cancel any in-flight refreshACL for this document.
+                    if (this._refreshingPath === documentPath) {
+                      this._refreshingPath = null;
+                    }
                     this.setState((prev) => {
                       const { [documentPath]: _r, ...remainingReaders } = prev.aclReaders;
                       const { [documentPath]: _w, ...remainingWriters } = prev.aclWriters;
