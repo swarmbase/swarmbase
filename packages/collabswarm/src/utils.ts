@@ -30,11 +30,8 @@ export function concatUint8Arrays(...arrs: Uint8Array[]): Uint8Array {
   return newArr;
 }
 
-// HACK:
-export function isBufferList(input: Uint8Array | Uint8ArrayList | BufferList): boolean {
-  return !!Object.getOwnPropertySymbols(input).find((s) => {
-    return String(s) === 'Symbol(BufferList)';
-  });
+export function isBufferList(input: Uint8Array | Uint8ArrayList | BufferList): input is BufferList {
+  return input instanceof BufferList;
 }
 
 export async function readUint8Iterable(
