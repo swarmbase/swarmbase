@@ -65,9 +65,10 @@ class App extends React.Component<
   AppState,
   AutomergeSwarmState<any>
 > {
-  // Tracks which document path is currently being refreshed. Set to null
-  // when a document is closed to prevent stale async setState calls.
-  private _refreshingPath: string | null = null;
+  // Monotonically increasing counter used to detect stale refreshACL calls.
+  // Each call captures the current value; if it changes before setState,
+  // a newer refresh has been initiated and the stale one is discarded.
+  private _refreshCounter = 0;
 
   constructor(public props: AppProps) {
     super(props);
@@ -85,7 +86,7 @@ class App extends React.Component<
     const docState = this.props.state.documents[documentPath];
     if (!docState?.documentRef) return;
 
-    this._refreshingPath = documentPath;
+    const thisRefresh = ++this._refreshCounter;
 
     try {
       const [readers, writers] = await Promise.all([
@@ -93,37 +94,58 @@ class App extends React.Component<
         docState.documentRef.getWriters(),
       ]);
 
-      // Bail out if the document was closed while we were awaiting.
-      if (this._refreshingPath !== documentPath) return;
+      // Bail out if a newer refreshACL call has been initiated.
+      if (this._refreshCounter !== thisRefresh) return;
 
+      // Serialize each CryptoKey to { fullHex, displayHex }.
+      // fullHex is the complete SHA-256 hash used for de-duplication;
+      // displayHex is the truncated 8-byte prefix shown in the UI.
       const serializeKeys = async (keys: CryptoKey[]) => {
         const results = await Promise.allSettled(
           keys.map(async (k) => {
             const raw = await crypto.subtle.exportKey('raw', k);
             const hash = await crypto.subtle.digest('SHA-256', raw);
-            return Array.from(new Uint8Array(hash).slice(0, 8))
+            const bytes = Array.from(new Uint8Array(hash));
+            const fullHex = bytes
               .map((b) => b.toString(16).padStart(2, '0'))
               .join('');
+            const displayHex = bytes
+              .slice(0, 8)
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('');
+            return { fullHex, displayHex };
           }),
         );
         // Unexportable keys get a fallback string. React key collisions are
         // avoided because the key prop includes the array index (e.g. `reader-${id}-${i}`).
         return results.map((r) =>
-          r.status === 'fulfilled' ? r.value : '<unexportable>',
+          r.status === 'fulfilled'
+            ? r.value
+            : { fullHex: '<unexportable>', displayHex: '<unexportable>' },
         );
       };
-      const writerIds = await serializeKeys(writers);
-      const allReaderIds = await serializeKeys(readers);
+      const writerEntries = await serializeKeys(writers);
+      const allReaderEntries = await serializeKeys(readers);
 
-      // Final guard: document may have been closed during serializeKeys.
-      if (this._refreshingPath !== documentPath) return;
+      // Final guard: a newer refresh may have started during serializeKeys.
+      if (this._refreshCounter !== thisRefresh) return;
 
-      // getReaders() returns both readers and writers; filter out writers to avoid duplicates.
-      const writerIdSet = new Set(writerIds);
-      const readerIds = allReaderIds.filter((id) => !writerIdSet.has(id));
+      // getReaders() returns both readers and writers; filter out writers
+      // using the full hash to avoid incorrect matches from truncation collisions.
+      const writerFullSet = new Set(writerEntries.map((e) => e.fullHex));
+      const readerEntries = allReaderEntries.filter(
+        (e) => !writerFullSet.has(e.fullHex),
+      );
+
       this.setState((prev) => ({
-        aclReaders: { ...prev.aclReaders, [documentPath]: readerIds },
-        aclWriters: { ...prev.aclWriters, [documentPath]: writerIds },
+        aclReaders: {
+          ...prev.aclReaders,
+          [documentPath]: readerEntries.map((e) => e.displayHex),
+        },
+        aclWriters: {
+          ...prev.aclWriters,
+          [documentPath]: writerEntries.map((e) => e.displayHex),
+        },
       }));
     } catch (err) {
       console.warn('Failed to refresh ACL:', err);
@@ -261,10 +283,8 @@ class App extends React.Component<
                 <button
                   onClick={() => {
                     this.props.onDocumentClose(documentPath);
-                    // Cancel any in-flight refreshACL for this document.
-                    if (this._refreshingPath === documentPath) {
-                      this._refreshingPath = null;
-                    }
+                    // Invalidate any in-flight refreshACL calls.
+                    ++this._refreshCounter;
                     this.setState((prev) => {
                       const { [documentPath]: _r, ...remainingReaders } = prev.aclReaders;
                       const { [documentPath]: _w, ...remainingWriters } = prev.aclWriters;
