@@ -2,7 +2,23 @@ import { describe, expect, test, jest, beforeEach, afterEach } from '@jest/globa
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
 import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
-import { resetCaches, getCacheSizes } from './hooks-cache';
+import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
+
+/** Reset all module-level caches. Test-only helper. */
+function resetCaches() {
+  openTasks.clear();
+  openTaskResults.clear();
+  subscriberCounts.clear();
+}
+
+/** Read-only access to module-level cache sizes. Test-only helper. */
+function getCacheSizes() {
+  return {
+    openTasks: openTasks.size,
+    openTaskResults: openTaskResults.size,
+    subscriberCounts: subscriberCounts.size,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers

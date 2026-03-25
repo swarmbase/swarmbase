@@ -7,7 +7,7 @@
  * index.
  */
 
-import { CollabswarmDocument } from '@collabswarm/collabswarm';
+import type { CollabswarmDocument } from '@collabswarm/collabswarm';
 
 export type CollabswarmContextOpenResultAny = {
   docRef?: CollabswarmDocument<any, any, any, any, any, any>;
@@ -25,22 +25,3 @@ export const openTaskResults = new Map<string, CollabswarmContextOpenResultAny>(
 // Reference count per documentPath -- only evict shared caches when the last subscriber unmounts.
 export const subscriberCounts = new Map<string, number>();
 
-/**
- * Reset all module-level caches. Intended for use in tests only.
- */
-export function resetCaches() {
-  openTasks.clear();
-  openTaskResults.clear();
-  subscriberCounts.clear();
-}
-
-/**
- * Read-only access to module-level cache sizes. Intended for use in tests only.
- */
-export function getCacheSizes() {
-  return {
-    openTasks: openTasks.size,
-    openTaskResults: openTaskResults.size,
-    subscriberCounts: subscriberCounts.size,
-  };
-}
