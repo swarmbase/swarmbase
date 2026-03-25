@@ -28,7 +28,7 @@ import {
   KeychainProvider,
   LRUCache,
 } from '@collabswarm/collabswarm';
-import { validateChangeBlockMetadata } from '@collabswarm/collabswarm/dist/src/json-serializer';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
 
 import * as uuid from 'uuid';
@@ -369,6 +369,7 @@ export class AutomergeKeychainProvider
  */
 type iCRDTChangeNode = {
   kind: CRDTChangeNodeKind;
+  keyID?: string;
   change?: string[];
   children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
 };

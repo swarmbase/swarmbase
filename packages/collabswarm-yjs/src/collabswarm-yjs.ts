@@ -14,13 +14,14 @@ import {
   KeychainProvider,
   LRUCache,
 } from '@collabswarm/collabswarm';
-import { validateChangeBlockMetadata } from '@collabswarm/collabswarm/dist/src/json-serializer';
+import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
 type iCRDTChangeNode = {
   kind: CRDTChangeNodeKind;
+  keyID?: string;
   // TODO: Change this to something more efficient.
   change?: string;
   children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;

@@ -56,6 +56,41 @@ describe('keyID in serializeChangeBlock / deserializeChangeBlock', () => {
   });
 });
 
+describe('keyID validation in deserializeChangeBlock', () => {
+  test('rejects keyID that is a number', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: 123,
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+
+  test('rejects keyID that is an object', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: {},
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+
+  test('rejects keyID that is null', () => {
+    const raw = JSON.stringify({
+      changes: { foo: 'bar' },
+      nonce: 'AQIDBA==',
+      keyID: null,
+    });
+    expect(() => jsonSerializer.deserializeChangeBlock(raw)).toThrow(
+      'keyID must be a string',
+    );
+  });
+});
+
 describe('blindIndexTokens in serializeChangeBlock / deserializeChangeBlock', () => {
   const nonce = new Uint8Array([1, 2, 3, 4]);
 

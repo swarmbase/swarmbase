@@ -20,6 +20,7 @@ const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
  * Mutates the result object in place by setting keyID and blindIndexTokens
  * if present and valid on the deserialized input.
  *
+ * @internal
  * @throws {Error} If keyID is not a string, or blindIndexTokens is not a
  *   plain object with string values.
  */
