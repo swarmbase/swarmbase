@@ -1311,10 +1311,13 @@ export class CollabswarmDocument<
    * the document is not yet fully open so it has nothing to serve.
    *
    * **Race window:** Messages published by peers between the `load()` response
-   * and the `pubsub.subscribe()` call will be missed. This is mitigated by the
-   * fact that subsequent messages will arrive once subscribed, and the underlying
-   * CRDT guarantees eventual consistency. If the missed message is critical, the
-   * caller can invoke `load()` again to re-sync from a peer.
+   * and the `pubsub.subscribe()` call will be missed. This is a deliberate
+   * trade-off: validation must complete before subscribing to prevent briefly
+   * joining an unauthorized topic. The window is mitigated by the fact that
+   * subsequent messages will arrive once subscribed, and the underlying CRDT
+   * guarantees eventual consistency. Callers who need to ensure no messages
+   * were missed should call `load()` again after `open()` resolves to re-sync
+   * the latest state from a peer.
    *
    * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
