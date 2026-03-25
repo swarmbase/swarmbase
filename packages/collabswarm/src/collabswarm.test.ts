@@ -205,6 +205,86 @@ describe('Multi-user simulation basics', () => {
   });
 });
 
+/**
+ * Tests for the validateDocumentPath control flow used in
+ * CollabswarmDocument.open(). These verify the validateDocumentPath callback
+ * contract independently of CollabswarmDocument.open() because open() requires
+ * a full libp2p/IPFS stack that is tested via integration tests (see e2e/).
+ * The helper below replicates the exact branching logic so we can cover all
+ * code paths (returns true, returns false, throws, async, undefined) in
+ * fast unit tests.
+ */
+describe('validateDocumentPath control flow', () => {
+  /**
+   * Replicates the validation block from CollabswarmDocument.open() so we can
+   * test the three code paths (returns true, returns false, throws) in
+   * isolation. The real implementation lives in CollabswarmDocument.open()
+   * within collabswarm-document.ts.
+   */
+  async function runValidation(
+    validateFn: ((path: string, key: unknown) => boolean | Promise<boolean>) | undefined,
+    documentPath: string,
+    userPublicKey: unknown,
+  ): Promise<void> {
+    if (validateFn) {
+      let allowed: boolean;
+      try {
+        allowed = await validateFn(documentPath, userPublicKey);
+      } catch (err) {
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+      if (!allowed) {
+        throw new Error(
+          `Document path "${documentPath}" is not allowed for the current user`,
+        );
+      }
+    }
+  }
+
+  test('should succeed when validateDocumentPath returns true', async () => {
+    const validateFn = (_path: string, _key: unknown) => true;
+    await expect(runValidation(validateFn, '/docs/allowed', 'key123')).resolves.toBeUndefined();
+  });
+
+  test('should throw descriptive error when validateDocumentPath returns false', async () => {
+    const validateFn = (_path: string, _key: unknown) => false;
+    await expect(runValidation(validateFn, '/docs/blocked', 'key123')).rejects.toThrow(
+      'Document path "/docs/blocked" is not allowed for the current user',
+    );
+  });
+
+  test('should rethrow Error from validateDocumentPath as-is', async () => {
+    const originalError = new Error('custom validation failure');
+    const validateFn = (_path: string, _key: unknown): boolean => { throw originalError; };
+    await expect(runValidation(validateFn, '/docs/bad', 'key123')).rejects.toThrow(originalError);
+  });
+
+  test('should wrap non-Error thrown value in an Error', async () => {
+    const validateFn = (_path: string, _key: unknown): boolean => { throw 'string error'; };
+    await expect(runValidation(validateFn, '/docs/bad', 'key123')).rejects.toThrow('string error');
+    // Verify it's wrapped as an Error instance
+    try {
+      await runValidation(validateFn, '/docs/bad', 'key123');
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+    }
+  });
+
+  test('should skip validation when validateDocumentPath is undefined', async () => {
+    await expect(runValidation(undefined, '/docs/any', 'key123')).resolves.toBeUndefined();
+  });
+
+  test('should support async validateDocumentPath returning Promise<boolean>', async () => {
+    const validateFn = (_path: string, _key: unknown) => Promise.resolve(true);
+    await expect(runValidation(validateFn, '/docs/async', 'key123')).resolves.toBeUndefined();
+
+    const validateFnFalse = (_path: string, _key: unknown) => Promise.resolve(false);
+    await expect(runValidation(validateFnFalse, '/docs/async', 'key123')).rejects.toThrow(
+      'Document path "/docs/async" is not allowed for the current user',
+    );
+  });
+});
+
 describe('getReaders() dedup logic', () => {
   // Tests the actual dedup pattern from CollabswarmDocument.getReaders() using
   // mock ACL objects with check()/users() — the same interface the production

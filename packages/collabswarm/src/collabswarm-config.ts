@@ -99,6 +99,9 @@ export interface CollabswarmConfig {
    * When enabled, messages from unauthorized peers are rejected at the
    * transport layer (P4 penalty in peer scoring).
    *
+   * Topic validators are registered during `open()` and properly removed
+   * during `close()` to prevent stale validator references.
+   *
    * Default: false (for backward compatibility).
    */
   enableTopicValidators?: boolean;
@@ -119,6 +122,30 @@ export interface CollabswarmConfig {
    * Default: false.
    */
   enableNetworkStats?: boolean;
+
+  /**
+   * Optional callback to validate document paths before creation.
+   *
+   * Called when `open()` determines the document is new (i.e., `load()` returned
+   * false — no peers could provide the document). Note that `load()` can also
+   * return false during network partitions when peers are unavailable.
+   *
+   * Validation runs before pubsub subscription and protocol handler registration,
+   * so rejected paths never temporarily join the topic.
+   *
+   * - If the callback returns `false`, `open()` throws
+   *   `new Error('Document path "<path>" is not allowed for the current user')`.
+   * - If the callback throws, `open()` rethrows the error as-is (if it is
+   *   already an `Error`) or wraps it via `new Error(String(err))`.
+   *
+   * May return a boolean or a Promise<boolean> for async validation.
+   * Return `true` to allow creation, `false` to reject it.
+   * When absent, all document paths are allowed.
+   *
+   * @param documentPath The path of the document being created.
+   * @param userPublicKey The public key of the current user.
+   */
+  validateDocumentPath?: (documentPath: string, userPublicKey: unknown) => boolean | Promise<boolean>;
 }
 
 /**

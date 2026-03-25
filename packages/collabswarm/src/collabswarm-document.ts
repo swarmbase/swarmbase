@@ -1229,7 +1229,7 @@ export class CollabswarmDocument<
    * response from a load request is a sync message containing all document change hashes.
    *
    * Load is used to fetch any new changes that a connecting node is missing.
-   * @returns false if this is a new document (no peers exist).
+   * @returns false if no peers could provide the document (new document or network partition).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -1291,15 +1291,66 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Connects to a collabswarm document. Running this method connects to the document pubsub topic
-   * and starts the document `.load()` process.
+   * Opens this collabswarm document. The sequence of operations is:
+   *
+   * 1. Call `.load()` to fetch the document from an existing peer via direct dial.
+   * 2. If the document is new (load returned false), run `validateDocumentPath`
+   *    (if configured) to ensure the path is allowed before proceeding.
+   * 3. Prepare a pubsub handler and subscribe to the document's GossipSub pubsub
+   *    topic, registering protocol handlers for load, key-update, and
+   *    snapshot-load requests.
+   * 4. For new documents, add the current user as a writer and generate an
+   *    initial document encryption key.
    *
    * Once opened, a document can be closed with `.close()`.
    *
-   * @returns false if this is a new document (no peers exist).
+   * **Design note:** `load()` runs before protocol handlers are registered, so
+   * this node cannot serve incoming load/key-update requests for *this* document
+   * during the load window. This is intentional — validation must complete before
+   * subscribing to pubsub to prevent briefly joining an unauthorized topic, and
+   * the document is not yet fully open so it has nothing to serve.
+   *
+   * **Race window:** Messages published by peers between the `load()` response
+   * and the `pubsub.subscribe()` call will be missed. This is a deliberate
+   * trade-off: validation must complete before subscribing to prevent briefly
+   * joining an unauthorized topic. The window is mitigated by the fact that
+   * subsequent messages will arrive once subscribed, and the underlying CRDT
+   * guarantees eventual consistency. Callers who need to ensure no messages
+   * were missed should call `load()` again after `open()` resolves to re-sync
+   * the latest state from a peer.
+   *
+   * @returns Resolves to `false` if no peers could provide the document (new or partitioned).
+   * @throws {Error} If `validateDocumentPath` is configured and rejects the path
+   *   for a new document. Validation runs before subscribing to pubsub or
+   *   registering protocol handlers, so no cleanup is needed on rejection.
    */
   public async open(): Promise<boolean> {
-    // Open pubsub connection.
+    // Load initial document from peers via direct dial (no subscription needed).
+    const isExisting = await this.load();
+
+    // Validate document path BEFORE subscribing to pubsub or registering
+    // protocol handlers. This prevents temporarily joining an unauthorized topic.
+    // _pubsubHandler is not yet assigned, so if validation throws, close() will
+    // not attempt to unsubscribe from a subscription that was never created.
+    if (!isExisting) {
+      const validateFn = this.swarm.config?.validateDocumentPath;
+      if (validateFn) {
+        let allowed: boolean;
+        try {
+          allowed = await validateFn(this.documentPath, this._userPublicKey);
+        } catch (err) {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+        if (!allowed) {
+          throw new Error(
+            `Document path "${this.documentPath}" is not allowed for the current user`,
+          );
+        }
+      }
+    }
+
+    // Assign pubsub handler AFTER validation succeeds. This ensures close()
+    // won't try to unsubscribe if open() failed during validation.
     this._pubsubHandler = (rawMessage) => {
       // Decrypt sync message.
       const blockKeyID = rawMessage.detail.data.slice(
@@ -1332,6 +1383,7 @@ export class CollabswarmDocument<
       );
     };
 
+    // Subscribe to pubsub topic and register protocol handlers.
     const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
@@ -1411,8 +1463,6 @@ export class CollabswarmDocument<
       }
     }
 
-    // Load initial document from peers.
-    const isExisting = await this.load(); // new document would return false; then a key is needed
     if (!isExisting) {
       // Add current user as a writer.
       await this._writers.add(this._userPublicKey);
@@ -1428,6 +1478,11 @@ export class CollabswarmDocument<
   /**
    * Disconnects from this collabswarm document. Running this method disconnects from the
    * document pubsub topic.
+   *
+   * **Limitation:** Multiple `CollabswarmDocument` instances sharing the same
+   * `documentPath` are not supported. Calling `close()` on one instance will
+   * remove the GossipSub topic validator and unsubscribe from the pubsub topic,
+   * breaking any other instance using the same path.
    */
   public async close() {
     if (this._pubsubHandler) {
@@ -1436,6 +1491,14 @@ export class CollabswarmDocument<
       pubsub.unsubscribe(this.documentPath);
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
+
+      // Always attempt to remove the GossipSub topic validator. This is safe
+      // even if none was registered (Map.delete is a no-op for missing keys),
+      // and ensures cleanup regardless of config changes between open() and close().
+      const gossipsubService = pubsub as any;
+      if (typeof gossipsubService.topicValidators?.delete === 'function') {
+        gossipsubService.topicValidators.delete(this.documentPath);
+      }
     }
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
