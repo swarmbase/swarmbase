@@ -1296,10 +1296,12 @@ export class CollabswarmDocument<
    * 1. Call `.load()` to fetch the document from an existing peer via direct dial.
    * 2. If the document is new (load returned false), run `validateDocumentPath`
    *    (if configured) to ensure the path is allowed before proceeding.
-   * 3. Prepare a pubsub handler and subscribe to the document's GossipSub pubsub
-   *    topic, registering protocol handlers for load, key-update, and
+   * 3. Assign the pubsub message handler, subscribe to the document's GossipSub
+   *    pubsub topic, and register protocol handlers for load, key-update, and
    *    snapshot-load requests.
-   * 4. For new documents, add the current user as a writer and generate an
+   * 4. If `enableTopicValidators` is set, register a GossipSub topic validator
+   *    that rejects messages from unauthorized peers.
+   * 5. For new documents, add the current user as a writer and generate an
    *    initial document encryption key.
    *
    * Once opened, a document can be closed with `.close()`.
