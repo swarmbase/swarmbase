@@ -160,11 +160,11 @@ describe('useCollabswarmDocumentState lifecycle', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.getWriters).toHaveBeenCalled();
     });
 
+    expect(mockDoc.open).toHaveBeenCalled();
     expect(mockDoc.getReaders).toHaveBeenCalled();
-    expect(mockDoc.getWriters).toHaveBeenCalled();
   });
 
   test('passes originFilter to subscribe', async () => {
