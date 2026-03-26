@@ -143,6 +143,7 @@ describe('collabswarmReducer', () => {
     expect(newState.documents['doc-1']).toEqual({
       documentRef: docRef,
       document: docRef.document,
+      peers: [],
     });
   });
 
@@ -151,7 +152,7 @@ describe('collabswarmReducer', () => {
     const state: CollabswarmState<any, any, any, any, any, any> = {
       ...createMockState(),
       documents: {
-        'doc-1': { documentRef: docRef, document: docRef.document },
+        'doc-1': { documentRef: docRef, document: docRef.document, peers: [] },
       },
     };
     const newState = reducer(state, closeDocument('doc-1'));
@@ -170,7 +171,7 @@ describe('collabswarmReducer', () => {
     const state: CollabswarmState<any, any, any, any, any, any> = {
       ...createMockState(),
       documents: {
-        'doc-1': { documentRef: docRef, document: docRef.document },
+        'doc-1': { documentRef: docRef, document: docRef.document, peers: [] },
       },
     };
     const updatedDoc = { text: 'synced' };
@@ -178,6 +179,19 @@ describe('collabswarmReducer', () => {
     expect(newState).not.toBe(state);
     expect(newState.documents['doc-1'].document).toEqual(updatedDoc);
     expect(newState.documents['doc-1'].documentRef).toBe(docRef);
+  });
+
+  test('SYNC_DOCUMENT preserves per-document peers', () => {
+    const docRef = { document: { text: 'old' } } as any;
+    const state: CollabswarmState<any, any, any, any, any, any> = {
+      ...createMockState(),
+      documents: {
+        'doc-1': { documentRef: docRef, document: docRef.document, peers: ['peer-a', 'peer-b'] },
+      },
+    };
+    const updatedDoc = { text: 'synced' };
+    const newState = reducer(state, syncDocument('doc-1', updatedDoc));
+    expect(newState.documents['doc-1'].peers).toEqual(['peer-a', 'peer-b']);
   });
 
   test('SYNC_DOCUMENT of non-existent doc returns same state', () => {
@@ -194,7 +208,7 @@ describe('collabswarmReducer', () => {
     const state: CollabswarmState<any, any, any, any, any, any> = {
       ...createMockState(),
       documents: {
-        'doc-1': { documentRef: docRef, document: docRef.document },
+        'doc-1': { documentRef: docRef, document: docRef.document, peers: [] },
       },
     };
     const updatedDoc = { text: 'changed' };
