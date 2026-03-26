@@ -274,7 +274,6 @@ export class CollabswarmNode<
     );
 
     // Open a pubsub channel (set by some config) for controlling this swarm of listeners.
-    // TODO: Add a '/document/<id>' prefix to all "normal" document paths.
     this._docPublishHandler = (rawMessage) => {
       try {
         const thisNodeId = this.swarm.peerId.toString();
