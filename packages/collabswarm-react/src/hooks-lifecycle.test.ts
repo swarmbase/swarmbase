@@ -422,8 +422,12 @@ describe('useCollabswarmDocumentState return value', () => {
       expect(mockDoc.open).toHaveBeenCalled();
     });
 
-    // The change function should be callable.
+    // The change function should be callable and delegate to docRef.change.
     expect(typeof captureRef.current.changeFn).toBe('function');
+
+    const mockChangeFn = jest.fn();
+    captureRef.current.changeFn(mockChangeFn, 'test message');
+    expect(mockDoc.change).toHaveBeenCalledWith(mockChangeFn, 'test message');
   });
 
   test('returns ACL helpers (readers, writers, addReader, etc.)', async () => {

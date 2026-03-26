@@ -1,4 +1,4 @@
-import { describe, expect, test, jest } from '@jest/globals';
+import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react';
 import { CollabswarmContext, useCollabswarm } from './hooks';
@@ -96,6 +96,9 @@ jest.mock('@collabswarm/collabswarm', () => {
 });
 
 describe('useCollabswarm hook', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
   // Helper to capture the hook return value.
   function HookConsumer(props: {
     privateKey: any;
