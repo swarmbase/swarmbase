@@ -1902,6 +1902,19 @@ export class CollabswarmDocument<
    * and restore consistency. A new transaction must be started after a
    * failure.
    *
+   * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
+   * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
+   * snapshots captured before `_makeChange()`. For `_hashes`, all entries
+   * added to the Set after `hashSizeBefore` are removed. Because the node
+   * remains subscribed to pubsub during the async transaction, this may
+   * include CIDs appended by concurrent remote syncs, not just local ones.
+   * This is acceptable because CRDT convergence guarantees those remote
+   * CIDs will be re-added on the next sync cycle or document load.
+   * The approach is O(n) iteration but O(delta) memory -- no full
+   * array clone -- and avoids disrupting any concurrent sync iteration
+   * that `clear()` would break. A new transaction must be started after
+   * a failure.
+   *
    * @throws {Error} If any step in the commit pipeline fails.
    */
   public async endChange(message?: string) {
@@ -1922,6 +1935,15 @@ export class CollabswarmDocument<
     }
 
     const originalDocument = this.document;
+    // Snapshot internal metadata so we can restore on failure.
+    // Only track the Set size (O(1)) instead of cloning the entire Set (O(n)):
+    // _makeChange adds at most one CID, and JS Sets iterate in insertion order,
+    // so on rollback we remove only entries appended after this point.
+    const hashSizeBefore = this._hashes.size;
+    const lastSyncSnapshot = this._lastSyncMessage;
+    const changeCountSnapshot = this._documentChangeCount;
+    const compactionCountSnapshot = this._changesSinceSnapshot;
+
     this._committing = true;
     try {
       await this._ensureCurrentUserCanWrite();
@@ -1945,9 +1967,6 @@ export class CollabswarmDocument<
       );
       this._document = newDocument;
 
-      // Note: _makeChange may partially mutate _hashes/_lastSyncMessage before
-      // throwing. Full metadata rollback is not feasible, but the document
-      // reference is restored so subsequent operations start from a clean state.
       await this._makeChange(changes);
 
       // Success -- clear transaction state.
@@ -1955,8 +1974,32 @@ export class CollabswarmDocument<
       this._pendingChangeFns = [];
     } catch (err) {
       // Abort transaction on ANY error (ensureWrite, localChange, or makeChange).
-      // Roll back document (best-effort for in-place mutating providers like Yjs).
+      // Roll back document and internal metadata (best-effort for in-place
+      // mutating providers like Yjs).
       this._document = originalDocument;
+      // Remove only the CIDs appended by _makeChange instead of clearing and
+      // re-populating the entire Set. This avoids mutating the Set during
+      // concurrent sync (clear() would disrupt any in-progress iteration)
+      // and is O(delta) instead of O(n).
+      // Iterate the Set (O(n)) but only collect entries past the snapshot
+      // threshold into a small buffer (O(delta) memory) -- avoids cloning
+      // the entire Set into an array via spread.
+      if (this._hashes.size > hashSizeBefore) {
+        const toRemove: string[] = [];
+        let i = 0;
+        for (const hash of this._hashes) {
+          if (i >= hashSizeBefore) {
+            toRemove.push(hash);
+          }
+          i++;
+        }
+        for (const hash of toRemove) {
+          this._hashes.delete(hash);
+        }
+      }
+      this._lastSyncMessage = lastSyncSnapshot;
+      this._documentChangeCount = changeCountSnapshot;
+      this._changesSinceSnapshot = compactionCountSnapshot;
       this._inTransaction = false;
       this._pendingChangeFns = [];
       throw err;
