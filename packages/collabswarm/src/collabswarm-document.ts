@@ -194,6 +194,10 @@ export class CollabswarmDocument<
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
+  // Cached pubsub topic string, set once in open() to ensure consistency
+  // between subscribe and unsubscribe even if config changes at runtime.
+  private _topic: string = '';
+
   // Transaction state for batching multiple changes atomically.
   private _pendingChangeFns: ChangeFnType[] = [];
   private _inTransaction = false;
@@ -321,11 +325,12 @@ export class CollabswarmDocument<
   // Helpers ------------------------------------------------------------------
 
   /**
-   * Returns the pubsub topic for this document by applying the configured
-   * prefix (defaults to `/document/`) to the document path.
+   * Computes the pubsub topic for this document by applying the configured
+   * prefix to the document path. Called once in open() to populate the
+   * cached _topic field.
    */
-  private get _topic(): string {
-    const prefix = this.swarm.config?.pubsubDocumentPrefix ?? '/document/';
+  private _computeTopic(): string {
+    const prefix = this.swarm.config?.pubsubDocumentPrefix;
     return documentTopic(this.documentPath, prefix);
   }
 
@@ -1448,6 +1453,10 @@ export class CollabswarmDocument<
    *   registering protocol handlers, so no cleanup is needed on rejection.
    */
   public async open(): Promise<boolean> {
+    // Cache the topic once so that subscribe and unsubscribe always target
+    // the same string, even if config.pubsubDocumentPrefix changes later.
+    this._topic = this._computeTopic();
+
     // Load initial document from peers via direct dial (no subscription needed).
     const isExisting = await this.load();
 
