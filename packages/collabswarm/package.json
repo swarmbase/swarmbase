@@ -41,7 +41,7 @@
     "@helia/unixfs": "^5.1.0",
     "@libp2p/autonat": "^2.0.38",
     "@libp2p/bootstrap": "^11.0.47",
-    "@libp2p/circuit-relay-v2": "^3.2.24",
+    "@libp2p/circuit-relay-v2": "^4.1.6",
     "@libp2p/identify": "^3.0.39",
     "@libp2p/interface": "^2.11.0",
     "@libp2p/kad-dht": "^15.0.2",
