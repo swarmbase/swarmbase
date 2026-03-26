@@ -208,7 +208,7 @@ describe('BeeKEM', () => {
         Buffer.from(aliceRootAfterRemoval).equals(Buffer.from(charlieRootAfterRemoval)),
       ).toBe(true);
 
-      // Bob tries to process the update — should fail because his leaf is blanked
+      // Bob tries to process the update -- should fail because his leaf is blanked
       // and he no longer has the key material needed to decrypt
       await expect(bob.processPathUpdate(removeUpdate)).rejects.toThrow();
     });

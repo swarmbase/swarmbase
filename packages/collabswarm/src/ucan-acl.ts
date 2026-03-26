@@ -36,7 +36,7 @@ export class UCANACL<ChangesType, PublicKey> implements ACL<ChangesType, PublicK
   private _entries: Map<string, UCANACLEntry> = new Map(); // publicKeyBase64 -> entry
   private _revokedKeys: Set<string> = new Set(); // set of revoked public key base64 strings
 
-  // Private backing ACL — all access must go through UCANACL methods
+  // Private backing ACL -- all access must go through UCANACL methods
   // to keep _entries, _revokedKeys, and the backing ACL in sync.
   constructor(
     private readonly _backing: ACL<ChangesType, PublicKey>,

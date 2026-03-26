@@ -31,10 +31,10 @@ export class IDBIndexStorage implements IndexStorage {
     existingDb.close();
 
     if (storeAlreadyExists) {
-      // Store already exists — just reopen at current version
+      // Store already exists -- just reopen at current version
       this._db = await openDB(this._dbName, currentVersion);
     } else {
-      // Need to create a new object store — requires version upgrade
+      // Need to create a new object store -- requires version upgrade
       const newVersion = currentVersion + 1;
       this._db = await openDB(this._dbName, newVersion, {
         upgrade(db) {
@@ -84,7 +84,7 @@ export class IDBIndexStorage implements IndexStorage {
 
     let results: IndexEntry[] = [];
 
-    // TODO: Optimization opportunity — leverage IDB indexes for common single-field
+    // TODO: Optimization opportunity -- leverage IDB indexes for common single-field
     // equality/range queries instead of always doing a full JS scan. Currently IDB indexes
     // are created in initialize() but not used during query(). For simple cases (single eq
     // filter on an indexed field), we could use store.index(field).getAll(value) for a

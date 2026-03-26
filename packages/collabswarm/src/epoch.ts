@@ -11,7 +11,7 @@ export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
 export const ENCRYPTION_KEY_INFO = 'aes-gcm-key';
 
 /**
- * Represents an epoch — a contiguous period during which a specific set of
+ * Represents an epoch -- a contiguous period during which a specific set of
  * members shares a symmetric encryption key. Epoch boundaries are triggered
  * by member add/remove or explicit key updates.
  */

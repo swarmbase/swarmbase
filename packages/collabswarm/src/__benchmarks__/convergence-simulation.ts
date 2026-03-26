@@ -92,7 +92,7 @@ export async function runConvergenceSimulationBenchmarks(
 
           const byteSize = signature.length + encrypted.data.length + encrypted.nonce.length;
 
-          // Apply locally before broadcast — each peer must have its own edits
+          // Apply locally before broadcast -- each peer must have its own edits
           peer.document[`peer-${peer.id}-${changeData}`] = 'applied';
 
           peer.messagesSent++;

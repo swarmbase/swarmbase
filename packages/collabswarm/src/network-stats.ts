@@ -3,7 +3,7 @@
  *
  * Enable via `enableNetworkStats: true` in CollabswarmConfig, then access
  * via `collabswarm.networkStats`. Callers must invoke `record*()` methods
- * explicitly to update counters — automatic event wiring is not yet
+ * explicitly to update counters -- automatic event wiring is not yet
  * implemented and will be added in a follow-up.
  */
 export class NetworkStats {

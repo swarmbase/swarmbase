@@ -68,7 +68,7 @@ export class AutomergeProvider<T = any>
     return [save(document) as unknown as BinaryChange];
   }
   applySnapshot(document: Doc<T>, snapshot: BinaryChange[]): Doc<T> {
-    // snapshot is [save(doc)] — a single-element array containing a save buffer.
+    // snapshot is [save(doc)] -- a single-element array containing a save buffer.
     // Load it into a new document and merge with the current one to preserve
     // any concurrent changes not included in the snapshot.
     const loaded = load<T>(snapshot[0] as unknown as Uint8Array);
@@ -468,7 +468,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       if (snapshotForWire.signature instanceof Uint8Array) {
         snapshotForWire.signature = Base64.fromUint8Array(snapshotForWire.signature);
       }
-      // Drop publicKey — CryptoKey is not JSON-serializable and
+      // Drop publicKey -- CryptoKey is not JSON-serializable and
       // snapshot verification uses writer ACL keys, not the embedded key.
       delete snapshotForWire.publicKey;
     }

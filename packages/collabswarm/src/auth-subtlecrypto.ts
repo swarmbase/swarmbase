@@ -84,7 +84,7 @@ export class SubtleCrypto
     // Normalize BufferSource to Uint8Array, respecting byteOffset/byteLength for views.
     if (raw instanceof Uint8Array) return raw;
     if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
-    // ArrayBufferView — respect offset and length to avoid reading unrelated bytes.
+    // ArrayBufferView -- respect offset and length to avoid reading unrelated bytes.
     return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
   }
 
@@ -106,7 +106,7 @@ export class SubtleCrypto
       }
       case 'AES-CTR':
       case 'AES-CBC':
-        // NOTE: Only AES-GCM is currently supported. AES-CTR and AES-CBC throw — see PR description.
+        // NOTE: Only AES-GCM is currently supported. AES-CTR and AES-CBC throw -- see PR description.
         // TODO: AES-CTR and AES-CBC support is planned but not yet implemented.
         // They require different nonce sizes (16 bytes) and key import
         // parameters than AES-GCM. Implementation is deferred until the

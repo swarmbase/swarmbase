@@ -44,7 +44,7 @@ const openTaskResults = new Map<
   CollabswarmContextOpenResult<any, any, any, any, any, any>
 >();
 
-// Reference count per documentPath — only evict shared caches when the last subscriber unmounts.
+// Reference count per documentPath -- only evict shared caches when the last subscriber unmounts.
 const subscriberCounts = new Map<string, number>();
 
 export const CollabswarmContext = createContext<{
@@ -384,7 +384,7 @@ export function useCollabswarmDocumentState<
           }
         }
       } else {
-        // Doc is already cached — subscribe this instance so it receives updates.
+        // Doc is already cached -- subscribe this instance so it receives updates.
         // Each hook instance uses a unique subscription ID so they don't collide.
         if (!active) return;
         docRef.subscribe(
@@ -448,7 +448,7 @@ export function useCollabswarmDocumentState<
         }
       }
 
-      // Decrement subscriber count — only evict shared caches when the last subscriber unmounts.
+      // Decrement subscriber count -- only evict shared caches when the last subscriber unmounts.
       const count = (subscriberCounts.get(documentPath) || 1) - 1;
       if (count <= 0) {
         subscriberCounts.delete(documentPath);
