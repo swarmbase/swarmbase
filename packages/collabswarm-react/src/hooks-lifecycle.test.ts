@@ -92,12 +92,8 @@ function TestConsumer(props: {
 // ---------------------------------------------------------------------------
 
 describe('useCollabswarmDocumentState lifecycle', () => {
-  beforeEach(() => {
-    resetCaches();
-    cleanup();
-  });
-
   afterEach(() => {
+    cleanup();
     resetCaches();
   });
 
@@ -200,12 +196,8 @@ describe('useCollabswarmDocumentState lifecycle', () => {
 });
 
 describe('Cache cleanup on unmount', () => {
-  beforeEach(() => {
-    resetCaches();
-    cleanup();
-  });
-
   afterEach(() => {
+    cleanup();
     resetCaches();
   });
 
@@ -276,12 +268,8 @@ describe('Cache cleanup on unmount', () => {
 });
 
 describe('Multiple subscribers to the same document', () => {
-  beforeEach(() => {
-    resetCaches();
-    cleanup();
-  });
-
   afterEach(() => {
+    cleanup();
     resetCaches();
   });
 
@@ -392,12 +380,8 @@ describe('Multiple subscribers to the same document', () => {
 });
 
 describe('useCollabswarmDocumentState return value', () => {
-  beforeEach(() => {
-    resetCaches();
-    cleanup();
-  });
-
   afterEach(() => {
+    cleanup();
     resetCaches();
   });
 
