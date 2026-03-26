@@ -1,7 +1,7 @@
 /**
  * A Bloom filter implemented as a grow-only CRDT.
  *
- * Merge semantics: bitwise OR — bits can be set but never unset.
+ * Merge semantics: bitwise OR -- bits can be set but never unset.
  * This makes it a valid state-based CRDT (join-semilattice).
  *
  * Uses double hashing: h(i, x) = h1(x) + i * h2(x) mod m

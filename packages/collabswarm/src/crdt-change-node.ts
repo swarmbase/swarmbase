@@ -29,7 +29,7 @@ export type CRDTChangeNode<ChangesType> = {
   /**
    * Changes made to the document itself (if any).
    *
-   * `undefined` means the change payload was deferred — it was not included
+   * `undefined` means the change payload was deferred -- it was not included
    * in the sync message and should be fetched from the Helia blockstore
    * using the node's CID.
    */

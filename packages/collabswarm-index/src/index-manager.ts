@@ -87,7 +87,7 @@ export class IndexManager<DocType> {
         this._setNestedField(fields, fieldDef.path, extractField(snapshot, fieldDef.path));
       }
 
-      // Diff against previous entry — skip write if unchanged
+      // Diff against previous entry -- skip write if unchanged
       const existing = await this._storage.get(indexName, documentPath);
       if (existing && this._fieldsEqual(existing, fields)) {
         continue;
@@ -152,7 +152,7 @@ export class IndexManager<DocType> {
     const id = this._nextSubscriptionId++;
     this._subscriptions.set(id, { options, callback });
 
-    // Fire initial query — guard against delivery after unsubscribe
+    // Fire initial query -- guard against delivery after unsubscribe
     this.query(options).then((result) => {
       if (this._subscriptions.has(id)) {
         callback(result);
@@ -221,7 +221,7 @@ export class IndexManager<DocType> {
       const va = a[key];
       const vb = b[key];
       if (va === vb) continue;
-      // Handle Date objects explicitly — they have no enumerable keys
+      // Handle Date objects explicitly -- they have no enumerable keys
       if (va instanceof Date && vb instanceof Date) {
         if (va.getTime() !== vb.getTime()) return false;
         continue;

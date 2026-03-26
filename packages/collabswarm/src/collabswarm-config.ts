@@ -147,7 +147,7 @@ export interface CollabswarmConfig {
    * Optional callback to validate document paths before creation.
    *
    * Called when `open()` determines the document is new (i.e., `load()` returned
-   * false — no peers could provide the document). Note that `load()` can also
+   * false -- no peers could provide the document). Note that `load()` can also
    * return false during network partitions when peers are unavailable.
    *
    * Validation runs before pubsub subscription and protocol handler registration,
@@ -192,7 +192,7 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  * can safely mutate the returned config without leaking state across
  * consumers. For shared/reused configs, store the result in a variable.
  *
- * **Note:** Lazily instantiated — safe to import in Node.js test environments
+ * **Note:** Lazily instantiated -- safe to import in Node.js test environments
  * that lack IndexedDB as long as the function is not called.
  */
 export function getDefaultConfig(): CollabswarmConfig {

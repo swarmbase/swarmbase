@@ -120,7 +120,7 @@ describe('YjsProvider delta encoding', () => {
       d.getMap('data').set('key1', 'value1');
     });
 
-    // Make second change — should return only the delta
+    // Make second change -- should return only the delta
     const [, changes2] = provider.localChange(doc, 'update', (d) => {
       d.getMap('data').set('key2', 'value2');
     });
@@ -143,7 +143,7 @@ describe('YjsProvider delta encoding', () => {
     provider.remoteChange(doc2, provider.getHistory(doc1));
     expect(doc2.getMap('data').get('key1')).toBe('value1');
 
-    // Second change on doc1 — returns delta
+    // Second change on doc1 -- returns delta
     const [, changes2] = provider.localChange(doc1, 'update', (d) => {
       d.getMap('data').set('key2', 'value2');
     });
@@ -172,7 +172,7 @@ describe('YjsACL delta encoding', () => {
 
   test('remove no-op produces delta that is a no-op when merged', async () => {
     const acl = new YjsACL();
-    // Remove a key that was never added — should produce a no-op delta
+    // Remove a key that was never added -- should produce a no-op delta
     const changes = await acl.remove(key1);
     // Applying a no-op delta should not add any users
     const acl2 = new YjsACL();

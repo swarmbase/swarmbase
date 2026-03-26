@@ -4,7 +4,7 @@ import { BlindIndexProvider } from './blind-index-provider';
  * WebCrypto-based BlindIndexProvider implementation.
  * - Key derivation: HKDF with SHA-256, field path as "info" parameter
  * - Token computation: HMAC-SHA-256 of normalized value, truncated and base64url-encoded
- * - Token truncation: First 16 bytes of HMAC output (128 bits) — balances collision resistance vs leakage
+ * - Token truncation: First 16 bytes of HMAC output (128 bits) -- balances collision resistance vs leakage
  */
 export class SubtleBlindIndexProvider implements BlindIndexProvider {
   private _tokenLengthBytes: number;

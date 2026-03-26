@@ -28,7 +28,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
   /**
    * Number of change nodes compacted into this snapshot.
-   * Used to compare snapshots — higher count means more compaction.
+   * Used to compare snapshots -- higher count means more compaction.
    */
   compactedCount: number;
 
@@ -43,7 +43,7 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 
   /**
    * Public key of the snapshot creator (optional on the wire).
-   * Not relied upon for verification — snapshot signatures are verified
+   * Not relied upon for verification -- snapshot signatures are verified
    * by trying all writer keys in the ACL. May be absent or degraded
    * after serialization for non-JSON-safe key types (e.g. CryptoKey).
    */

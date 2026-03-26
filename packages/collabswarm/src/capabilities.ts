@@ -20,7 +20,7 @@ export const CAP_DOC_HISTORY = '/doc/history';
 /**
  * All document capabilities in order of decreasing privilege.
  * Note: /doc/history is deliberately excluded because it is orthogonal to
- * the read/write/admin hierarchy. History access is independent — a user
+ * the read/write/admin hierarchy. History access is independent -- a user
  * can have read+history or read without history.
  */
 export const CAPABILITY_HIERARCHY = [
@@ -57,8 +57,8 @@ export function capabilityImplies(held: string, required: string): boolean {
 
 /**
  * Future field-level capability pattern.
- * /doc/write/field/{fieldPath} — Write to specific Yjs sub-document
- * /doc/read/field/{fieldPath} — Read specific Yjs sub-document
+ * /doc/write/field/{fieldPath} -- Write to specific Yjs sub-document
+ * /doc/read/field/{fieldPath} -- Read specific Yjs sub-document
  */
 export function isFieldCapability(capability: string): boolean {
   return capability.includes('/field/');

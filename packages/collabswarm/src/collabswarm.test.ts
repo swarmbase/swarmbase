@@ -287,7 +287,7 @@ describe('validateDocumentPath control flow', () => {
 
 describe('getReaders() dedup logic', () => {
   // Tests the actual dedup pattern from CollabswarmDocument.getReaders() using
-  // mock ACL objects with check()/users() — the same interface the production
+  // mock ACL objects with check()/users() -- the same interface the production
   // code calls. This catches regressions if check() semantics change.
   test('should deduplicate keys present in both readers and writers via check()', async () => {
     const sharedKey = await crypto.subtle.generateKey(
@@ -300,7 +300,7 @@ describe('getReaders() dedup logic', () => {
       { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify'],
     );
 
-    // Mock ACLs — sharedKey appears in both readers and writers
+    // Mock ACLs -- sharedKey appears in both readers and writers
     const readerKeys = [sharedKey.publicKey, readerOnlyKey.publicKey];
     const writerKeys = [sharedKey.publicKey, writerOnlyKey.publicKey];
 
@@ -309,7 +309,7 @@ describe('getReaders() dedup logic', () => {
       new Uint8Array(await crypto.subtle.exportKey('raw', k)).toString();
     const readerFPs = new Set(await Promise.all(readerKeys.map(fingerprint)));
 
-    // Mock _readers.check() — returns true if the key is in readerKeys
+    // Mock _readers.check() -- returns true if the key is in readerKeys
     const readersCheck = async (key: CryptoKey) =>
       readerFPs.has(await fingerprint(key));
 

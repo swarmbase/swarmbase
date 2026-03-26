@@ -57,7 +57,7 @@ export async function readUint8Iterable(
     } else if (chunk instanceof Uint8Array) {
       assembled.set(chunk, index);
     } else {
-      // Uint8ArrayList — use subarray() to get a contiguous Uint8Array
+      // Uint8ArrayList -- use subarray() to get a contiguous Uint8Array
       assembled.set((chunk as Uint8ArrayList).subarray(), index);
     }
     index += chunk.length;

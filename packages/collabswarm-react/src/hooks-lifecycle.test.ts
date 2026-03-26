@@ -26,7 +26,7 @@ function createMockCollabswarm(mockDoc: ReturnType<typeof createMockDocument>) {
   return { doc: jest.fn(() => mockDoc) } as any;
 }
 
-// Wrapper providing context — uses React.createElement to avoid JSX
+// Wrapper providing context -- uses React.createElement to avoid JSX
 function TestProvider(props: { children: React.ReactNode }) {
   const [docCache, setDocCache] = useState<Record<string, any>>({});
   const [docDataCache, setDocDataCache] = useState<Record<string, any>>({});

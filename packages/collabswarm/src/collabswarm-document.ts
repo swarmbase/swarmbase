@@ -1884,6 +1884,24 @@ export class CollabswarmDocument<
    * document after a failed transaction (e.g. call `load()` or wait for
    * the next pubsub round) to ensure remote state is promptly restored.
    *
+   * **Known limitation -- partial internal state on failure:** If
+   * `_makeChange()` fails partway through (e.g. encryption succeeds but
+   * pubsub publish throws), internal metadata (`_hashes`,
+   * `_lastSyncMessage`) may be left in an inconsistent state because
+   * `_makeChange` mutates them before completing all steps. Compaction
+   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
+   * NOT rolled back. These partial mutations are not reversed.
+   *
+   * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
+   * Because `_hashes` is used to skip already-seen changes during sync,
+   * any CID added before the failure will cause that change to be silently
+   * skipped if it arrives again via pubsub or `load()`. This means the
+   * rolled-back change is effectively "lost" from this peer's perspective
+   * until `_hashes` is rebuilt. **Callers should call `load()` after a
+   * failed transaction** to re-sync the full document state from a peer
+   * and restore consistency. A new transaction must be started after a
+   * failure.
+   *
    * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
    * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
    * snapshots captured before `_makeChange()`. For `_hashes`, all entries

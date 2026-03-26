@@ -208,7 +208,7 @@ export class Collabswarm<
 
     // In libp2p v2, 'peer:connect'/'peer:disconnect' emit CustomEvent<PeerId>.
     // event.detail is a PeerId whose toString() returns the peer ID string.
-    // Note: libp2p v3 changed this to emit Connection objects — this must be
+    // Note: libp2p v3 changed this to emit Connection objects -- this must be
     // updated if libp2p is upgraded past v2.x.
     this.libp2p.addEventListener('peer:connect', (event) => {
       const peerId = event.detail.toString();

@@ -100,7 +100,7 @@ export async function createUCAN(
  * Verify a UCAN token's signature.
  *
  * Note: Uses SHA-384 to match ECDSA P-384 curve strength (not SHA-256,
- * which is used in epoch.ts for HKDF — different purpose).
+ * which is used in epoch.ts for HKDF -- different purpose).
  */
 export async function verifyUCANSignature(
   ucan: UCAN,
