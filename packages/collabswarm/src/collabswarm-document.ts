@@ -739,7 +739,7 @@ export class CollabswarmDocument<
   private async _keychainChangesForVisibility(): Promise<ChangesType> {
     switch (this._historyVisibility) {
       case 'full_history':
-        // Send ALL epoch keys — for audit trails and regulatory compliance.
+        // Send ALL epoch keys -- for audit trails and regulatory compliance.
         return this._keychain.history();
       case 'since_invited':
         // TODO: Filter using _invitationEpoch when epoch-based keychain
@@ -747,7 +747,7 @@ export class CollabswarmDocument<
         return this._keychain.history();
       case 'current_only':
       default:
-        // Only send the current key — most private option.
+        // Only send the current key -- most private option.
         return await this._keychain.currentKeyChange();
     }
   }
@@ -847,7 +847,7 @@ export class CollabswarmDocument<
     while (qi < queue.length) {
       const current = queue[qi++]!;
 
-      // ACL nodes are always kept — never count them toward the limit.
+      // ACL nodes are always kept -- never count them toward the limit.
       const isACLNode =
         current.kind === crdtReaderChangeNode ||
         current.kind === crdtWriterChangeNode;
@@ -861,7 +861,7 @@ export class CollabswarmDocument<
         current.children !== crdtChangeNodeDeferred
       ) {
         if (!isACLNode && documentNodesVisited >= keepCount) {
-          // This document node is at the boundary — prune its children,
+          // This document node is at the boundary -- prune its children,
           // but preserve any ACL nodes within the entire subtree.
           const preservedACL: Record<string, CRDTChangeNode<ChangesType>> = {};
           collectACLNodes(current.children, preservedACL);
@@ -906,7 +906,7 @@ export class CollabswarmDocument<
         }
 
         // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely — any peer is treated as authorized.
+        // checks entirely -- any peer is treated as authorized.
         let authorized = false;
         if (!this._isSigningEnabled()) {
           // Bypass: signing disabled, no signature verification needed.
@@ -914,7 +914,7 @@ export class CollabswarmDocument<
         } else {
           if (!message.signature) {
             // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled — they cannot interoperate).
+            // that have signing disabled -- they cannot interoperate).
             console.warn(
               `Rejected load request for ${message.documentId}: missing signature`,
             );
@@ -1014,7 +1014,7 @@ export class CollabswarmDocument<
         }
 
         // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely — any peer is treated as authorized.
+        // checks entirely -- any peer is treated as authorized.
         let authorized = false;
         if (!this._isSigningEnabled()) {
           // Bypass: signing disabled, no signature verification needed.
@@ -1022,7 +1022,7 @@ export class CollabswarmDocument<
         } else {
           if (!message.signature) {
             // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled — they cannot interoperate).
+            // that have signing disabled -- they cannot interoperate).
             console.warn(
               `Rejected snapshot load request for ${message.documentId}: missing signature`,
             );
@@ -1055,7 +1055,7 @@ export class CollabswarmDocument<
         }
 
         if (!this._latestSnapshot) {
-          // No snapshot available — respond with empty payload so the peer
+          // No snapshot available -- respond with empty payload so the peer
           // can fall back to the normal doc-load protocol.
           console.log(
             `No snapshot available for ${this.documentPath}, sending empty response`,
@@ -1215,7 +1215,7 @@ export class CollabswarmDocument<
         const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
         let rawContent: Uint8Array;
         if (assembled.length <= headerLength) {
-          // Too short to contain a valid encrypted payload — reject.
+          // Too short to contain a valid encrypted payload -- reject.
           console.warn(
             `Load response for ${this.documentPath}: payload too short (${assembled.length} <= ${headerLength}), skipping peer`,
           );
@@ -1235,7 +1235,7 @@ export class CollabswarmDocument<
           }
           rawContent = decrypted;
         } else {
-          // KeyID not recognized — peer sent encrypted data with a key we
+          // KeyID not recognized -- peer sent encrypted data with a key we
           // don't have. Fail and let the caller try the next peer.
           console.warn(
             `Load response for ${this.documentPath}: unrecognized keyID, skipping peer`,
@@ -1256,7 +1256,7 @@ export class CollabswarmDocument<
         // prevents a malicious peer from injecting ACL changes that add
         // its own key.
         // On first load (_writers is empty / bootstrapping), we cannot
-        // verify — trust relies on the encrypted channel (only peers
+        // verify -- trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
         const preLoadWriters = await this._writers.users();
         if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
@@ -1308,7 +1308,7 @@ export class CollabswarmDocument<
    *   pubsub message sender). Matched against peers by extracting the PeerId
    *   component from their Multiaddr via `getPeerId()`.
    * @returns `true` if the document was successfully loaded from a peer.
-   *   `false` if no peer could provide the document — this is ambiguous: it
+   *   `false` if no peer could provide the document -- this is ambiguous: it
    *   may mean the document is brand new (no peers have it) OR that all peers
    *   failed to respond, failed to decrypt, or failed signature verification.
    *   Note: `open()` treats `false` as "new document" and initializes a fresh
@@ -1372,7 +1372,7 @@ export class CollabswarmDocument<
         ]);
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
-        // Empty response — peer has no snapshot, try doc-load below.
+        // Empty response -- peer has no snapshot, try doc-load below.
       } catch {
         // Peer doesn't support snapshot-load protocol.
       }
@@ -1393,7 +1393,7 @@ export class CollabswarmDocument<
       }
     }
 
-    // No peer could provide the document — assume new document.
+    // No peer could provide the document -- assume new document.
     console.log('Failed to open document on any nodes.', this);
     return false;
   }
@@ -1416,7 +1416,7 @@ export class CollabswarmDocument<
    *
    * **Design note:** `load()` runs before protocol handlers are registered, so
    * this node cannot serve incoming load/key-update requests for *this* document
-   * during the load window. This is intentional — validation must complete before
+   * during the load window. This is intentional -- validation must complete before
    * subscribing to pubsub to prevent briefly joining an unauthorized topic, and
    * the document is not yet fully open so it has nothing to serve.
    *
@@ -1429,7 +1429,7 @@ export class CollabswarmDocument<
    * were missed should call `load()` again after `open()` resolves to re-sync
    * the latest state from a peer.
    *
-   * @returns `false` if `load()` returned `false` — which `open()` treats as
+   * @returns `false` if `load()` returned `false` -- which `open()` treats as
    *   "new document" by adding the current user as a writer and generating an
    *   initial encryption key. Note that `load()` returning `false` is ambiguous:
    *   it may also mean all peers failed (see `load()` docs for details).
@@ -1484,7 +1484,7 @@ export class CollabswarmDocument<
             console.warn(
               'Trying to re-load document... Unable to decrypt incoming message',
             );
-            // Prefer loading from the sending peer — they created this change
+            // Prefer loading from the sending peer -- they created this change
             // and should have the document key(s) needed to read it.
             const senderPeer = rawMessage.detail.type === 'signed' ? rawMessage.detail.from : undefined;
             return this.load(senderPeer);
@@ -1547,7 +1547,7 @@ export class CollabswarmDocument<
                 blockData,
               );
               if (!rawContent) {
-                // Decryption failed — key may not be in keychain yet
+                // Decryption failed -- key may not be in keychain yet
                 console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
                 return 'Ignore';
               }
@@ -1652,7 +1652,7 @@ export class CollabswarmDocument<
       return false;
     }
 
-    // Only serialize for signature verification — skip when signing is disabled
+    // Only serialize for signature verification -- skip when signing is disabled
     // to avoid expensive serialization of large messages.
     if (signingEnabled && verifySignature) {
       const raw = this._syncMessageSerializer.serializeSyncMessage(
@@ -1712,7 +1712,7 @@ export class CollabswarmDocument<
         // by trying all authorized writers (publicKey may not survive
         // serialization for all key types, e.g. CryptoKey).
         // When signing is disabled, skip serialization and signature
-        // verification — accept the snapshot unconditionally.
+        // verification -- accept the snapshot unconditionally.
         // WARNING: This means any peer can inject arbitrary snapshot state when
         // signing is disabled. Only disable signing in trusted or development
         // environments where all peers are known and authenticated by other means.
@@ -1824,7 +1824,7 @@ export class CollabswarmDocument<
   }
 
   // TODO: Unit tests for CollabswarmDocument require mocking libp2p, IPFS/Helia,
-  // and all providers — deferred to integration testing (see e2e/).
+  // and all providers -- deferred to integration testing (see e2e/).
 
   /**
    * Start a change transaction. Changes made via `addChange()` will be batched
@@ -1861,16 +1861,16 @@ export class CollabswarmDocument<
    * For immutable CRDT providers (e.g. Automerge), rollback is reliable
    * because `localChange()` returns a new document object.
    *
-   * **Known limitation — in-place mutating providers:** For CRDT providers
+   * **Known limitation -- in-place mutating providers:** For CRDT providers
    * that mutate in place (e.g. Yjs), rollback does NOT undo mutations.
    * Yjs's `localChange()` mutates the document object directly and returns
    * the same reference, so restoring the saved reference after failure has
-   * no effect — the mutations have already been applied to the shared
+   * no effect -- the mutations have already been applied to the shared
    * Y.Doc. Callers using Yjs should treat a failed transaction as leaving
    * the local document in a potentially inconsistent state and consider
    * re-syncing from peers.
    *
-   * **Known limitation — concurrent remote changes during rollback:** The
+   * **Known limitation -- concurrent remote changes during rollback:** The
    * rollback sets `_document` back to the snapshot captured when
    * `endChange()` is called (before applying the pending change functions).
    * Because `_makeChange()` is async and the node remains
@@ -1878,29 +1878,24 @@ export class CollabswarmDocument<
    * applied to `_document` between the start of the transaction and the
    * point of failure. Rolling back to the original snapshot **reverts those
    * remote changes as well**, not just the local batch. This is acceptable
-   * because the CRDT layer guarantees eventual consistency — the reverted
+   * because the CRDT layer guarantees eventual consistency -- the reverted
    * remote changes will be re-applied on the next sync cycle or document
    * load. If transaction failure is critical, callers should re-sync the
    * document after a failed transaction (e.g. call `load()` or wait for
    * the next pubsub round) to ensure remote state is promptly restored.
    *
-   * **Known limitation — partial internal state on failure:** If
-   * `_makeChange()` fails partway through (e.g. encryption succeeds but
-   * pubsub publish throws), internal metadata (`_hashes`,
-   * `_lastSyncMessage`) may be left in an inconsistent state because
-   * `_makeChange` mutates them before completing all steps. Compaction
-   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
-   * NOT rolled back. These partial mutations are not reversed.
-   *
-   * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
-   * Because `_hashes` is used to skip already-seen changes during sync,
-   * any CID added before the failure will cause that change to be silently
-   * skipped if it arrives again via pubsub or `load()`. This means the
-   * rolled-back change is effectively "lost" from this peer's perspective
-   * until `_hashes` is rebuilt. **Callers should call `load()` after a
-   * failed transaction** to re-sync the full document state from a peer
-   * and restore consistency. A new transaction must be started after a
-   * failure.
+   * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
+   * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
+   * snapshots captured before `_makeChange()`. For `_hashes`, all entries
+   * added to the Set after `hashSizeBefore` are removed. Because the node
+   * remains subscribed to pubsub during the async transaction, this may
+   * include CIDs appended by concurrent remote syncs, not just local ones.
+   * This is acceptable because CRDT convergence guarantees those remote
+   * CIDs will be re-added on the next sync cycle or document load.
+   * The approach is O(n) iteration but O(delta) memory -- no full
+   * array clone -- and avoids disrupting any concurrent sync iteration
+   * that `clear()` would break. A new transaction must be started after
+   * a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
@@ -1922,6 +1917,15 @@ export class CollabswarmDocument<
     }
 
     const originalDocument = this.document;
+    // Snapshot internal metadata so we can restore on failure.
+    // Only track the Set size (O(1)) instead of cloning the entire Set (O(n)):
+    // _makeChange adds at most one CID, and JS Sets iterate in insertion order,
+    // so on rollback we remove only entries appended after this point.
+    const hashSizeBefore = this._hashes.size;
+    const lastSyncSnapshot = this._lastSyncMessage;
+    const changeCountSnapshot = this._documentChangeCount;
+    const compactionCountSnapshot = this._changesSinceSnapshot;
+
     this._committing = true;
     try {
       await this._ensureCurrentUserCanWrite();
@@ -1945,18 +1949,39 @@ export class CollabswarmDocument<
       );
       this._document = newDocument;
 
-      // Note: _makeChange may partially mutate _hashes/_lastSyncMessage before
-      // throwing. Full metadata rollback is not feasible, but the document
-      // reference is restored so subsequent operations start from a clean state.
       await this._makeChange(changes);
 
-      // Success — clear transaction state.
+      // Success -- clear transaction state.
       this._inTransaction = false;
       this._pendingChangeFns = [];
     } catch (err) {
       // Abort transaction on ANY error (ensureWrite, localChange, or makeChange).
-      // Roll back document (best-effort for in-place mutating providers like Yjs).
+      // Roll back document and internal metadata (best-effort for in-place
+      // mutating providers like Yjs).
       this._document = originalDocument;
+      // Remove only the CIDs appended by _makeChange instead of clearing and
+      // re-populating the entire Set. This avoids mutating the Set during
+      // concurrent sync (clear() would disrupt any in-progress iteration)
+      // and is O(delta) instead of O(n).
+      // Iterate the Set (O(n)) but only collect entries past the snapshot
+      // threshold into a small buffer (O(delta) memory) -- avoids cloning
+      // the entire Set into an array via spread.
+      if (this._hashes.size > hashSizeBefore) {
+        const toRemove: string[] = [];
+        let i = 0;
+        for (const hash of this._hashes) {
+          if (i >= hashSizeBefore) {
+            toRemove.push(hash);
+          }
+          i++;
+        }
+        for (const hash of toRemove) {
+          this._hashes.delete(hash);
+        }
+      }
+      this._lastSyncMessage = lastSyncSnapshot;
+      this._documentChangeCount = changeCountSnapshot;
+      this._changesSinceSnapshot = compactionCountSnapshot;
       this._inTransaction = false;
       this._pendingChangeFns = [];
       throw err;
@@ -2058,7 +2083,7 @@ export class CollabswarmDocument<
     this._changesSinceSnapshot = 0;
 
     // Prune old change nodes from the in-memory sync tree if configured.
-    // The snapshot is NOT stored on _lastSyncMessage — it is only included
+    // The snapshot is NOT stored on _lastSyncMessage -- it is only included
     // in load/snapshot-load responses via _latestSnapshot, to avoid bloating
     // every incremental pubsub sync message with the full snapshot state.
     if (this._lastSyncMessage && this._compactionConfig.pruneAfterSnapshot) {
