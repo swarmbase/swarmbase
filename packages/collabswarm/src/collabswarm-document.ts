@@ -30,6 +30,7 @@ import { SyncMessageSerializer } from './sync-message-serializer';
 import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
+import { documentTopic } from './document-topic';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
@@ -318,6 +319,15 @@ export class CollabswarmDocument<
   }
 
   // Helpers ------------------------------------------------------------------
+
+  /**
+   * Returns the pubsub topic for this document by applying the configured
+   * prefix (defaults to `/document/`) to the document path.
+   */
+  private get _topic(): string {
+    const prefix = this.swarm.config?.pubsubDocumentPrefix ?? '/document/';
+    return documentTopic(this.documentPath, prefix);
+  }
 
   private async _shuffledPeers() {
     const peers = this.swarm.heliaNode.libp2p
@@ -717,7 +727,7 @@ export class CollabswarmDocument<
       throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
     }
     await this.swarm.heliaNode.libp2p.services.pubsub.publish(
-      this.documentPath,
+      this._topic,
       concatUint8Arrays(documentKeyID, nonce, data),
     );
 
@@ -1504,7 +1514,7 @@ export class CollabswarmDocument<
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
-    pubsub.subscribe(this.documentPath);
+    pubsub.subscribe(this._topic);
 
     // For now we support multiple protocols, one per document path.
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
@@ -1523,7 +1533,7 @@ export class CollabswarmDocument<
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.set === 'function') {
         gossipsubService.topicValidators.set(
-          this.documentPath,
+          this._topic,
           async (
             _peerIdStr: string,
             message: { data: Uint8Array },
@@ -1604,7 +1614,7 @@ export class CollabswarmDocument<
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
-      pubsub.unsubscribe(this.documentPath);
+      pubsub.unsubscribe(this._topic);
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
 
@@ -1613,13 +1623,13 @@ export class CollabswarmDocument<
       // and ensures cleanup regardless of config changes between open() and close().
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.delete === 'function') {
-        gossipsubService.topicValidators.delete(this.documentPath);
+        gossipsubService.topicValidators.delete(this._topic);
       }
     }
     // Remove topicValidators entry if one was registered during open().
     const gossipsub = this.swarm.libp2p?.services?.pubsub as any;
     if (gossipsub?.topicValidators) {
-      gossipsub.topicValidators.delete(this.documentPath);
+      gossipsub.topicValidators.delete(this._topic);
     }
 
     // Unregister protocol handlers.
