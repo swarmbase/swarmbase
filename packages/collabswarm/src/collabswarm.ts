@@ -10,6 +10,7 @@
  *   at least one address to join
  */
 
+import { pipe } from 'it-pipe';
 import { AuthProvider } from './auth-provider';
 import { CRDTProvider } from './crdt-provider';
 import {
@@ -24,6 +25,8 @@ import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { documentLoadV1, documentKeyUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import { readUint8Iterable } from './utils';
 import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
@@ -31,6 +34,7 @@ import { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { multiaddr } from '@multiformats/multiaddr';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
+import { Uint8ArrayList } from 'uint8arraylist';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -113,6 +117,14 @@ export class Collabswarm<
   private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
     new Map<string, CollabswarmPeersHandler>();
   private _networkStats?: NetworkStats;
+
+  // Registry of open documents keyed by document path. Shared protocol
+  // handlers use this to route incoming stream requests to the correct
+  // CollabswarmDocument instance.
+  private _documentRegistry = new Map<
+    string,
+    CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>
+  >();
 
   /**
    * Network statistics tracker. Only available when `enableNetworkStats`
@@ -228,7 +240,135 @@ export class Collabswarm<
       }
     });
     this._peerId = this._heliaNode?.libp2p?.peerId;
+
+    // Register shared protocol handlers that route incoming requests to
+    // the appropriate document via the document registry. This replaces
+    // per-document protocol handler registration, reducing protocol
+    // handler overhead for multi-document applications.
+    this._registerSharedProtocolHandlers();
+
     console.log('Helia node initialized:', this._peerId);
+  }
+
+  /**
+   * Registers a document in the shared handler registry so incoming
+   * protocol requests can be routed to it.
+   *
+   * Called by CollabswarmDocument.open().
+   */
+  registerDocument(
+    documentPath: string,
+    document: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
+  ): void {
+    this._documentRegistry.set(documentPath, document);
+  }
+
+  /**
+   * Removes a document from the shared handler registry.
+   *
+   * Called by CollabswarmDocument.close().
+   */
+  unregisterDocument(documentPath: string): void {
+    this._documentRegistry.delete(documentPath);
+  }
+
+  /**
+   * Registers a single set of protocol handlers on libp2p for all three
+   * protocols (doc-load, snapshot-load, key-update). Each handler reads
+   * the incoming stream, extracts the document path, and routes to the
+   * matching CollabswarmDocument instance in the registry.
+   *
+   * For doc-load and snapshot-load, the document path is extracted by
+   * deserializing the CRDTLoadRequest from the stream data. For
+   * key-update, a 4-byte length-prefixed document path header precedes
+   * the encrypted payload.
+   */
+  private _registerSharedProtocolHandlers(): void {
+    // Shared doc-load handler.
+    this.libp2p.handle(documentLoadV1, ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          const doc = this._documentRegistry.get(request.documentId);
+          if (!doc) {
+            console.warn(
+              `Shared doc-load handler: no document registered for "${request.documentId}"`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          await doc.handleLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared doc-load handler:', err);
+      });
+    });
+
+    // Shared snapshot-load handler.
+    this.libp2p.handle(snapshotLoadV1, ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          const doc = this._documentRegistry.get(request.documentId);
+          if (!doc) {
+            console.warn(
+              `Shared snapshot-load handler: no document registered for "${request.documentId}"`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          await doc.handleSnapshotLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared snapshot-load handler:', err);
+      });
+    });
+
+    // Shared key-update handler. The stream data is prefixed with a
+    // 4-byte big-endian length followed by the UTF-8 document path.
+    // The remaining bytes are the encrypted key-update payload.
+    this.libp2p.handle(documentKeyUpdateV1, ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          if (assembled.length < 4) {
+            console.warn('Shared key-update handler: message too short');
+            return [];
+          }
+          const pathLength =
+            (assembled[0] << 24) |
+            (assembled[1] << 16) |
+            (assembled[2] << 8) |
+            assembled[3];
+          if (assembled.length < 4 + pathLength) {
+            console.warn('Shared key-update handler: message shorter than declared path length');
+            return [];
+          }
+          const documentPath = new TextDecoder().decode(
+            assembled.slice(4, 4 + pathLength),
+          );
+          const payload = assembled.slice(4 + pathLength);
+          const doc = this._documentRegistry.get(documentPath);
+          if (!doc) {
+            console.warn(
+              `Shared key-update handler: no document registered for "${documentPath}"`,
+            );
+            return [];
+          }
+          await doc.handleKeyUpdateRequestData(payload);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared key-update handler:', err);
+      });
+    });
   }
 
   /**
