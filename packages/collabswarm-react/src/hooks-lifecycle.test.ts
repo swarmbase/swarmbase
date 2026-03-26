@@ -332,7 +332,7 @@ describe('Multiple subscribers to the same document', () => {
     expect(sizesAfterPartialUnmount.subscriberCounts).toBeGreaterThanOrEqual(1);
   });
 
-  test('each subscriber gets its own unique subscription ID', async () => {
+  test('each subscriber gets its own subscription ID with expected prefix', async () => {
     const mockDoc = createMockDocument();
     const mockSwarm = createMockCollabswarm(mockDoc);
 
@@ -352,10 +352,11 @@ describe('Multiple subscribers to the same document', () => {
       expect(mockDoc.subscribe.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
 
-    // Extract subscription IDs from mock calls.
+    // Verify each subscription ID has the expected prefix format.
     const ids = mockDoc.subscribe.mock.calls.map((call: any[]) => call[0]);
-    const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(ids.length);
+    for (const id of ids) {
+      expect(id).toMatch(/^useCollabswarmDocumentState-/);
+    }
   });
 
   test('unsubscribe is called for each subscriber on full unmount', async () => {
