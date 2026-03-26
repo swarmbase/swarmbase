@@ -1886,11 +1886,13 @@ export class CollabswarmDocument<
    *
    * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
    * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
-   * snapshots captured before `_makeChange()`. For `_hashes`, only the
-   * CIDs appended since the transaction began are removed (delta-based
-   * rollback), avoiding the cost of cloning the entire Set and preventing
-   * mutation of the Set during concurrent sync iteration. A new
-   * transaction must be started after a failure.
+   * snapshots captured before `_makeChange()`. For `_hashes`, the Set is
+   * iterated (skipping the first `hashSizeBefore` entries) to collect only
+   * the CIDs appended during the failed transaction, then those entries
+   * are deleted. This is O(n) iteration but O(delta) memory — no full
+   * array clone — and avoids disrupting any concurrent sync iteration
+   * that `clear()` would break. A new transaction must be started after
+   * a failure.
    *
    * @throws {Error} If any step in the commit pipeline fails.
    */
@@ -1958,10 +1960,20 @@ export class CollabswarmDocument<
       // re-populating the entire Set. This avoids mutating the Set during
       // concurrent sync (clear() would disrupt any in-progress iteration)
       // and is O(delta) instead of O(n).
+      // Iterate the Set (O(n)) but only collect entries past the snapshot
+      // threshold into a small buffer (O(delta) memory) — avoids cloning
+      // the entire Set into an array via spread.
       if (this._hashes.size > hashSizeBefore) {
-        const entries = [...this._hashes];
-        for (let i = hashSizeBefore; i < entries.length; i++) {
-          this._hashes.delete(entries[i]!);
+        const toRemove: string[] = [];
+        let i = 0;
+        for (const hash of this._hashes) {
+          if (i >= hashSizeBefore) {
+            toRemove.push(hash);
+          }
+          i++;
+        }
+        for (const hash of toRemove) {
+          this._hashes.delete(hash);
         }
       }
       this._lastSyncMessage = lastSyncSnapshot;
