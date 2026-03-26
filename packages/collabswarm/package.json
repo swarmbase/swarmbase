@@ -52,6 +52,7 @@
     "@libp2p/websockets": "^9.2.19",
     "@libp2p/webtransport": "^5.0.51",
     "@multiformats/multiaddr": "^12.3.1",
+    "bl": "^6.1.6",
     "blockstore-idb": "^3.0.1",
     "datastore-idb": "^4.0.1",
     "helia": "^5.5.1",
