@@ -11,6 +11,7 @@ import {
   CollabswarmConfig,
 } from '@collabswarm/collabswarm';
 import { useEffect, useState, useContext, useRef, createContext } from 'react';
+import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
 
 export type CollabswarmContextOpenResult<
   DocType,
@@ -31,21 +32,6 @@ export type CollabswarmContextOpenResult<
   readers?: PublicKey[];
   writers?: PublicKey[];
 };
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Module-level singletons must use `any` because
-// they store results from multiple generic instantiations of useCollabswarmDocumentState.
-const openTasks = new Map<
-  string,
-  Promise<CollabswarmContextOpenResult<any, any, any, any, any, any>>
->();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- See above.
-const openTaskResults = new Map<
-  string,
-  CollabswarmContextOpenResult<any, any, any, any, any, any>
->();
-
-// Reference count per documentPath -- only evict shared caches when the last subscriber unmounts.
-const subscriberCounts = new Map<string, number>();
 
 export const CollabswarmContext = createContext<{
   // Caches are evicted when the last subscriber for a document path unmounts (see cleanup below).
