@@ -57,7 +57,7 @@
     "datastore-idb": "^4.0.1",
     "helia": "^5.5.1",
     "ipns": "^10.1.2",
-    "js-base64": "^3.6.1",
+    "js-base64": "^3.7.8",
     "libp2p": "^2.10.0",
     "multiformats": "^13.4.2",
     "uint8arraylist": "^2.4.8"
