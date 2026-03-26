@@ -23,8 +23,8 @@ type iCRDTChangeNode = {
   kind: CRDTChangeNodeKind;
   keyID?: string;
   // Binary data is stored as a base64 string for JSON serialization.
-  // Base64 has only ~33% overhead and is the standard encoding for binary
-  // data in JSON, so this is an acceptable trade-off.
+  // Base64 has only ~33% payload expansion and is the standard encoding for
+  // binary data in JSON, so this is an acceptable trade-off.
   change?: string;
   children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
 };
@@ -210,7 +210,8 @@ export class YjsProvider
     // This intentionally encodes the full document state. getHistory() is
     // used for initial sync with new peers, so the complete state is needed.
     // Incremental deltas are handled by localChange() which captures only
-    // the changes made during a single mutation (fixed in PR #174).
+    // the changes made during a single mutation via
+    // Y.encodeStateAsUpdate(doc, lastSyncState).
     return encodeStateAsUpdateV2(document);
   }
   getSnapshot(document: Doc): Uint8Array {
