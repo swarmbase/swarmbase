@@ -25,7 +25,10 @@ import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
-import { documentLoadV1, documentKeyUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import {
+  documentLoadV1, documentKeyUpdateV1, snapshotLoadV1,
+  documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
+} from './wire-protocols';
 import { readUint8Iterable } from './utils';
 import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
@@ -34,7 +37,7 @@ import { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { multiaddr } from '@multiformats/multiaddr';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { Uint8ArrayList } from 'uint8arraylist';
+import type { Uint8ArrayList } from 'uint8arraylist';
 
 /**
  * Handler type for peer-connect and peer-disconnect events.
@@ -117,6 +120,11 @@ export class Collabswarm<
   private _peerDisconnectHandlers: Map<string, CollabswarmPeersHandler> =
     new Map<string, CollabswarmPeersHandler>();
   private _networkStats?: NetworkStats;
+
+  // Whether shared protocol handlers have already been registered via
+  // _registerSharedProtocolHandlers(). Prevents duplicate registration
+  // if initialize() is called more than once.
+  private _sharedHandlersRegistered = false;
 
   // Registry of open documents keyed by document path. Shared protocol
   // handlers use this to route incoming stream requests to the correct
@@ -260,6 +268,9 @@ export class Collabswarm<
     documentPath: string,
     document: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
   ): void {
+    if (this._documentRegistry.has(documentPath)) {
+      console.warn('Overwriting existing document registration:', documentPath);
+    }
     this._documentRegistry.set(documentPath, document);
   }
 
@@ -284,8 +295,14 @@ export class Collabswarm<
    * the encrypted payload.
    */
   private _registerSharedProtocolHandlers(): void {
-    // Shared doc-load handler.
-    this.libp2p.handle(documentLoadV1, ({ stream }) => {
+    if (this._sharedHandlersRegistered) {
+      return;
+    }
+    this._sharedHandlersRegistered = true;
+
+    // Handler implementation for doc-load requests. Used by both V2
+    // (shared) and V1 (per-document fallback) protocol registrations.
+    const docLoadHandler = ({ stream }: { stream: any }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -305,10 +322,10 @@ export class Collabswarm<
       ).catch((err: unknown) => {
         console.error('Error in shared doc-load handler:', err);
       });
-    });
+    };
 
-    // Shared snapshot-load handler.
-    this.libp2p.handle(snapshotLoadV1, ({ stream }) => {
+    // Handler implementation for snapshot-load requests.
+    const snapshotLoadHandler = ({ stream }: { stream: any }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -328,12 +345,13 @@ export class Collabswarm<
       ).catch((err: unknown) => {
         console.error('Error in shared snapshot-load handler:', err);
       });
-    });
+    };
 
-    // Shared key-update handler. The stream data is prefixed with a
-    // 4-byte big-endian length followed by the UTF-8 document path.
-    // The remaining bytes are the encrypted key-update payload.
-    this.libp2p.handle(documentKeyUpdateV1, ({ stream }) => {
+    // Handler implementation for key-update requests. The stream data
+    // is prefixed with a 4-byte big-endian length followed by the
+    // UTF-8 document path. The remaining bytes are the encrypted
+    // key-update payload.
+    const keyUpdateHandler = ({ stream }: { stream: any }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -342,11 +360,13 @@ export class Collabswarm<
             console.warn('Shared key-update handler: message too short');
             return [];
           }
+          // Use unsigned right shift (>>> 0) to ensure the path length
+          // is interpreted as an unsigned 32-bit integer.
           const pathLength =
-            (assembled[0] << 24) |
+            ((assembled[0] << 24) |
             (assembled[1] << 16) |
             (assembled[2] << 8) |
-            assembled[3];
+            assembled[3]) >>> 0;
           if (assembled.length < 4 + pathLength) {
             console.warn('Shared key-update handler: message shorter than declared path length');
             return [];
@@ -368,7 +388,20 @@ export class Collabswarm<
       ).catch((err: unknown) => {
         console.error('Error in shared key-update handler:', err);
       });
-    });
+    };
+
+    // Register V2 (shared) protocol handlers.
+    this.libp2p.handle(documentLoadV2, docLoadHandler);
+    this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
+    this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
+
+    // Also register on V1 protocol IDs for backward compatibility with
+    // peers that have not yet upgraded. V1 peers dial the old per-document
+    // protocol IDs; the shared handler routes via the document path
+    // embedded in the request payload, so the same handler works for both.
+    this.libp2p.handle(documentLoadV1, docLoadHandler);
+    this.libp2p.handle(snapshotLoadV1, snapshotLoadHandler);
+    this.libp2p.handle(documentKeyUpdateV1, keyUpdateHandler);
   }
 
   /**

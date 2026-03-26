@@ -27,7 +27,10 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
+import {
+  documentKeyUpdateV1, documentLoadV1, snapshotLoadV1,
+  documentKeyUpdateV2, documentLoadV2, snapshotLoadV2,
+} from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import { ACLProvider } from './acl-provider';
@@ -871,6 +874,7 @@ export class CollabswarmDocument<
    * Handles a doc-load request with pre-read stream data. Called by the
    * shared protocol handler in Collabswarm after reading and routing.
    *
+   * @internal
    * @param assembledRequest The raw request bytes already read from the stream.
    * @param stream The stream object for sending the response.
    */
@@ -983,6 +987,7 @@ export class CollabswarmDocument<
    * Handles a snapshot-load request with pre-read stream data. Called by
    * the shared protocol handler in Collabswarm after reading and routing.
    *
+   * @internal
    * @param assembledRequest The raw request bytes already read from the stream.
    * @param stream The stream object for sending the response.
    */
@@ -1356,11 +1361,13 @@ export class CollabswarmDocument<
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
+    // For each protocol, try V2 (shared handler) first, then V1
+    // (per-document handler) for backward compatibility with older peers.
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
-          snapshotLoadV1,
+          snapshotLoadV2, snapshotLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
@@ -1372,13 +1379,13 @@ export class CollabswarmDocument<
       try {
         console.log('Trying doc-load from peer:', peer.toString());
         const docStream = await this.libp2p.dialProtocol(peer, [
-          documentLoadV1,
+          documentLoadV2, documentLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
         if (loaded) return true;
       } catch (err) {
         console.warn(
-          `Failed to load document from (${documentLoadV1}): `,
+          `Failed to load document from (${documentLoadV2}/${documentLoadV1}): `,
           peer.toString(),
           err,
         );
@@ -2288,7 +2295,7 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = await this.libp2p.dialProtocol(peer, [
-          documentKeyUpdateV1,
+          documentKeyUpdateV2, documentKeyUpdateV1,
         ]);
         await pipe(
           [concatUint8Arrays(pathHeader, pathBytes, previousKeyID, nonce, data)],
@@ -2315,14 +2322,11 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Handle incoming key-update protocol messages.
-   * Verifies the sender is an authorized writer, then merges the keychain changes.
-   */
-  /**
    * Handles a key-update request with pre-read payload data. Called by
    * the shared protocol handler in Collabswarm after reading the document
    * path header and routing.
    *
+   * @internal
    * @param payload The encrypted key-update payload (without the document
    *   path header that was already stripped by the shared handler).
    */
