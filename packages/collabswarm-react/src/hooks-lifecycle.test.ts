@@ -1,4 +1,4 @@
-import { describe, expect, test, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, expect, test, jest, afterEach } from '@jest/globals';
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
 import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
@@ -215,15 +215,18 @@ describe('Cache cleanup on unmount', () => {
       unmount = result.unmount;
     });
 
+    // Wait for the full async chain: open -> getReaders -> getWriters -> cache update.
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.getWriters).toHaveBeenCalled();
     });
 
-    // After mount, caches should be populated.
-    const sizesAfterMount = getCacheSizes();
-    expect(sizesAfterMount.openTasks).toBeGreaterThanOrEqual(1);
-    expect(sizesAfterMount.openTaskResults).toBeGreaterThanOrEqual(1);
-    expect(sizesAfterMount.subscriberCounts).toBeGreaterThanOrEqual(1);
+    // After the full open chain completes, caches should be populated.
+    await waitFor(() => {
+      const sizesAfterMount = getCacheSizes();
+      expect(sizesAfterMount.openTasks).toBeGreaterThanOrEqual(1);
+      expect(sizesAfterMount.openTaskResults).toBeGreaterThanOrEqual(1);
+      expect(sizesAfterMount.subscriberCounts).toBeGreaterThanOrEqual(1);
+    });
 
     act(() => {
       unmount!();
