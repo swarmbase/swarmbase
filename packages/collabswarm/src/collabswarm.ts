@@ -26,7 +26,6 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
-  documentLoadV1, documentKeyUpdateV1, snapshotLoadV1,
   documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
 } from './wire-protocols';
 import { readUint8Iterable } from './utils';
@@ -205,6 +204,10 @@ export class Collabswarm<
 
     this._config = config;
 
+    // Reset shared handler flag so re-initialization registers handlers on
+    // the new libp2p node instance.
+    this._sharedHandlersRegistered = false;
+
     this._networkStats = config.enableNetworkStats ? new NetworkStats() : undefined;
 
     // Setup Helia node.
@@ -284,7 +287,7 @@ export class Collabswarm<
   }
 
   /**
-   * Registers a single set of protocol handlers on libp2p for all three
+   * Registers V2 shared protocol handlers on libp2p for all three
    * protocols (doc-load, snapshot-load, key-update). Each handler reads
    * the incoming stream, extracts the document path, and routes to the
    * matching CollabswarmDocument instance in the registry.
@@ -293,6 +296,9 @@ export class Collabswarm<
    * deserializing the CRDTLoadRequest from the stream data. For
    * key-update, a 4-byte length-prefixed document path header precedes
    * the encrypted payload.
+   *
+   * V1 backward compatibility is handled by per-document protocol handlers
+   * registered in CollabswarmDocument.open() and unregistered in close().
    */
   private _registerSharedProtocolHandlers(): void {
     if (this._sharedHandlersRegistered) {
@@ -390,18 +396,18 @@ export class Collabswarm<
       });
     };
 
-    // Register V2 (shared) protocol handlers.
+    // Register V2 (shared) protocol handlers. V2 protocol IDs use a single
+    // shared handler for all documents; the document path is extracted from
+    // the stream payload for routing.
+    //
+    // V1 backward compatibility is handled separately: per-document V1
+    // protocol handlers (with the document path suffixed to the protocol ID)
+    // are registered in CollabswarmDocument.open() and unregistered in
+    // CollabswarmDocument.close(). This preserves true interoperability with
+    // legacy peers that dial per-document protocol IDs.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
-
-    // Also register on V1 protocol IDs for backward compatibility with
-    // peers that have not yet upgraded. V1 peers dial the old per-document
-    // protocol IDs; the shared handler routes via the document path
-    // embedded in the request payload, so the same handler works for both.
-    this.libp2p.handle(documentLoadV1, docLoadHandler);
-    this.libp2p.handle(snapshotLoadV1, snapshotLoadHandler);
-    this.libp2p.handle(documentKeyUpdateV1, keyUpdateHandler);
   }
 
   /**

@@ -45,7 +45,7 @@ import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { EventHandler, Message, PeerId } from '@libp2p/interface';
+import { EventHandler, Message, PeerId, StreamHandler } from '@libp2p/interface';
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -219,6 +219,29 @@ export class CollabswarmDocument<
     return this.swarm.heliaNode.libp2p;
   }
 
+  /**
+   * Per-document V1 protocol ID for doc-load requests.
+   * Legacy peers register and dial this protocol string.
+   */
+  public get protocolLoadV1() {
+    return `${documentLoadV1}${this.documentPath}`;
+  }
+
+  /**
+   * Per-document V1 protocol ID for key-update requests.
+   * Legacy peers register and dial this protocol string.
+   */
+  public get protocolKeyUpdateV1() {
+    return `${documentKeyUpdateV1}${this.documentPath}`;
+  }
+
+  /**
+   * Per-document V1 protocol ID for snapshot-load requests.
+   * Legacy peers register and dial this protocol string.
+   */
+  public get protocolSnapshotLoadV1() {
+    return `${snapshotLoadV1}${this.documentPath}`;
+  }
 
   private heliaFs: UnixFS;
 
@@ -951,6 +974,75 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Registers per-document V1 protocol handlers on libp2p. These handle
+   * incoming requests from legacy peers that dial protocol IDs suffixed
+   * with the document path (e.g., `${documentLoadV1}${documentPath}`).
+   *
+   * @internal
+   */
+  private _registerPerDocumentV1Handlers(): void {
+    // V1 doc-load handler: legacy peers send the same payload format, so we
+    // reuse handleLoadRequestData directly.
+    const v1DocLoadHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 doc-load handler for ${this.documentPath}:`, err);
+      });
+    };
+
+    // V1 snapshot-load handler.
+    const v1SnapshotLoadHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleSnapshotLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 snapshot-load handler for ${this.documentPath}:`, err);
+      });
+    };
+
+    // V1 key-update handler: legacy peers send the raw encrypted payload
+    // WITHOUT a document-path header. Since this handler is per-document,
+    // we already know the target document and pass the payload directly.
+    const v1KeyUpdateHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleKeyUpdateRequestData(assembled);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 key-update handler for ${this.documentPath}:`, err);
+      });
+    };
+
+    this.libp2p.handle(this.protocolLoadV1, v1DocLoadHandler);
+    this.libp2p.handle(this.protocolSnapshotLoadV1, v1SnapshotLoadHandler);
+    this.libp2p.handle(this.protocolKeyUpdateV1, v1KeyUpdateHandler);
+  }
+
+  /**
+   * Unregisters per-document V1 protocol handlers from libp2p.
+   *
+   * @internal
+   */
+  private async _unregisterPerDocumentV1Handlers(): Promise<void> {
+    await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
+  }
+
+  /**
    * Handles a doc-load request with pre-read stream data. Called by the
    * shared protocol handler in Collabswarm after reading and routing.
    *
@@ -1441,13 +1533,14 @@ export class CollabswarmDocument<
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
-    // For each protocol, try V2 (shared handler) first, then V1
-    // (per-document handler) for backward compatibility with older peers.
+    // For each protocol, try V2 (shared handler) first, then fall back to
+    // the legacy per-document V1 protocol ID for backward compatibility
+    // with older peers that registered handlers with the document path suffix.
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
-          snapshotLoadV2, snapshotLoadV1,
+          snapshotLoadV2, this.protocolSnapshotLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
@@ -1459,13 +1552,13 @@ export class CollabswarmDocument<
       try {
         console.log('Trying doc-load from peer:', peer.toString());
         const docStream = await this.libp2p.dialProtocol(peer, [
-          documentLoadV2, documentLoadV1,
+          documentLoadV2, this.protocolLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
         if (loaded) return true;
       } catch (err) {
         console.warn(
-          `Failed to load document from (${documentLoadV2}/${documentLoadV1}): `,
+          `Failed to load document from (${documentLoadV2}/${this.protocolLoadV1}): `,
           peer.toString(),
           err,
         );
@@ -1589,11 +1682,16 @@ export class CollabswarmDocument<
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
 
-    // Register this document with the swarm so incoming protocol requests
+    // Register this document with the swarm so incoming V2 protocol requests
     // are routed here by the shared protocol handlers registered during
-    // Collabswarm.initialize(). This replaces per-document libp2p.handle()
-    // calls, reducing protocol handler overhead.
+    // Collabswarm.initialize().
     this.swarm.registerDocument(this.documentPath, this);
+
+    // Register per-document V1 protocol handlers for backward compatibility
+    // with legacy peers that dial per-document protocol IDs (e.g.,
+    // `${documentLoadV1}${documentPath}`). These handlers wrap the same
+    // logic used by the shared V2 handlers.
+    this._registerPerDocumentV1Handlers();
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -1706,7 +1804,10 @@ export class CollabswarmDocument<
       gossipsub.topicValidators.delete(topic);
     }
 
-    // Unregister this document from the shared protocol handler registry.
+    // Unregister per-document V1 protocol handlers.
+    await this._unregisterPerDocumentV1Handlers();
+
+    // Unregister this document from the shared V2 protocol handler registry.
     this.swarm.unregisterDocument(this.documentPath);
   }
 
@@ -2370,9 +2471,11 @@ export class CollabswarmDocument<
       throw new Error(`Failed to encrypt key update! Nonce cannot be empty`);
     }
 
-    // Send to all connected peers via the shared key-update protocol.
-    // Prepend a 4-byte big-endian length + UTF-8 document path header
-    // so the shared handler in Collabswarm can route to the correct document.
+    // Send to all connected peers via key-update protocol.
+    // Try V2 (shared handler) first, then fall back to the legacy per-document
+    // V1 protocol ID. The payload format differs:
+    //   V2: 4-byte big-endian path length + UTF-8 path + encrypted payload
+    //   V1 (per-document): encrypted payload only (no path header needed)
     const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
@@ -2384,6 +2487,10 @@ export class CollabswarmDocument<
     pathHeader[2] = (pathBytes.length >> 8) & 0xff;
     pathHeader[3] = pathBytes.length & 0xff;
 
+    // Pre-build both payload formats.
+    const v2Payload = concatUint8Arrays(pathHeader, pathBytes, previousKeyID, nonce, data);
+    const v1Payload = concatUint8Arrays(previousKeyID, nonce, data);
+
     // WARNING: If some peers fail to receive this update, they will be unable
     // to decrypt future messages encrypted with the new key. They will need to
     // perform a fresh document load to recover the keychain state.
@@ -2391,10 +2498,17 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = await this.libp2p.dialProtocol(peer, [
-          documentKeyUpdateV2, documentKeyUpdateV1,
+          documentKeyUpdateV2, this.protocolKeyUpdateV1,
         ]);
+        // Check which protocol was negotiated. If the peer selected the
+        // per-document V1 protocol, send the legacy payload without the
+        // document-path header. Otherwise send the V2 payload with header.
+        const negotiatedProtocol = stream.protocol;
+        const payload = negotiatedProtocol === documentKeyUpdateV2
+          ? v2Payload
+          : v1Payload;
         await pipe(
-          [concatUint8Arrays(pathHeader, pathBytes, previousKeyID, nonce, data)],
+          [payload],
           stream.sink,
         );
       } catch (err) {
