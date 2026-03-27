@@ -87,10 +87,16 @@ export interface CollabswarmConfig {
   /**
    * Prefix to apply to document pubsub topics.
    *
-   * Defaults to `''` (empty string) so that topic strings are the bare
-   * document path -- backward-compatible with nodes that do not use this
-   * prefix. Set to `'/document/'` (or any other prefix) to namespace
-   * document traffic on the pubsub mesh.
+   * An empty string (`''`) means no prefix is applied and topic strings
+   * are the bare document path. This is the default for backward
+   * compatibility with existing deployments that were created before
+   * topic prefixing was introduced.
+   *
+   * For new deployments, `'/document/'` is the recommended prefix to
+   * clearly namespace document traffic on the pubsub mesh and avoid
+   * collisions with other topic types.
+   *
+   * @default ''
    */
   pubsubDocumentPrefix: string;
 
