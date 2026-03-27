@@ -211,7 +211,7 @@ export class YjsProvider
     // used for initial sync with new peers, so the complete state is needed.
     // Incremental deltas are handled by localChange() which captures only
     // the changes made during a single mutation via
-    // Y.encodeStateAsUpdate(doc, lastSyncState).
+    // encodeStateVector() + encodeStateAsUpdateV2(doc, beforeSV).
     return encodeStateAsUpdateV2(document);
   }
   getSnapshot(document: Doc): Uint8Array {
