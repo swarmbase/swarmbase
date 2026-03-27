@@ -70,7 +70,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
       },
     },
 
-    pubsubDocumentPrefix: '/document/',
+    pubsubDocumentPrefix: '',
     pubsubDocumentPublishPath: '/documents',
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
@@ -85,7 +85,12 @@ export interface CollabswarmConfig {
   helia?: HeliaInit;
 
   /**
-   * Prefix to apply to newly created documents.
+   * Prefix to apply to document pubsub topics.
+   *
+   * Defaults to `''` (empty string) so that topic strings are the bare
+   * document path -- backward-compatible with nodes that do not use this
+   * prefix. Set to `'/document/'` (or any other prefix) to namespace
+   * document traffic on the pubsub mesh.
    */
   pubsubDocumentPrefix: string;
 
