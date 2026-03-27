@@ -27,7 +27,10 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
+import {
+  documentKeyUpdateV1, documentLoadV1, snapshotLoadV1,
+  documentKeyUpdateV2, documentLoadV2, snapshotLoadV2,
+} from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import { ACLProvider } from './acl-provider';
@@ -212,18 +215,25 @@ export class CollabswarmDocument<
     return this.swarm.heliaNode.libp2p;
   }
 
+  /**
+   * Per-document V1 protocol ID for doc-load requests.
+   * Legacy peers register and dial this protocol string.
+   */
   public get protocolLoadV1() {
     return `${documentLoadV1}${this.documentPath}`;
   }
 
+  /**
+   * Per-document V1 protocol ID for key-update requests.
+   * Legacy peers register and dial this protocol string.
+   */
   public get protocolKeyUpdateV1() {
     return `${documentKeyUpdateV1}${this.documentPath}`;
   }
 
   /**
-   * Returns the versioned snapshot-load protocol string for this document.
-   * Used to register and dial the `/collabswarm/snapshot-load/1.0.0` handler
-   * scoped to this document's path.
+   * Per-document V1 protocol ID for snapshot-load requests.
+   * Legacy peers register and dial this protocol string.
    */
   public get protocolSnapshotLoadV1() {
     return `${snapshotLoadV1}${this.documentPath}`;
@@ -883,224 +893,303 @@ export class CollabswarmDocument<
     );
   }
 
-  private _handleLoadRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolLoadV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembledRequest = await readUint8Iterable(source);
-        const message =
-          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
-        console.log(
-          `received ${this.protocolLoadV1} request:`,
-          assembledRequest,
-          message,
-        );
+  /**
+   * Registers per-document V1 protocol handlers on libp2p. These handle
+   * incoming requests from legacy peers that dial protocol IDs suffixed
+   * with the document path (e.g., `${documentLoadV1}${documentPath}`).
+   *
+   * @internal
+   */
+  private _registerPerDocumentV1Handlers(): void {
+    // V1 doc-load handler: legacy peers send the same payload format, so we
+    // reuse handleLoadRequestData directly.
+    const v1DocLoadHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 doc-load handler for ${this.documentPath}:`, err);
+      });
+    };
 
-        if (message.documentId !== this.documentPath) {
+    // V1 snapshot-load handler.
+    const v1SnapshotLoadHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleSnapshotLoadRequestData(assembled, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 snapshot-load handler for ${this.documentPath}:`, err);
+      });
+    };
+
+    // V1 key-update handler: legacy peers send the raw encrypted payload
+    // WITHOUT a document-path header. Since this handler is per-document,
+    // we already know the target document and pass the payload directly.
+    const v1KeyUpdateHandler: StreamHandler = ({ stream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          const assembled = await readUint8Iterable(source);
+          await this.handleKeyUpdateRequestData(assembled);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error(`Error in V1 key-update handler for ${this.documentPath}:`, err);
+      });
+    };
+
+    this.libp2p.handle(this.protocolLoadV1, v1DocLoadHandler);
+    this.libp2p.handle(this.protocolSnapshotLoadV1, v1SnapshotLoadHandler);
+    this.libp2p.handle(this.protocolKeyUpdateV1, v1KeyUpdateHandler);
+  }
+
+  /**
+   * Unregisters per-document V1 protocol handlers from libp2p.
+   *
+   * @internal
+   */
+  private async _unregisterPerDocumentV1Handlers(): Promise<void> {
+    await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
+    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
+  }
+
+  /**
+   * Handles a doc-load request with pre-read stream data. Called by the
+   * shared protocol handler in Collabswarm after reading and routing.
+   *
+   * @internal
+   * @param assembledRequest The raw request bytes already read from the stream.
+   * @param stream The stream object for sending the response.
+   */
+  public async handleLoadRequestData(
+    assembledRequest: Uint8Array,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      const message =
+        this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+      console.log(
+        `received ${documentLoadV1} request:`,
+        assembledRequest,
+        message,
+      );
+
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        // Bypass: signing disabled, no signature verification needed.
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          // Reject requests with missing/empty signatures (e.g. from peers
+          // that have signing disabled -- they cannot interoperate).
           console.warn(
-            `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+            `Rejected load request for ${message.documentId}: missing signature`,
           );
           await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+          return;
         }
-
-        // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely -- any peer is treated as authorized.
-        let authorized = false;
-        if (!this._isSigningEnabled()) {
-          // Bypass: signing disabled, no signature verification needed.
-          authorized = true;
-        } else {
-          if (!message.signature) {
-            // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled -- they cannot interoperate).
-            console.warn(
-              `Rejected load request for ${message.documentId}: missing signature`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const readers = (
-            await Promise.all([this._readers.users(), this._writers.users()])
-          ).flat();
-          for (const reader of readers) {
-            if (
-              await this._authProvider.verify(
-                this._encoder.encode(message.documentId),
-                reader,
-                this._deserializeSignature(message.signature),
-              )
-            ) {
-              authorized = true;
-              break;
-            }
-          }
-        }
-
-        if (!authorized) {
-          console.warn(
-            `Detected an unauthorized load request for ${message.documentId}`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
-        }
-
-        // Construct load response based on history visibility setting.
-        const loadMessage = this._createSyncMessage();
-
-        loadMessage.keychainChanges = await this._keychainChangesForVisibility();
-
-        // Include the latest snapshot if available, to accelerate initial sync.
-        if (this._latestSnapshot) {
-          loadMessage.snapshot = this._latestSnapshot;
-        }
-
-        // Sign new message.
-        loadMessage.signature = await this._signAsWriter(loadMessage);
-
-        const serializedLoad =
-          this._syncMessageSerializer.serializeSyncMessage(loadMessage);
-
-        // Encrypt the load response so keychain is not sent in plaintext.
-        // NOTE: This uses the current key, which works for existing peers requesting
-        // a reload (they already have the key). For NEW members being onboarded for
-        // the first time, the key must be delivered out-of-band via BeeKEM Welcome
-        // message -- they cannot decrypt this load response without the key.
-        const [documentKeyID, documentKey] = await this._keychain.current();
-        if (!documentKey) {
-          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-        }
-        const { nonce, data } = await this._authProvider.encrypt(
-          serializedLoad,
-          documentKey,
-        );
-        if (!nonce) {
-          throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
-        }
-        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
-        console.log(
-          `sending ${this.protocolLoadV1} response (encrypted)`,
-        );
-
-        await stream.sink([assembled] as Iterable<Uint8Array>);
-        return [];
-      },
-    ).catch((err: unknown) => {
-      console.error(`Error handling ${this.protocolLoadV1} load request:`, err);
-    });
-  };
-
-  private _handleSnapshotLoadRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolSnapshotLoadV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembledRequest = await readUint8Iterable(source);
-        const message =
-          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
-        console.log(
-          `received ${this.protocolSnapshotLoadV1} request:`,
-          assembledRequest,
-          message,
-        );
-
-        if (message.documentId !== this.documentPath) {
-          console.warn(
-            `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
-        }
-
-        // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely -- any peer is treated as authorized.
-        let authorized = false;
-        if (!this._isSigningEnabled()) {
-          // Bypass: signing disabled, no signature verification needed.
-          authorized = true;
-        } else {
-          if (!message.signature) {
-            // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled -- they cannot interoperate).
-            console.warn(
-              `Rejected snapshot load request for ${message.documentId}: missing signature`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const readers = (
-            await Promise.all([this._readers.users(), this._writers.users()])
-          ).flat();
-          for (const reader of readers) {
-            if (
-              await this._authProvider.verify(
-                this._encoder.encode(message.documentId),
-                reader,
-                this._deserializeSignature(message.signature),
-              )
-            ) {
-              authorized = true;
-              break;
-            }
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
           }
         }
+      }
 
-        if (!authorized) {
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized load request for ${message.documentId}`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Construct load response based on history visibility setting.
+      const loadMessage = this._createSyncMessage();
+
+      loadMessage.keychainChanges = await this._keychainChangesForVisibility();
+
+      // Include the latest snapshot if available, to accelerate initial sync.
+      if (this._latestSnapshot) {
+        loadMessage.snapshot = this._latestSnapshot;
+      }
+
+      // Sign new message.
+      loadMessage.signature = await this._signAsWriter(loadMessage);
+
+      const serializedLoad =
+        this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+
+      // Encrypt the load response so keychain is not sent in plaintext.
+      // NOTE: This uses the current key, which works for existing peers requesting
+      // a reload (they already have the key). For NEW members being onboarded for
+      // the first time, the key must be delivered out-of-band via BeeKEM Welcome
+      // message -- they cannot decrypt this load response without the key.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serializedLoad,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending ${documentLoadV1} response (encrypted)`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
+      console.error(`Error handling ${documentLoadV1} load request:`, err);
+    }
+  }
+
+  /**
+   * Handles a snapshot-load request with pre-read stream data. Called by
+   * the shared protocol handler in Collabswarm after reading and routing.
+   *
+   * @internal
+   * @param assembledRequest The raw request bytes already read from the stream.
+   * @param stream The stream object for sending the response.
+   */
+  public async handleSnapshotLoadRequestData(
+    assembledRequest: Uint8Array,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      const message =
+        this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
+      console.log(
+        `received ${snapshotLoadV1} request:`,
+        assembledRequest,
+        message,
+      );
+
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        // Bypass: signing disabled, no signature verification needed.
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          // Reject requests with missing/empty signatures (e.g. from peers
+          // that have signing disabled -- they cannot interoperate).
           console.warn(
-            `Detected an unauthorized snapshot load request for ${message.documentId}`,
+            `Rejected snapshot load request for ${message.documentId}: missing signature`,
           );
           await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+          return;
         }
-
-        if (!this._latestSnapshot) {
-          // No snapshot available -- respond with empty payload so the peer
-          // can fall back to the normal doc-load protocol.
-          console.log(
-            `No snapshot available for ${this.documentPath}, sending empty response`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
+          }
         }
+      }
 
-        // Build a complete sync message with the snapshot, post-snapshot
-        // changes, and keychain so the peer can fully catch up.
-        const snapshotMessage = this._createSyncMessage();
-        snapshotMessage.snapshot = this._latestSnapshot;
-        snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
-        snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
-
-        const serialized =
-          this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
-
-        // Encrypt the response.
-        const [documentKeyID, documentKey] = await this._keychain.current();
-        if (!documentKey) {
-          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-        }
-        const { nonce, data } = await this._authProvider.encrypt(
-          serialized,
-          documentKey,
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized snapshot load request for ${message.documentId}`,
         );
-        if (!nonce) {
-          throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
-        }
-        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      if (!this._latestSnapshot) {
+        // No snapshot available -- respond with empty payload so the peer
+        // can fall back to the normal doc-load protocol.
         console.log(
-          `sending ${this.protocolSnapshotLoadV1} response (encrypted)`,
+          `No snapshot available for ${this.documentPath}, sending empty response`,
         );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
 
-        await stream.sink([assembled] as Iterable<Uint8Array>);
-        return [];
-      },
-    ).catch((err: unknown) => {
+      // Build a complete sync message with the snapshot, post-snapshot
+      // changes, and keychain so the peer can fully catch up.
+      const snapshotMessage = this._createSyncMessage();
+      snapshotMessage.snapshot = this._latestSnapshot;
+      snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
+      snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
+
+      const serialized =
+        this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
+
+      // Encrypt the response.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serialized,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending ${snapshotLoadV1} response (encrypted)`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
       console.error(
-        `Error handling ${this.protocolSnapshotLoadV1} snapshot load request:`,
+        `Error handling ${snapshotLoadV1} snapshot load request:`,
         err,
       );
-    });
-  };
+    }
+  }
 
   /**
    * Build the deterministic binary payload used for snapshot signing/verification.
@@ -1364,11 +1453,14 @@ export class CollabswarmDocument<
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
+    // For each protocol, try V2 (shared handler) first, then fall back to
+    // the legacy per-document V1 protocol ID for backward compatibility
+    // with older peers that registered handlers with the document path suffix.
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
-          this.protocolSnapshotLoadV1,
+          snapshotLoadV2, this.protocolSnapshotLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
@@ -1380,13 +1472,13 @@ export class CollabswarmDocument<
       try {
         console.log('Trying doc-load from peer:', peer.toString());
         const docStream = await this.libp2p.dialProtocol(peer, [
-          this.protocolLoadV1,
+          documentLoadV2, this.protocolLoadV1,
         ]);
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
         if (loaded) return true;
       } catch (err) {
         console.warn(
-          `Failed to load document from (${this.protocolLoadV1}): `,
+          `Failed to load document from (${documentLoadV2}/${this.protocolLoadV1}): `,
           peer.toString(),
           err,
         );
@@ -1506,14 +1598,16 @@ export class CollabswarmDocument<
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this.documentPath);
 
-    // For now we support multiple protocols, one per document path.
-    // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
-    //       right document. This should be more efficient.
-    this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
-    this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
-    // Snapshot-load protocol: load() tries this first for faster initial sync,
-    // falling back to protocolLoadV1 if the peer doesn't support it or has no snapshot.
-    this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
+    // Register this document with the swarm so incoming V2 protocol requests
+    // are routed here by the shared protocol handlers registered during
+    // Collabswarm.initialize().
+    this.swarm.registerDocument(this.documentPath, this);
+
+    // Register per-document V1 protocol handlers for backward compatibility
+    // with legacy peers that dial per-document protocol IDs (e.g.,
+    // `${documentLoadV1}${documentPath}`). These handlers wrap the same
+    // logic used by the shared V2 handlers.
+    this._registerPerDocumentV1Handlers();
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -1622,10 +1716,11 @@ export class CollabswarmDocument<
       gossipsub.topicValidators.delete(this.documentPath);
     }
 
-    // Unregister protocol handlers.
-    await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
-    await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
-    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
+    // Unregister per-document V1 protocol handlers.
+    await this._unregisterPerDocumentV1Handlers();
+
+    // Unregister this document from the shared V2 protocol handler registry.
+    this.swarm.unregisterDocument(this.documentPath);
   }
 
   /**
@@ -2280,10 +2375,25 @@ export class CollabswarmDocument<
       throw new Error(`Failed to encrypt key update! Nonce cannot be empty`);
     }
 
-    // Send to all connected peers via the key-update protocol.
+    // Send to all connected peers via key-update protocol.
+    // Try V2 (shared handler) first, then fall back to the legacy per-document
+    // V1 protocol ID. The payload format differs:
+    //   V2: 4-byte big-endian path length + UTF-8 path + encrypted payload
+    //   V1 (per-document): encrypted payload only (no path header needed)
     const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
+
+    const pathBytes = new TextEncoder().encode(this.documentPath);
+    const pathHeader = new Uint8Array(4);
+    pathHeader[0] = (pathBytes.length >> 24) & 0xff;
+    pathHeader[1] = (pathBytes.length >> 16) & 0xff;
+    pathHeader[2] = (pathBytes.length >> 8) & 0xff;
+    pathHeader[3] = pathBytes.length & 0xff;
+
+    // Pre-build both payload formats.
+    const v2Payload = concatUint8Arrays(pathHeader, pathBytes, previousKeyID, nonce, data);
+    const v1Payload = concatUint8Arrays(previousKeyID, nonce, data);
 
     // WARNING: If some peers fail to receive this update, they will be unable
     // to decrypt future messages encrypted with the new key. They will need to
@@ -2292,10 +2402,17 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = await this.libp2p.dialProtocol(peer, [
-          this.protocolKeyUpdateV1,
+          documentKeyUpdateV2, this.protocolKeyUpdateV1,
         ]);
+        // Check which protocol was negotiated. If the peer selected the
+        // per-document V1 protocol, send the legacy payload without the
+        // document-path header. Otherwise send the V2 payload with header.
+        const negotiatedProtocol = stream.protocol;
+        const payload = negotiatedProtocol === documentKeyUpdateV2
+          ? v2Payload
+          : v1Payload;
         await pipe(
-          [concatUint8Arrays(previousKeyID, nonce, data)],
+          [payload],
           stream.sink,
         );
       } catch (err) {
@@ -2319,96 +2436,97 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Handle incoming key-update protocol messages.
-   * Verifies the sender is an authorized writer, then merges the keychain changes.
+   * Handles a key-update request with pre-read payload data. Called by
+   * the shared protocol handler in Collabswarm after reading the document
+   * path header and routing.
+   *
+   * @internal
+   * @param payload The encrypted key-update payload (without the document
+   *   path header that was already stripped by the shared handler).
    */
-  private _handleKeyUpdateRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolKeyUpdateV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembled = await readUint8Iterable(source);
+  public async handleKeyUpdateRequestData(
+    payload: Uint8Array,
+  ): Promise<void> {
+    try {
+      console.log(`received ${documentKeyUpdateV1} dial for ${this.documentPath}`);
 
-        // Decrypt the key update message.
-        const blockKeyID = assembled.slice(
-          0,
-          this._keychainProvider.keyIDLength,
-        );
-        const blockNonce = assembled.slice(
-          this._keychainProvider.keyIDLength,
-          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-        );
-        const blockData = assembled.slice(
-          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-        );
+      // Decrypt the key update message.
+      const blockKeyID = payload.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      const blockNonce = payload.slice(
+        this._keychainProvider.keyIDLength,
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      const blockData = payload.slice(
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
 
-        let rawContent: Uint8Array | undefined;
+      let rawContent: Uint8Array | undefined;
+      try {
+        rawContent = await this._decryptBlock(
+          blockKeyID,
+          blockNonce,
+          blockData,
+        );
+      } catch (e) {
+        console.warn('Failed to decrypt key update message:', e);
+      }
+
+      if (!rawContent) {
+        console.warn(
+          `Unable to decrypt key update for ${this.documentPath}`,
+        );
+        return;
+      }
+
+      const message =
+        this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+      // Verify the sender is an authorized writer.
+      if (this._isSigningEnabled()) {
+        if (message.signature) {
+          const { signature, ...messageWithoutSignature } = message;
+          const raw =
+            this._syncMessageSerializer.serializeSyncMessage(
+              messageWithoutSignature,
+            );
+          if (!(await this._verifyWriterSignature(raw, signature))) {
+            console.warn(
+              `Received key update with invalid signature for ${this.documentPath}`,
+            );
+            return;
+          }
+        } else {
+          console.warn(
+            `Received unsigned key update for ${this.documentPath}`,
+          );
+          return;
+        }
+      }
+
+      // Merge keychain changes.
+      if (message.keychainChanges) {
         try {
-          rawContent = await this._decryptBlock(
-            blockKeyID,
-            blockNonce,
-            blockData,
+          this._keychain.merge(message.keychainChanges);
+          console.log(
+            `Updated keychain via key-update protocol in ${this.documentPath}`,
           );
         } catch (e) {
-          console.warn('Failed to decrypt key update message:', e);
-        }
-
-        if (!rawContent) {
-          console.warn(
-            `Unable to decrypt key update for ${this.documentPath}`,
+          console.error(
+            'Failed to merge keychain changes from key update:',
+            e,
           );
-          return [];
         }
-
-        const message =
-          this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-
-        // Verify the sender is an authorized writer.
-        if (this._isSigningEnabled()) {
-          if (message.signature) {
-            const { signature, ...messageWithoutSignature } = message;
-            const raw =
-              this._syncMessageSerializer.serializeSyncMessage(
-                messageWithoutSignature,
-              );
-            if (!(await this._verifyWriterSignature(raw, signature))) {
-              console.warn(
-                `Received key update with invalid signature for ${this.documentPath}`,
-              );
-              return [];
-            }
-          } else {
-            console.warn(
-              `Received unsigned key update for ${this.documentPath}`,
-            );
-            return [];
-          }
-        }
-
-        // Merge keychain changes.
-        if (message.keychainChanges) {
-          try {
-            this._keychain.merge(message.keychainChanges);
-            console.log(
-              `Updated keychain via key-update protocol in ${this.documentPath}`,
-            );
-          } catch (e) {
-            console.error(
-              'Failed to merge keychain changes from key update:',
-              e,
-            );
-          }
-        }
-
-        return [];
-      },
-    ).catch((err: unknown) => {
+      }
+    } catch (err: unknown) {
       console.error(
-        `Error handling ${this.protocolKeyUpdateV1} request:`,
+        `Error handling ${documentKeyUpdateV1} request:`,
         err,
       );
-    });
-  };
+    }
+  }
 
   // public async pin() {
   //   // Apply local change w/ CRDT provider.
