@@ -194,9 +194,10 @@ export class CollabswarmDocument<
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
-  // Cached pubsub topic string, set once in open() to ensure consistency
-  // between subscribe and unsubscribe even if config changes at runtime.
-  private _topic: string = '';
+  // Cached pubsub topic string. Initialized to the bare documentPath so that
+  // callers that invoke _makeChange() before open() (e.g. via load()) publish
+  // to a valid topic. open() recomputes this with the configured prefix.
+  private _topic: string;
 
   // Transaction state for batching multiple changes atomically.
   private _pendingChangeFns: ChangeFnType[] = [];
@@ -320,6 +321,11 @@ export class CollabswarmDocument<
       ...defaultCompactionConfig,
       ...(this.swarm.config?.compaction ?? {}),
     };
+
+    // Provide a valid default topic so that _makeChange() works even before
+    // open() is called (e.g. when load() triggers a change). open() will
+    // recompute this with the configured prefix.
+    this._topic = this._computeTopic();
   }
 
   // Helpers ------------------------------------------------------------------
