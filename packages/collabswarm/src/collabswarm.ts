@@ -26,6 +26,7 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
+  documentKeyUpdateV1,
   documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
 } from './wire-protocols';
 import { readUint8Iterable } from './utils';
@@ -198,6 +199,13 @@ export class Collabswarm<
    * @param config General settings for collabswarm.
    */
   public async initialize(config?: CollabswarmConfig) {
+    if (this._documentRegistry.size > 0) {
+      throw new Error(
+        'Cannot reinitialize while documents are open. ' +
+        'Close all documents before calling initialize() again.',
+      );
+    }
+
     if (!config) {
       config = defaultConfig(defaultBootstrapConfig([]));
     }
@@ -272,7 +280,10 @@ export class Collabswarm<
     document: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
   ): void {
     if (this._documentRegistry.has(documentPath)) {
-      console.warn('Overwriting existing document registration:', documentPath);
+      throw new Error(
+        `A document is already registered for "${documentPath}". ` +
+        'Multiple instances per path are not supported. Close the existing document first.',
+      );
     }
     this._documentRegistry.set(documentPath, document);
   }
@@ -373,10 +384,28 @@ export class Collabswarm<
             (assembled[1] << 16) |
             (assembled[2] << 8) |
             assembled[3]) >>> 0;
-          if (assembled.length < 4 + pathLength) {
-            console.warn('Shared key-update handler: message shorter than declared path length');
+
+          // Validate the path length header. If it looks invalid, this may
+          // be a V1-format payload (no path header). Fall back to
+          // deserializing the message to extract the documentId.
+          if (
+            pathLength === 0 ||
+            pathLength >= 4096 ||
+            pathLength + 4 > assembled.length
+          ) {
+            console.warn(
+              'Shared key-update handler: invalid path header (pathLength=' +
+              pathLength + '), treating as V1 format',
+            );
+            // V1 fallback: the entire payload is the encrypted key-update
+            // message. Try every registered document to see if one can
+            // decrypt and process it.
+            for (const [, doc] of this._documentRegistry) {
+              await doc.handleKeyUpdateRequestData(assembled);
+            }
             return [];
           }
+
           const documentPath = new TextDecoder().decode(
             assembled.slice(4, 4 + pathLength),
           );
@@ -400,14 +429,20 @@ export class Collabswarm<
     // shared handler for all documents; the document path is extracted from
     // the stream payload for routing.
     //
-    // V1 backward compatibility is handled separately: per-document V1
-    // protocol handlers (with the document path suffixed to the protocol ID)
-    // are registered in CollabswarmDocument.open() and unregistered in
-    // CollabswarmDocument.close(). This preserves true interoperability with
-    // legacy peers that dial per-document protocol IDs.
+    // Per-document V1 protocol handlers (with the document path appended to
+    // the protocol ID, e.g. "/collabswarm/doc-load/1.0.0/my-doc") are
+    // registered in CollabswarmDocument.open() and unregistered in close().
+    // These exist for peers that still dial the per-document V1 protocol
+    // strings -- not the base V1 protocol IDs defined in wire-protocols.ts.
+    // The key-update shared handler also includes a V1-format fallback for
+    // payloads that lack a valid document-path header.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
+    // Also register on the base V1 key-update protocol ID so that peers
+    // dialing the un-suffixed V1 protocol are handled. The handler's
+    // V1-format fallback will process these payloads (no path header).
+    this.libp2p.handle(documentKeyUpdateV1, keyUpdateHandler);
   }
 
   /**
