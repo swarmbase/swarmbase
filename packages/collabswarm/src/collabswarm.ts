@@ -316,8 +316,9 @@ export class Collabswarm<
     }
     this._sharedHandlersRegistered = true;
 
-    // Handler implementation for doc-load requests. Used by both V2
-    // (shared) and V1 (per-document fallback) protocol registrations.
+    // Handler implementation for doc-load requests used by the V2
+    // shared protocol registration. V1 per-document handlers are
+    // registered in CollabswarmDocument.open().
     const docLoadHandler = ({ stream }: { stream: any }) => {
       pipe(
         stream.source,
