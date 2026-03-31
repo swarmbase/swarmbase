@@ -17,6 +17,7 @@ import { bitswap } from '@helia/block-brokers';
 import { IDBDatastore } from 'datastore-idb';
 import { IDBBlockstore } from 'blockstore-idb';
 import { CompactionConfig } from './compaction-config';
+import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -70,7 +71,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
       },
     },
 
-    pubsubDocumentPrefix: '/document/',
+    pubsubDocumentPrefix: DEFAULT_DOCUMENT_TOPIC_PREFIX,
     pubsubDocumentPublishPath: '/documents',
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
@@ -87,13 +88,13 @@ export interface CollabswarmConfig {
   /**
    * Prefix to apply to document pubsub topics.
    *
-   * Defaults to `'/document/'` to namespace document traffic on the
-   * pubsub mesh and avoid collisions with other topic types.
+   * Defaults to {@link DEFAULT_DOCUMENT_TOPIC_PREFIX} to namespace document
+   * traffic on the pubsub mesh and avoid collisions with other topic types.
    *
    * Set to an empty string (`''`) to disable prefixing; topic strings
    * will be the bare document path (legacy behavior).
    *
-   * @default '/document/'
+   * @default DEFAULT_DOCUMENT_TOPIC_PREFIX
    */
   pubsubDocumentPrefix: string;
 

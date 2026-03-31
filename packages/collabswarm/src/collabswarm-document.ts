@@ -199,11 +199,6 @@ export class CollabswarmDocument<
   // publish to a valid topic. open() recomputes this with the configured prefix.
   private _topic: string;
 
-  // When the prefixed topic differs from the bare documentPath, we also
-  // subscribe to the legacy (unprefixed) topic for backward compatibility
-  // during rollout. This field is set in open() and used in close().
-  private _legacyTopic: string | undefined;
-
   // Transaction state for batching multiple changes atomically.
   private _pendingChangeFns: ChangeFnType[] = [];
   private _inTransaction = false;
@@ -1538,18 +1533,6 @@ export class CollabswarmDocument<
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
 
-    // For backward compatibility during rollout, also subscribe to the legacy
-    // (unprefixed) topic so we receive messages from peers that haven't upgraded.
-    // However, when topic validators are active (enabled in config AND signing
-    // is enabled), skip the legacy topic so all messages pass through the
-    // validated prefixed topic.
-    if (this._topic !== this.documentPath) {
-      this._legacyTopic = this.documentPath;
-      if (!(this.swarm.config?.enableTopicValidators && this._isSigningEnabled())) {
-        pubsub.subscribe(this._legacyTopic);
-      }
-    }
-
     // For now we support multiple protocols, one per document path.
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
     //       right document. This should be more efficient.
@@ -1647,17 +1630,12 @@ export class CollabswarmDocument<
   public async close() {
     // Compute the topic to clean up. Prefer the cached value, but fall back
     // to computing it so cleanup works even if _topic was never set.
-    const topic = this._topic || this._computeTopic();
+    const topic = this._topic ?? this._computeTopic();
 
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
       pubsub.unsubscribe(topic);
-
-      // Unsubscribe from the legacy (unprefixed) topic if we subscribed to it.
-      if (this._legacyTopic) {
-        pubsub.unsubscribe(this._legacyTopic);
-      }
 
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
@@ -1675,8 +1653,6 @@ export class CollabswarmDocument<
     if (gossipsub?.topicValidators) {
       gossipsub.topicValidators.delete(topic);
     }
-
-    this._legacyTopic = undefined;
 
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
