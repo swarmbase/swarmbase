@@ -38,6 +38,12 @@ import { multiaddr } from '@multiformats/multiaddr';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
 import type { Uint8ArrayList } from 'uint8arraylist';
 
+/** Maximum allowed document path length in key-update V2 wire format. */
+const MAX_DOCUMENT_PATH_LENGTH = 4096;
+
+/** Maximum allowed request size for shared protocol handlers (10 MB). */
+const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
+
 /**
  * Handler type for peer-connect and peer-disconnect events.
  *
@@ -297,7 +303,7 @@ export class Collabswarm<
   }
 
   /**
-   * Registers V2 shared protocol handlers on libp2p for all three
+   * Registers shared protocol handlers on libp2p for all three
    * protocols (doc-load, snapshot-load, key-update). Each handler reads
    * the incoming stream, extracts the document path, and routes to the
    * matching CollabswarmDocument instance in the registry.
@@ -306,9 +312,6 @@ export class Collabswarm<
    * deserializing the CRDTLoadRequest from the stream data. For
    * key-update, a 4-byte length-prefixed document path header precedes
    * the encrypted payload.
-   *
-   * V1 backward compatibility is handled by per-document protocol handlers
-   * registered in CollabswarmDocument.open() and unregistered in close().
    */
   private _registerSharedProtocolHandlers(): void {
     if (this._sharedHandlersRegistered) {
@@ -316,14 +319,18 @@ export class Collabswarm<
     }
     this._sharedHandlersRegistered = true;
 
-    // Handler implementation for doc-load requests used by the V2
-    // shared protocol registration. V1 per-document handlers are
-    // registered in CollabswarmDocument.open().
+    // Handler implementation for doc-load requests.
     const docLoadHandler = ({ stream }: { stream: any }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           const assembled = await readUint8Iterable(source);
+          if (assembled.length > MAX_REQUEST_SIZE) {
+            console.warn(
+              `Shared doc-load handler: request too large (${assembled.length} bytes), dropping`,
+            );
+            return [];
+          }
           const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
           const doc = this._documentRegistry.get(request.documentId);
           if (!doc) {
@@ -347,6 +354,12 @@ export class Collabswarm<
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           const assembled = await readUint8Iterable(source);
+          if (assembled.length > MAX_REQUEST_SIZE) {
+            console.warn(
+              `Shared snapshot-load handler: request too large (${assembled.length} bytes), dropping`,
+            );
+            return [];
+          }
           const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
           const doc = this._documentRegistry.get(request.documentId);
           if (!doc) {
@@ -373,6 +386,12 @@ export class Collabswarm<
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           const assembled = await readUint8Iterable(source);
+          if (assembled.length > MAX_REQUEST_SIZE) {
+            console.warn(
+              `Shared key-update handler: request too large (${assembled.length} bytes), dropping`,
+            );
+            return [];
+          }
           if (assembled.length < 4) {
             console.warn('Shared key-update handler: message too short');
             return [];
@@ -385,12 +404,12 @@ export class Collabswarm<
             (assembled[2] << 8) |
             assembled[3]) >>> 0;
 
-          // Validate the path length header. If it looks invalid, this may
-          // be a V1-format payload (no path header). Fall back to
-          // deserializing the message to extract the documentId.
+          // Validate the path length header. If it looks invalid, treat the
+          // message as malformed, log a warning, and drop it rather than
+          // attempting to interpret it as a legacy (V1) payload.
           if (
             pathLength === 0 ||
-            pathLength >= 4096 ||
+            pathLength >= MAX_DOCUMENT_PATH_LENGTH ||
             pathLength + 4 > assembled.length
           ) {
             console.warn(
@@ -419,19 +438,9 @@ export class Collabswarm<
       });
     };
 
-    // Register V2 (shared) protocol handlers. V2 protocol IDs use a single
-    // shared handler for all documents; the document path is extracted from
-    // the stream payload for routing.
-    //
-    // Per-document V1 protocol handlers (with the document path appended to
-    // the protocol ID, e.g. "/collabswarm/doc-load/1.0.0/my-doc") are
-    // registered in CollabswarmDocument.open() and unregistered in close().
-    // These exist for peers that still dial the per-document V1 protocol
-    // strings, rather than the shared V2 protocol IDs defined in
-    // wire-protocols.ts. The shared key-update handler is intentionally not
-    // registered on the base V1 key-update protocol ID to avoid triggering
-    // fallback behavior across all open documents when peers dial
-    // an un-suffixed key-update protocol.
+    // Register shared protocol handlers. Each protocol ID uses a single
+    // handler for all documents; the document path is extracted from the
+    // stream payload for routing.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
