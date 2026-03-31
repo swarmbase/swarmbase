@@ -1628,9 +1628,8 @@ export class CollabswarmDocument<
    * breaking any other instance using the same path.
    */
   public async close() {
-    // Compute the topic to clean up. Prefer the cached value, but fall back
-    // to computing it so cleanup works even if _topic was never set.
-    const topic = this._topic ?? this._computeTopic();
+    // Use the cached topic for cleanup; it is initialized in the constructor.
+    const topic = this._topic;
 
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
