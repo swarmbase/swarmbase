@@ -26,7 +26,6 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
-  documentKeyUpdateV1,
   documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
 } from './wire-protocols';
 import { readUint8Iterable } from './utils';
@@ -395,14 +394,8 @@ export class Collabswarm<
           ) {
             console.warn(
               'Shared key-update handler: invalid path header (pathLength=' +
-              pathLength + '), treating as V1 format',
+              pathLength + '), dropping message',
             );
-            // V1 fallback: the entire payload is the encrypted key-update
-            // message. Try every registered document to see if one can
-            // decrypt and process it.
-            for (const [, doc] of this._documentRegistry) {
-              await doc.handleKeyUpdateRequestData(assembled);
-            }
             return [];
           }
 
@@ -433,16 +426,14 @@ export class Collabswarm<
     // the protocol ID, e.g. "/collabswarm/doc-load/1.0.0/my-doc") are
     // registered in CollabswarmDocument.open() and unregistered in close().
     // These exist for peers that still dial the per-document V1 protocol
-    // strings -- not the base V1 protocol IDs defined in wire-protocols.ts.
-    // The key-update shared handler also includes a V1-format fallback for
-    // payloads that lack a valid document-path header.
+    // strings, rather than the shared V2 protocol IDs defined in
+    // wire-protocols.ts. The shared key-update handler is intentionally not
+    // registered on the base V1 key-update protocol ID to avoid triggering
+    // fallback behavior across all open documents when peers dial
+    // an un-suffixed key-update protocol.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
-    // Also register on the base V1 key-update protocol ID so that peers
-    // dialing the un-suffixed V1 protocol are handled. The handler's
-    // V1-format fallback will process these payloads (no path header).
-    this.libp2p.handle(documentKeyUpdateV1, keyUpdateHandler);
   }
 
   /**
