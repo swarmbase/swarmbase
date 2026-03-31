@@ -70,7 +70,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
       },
     },
 
-    pubsubDocumentPrefix: '',
+    pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
@@ -87,16 +87,13 @@ export interface CollabswarmConfig {
   /**
    * Prefix to apply to document pubsub topics.
    *
-   * An empty string (`''`) means no prefix is applied and topic strings
-   * are the bare document path. This is the default for backward
-   * compatibility with existing deployments that were created before
-   * topic prefixing was introduced.
+   * Defaults to `'/document/'` to namespace document traffic on the
+   * pubsub mesh and avoid collisions with other topic types.
    *
-   * For new deployments, `'/document/'` is the recommended prefix to
-   * clearly namespace document traffic on the pubsub mesh and avoid
-   * collisions with other topic types.
+   * Set to an empty string (`''`) to disable prefixing; topic strings
+   * will be the bare document path (legacy behavior).
    *
-   * @default ''
+   * @default '/document/'
    */
   pubsubDocumentPrefix: string;
 

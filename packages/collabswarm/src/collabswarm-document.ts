@@ -194,10 +194,15 @@ export class CollabswarmDocument<
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
-  // Cached pubsub topic string. Initialized to the bare documentPath so that
-  // callers that invoke _makeChange() before open() (e.g. via load()) publish
-  // to a valid topic. open() recomputes this with the configured prefix.
+  // Cached pubsub topic string. Initialized in constructor via _computeTopic()
+  // so that callers that invoke _makeChange() before open() (e.g. via load())
+  // publish to a valid topic. open() recomputes this with the configured prefix.
   private _topic: string;
+
+  // When the prefixed topic differs from the bare documentPath, we also
+  // subscribe to the legacy (unprefixed) topic for backward compatibility
+  // during rollout. This field is set in open() and used in close().
+  private _legacyTopic: string | undefined;
 
   // Transaction state for batching multiple changes atomically.
   private _pendingChangeFns: ChangeFnType[] = [];
@@ -337,7 +342,9 @@ export class CollabswarmDocument<
    */
   private _computeTopic(): string {
     const prefix = this.swarm.config?.pubsubDocumentPrefix;
-    return documentTopic(this.documentPath, prefix);
+    return prefix !== undefined
+      ? documentTopic(this.documentPath, prefix)
+      : documentTopic(this.documentPath);
   }
 
   private async _shuffledPeers() {
@@ -703,6 +710,12 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
+    // Ensure we have a valid topic. Normally set in open(), but guard
+    // against callers that reach this path before open() completes.
+    if (!this._topic) {
+      this._topic = this._computeTopic();
+    }
+
     // Store changes in blockstore.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
@@ -1531,6 +1544,13 @@ export class CollabswarmDocument<
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
 
+    // For backward compatibility during rollout, also subscribe to the legacy
+    // (unprefixed) topic so we receive messages from peers that haven't upgraded.
+    if (this._topic !== this.documentPath) {
+      this._legacyTopic = this.documentPath;
+      pubsub.subscribe(this._legacyTopic);
+    }
+
     // For now we support multiple protocols, one per document path.
     // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
     //       right document. This should be more efficient.
@@ -1626,10 +1646,20 @@ export class CollabswarmDocument<
    * breaking any other instance using the same path.
    */
   public async close() {
+    // Compute the topic to clean up. Prefer the cached value, but fall back
+    // to computing it so cleanup works even if _topic was never set.
+    const topic = this._topic || this._computeTopic();
+
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
-      pubsub.unsubscribe(this._topic);
+      pubsub.unsubscribe(topic);
+
+      // Unsubscribe from the legacy (unprefixed) topic if we subscribed to it.
+      if (this._legacyTopic) {
+        pubsub.unsubscribe(this._legacyTopic);
+      }
+
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
 
@@ -1638,14 +1668,16 @@ export class CollabswarmDocument<
       // and ensures cleanup regardless of config changes between open() and close().
       const gossipsubService = pubsub as any;
       if (typeof gossipsubService.topicValidators?.delete === 'function') {
-        gossipsubService.topicValidators.delete(this._topic);
+        gossipsubService.topicValidators.delete(topic);
       }
     }
     // Remove topicValidators entry if one was registered during open().
     const gossipsub = this.swarm.libp2p?.services?.pubsub as any;
     if (gossipsub?.topicValidators) {
-      gossipsub.topicValidators.delete(this._topic);
+      gossipsub.topicValidators.delete(topic);
     }
+
+    this._legacyTopic = undefined;
 
     // Unregister protocol handlers.
     await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});

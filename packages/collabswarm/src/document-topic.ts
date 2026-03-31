@@ -1,20 +1,25 @@
+/** Default topic prefix for document pubsub topics. */
+export const DEFAULT_DOCUMENT_TOPIC_PREFIX = '/document/';
+
 /**
  * Builds a pubsub topic string for a given document path by prepending
  * the configured topic prefix. This separates document pubsub traffic
  * from other topics on the same network.
  *
- * The default prefix is an empty string, which means the topic is the
- * bare document path -- identical to the behavior before this helper
- * was introduced. To namespace document topics, pass a prefix such as
- * `'/document/'` via `CollabswarmConfig.pubsubDocumentPrefix`.
+ * The default prefix is `'/document/'`, which namespaces document traffic
+ * on the pubsub mesh. Pass an empty string to disable prefixing (the topic
+ * will be the bare document path, matching legacy behavior).
+ *
+ * **Edge case:** An empty string (`''`) prefix returns `documentPath`
+ * unchanged. This is intentional for backward compatibility.
  *
  * @param documentPath - The path identifying the document.
- * @param topicPrefix - Prefix to prepend (defaults to `''`).
+ * @param topicPrefix - Prefix to prepend (defaults to `'/document/'`).
  * @returns The full pubsub topic string.
  */
 export function documentTopic(
   documentPath: string,
-  topicPrefix: string = '',
+  topicPrefix: string = DEFAULT_DOCUMENT_TOPIC_PREFIX,
 ): string {
   // When the prefix is empty, return the path unchanged to preserve
   // backward-compatible topic strings.

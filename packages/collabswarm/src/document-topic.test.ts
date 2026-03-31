@@ -1,25 +1,37 @@
 import { describe, expect, test } from '@jest/globals';
-import { documentTopic } from './document-topic';
+import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 
 describe('documentTopic', () => {
-  test('returns bare path when using default empty prefix', () => {
-    expect(documentTopic('my-doc')).toBe('my-doc');
+  test('uses /document/ prefix by default', () => {
+    expect(documentTopic('my-doc')).toBe('/document/my-doc');
   });
 
-  test('preserves leading slash with default empty prefix', () => {
-    expect(documentTopic('/my-doc')).toBe('/my-doc');
+  test('default prefix matches DEFAULT_DOCUMENT_TOPIC_PREFIX', () => {
+    expect(DEFAULT_DOCUMENT_TOPIC_PREFIX).toBe('/document/');
   });
 
-  test('preserves nested paths with default empty prefix', () => {
-    expect(documentTopic('/org/team/doc')).toBe('/org/team/doc');
+  test('avoids double slash with default prefix and leading-slash path', () => {
+    expect(documentTopic('/my-doc')).toBe('/document/my-doc');
   });
 
-  test('preserves nested paths without leading slash with default empty prefix', () => {
-    expect(documentTopic('org/team/doc')).toBe('org/team/doc');
+  test('returns bare path when using explicit empty prefix', () => {
+    expect(documentTopic('my-doc', '')).toBe('my-doc');
   });
 
-  test('returns empty string for empty path with default empty prefix', () => {
-    expect(documentTopic('')).toBe('');
+  test('preserves leading slash with explicit empty prefix', () => {
+    expect(documentTopic('/my-doc', '')).toBe('/my-doc');
+  });
+
+  test('preserves nested paths with explicit empty prefix', () => {
+    expect(documentTopic('/org/team/doc', '')).toBe('/org/team/doc');
+  });
+
+  test('preserves nested paths without leading slash with explicit empty prefix', () => {
+    expect(documentTopic('org/team/doc', '')).toBe('org/team/doc');
+  });
+
+  test('returns empty string for empty path with explicit empty prefix', () => {
+    expect(documentTopic('', '')).toBe('');
   });
 
   test('uses a custom prefix', () => {
@@ -44,5 +56,14 @@ describe('documentTopic', () => {
 
   test('applies /document/ prefix and avoids double slash', () => {
     expect(documentTopic('/my-doc', '/document/')).toBe('/document/my-doc');
+  });
+
+  // Edge case: '/' prefix produces '/path'
+  test('applies bare / prefix correctly', () => {
+    expect(documentTopic('my-doc', '/')).toBe('/my-doc');
+  });
+
+  test('applies bare / prefix and avoids double slash with leading-slash path', () => {
+    expect(documentTopic('/my-doc', '/')).toBe('/my-doc');
   });
 });
