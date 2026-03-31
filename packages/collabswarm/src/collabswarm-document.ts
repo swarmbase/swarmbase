@@ -710,12 +710,6 @@ export class CollabswarmDocument<
     changes: ChangesType,
     kind: CRDTChangeNodeKind = crdtDocumentChangeNode,
   ) {
-    // Ensure we have a valid topic. Normally set in open(), but guard
-    // against callers that reach this path before open() completes.
-    if (!this._topic) {
-      this._topic = this._computeTopic();
-    }
-
     // Store changes in blockstore.
     const hash = await this._putBlock(changes);
     this._hashes.add(hash);
@@ -1546,9 +1540,14 @@ export class CollabswarmDocument<
 
     // For backward compatibility during rollout, also subscribe to the legacy
     // (unprefixed) topic so we receive messages from peers that haven't upgraded.
+    // However, when topic validators are enabled, we avoid subscribing to the
+    // legacy topic so that all messages must pass through the validated,
+    // prefixed topic.
     if (this._topic !== this.documentPath) {
       this._legacyTopic = this.documentPath;
-      pubsub.subscribe(this._legacyTopic);
+      if (!this.swarm.config?.enableTopicValidators) {
+        pubsub.subscribe(this._legacyTopic);
+      }
     }
 
     // For now we support multiple protocols, one per document path.
