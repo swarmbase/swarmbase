@@ -1089,12 +1089,12 @@ export class CollabswarmDocument<
       }
       const assembled = concatUint8Arrays(documentKeyID, nonce, data);
       console.log(
-        `sending ${documentLoadV1} response (encrypted)`,
+        `sending doc-load response (encrypted) for ${this.documentPath}`,
       );
 
       await stream.sink([assembled] as Iterable<Uint8Array>);
     } catch (err: unknown) {
-      console.error(`Error handling ${documentLoadV1} load request:`, err);
+      console.error(`Error handling doc-load request for ${this.documentPath}:`, err);
     }
   }
 
@@ -1202,13 +1202,13 @@ export class CollabswarmDocument<
       }
       const assembled = concatUint8Arrays(documentKeyID, nonce, data);
       console.log(
-        `sending ${snapshotLoadV1} response (encrypted)`,
+        `sending snapshot-load response (encrypted) for ${this.documentPath}`,
       );
 
       await stream.sink([assembled] as Iterable<Uint8Array>);
     } catch (err: unknown) {
       console.error(
-        `Error handling ${snapshotLoadV1} snapshot load request:`,
+        `Error handling snapshot-load request for ${this.documentPath}:`,
         err,
       );
     }
@@ -1625,6 +1625,11 @@ export class CollabswarmDocument<
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
 
+    // The remaining setup steps register handlers and state that must be
+    // cleaned up if any step fails. Wrap in try/catch to call close() on
+    // failure, preventing leaked registry entries, protocol handlers, or
+    // pubsub subscriptions.
+    try {
     // Register this document with the swarm so incoming V2 protocol requests
     // are routed here by the shared protocol handlers registered during
     // Collabswarm.initialize().
@@ -1707,6 +1712,13 @@ export class CollabswarmDocument<
       // Add initial document key.
       console.log(`Adding a key to ${this.documentPath}`);
       await this._keychain.add();
+    }
+
+    } catch (err) {
+      // Clean up any partially-registered state to avoid leaked handlers,
+      // subscriptions, or registry entries.
+      await this.close().catch(() => {});
+      throw err;
     }
 
     return isExisting;
@@ -2415,7 +2427,7 @@ export class CollabswarmDocument<
       .getConnections()
       ?.map((x) => x.remoteAddr);
 
-    const pathBytes = new TextEncoder().encode(this.documentPath);
+    const pathBytes = this._encoder.encode(this.documentPath);
     const pathHeader = new Uint8Array(4);
     pathHeader[0] = (pathBytes.length >> 24) & 0xff;
     pathHeader[1] = (pathBytes.length >> 16) & 0xff;
@@ -2513,9 +2525,10 @@ export class CollabswarmDocument<
       const message =
         this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
-      // Validate that the deserialized message targets this document.
-      // This can happen when a V1-format payload is broadcast to all
-      // registered documents as a fallback (see shared key-update handler).
+      // The shared V2 key-update handler already routes by the
+      // length-prefixed document-path header and drops invalid headers;
+      // this check is kept as a defense-in-depth guard against malformed
+      // or misrouted messages.
       if (message.documentId && message.documentId !== this.documentPath) {
         console.warn(
           `Ignoring key-update for wrong document ` +
