@@ -2580,6 +2580,17 @@ export class CollabswarmDocument<
       const message =
         this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
+      // Validate that the deserialized message targets this document.
+      // This can happen when a V1-format payload is broadcast to all
+      // registered documents as a fallback (see shared key-update handler).
+      if (message.documentId && message.documentId !== this.documentPath) {
+        console.warn(
+          `Ignoring key-update for wrong document ` +
+          `(${message.documentId} !== ${this.documentPath})`,
+        );
+        return;
+      }
+
       // Verify the sender is an authorized writer.
       if (this._isSigningEnabled()) {
         if (message.signature) {
