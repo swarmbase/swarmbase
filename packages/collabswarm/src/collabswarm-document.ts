@@ -1058,7 +1058,7 @@ export class CollabswarmDocument<
       const message =
         this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
       console.log(
-        `received ${documentLoadV1} request:`,
+        `received doc-load request for ${this.documentPath}:`,
         assembledRequest,
         message,
       );
@@ -1171,7 +1171,7 @@ export class CollabswarmDocument<
       const message =
         this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
       console.log(
-        `received ${snapshotLoadV1} request:`,
+        `received snapshot-load request for ${this.documentPath}:`,
         assembledRequest,
         message,
       );
@@ -2544,8 +2544,6 @@ export class CollabswarmDocument<
     payload: Uint8Array,
   ): Promise<void> {
     try {
-      console.log(`received ${documentKeyUpdateV1} dial for ${this.documentPath}`);
-
       // Decrypt the key update message.
       const blockKeyID = payload.slice(
         0,
@@ -2612,6 +2610,8 @@ export class CollabswarmDocument<
           return;
         }
       }
+
+      console.log(`received key-update for ${this.documentPath}`);
 
       // Merge keychain changes.
       if (message.keychainChanges) {
