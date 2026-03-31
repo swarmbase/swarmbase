@@ -1540,12 +1540,12 @@ export class CollabswarmDocument<
 
     // For backward compatibility during rollout, also subscribe to the legacy
     // (unprefixed) topic so we receive messages from peers that haven't upgraded.
-    // However, when topic validators are enabled, we avoid subscribing to the
-    // legacy topic so that all messages must pass through the validated,
-    // prefixed topic.
+    // However, when topic validators are active (enabled in config AND signing
+    // is enabled), skip the legacy topic so all messages pass through the
+    // validated prefixed topic.
     if (this._topic !== this.documentPath) {
       this._legacyTopic = this.documentPath;
-      if (!this.swarm.config?.enableTopicValidators) {
+      if (!(this.swarm.config?.enableTopicValidators && this._isSigningEnabled())) {
         pubsub.subscribe(this._legacyTopic);
       }
     }
