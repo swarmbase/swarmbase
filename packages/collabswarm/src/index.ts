@@ -75,6 +75,7 @@ import {
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
 import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
 import { defaultCompactionConfig } from './compaction-config';
@@ -154,6 +155,8 @@ export {
   // Network statistics
   NetworkStats,
   // Utilities
+  documentTopic,
+  DEFAULT_DOCUMENT_TOPIC_PREFIX,
   LRUCache,
 };
 
