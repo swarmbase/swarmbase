@@ -28,7 +28,7 @@
     "eslint": "^10.0.2",
     "jest": "^29.2.5",
     "jest-environment-jsdom": "^30.3.0",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.2.4",
     "redux": "^5.0.1",
     "redux-thunk": "^3.1.0",
     "ts-jest": "^29.2.5",
