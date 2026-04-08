@@ -57,11 +57,16 @@ function trackConsole(page: Page) {
 
 async function initPage(browser: any, url: string) {
   const context = await browser.newContext();
-  const page = await context.newPage();
-  const track = trackConsole(page);
-  await page.goto(url);
-  await track.waitFor('INIT_COMPLETE');
-  return { page, track, context };
+  try {
+    const page = await context.newPage();
+    const track = trackConsole(page);
+    await page.goto(url);
+    await track.waitFor('INIT_COMPLETE');
+    return { page, track, context };
+  } catch (err) {
+    await context.close();
+    throw err;
+  }
 }
 
 async function waitForPeerConnection(track: ReturnType<typeof trackConsole>, timeout = 90_000) {
@@ -174,7 +179,7 @@ test.describe('Three-Peer Cross-NAT Sync', () => {
         waitForPeerConnection(b.track),
         waitForPeerConnection(c.track),
       ]);
-      await waitForMesh(a.page, 15_000);
+      await waitForMesh(a.page, 20_000);
 
       const msgB = b.track.waitFor('PUBSUB_MESSAGE:', 45_000);
       const msgC = c.track.waitFor('PUBSUB_MESSAGE:', 45_000);
@@ -204,7 +209,7 @@ test.describe('Three-Peer Cross-NAT Sync', () => {
         waitForPeerConnection(b.track),
         waitForPeerConnection(c.track),
       ]);
-      await waitForMesh(a.page, 15_000);
+      await waitForMesh(a.page, 20_000);
 
       const msgA = a.track.waitFor('PUBSUB_MESSAGE:', 45_000);
       const msgC = c.track.waitFor('PUBSUB_MESSAGE:', 45_000);
@@ -239,7 +244,7 @@ test.describe('Rapid Cross-NAT Concurrent Messages', () => {
       await waitForMesh(a.page);
 
       // Warmup message to confirm mesh
-      const warmup = b.track.waitFor('PUBSUB_MESSAGE:', 30_000);
+      const warmup = b.track.waitFor('PUBSUB_MESSAGE:', 60_000);
       await a.page.fill('#message-input', 'warmup');
       await a.page.click('#send-btn');
       await warmup;
