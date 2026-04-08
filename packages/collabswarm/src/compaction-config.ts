@@ -25,8 +25,9 @@ export interface CompactionConfig {
   minChangesBeforeSnapshot: number;
 
   /**
-   * Whether to prune old DAG nodes from sync messages after a snapshot.
-   * When true, only the snapshot + post-snapshot changes are included in sync messages.
+   * Whether to prune old DAG nodes after a snapshot.
+   * When true, old change nodes are removed from the in-memory sync tree
+   * and their blocks are deleted from the Helia blockstore.
    * Pruned blocks are unpinned and deleted from the Helia blockstore.
    *
    * Implemented:

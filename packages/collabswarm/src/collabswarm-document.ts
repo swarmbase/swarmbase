@@ -941,8 +941,10 @@ export class CollabswarmDocument<
         }
 
         // Delete the raw block from the blockstore.
+        // Note: we intentionally keep the CID in _hashes so that
+        // _mergeSyncTree() still deduplicates if a peer re-sends
+        // the same change block (e.g., a peer that hasn't compacted).
         await blockstore.delete(cid);
-        this._hashes.delete(cidStr);
         deleted++;
       } catch (err) {
         console.error(`Failed to GC block ${cidStr}:`, err);
