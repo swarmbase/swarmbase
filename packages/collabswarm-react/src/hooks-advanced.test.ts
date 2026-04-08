@@ -200,7 +200,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.subscribe).toHaveBeenCalled();
     });
 
     // Wait for caches to be populated so docRef is in docCache.
@@ -233,7 +233,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.subscribe).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -261,7 +261,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.subscribe).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -289,7 +289,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.subscribe).toHaveBeenCalled();
     });
 
     await act(async () => {
@@ -328,7 +328,7 @@ describe('Change function edge cases', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.open).toHaveBeenCalled();
+      expect(mockDoc.subscribe).toHaveBeenCalled();
     });
 
     const changeFnArg = jest.fn();
