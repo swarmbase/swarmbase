@@ -1577,6 +1577,12 @@ export class CollabswarmDocument<
       );
     };
 
+    // Register this document with the swarm BEFORE subscribing to pubsub.
+    // registerDocument() throws on duplicate document paths; doing this first
+    // avoids subscribing to a topic that would then be unsubscribed by close()
+    // on failure, which could disrupt an already-open instance for the same path.
+    this.swarm.registerDocument(this.documentPath, this);
+
     // Subscribe to pubsub topic and register protocol handlers.
     const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
@@ -1590,10 +1596,6 @@ export class CollabswarmDocument<
     // failure, preventing leaked registry entries, protocol handlers, or
     // pubsub subscriptions.
     try {
-    // Register this document with the swarm so incoming V2 protocol requests
-    // are routed here by the shared protocol handlers registered during
-    // Collabswarm.initialize().
-    this.swarm.registerDocument(this.documentPath, this);
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -2384,6 +2386,12 @@ export class CollabswarmDocument<
       ?.map((x) => x.remoteAddr);
 
     const pathBytes = this._encoder.encode(this.documentPath);
+    if (pathBytes.length === 0 || pathBytes.length > 4096) {
+      throw new Error(
+        `Document path "${this.documentPath}" encoded length (${pathBytes.length}) exceeds ` +
+        'the maximum allowed path length (4096 bytes) for the V2 key-update protocol',
+      );
+    }
     const pathHeader = new Uint8Array(4);
     pathHeader[0] = (pathBytes.length >> 24) & 0xff;
     pathHeader[1] = (pathBytes.length >> 16) & 0xff;
