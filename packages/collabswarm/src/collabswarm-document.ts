@@ -829,7 +829,7 @@ export class CollabswarmDocument<
 
     // Recursively collect all ACL nodes from a subtree that is about to be pruned.
     // Re-attached ACL nodes are stored as leaf nodes (children stripped) so they
-    // don't pull in the full pre-prune subtree through their parent pointers.
+    // don't keep nested children subtrees alive after pruning.
     // Non-ACL (document) node CIDs are added to the prunedCIDs set.
     const collectACLNodes = (
       children: Record<string, CRDTChangeNode<ChangesType>>,
