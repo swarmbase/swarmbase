@@ -2,7 +2,7 @@
 #
 # Simulates cross-NAT connectivity using isolated Docker networks.
 # Clients on separate networks (nat-a, nat-b) can only communicate
-# through the relay on the shared relay-net network.
+# through the relay, which is connected to both nat-a and nat-b networks.
 #
 # Usage:
 #   docker compose -f docker-compose.nat-test.yaml build
