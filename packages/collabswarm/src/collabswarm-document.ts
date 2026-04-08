@@ -1174,6 +1174,8 @@ export class CollabswarmDocument<
         `Error handling snapshot-load request for ${this.documentPath}:`,
         err,
       );
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
     }
   }
 
@@ -1577,25 +1579,23 @@ export class CollabswarmDocument<
       );
     };
 
+    // All registration and subscription steps are inside try/catch so that
+    // close() cleans up any partially-registered state on failure.
+    const pubsub = this.swarm.heliaNode.libp2p.services
+      .pubsub as PubSubBaseProtocol;
+
+    try {
     // Register this document with the swarm BEFORE subscribing to pubsub.
     // registerDocument() throws on duplicate document paths; doing this first
     // avoids subscribing to a topic that would then be unsubscribed by close()
     // on failure, which could disrupt an already-open instance for the same path.
     this.swarm.registerDocument(this.documentPath, this);
 
-    // Subscribe to pubsub topic and register protocol handlers.
-    const pubsub = this.swarm.heliaNode.libp2p.services
-      .pubsub as PubSubBaseProtocol;
+    // Subscribe to pubsub topic.
     // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
-
-    // The remaining setup steps register handlers and state that must be
-    // cleaned up if any step fails. Wrap in try/catch to call close() on
-    // failure, preventing leaked registry entries, protocol handlers, or
-    // pubsub subscriptions.
-    try {
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the

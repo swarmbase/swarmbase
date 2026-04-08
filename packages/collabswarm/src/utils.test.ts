@@ -183,6 +183,46 @@ describe('readUint8Iterable', () => {
     expect(result).toEqual(new Uint8Array([]));
     expect(result.length).toBe(0);
   });
+
+  describe('maxSize enforcement', () => {
+    test('throws RangeError when stream exceeds maxSize', async () => {
+      const chunks = [
+        new Uint8Array([1, 2, 3]),
+        new Uint8Array([4, 5, 6]),
+      ];
+      await expect(
+        readUint8Iterable(toAsyncIterable(chunks), 5),
+      ).rejects.toThrow(RangeError);
+    });
+
+    test('succeeds when stream is exactly at maxSize', async () => {
+      const chunks = [
+        new Uint8Array([1, 2, 3]),
+        new Uint8Array([4, 5]),
+      ];
+      const result = await readUint8Iterable(toAsyncIterable(chunks), 5);
+      expect(result).toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+    });
+
+    test('succeeds when stream is under maxSize', async () => {
+      const chunks = [new Uint8Array([1, 2])];
+      const result = await readUint8Iterable(toAsyncIterable(chunks), 100);
+      expect(result).toEqual(new Uint8Array([1, 2]));
+    });
+
+    test('throws on first chunk exceeding maxSize', async () => {
+      const chunks = [new Uint8Array(1000)];
+      await expect(
+        readUint8Iterable(toAsyncIterable(chunks), 10),
+      ).rejects.toThrow(/exceeded maximum allowed size/);
+    });
+
+    test('no limit when maxSize is undefined', async () => {
+      const chunks = [new Uint8Array(1000)];
+      const result = await readUint8Iterable(toAsyncIterable(chunks));
+      expect(result.length).toBe(1000);
+    });
+  });
 });
 
 describe('crypto key utilities', () => {
