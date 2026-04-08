@@ -7,7 +7,7 @@
 
 import { pipe } from 'it-pipe';
 import { Libp2p } from 'libp2p';
-import { Collabswarm } from './collabswarm';
+import { Collabswarm, MAX_DOCUMENT_PATH_LENGTH } from './collabswarm';
 import {
   concatUint8Arrays,
   firstTrue,
@@ -193,6 +193,11 @@ export class CollabswarmDocument<
   // Handler for listening for sync messages on the document topic. Is `undefined` until
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
+
+  // Whether this instance has successfully subscribed to the pubsub topic.
+  // Used in close() to avoid unsubscribing when open() failed before subscribing,
+  // which would break other instances listening on the same topic.
+  private _subscribed = false;
 
   // Cached pubsub topic string. Initialized in constructor via _computeTopic()
   // so that callers that invoke _makeChange() before open() (e.g. via load())
@@ -1058,6 +1063,8 @@ export class CollabswarmDocument<
       await stream.sink([assembled] as Iterable<Uint8Array>);
     } catch (err: unknown) {
       console.error(`Error handling doc-load request for ${this.documentPath}:`, err);
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
     }
   }
 
@@ -1596,6 +1603,7 @@ export class CollabswarmDocument<
     // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
     pubsub.addEventListener('message', this._pubsubHandler as EventListener);
     pubsub.subscribe(this._topic);
+    this._subscribed = true;
 
     // Register GossipSub topic validator for authorization enforcement.
     // When enabled, messages from unauthorized peers are rejected at the
@@ -1696,7 +1704,14 @@ export class CollabswarmDocument<
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
-      pubsub.unsubscribe(topic);
+
+      // Only unsubscribe if this instance actually subscribed. If open()
+      // failed before pubsub.subscribe() completed, unsubscribing here
+      // would remove a subscription belonging to another instance.
+      if (this._subscribed) {
+        pubsub.unsubscribe(topic);
+        this._subscribed = false;
+      }
 
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
@@ -2386,10 +2401,10 @@ export class CollabswarmDocument<
       ?.map((x) => x.remoteAddr);
 
     const pathBytes = this._encoder.encode(this.documentPath);
-    if (pathBytes.length === 0 || pathBytes.length > 4096) {
+    if (pathBytes.length === 0 || pathBytes.length > MAX_DOCUMENT_PATH_LENGTH) {
       throw new Error(
         `Document path "${this.documentPath}" encoded length (${pathBytes.length}) exceeds ` +
-        'the maximum allowed path length (4096 bytes) for the V2 key-update protocol',
+        `the maximum allowed path length (${MAX_DOCUMENT_PATH_LENGTH} bytes) for the V2 key-update protocol`,
       );
     }
     const pathHeader = new Uint8Array(4);
