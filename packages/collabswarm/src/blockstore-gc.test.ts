@@ -128,8 +128,6 @@ describe('blockstore GC integration with pruning', () => {
     root: CRDTChangeNode<Changes>,
     keepCount: number,
   ): { prunedCIDs: Set<string>; retainedCIDs: Set<string> } {
-    const beforeCIDs = collectTreeCIDs(rootCID, root);
-
     // BFS prune (same algorithm as _pruneChanges)
     const prunedCIDs = new Set<string>();
     const queue: Array<CRDTChangeNode<Changes>> = [root];
