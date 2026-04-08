@@ -808,9 +808,11 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Prune the change tree in the last sync message to keep only the most recent
-   * N change nodes. Nodes beyond the limit have their children removed, turning
-   * them into leaf nodes.
+   * Prune the change tree in the last sync message. After a BFS traversal
+   * retains `keepCount` document nodes, remaining children are removed.
+   * Note: in branching histories, nodes already enqueued in the BFS before
+   * the limit is reached are also retained, so the actual count may exceed
+   * `keepCount`.
    *
    * @param keepCount Maximum number of change nodes to retain in the sync tree.
    * @returns Set of CID strings for document nodes that were pruned from the tree.
@@ -914,9 +916,10 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Delete pruned blocks from the Helia blockstore and remove their CIDs
-   * from the local `_hashes` set. Unpins each block first (if pinned), then
-   * deletes the raw block data.
+   * Delete pruned blocks from the Helia blockstore. Unpins each block first
+   * (if pinned), then deletes the raw block data. CIDs are intentionally
+   * kept in `_hashes` so that `_mergeSyncTree()` still deduplicates if a
+   * peer re-sends the same change block.
    *
    * Errors on individual blocks are logged but do not abort the overall GC pass.
    */
