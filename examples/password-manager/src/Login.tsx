@@ -10,7 +10,6 @@ export function Login({
   setPublicKey,
   setPrivateKey,
   setBootstrapPeers,
-  setSignalingServerAddr,
 }: {
   userId?: string;
   setUserId?: (userId: string) => void;
@@ -18,8 +17,6 @@ export function Login({
   setPublicKey?: (publicKey: CryptoKey) => void;
   privateKey?: CryptoKey;
   setPrivateKey?: (privateKey: CryptoKey) => void;
-  signalingServerAddr?: string;
-  setSignalingServerAddr?: (signalingServerAddr: string) => void;
   bootstrapPeers?: string[];
   setBootstrapPeers?: (peers: string[]) => void;
 }) {
@@ -30,10 +27,6 @@ export function Login({
   const [generatedPublicKey, setGeneratedPublicKey] = React.useState<
     string | undefined
   >();
-  const [
-    draftSignalingServerAddr,
-    setDraftSignalingServerAddr,
-  ] = React.useState('');
   const [draftBootstrapPeers, setDraftBootstrapPeers] = React.useState('');
   // Generate a keypair.
   React.useEffect(() => {
@@ -94,15 +87,6 @@ export function Login({
             </Form.Text>
           </Form.Group>
 
-          <Form.Group className="mb-3" controlId="formRelayServer">
-            <Form.Label>Relay Server</Form.Label>
-            <Form.Control
-              placeholder="Enter the multiaddr of a relay server (e.g. /ip4/.../tcp/9001/ws/p2p/...)"
-              value={draftSignalingServerAddr || ''}
-              onChange={(e) => setDraftSignalingServerAddr(e.target.value)}
-            />
-          </Form.Group>
-
           <Form.Group className="mb-3" controlId="formBootstrapPeers">
             <Form.Label>Bootstrap Peers</Form.Label>
             <Form.Control
@@ -126,9 +110,6 @@ export function Login({
               setBootstrapPeers &&
                 draftBootstrapPeers &&
                 setBootstrapPeers(draftBootstrapPeers.split('\n'));
-              setSignalingServerAddr &&
-                draftSignalingServerAddr &&
-                setSignalingServerAddr(draftSignalingServerAddr);
               setUserId && generatedPublicKey && setUserId(btoa(generatedPublicKey));
               // Redirct to the /secrets page.
               history.push('/secrets');
