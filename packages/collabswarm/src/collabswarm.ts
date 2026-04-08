@@ -211,6 +211,15 @@ export class Collabswarm<
       );
     }
 
+    // Tear down the previous Helia/libp2p instance if reinitializing,
+    // preventing leaked background resources (connections, timers, etc.).
+    if (this._heliaNode) {
+      try { await this._heliaNode.stop(); } catch { /* best-effort */ }
+      this._heliaNode = undefined;
+      this._peerId = undefined;
+      this._peerIds = [];
+    }
+
     if (!config) {
       config = defaultConfig(defaultBootstrapConfig([]));
     }
