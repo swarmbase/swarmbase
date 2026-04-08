@@ -810,23 +810,27 @@ export class CollabswarmDocument<
   /**
    * Prune the change tree in the last sync message to keep only the most recent
    * N change nodes. Nodes beyond the limit have their children removed, turning
-   * them into leaf nodes. Old blocks remain in the Helia blockstore for peers
-   * that already have them.
+   * them into leaf nodes.
    *
    * @param keepCount Maximum number of change nodes to retain in the sync tree.
+   * @returns Set of CID strings for document nodes that were pruned from the tree.
+   *   ACL node CIDs are never included (they are always preserved).
    */
-  private _pruneChanges(keepCount: number) {
+  private _pruneChanges(keepCount: number): Set<string> {
+    const prunedCIDs = new Set<string>();
+
     if (keepCount <= 0) {
       // Pruning everything (including root) is destructive and nonsensical; skip.
-      return;
+      return prunedCIDs;
     }
     if (!this._lastSyncMessage?.changes || !this._lastSyncMessage.changeId) {
-      return;
+      return prunedCIDs;
     }
 
     // Recursively collect all ACL nodes from a subtree that is about to be pruned.
     // Re-attached ACL nodes are stored as leaf nodes (children stripped) so they
     // don't pull in the full pre-prune subtree through their parent pointers.
+    // Non-ACL (document) node CIDs are added to the prunedCIDs set.
     const collectACLNodes = (
       children: Record<string, CRDTChangeNode<ChangesType>>,
       out: Record<string, CRDTChangeNode<ChangesType>>,
@@ -839,6 +843,9 @@ export class CollabswarmDocument<
           // Shallow copy without children to avoid retaining the full subtree.
           const { children: _dropped, ...leafNode } = childNode;
           out[childHash] = leafNode as CRDTChangeNode<ChangesType>;
+        } else {
+          // Document node being pruned -- record its CID.
+          prunedCIDs.add(childHash);
         }
         if (
           childNode.children !== undefined &&
@@ -900,7 +907,50 @@ export class CollabswarmDocument<
     }
 
     console.log(
-      `Pruned change tree for ${this.documentPath}: kept ${documentNodesVisited} document nodes of ${this._hashes.size} total nodes`,
+      `Pruned change tree for ${this.documentPath}: kept ${documentNodesVisited} document nodes, pruned ${prunedCIDs.size} blocks`,
+    );
+
+    return prunedCIDs;
+  }
+
+  /**
+   * Delete pruned blocks from the Helia blockstore and remove their CIDs
+   * from the local `_hashes` set. Unpins each block first (if pinned), then
+   * deletes the raw block data.
+   *
+   * Errors on individual blocks are logged but do not abort the overall GC pass.
+   */
+  private async _gcPrunedBlocks(prunedCIDs: Set<string>): Promise<void> {
+    if (prunedCIDs.size === 0) {
+      return;
+    }
+
+    const blockstore = this.swarm.heliaNode.blockstore;
+    const pins = this.swarm.heliaNode.pins;
+    let deleted = 0;
+
+    for (const cidStr of prunedCIDs) {
+      try {
+        const cid = CID.parse(cidStr);
+
+        // Unpin first -- pins.rm is an AsyncGenerator, drain it.
+        try {
+          for await (const _ of pins.rm(cid)) { /* drain */ }
+        } catch {
+          // Block may not be pinned; that's fine.
+        }
+
+        // Delete the raw block from the blockstore.
+        await blockstore.delete(cid);
+        this._hashes.delete(cidStr);
+        deleted++;
+      } catch (err) {
+        console.error(`Failed to GC block ${cidStr}:`, err);
+      }
+    }
+
+    console.log(
+      `Blockstore GC for ${this.documentPath}: deleted ${deleted}/${prunedCIDs.size} blocks`,
     );
   }
 
@@ -2134,7 +2184,15 @@ export class CollabswarmDocument<
     // in load/snapshot-load responses via _latestSnapshot, to avoid bloating
     // every incremental pubsub sync message with the full snapshot state.
     if (this._lastSyncMessage && this._compactionConfig.pruneAfterSnapshot) {
-      this._pruneChanges(this._compactionConfig.keepRecentNodes);
+      const prunedCIDs = this._pruneChanges(this._compactionConfig.keepRecentNodes);
+
+      // Delete pruned blocks from the Helia blockstore asynchronously.
+      // Fire-and-forget: GC errors are logged but don't block snapshot creation.
+      if (prunedCIDs.size > 0) {
+        this._gcPrunedBlocks(prunedCIDs).catch((err) => {
+          console.error(`Blockstore GC failed for ${this.documentPath}:`, err);
+        });
+      }
     }
 
     console.log(

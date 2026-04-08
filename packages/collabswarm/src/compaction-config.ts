@@ -27,11 +27,12 @@ export interface CompactionConfig {
   /**
    * Whether to prune old DAG nodes from sync messages after a snapshot.
    * When true, only the snapshot + post-snapshot changes are included in sync messages.
-   * Old blocks remain in the Helia blockstore for peers that already have them.
+   * Pruned blocks are unpinned and deleted from the Helia blockstore.
    *
-   * Currently implemented: in-memory sync tree pruning (removes old nodes from
-   * `_lastSyncMessage.changes` so they are not retransmitted).
-   * TODO: Helia blockstore unpinning/GC of old blocks is not yet implemented.
+   * Implemented:
+   * - In-memory sync tree pruning (removes old nodes from `_lastSyncMessage.changes`).
+   * - Helia blockstore GC: pruned document blocks are unpinned and deleted.
+   *   ACL (reader/writer) blocks are always preserved.
    */
   pruneAfterSnapshot: boolean;
 
@@ -39,8 +40,9 @@ export interface CompactionConfig {
    * Keep at least N most recent change nodes in the sync tree even after pruning.
    * Provides a buffer so that slightly-behind peers can still catch up incrementally.
    *
-   * Currently implemented: sync tree pruning respects this count.
-   * TODO: Helia blockstore unpinning/GC of old blocks is not yet implemented.
+   * Implemented:
+   * - Sync tree pruning respects this count.
+   * - Blockstore GC only deletes blocks beyond this threshold.
    */
   keepRecentNodes: number;
 }
