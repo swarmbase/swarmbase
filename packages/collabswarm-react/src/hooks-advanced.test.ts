@@ -230,7 +230,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.subscribe).toHaveBeenCalled();
+      expect(captureRef.current.docData).toBeDefined();
     });
 
     await act(async () => {
@@ -258,7 +258,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.subscribe).toHaveBeenCalled();
+      expect(captureRef.current.docData).toBeDefined();
     });
 
     await act(async () => {
@@ -286,7 +286,7 @@ describe('ACL helper functions delegate to docRef', () => {
     });
 
     await waitFor(() => {
-      expect(mockDoc.subscribe).toHaveBeenCalled();
+      expect(captureRef.current.docData).toBeDefined();
     });
 
     await act(async () => {
