@@ -359,7 +359,7 @@ When implementing new protocols:
 libp2p has debug logging:
 
 ```bash
-DEBUG=libp2p:* yarn start
+DEBUG=libp2p:* yarn workspace @collabswarm/browser-test start
 ```
 
 ### Common Issues
