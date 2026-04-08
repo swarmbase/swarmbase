@@ -111,7 +111,7 @@ export function Login({
                 draftBootstrapPeers &&
                 setBootstrapPeers(draftBootstrapPeers.split('\n'));
               setUserId && generatedPublicKey && setUserId(btoa(generatedPublicKey));
-              // Redirct to the /secrets page.
+              // Redirect to the /secrets page.
               history.push('/secrets');
             }}
           >
