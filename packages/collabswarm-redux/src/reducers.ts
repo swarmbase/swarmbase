@@ -114,7 +114,6 @@ export function initialState<
   };
 }
 
-// export function automergeSwarmReducer<T>(state: AutomergeSwarmState<T> = initialState, action: AutomergeSwarmActions): AutomergeSwarmState<T> {
 export function collabswarmReducer<
   DocType,
   ChangesType,

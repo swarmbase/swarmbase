@@ -174,8 +174,6 @@ export class CollabswarmDocument<
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
-  // private _readersHashes = new Set<string>();
-  // private _writersHashes = new Set<string>();
 
   // Compaction state.
   private _compactionConfig: CompactionConfig;
@@ -2441,27 +2439,4 @@ export class CollabswarmDocument<
     });
   };
 
-  // public async pin() {
-  //   // Apply local change w/ CRDT provider.
-  //   const changes = this._crdtProvider.getHistory(this.document);
-
-  //   // Store changes in ipfs.
-  //   const newFileResult = await this.swarm.heliaNode.add(
-  //     this._changesSerializer.serializeChanges(changes),
-  //   );
-  //   const hash = newFileResult.cid.toString();
-  //   this._hashes.add(hash);
-
-  //   // Send new message.
-  //   const updateMessage = this._createSyncMessage();
-  //   // updateMessage.changes[hash] = changes;
-
-  //   if (!this.swarm.config) {
-  //     throw 'Can not pin a file when the node has not been initialized'!;
-  //   }
-  //   this.swarm.heliaNode.pubsub.publish(
-  //     this.swarm.config.pubsubDocumentPublishPath,
-  //     this._syncMessageSerializer.serializeSyncMessage(updateMessage),
-  //   );
-  // }
 }

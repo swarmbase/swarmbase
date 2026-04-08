@@ -70,7 +70,7 @@ export class Collabswarm<
   DocType,
   ChangesType,
   ChangeFnType,
-  PrivateKey, // TODO (eric) if it's here it's not per document?
+  PrivateKey,
   PublicKey,
   DocumentKey,
 > {
@@ -275,7 +275,7 @@ export class Collabswarm<
     DocumentKey
   > | null {
     // Return new document reference.
-    return new CollabswarmDocument( // TODO (eric) pass in initial DocumentKey here?
+    return new CollabswarmDocument(
       this,
       documentPath,
       this._userKey,

@@ -48,7 +48,6 @@ export class SubtleCrypto
       | RsaPssParams
       | EcdsaParams
       | AesCbcParams = {
-      // TODO: Is this correct?
       name: 'ECDSA',
       hash: { name: 'SHA-384' },
     },
