@@ -341,6 +341,10 @@ describe('Change function edge cases', () => {
     const captureRef = { current: null as any };
     const mockSwarm = { doc: jest.fn() } as any;
 
+    // Suppress async warnings from the hook's effect attempting to open a
+    // document with an undefined doc reference.
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
     // Use the default context (no provider) so docCache is empty.
     render(
       React.createElement(TestConsumer, {
@@ -353,6 +357,8 @@ describe('Change function edge cases', () => {
     // changeFn should be defined but should not throw.
     expect(typeof captureRef.current.changeFn).toBe('function');
     expect(() => captureRef.current.changeFn(() => {})).not.toThrow();
+
+    consoleSpy.mockRestore();
   });
 });
 
@@ -400,12 +406,14 @@ describe('Multiple different document paths', () => {
     });
 
     // Both documents should have their own cache entries.
-    expect(openTaskResults.has('/doc-a')).toBe(true);
-    expect(openTaskResults.has('/doc-b')).toBe(true);
-
-    // Subscriber counts should exist for both paths.
-    expect(subscriberCounts.get('/doc-a')).toBe(1);
-    expect(subscriberCounts.get('/doc-b')).toBe(1);
+    // Use waitFor since caches are populated after additional async steps
+    // (getReaders/getWriters) following open().
+    await waitFor(() => {
+      expect(openTaskResults.has('/doc-a')).toBe(true);
+      expect(openTaskResults.has('/doc-b')).toBe(true);
+      expect(subscriberCounts.get('/doc-a')).toBe(1);
+      expect(subscriberCounts.get('/doc-b')).toBe(1);
+    });
   });
 
   test('unmounting one document does not affect the other', async () => {
@@ -481,15 +489,12 @@ describe('Error handling', () => {
       );
     });
 
-    // Give async effect time to run.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+    // Wait for the async effect to warn about the null document.
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to open/find document'),
+      );
     });
-
-    // Should have warned about failing to open/find the document.
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to open/find document'),
-    );
 
     consoleSpy.mockRestore();
   });
