@@ -23,6 +23,8 @@ async function main() {
       listen: [
         '/ip4/0.0.0.0/tcp/9001/ws',
         '/ip4/0.0.0.0/tcp/9002',
+        '/ip6/::/tcp/9001/ws',
+        '/ip6/::/tcp/9002',
       ],
     },
     transports: [
