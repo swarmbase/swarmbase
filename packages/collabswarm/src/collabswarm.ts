@@ -39,7 +39,7 @@ import { PubSubBaseProtocol } from '@libp2p/pubsub';
 import type { Uint8ArrayList } from 'uint8arraylist';
 
 /** Maximum allowed document path length in key-update V2 wire format. */
-const MAX_DOCUMENT_PATH_LENGTH = 4096;
+export const MAX_DOCUMENT_PATH_LENGTH = 4096;
 
 /** Maximum allowed request size for shared protocol handlers (10 MB). */
 const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
