@@ -36,6 +36,7 @@ export function isBufferList(input: Uint8Array | Uint8ArrayList | BufferList): i
 
 export async function readUint8Iterable(
   iterable: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,
+  maxSize?: number,
 ): Promise<Uint8Array> {
   let length = 0;
   const chunks = [] as (Uint8Array | Uint8ArrayList | BufferList)[];
@@ -43,6 +44,11 @@ export async function readUint8Iterable(
     if (chunk) {
       chunks.push(chunk);
       length += chunk.length;
+      if (maxSize !== undefined && length > maxSize) {
+        throw new RangeError(
+          `Stream exceeded maximum allowed size of ${maxSize} bytes`,
+        );
+      }
     }
   }
 

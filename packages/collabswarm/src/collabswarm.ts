@@ -324,14 +324,25 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          const assembled = await readUint8Iterable(source);
-          if (assembled.length > MAX_REQUEST_SIZE) {
-            console.warn(
-              `Shared doc-load handler: request too large (${assembled.length} bytes), dropping`,
-            );
+          let assembled: Uint8Array;
+          try {
+            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+          } catch (err) {
+            console.warn('Shared doc-load handler: request too large, dropping');
+            await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
-          const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          let request;
+          try {
+            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          } catch (err) {
+            console.warn(
+              'Shared doc-load handler: failed to deserialize load request, dropping:',
+              err,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
           const doc = this._documentRegistry.get(request.documentId);
           if (!doc) {
             console.warn(
@@ -353,14 +364,25 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          const assembled = await readUint8Iterable(source);
-          if (assembled.length > MAX_REQUEST_SIZE) {
-            console.warn(
-              `Shared snapshot-load handler: request too large (${assembled.length} bytes), dropping`,
-            );
+          let assembled: Uint8Array;
+          try {
+            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+          } catch (err) {
+            console.warn('Shared snapshot-load handler: request too large, dropping');
+            await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
-          const request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          let request;
+          try {
+            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          } catch (err) {
+            console.warn(
+              'Shared snapshot-load handler: failed to deserialize load request, dropping:',
+              err,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
           const doc = this._documentRegistry.get(request.documentId);
           if (!doc) {
             console.warn(
@@ -385,11 +407,11 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          const assembled = await readUint8Iterable(source);
-          if (assembled.length > MAX_REQUEST_SIZE) {
-            console.warn(
-              `Shared key-update handler: request too large (${assembled.length} bytes), dropping`,
-            );
+          let assembled: Uint8Array;
+          try {
+            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+          } catch (err) {
+            console.warn('Shared key-update handler: request too large, dropping');
             return [];
           }
           if (assembled.length < 4) {
@@ -409,7 +431,7 @@ export class Collabswarm<
           // attempting to interpret it as a legacy (V1) payload.
           if (
             pathLength === 0 ||
-            pathLength >= MAX_DOCUMENT_PATH_LENGTH ||
+            pathLength > MAX_DOCUMENT_PATH_LENGTH ||
             pathLength + 4 > assembled.length
           ) {
             console.warn(
