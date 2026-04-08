@@ -53,10 +53,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
           webRTC(),
           webRTCDirect(),
           webTransport(),
-          // https://github.com/libp2p/js-libp2p-websockets#libp2p-usage-example
-          // circuitRelayTransport({ discoverRelays: 3 }),
         ],
-        //streamMuxers: [mplex()],
         streamMuxers: [yamux()],
         peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
         services: {
@@ -78,25 +75,6 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
         connectionGater: { denyDialMultiaddr: async () => false },
       },
     },
-    // ipfs: {
-    //   relay: {
-    //     enabled: true, // enable circuit relay dialer and listener
-    //     hop: {
-    //       enabled: true, // enable circuit relay HOP (make this node a relay)
-    //     },
-    //   },
-    //   config: {
-    //     Addresses: {
-    //       Swarm: [
-    //         '/ip4/0.0.0.0/tcp/4003/ws',
-    //         '/ip4/0.0.0.0/tcp/4001',
-    //         '/ip6/::/tcp/4002',
-    //       ],
-    //     },
-    //     Bootstrap: [],
-    //   },
-    // },
-
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility

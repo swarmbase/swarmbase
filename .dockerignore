@@ -1,6 +1,5 @@
 Dockerfile.browser-test
 Dockerfile.node
-Dockerfile.webrtc-star-signal
 Dockerfile
 node_modules/
 packages/collabswarm-automerge/node_modules

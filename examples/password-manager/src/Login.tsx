@@ -33,7 +33,7 @@ export function Login({
   const [
     draftSignalingServerAddr,
     setDraftSignalingServerAddr,
-  ] = React.useState('/ip4/127.0.0.1/tcp/9090/wss/p2p-webrtc-star');
+  ] = React.useState('');
   const [draftBootstrapPeers, setDraftBootstrapPeers] = React.useState('');
   // Generate a keypair.
   React.useEffect(() => {
@@ -94,10 +94,10 @@ export function Login({
             </Form.Text>
           </Form.Group>
 
-          <Form.Group className="mb-3" controlId="formSignalingServer">
-            <Form.Label>Star Signal Server</Form.Label>
+          <Form.Group className="mb-3" controlId="formRelayServer">
+            <Form.Label>Relay Server</Form.Label>
             <Form.Control
-              placeholder="Enter the address of the webRTC signaling server"
+              placeholder="Enter the multiaddr of a relay server (e.g. /ip4/.../tcp/9001/ws/p2p/...)"
               value={draftSignalingServerAddr || ''}
               onChange={(e) => setDraftSignalingServerAddr(e.target.value)}
             />

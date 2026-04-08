@@ -1852,7 +1852,7 @@ export class CollabswarmDocument<
     }
   }
 
-  // TODO: Unit tests for CollabswarmDocument require mocking libp2p, IPFS/Helia,
+  // TODO: Unit tests for CollabswarmDocument require mocking libp2p, Helia,
   // and all providers -- deferred to integration testing (see e2e/).
 
   /**
