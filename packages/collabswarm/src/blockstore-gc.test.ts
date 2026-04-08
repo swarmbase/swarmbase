@@ -241,11 +241,9 @@ describe('blockstore GC integration with pruning', () => {
     // keepCount=2: root (1) + first child visited (2) -> prune rest
     const { prunedCIDs } = simulatePrune('cid-root', root, 2);
 
-    // Root counts as 1. Then BFS visits cid-a (2, at limit -> prune children)
-    // and cid-b (3, beyond limit -> prune children). But cid-a is at boundary
-    // so its children are pruned. cid-b is beyond so it gets pruned too.
-    // Actually cid-b is also visited by BFS but documentNodesVisited is already >= keepCount.
-    // Let's just verify at least some nodes are pruned.
-    expect(prunedCIDs.size).toBeGreaterThan(0);
+    // BFS order: root (1), cid-a (2, at limit -> prune children),
+    // cid-b (3, beyond limit -> prune children).
+    // cid-a and cid-b are retained but their children cid-a1 and cid-b1 are pruned.
+    expect(prunedCIDs).toEqual(new Set(['cid-a1', 'cid-b1']));
   });
 });
