@@ -1,86 +1,15 @@
 import { describe, expect, test, jest, afterEach } from '@jest/globals';
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
-import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
 import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
-
-/** Reset all module-level caches. */
-function resetCaches() {
-  openTasks.clear();
-  openTaskResults.clear();
-  subscriberCounts.clear();
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function createMockDocument(data: any = { test: 'data' }): any {
-  const subscriptions = new Map<string, { handler: Function; filter: string }>();
-  return {
-    open: jest.fn(() => Promise.resolve()),
-    close: jest.fn(() => Promise.resolve()),
-    getReaders: jest.fn(() => Promise.resolve(['reader1'])),
-    getWriters: jest.fn(() => Promise.resolve(['writer1'])),
-    document: data,
-    change: jest.fn(),
-    addReader: jest.fn(() => Promise.resolve()),
-    removeReader: jest.fn(() => Promise.resolve()),
-    addWriter: jest.fn(() => Promise.resolve()),
-    removeWriter: jest.fn(() => Promise.resolve()),
-    subscribe: jest.fn((id: string, handler: Function, filter: string) => {
-      subscriptions.set(id, { handler, filter });
-    }),
-    unsubscribe: jest.fn((id: string) => {
-      subscriptions.delete(id);
-    }),
-    _subscriptions: subscriptions,
-  };
-}
-
-function createMockCollabswarm(mockDoc: any) {
-  return { doc: jest.fn(() => mockDoc) } as any;
-}
-
-function createMockCollabswarmMultiDoc(docMap: Record<string, any>) {
-  return {
-    doc: jest.fn((path: string) => docMap[path] || null),
-  } as any;
-}
-
-function TestProvider(props: { children: React.ReactNode }) {
-  const [docCache, setDocCache] = useState<Record<string, any>>({});
-  const [docDataCache, setDocDataCache] = useState<Record<string, any>>({});
-  const [docReadersCache, setDocReadersCache] = useState<Record<string, any[]>>({});
-  const [docWritersCache, setDocWritersCache] = useState<Record<string, any[]>>({});
-  return React.createElement(
-    CollabswarmContext.Provider,
-    {
-      value: {
-        docCache, docDataCache, docReadersCache, docWritersCache,
-        setDocCache, setDocDataCache, setDocReadersCache, setDocWritersCache,
-      },
-    },
-    props.children,
-  );
-}
-
-function TestConsumer(props: {
-  collabswarm: any;
-  documentPath: string;
-  originFilter?: 'all' | 'remote' | 'local';
-  captureRef?: { current: any };
-}) {
-  const [docData, changeFn, acl] = useCollabswarmDocumentState(
-    props.collabswarm,
-    props.documentPath,
-    props.originFilter,
-  );
-  if (props.captureRef) {
-    props.captureRef.current = { docData, changeFn, acl };
-  }
-  return React.createElement('div', { 'data-testid': 'doc-data' }, JSON.stringify(docData));
-}
+import {
+  resetCaches,
+  createMockDocument,
+  createMockCollabswarm,
+  createMockCollabswarmMultiDoc,
+  TestProvider,
+  TestConsumer,
+} from './test-utils';
 
 // ---------------------------------------------------------------------------
 // Tests: Subscription callback behavior
@@ -532,6 +461,33 @@ describe('originFilter variants', () => {
       expect.any(String),
       expect.any(Function),
       'all',
+    );
+  });
+
+  test('passes "remote" originFilter to subscribe', async () => {
+    const mockDoc = createMockDocument();
+    const mockSwarm = createMockCollabswarm(mockDoc);
+
+    await act(async () => {
+      render(
+        React.createElement(TestProvider, null,
+          React.createElement(TestConsumer, {
+            collabswarm: mockSwarm,
+            documentPath: '/filter-remote',
+            originFilter: 'remote',
+          }),
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockDoc.subscribe).toHaveBeenCalled();
+    });
+
+    expect(mockDoc.subscribe).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+      'remote',
     );
   });
 
