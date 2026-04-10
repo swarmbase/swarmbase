@@ -353,36 +353,40 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
-          } catch (err) {
-            const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
-            console.warn(`Shared doc-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
+            let assembled: Uint8Array;
+            try {
+              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            } catch (err) {
+              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+              console.warn(`Shared doc-load handler: ${reason}, dropping`);
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            let request;
+            try {
+              request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+            } catch (err) {
+              console.warn(
+                'Shared doc-load handler: failed to deserialize load request, dropping:',
+                err,
+              );
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            const doc = this._documentRegistry.get(request.documentId);
+            if (!doc) {
+              console.warn(
+                `Shared doc-load handler: no document registered for "${request.documentId}"`,
+              );
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            await doc.handleLoadRequestData(request, stream);
             return [];
+          } finally {
+            stream.close?.();
           }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared doc-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const doc = this._documentRegistry.get(request.documentId);
-          if (!doc) {
-            console.warn(
-              `Shared doc-load handler: no document registered for "${request.documentId}"`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          await doc.handleLoadRequestData(request, stream);
-          return [];
         },
       ).catch((err: unknown) => {
         console.error('Error in shared doc-load handler:', err);
@@ -394,36 +398,40 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
-          } catch (err) {
-            const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
-            console.warn(`Shared snapshot-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
+            let assembled: Uint8Array;
+            try {
+              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            } catch (err) {
+              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+              console.warn(`Shared snapshot-load handler: ${reason}, dropping`);
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            let request;
+            try {
+              request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+            } catch (err) {
+              console.warn(
+                'Shared snapshot-load handler: failed to deserialize load request, dropping:',
+                err,
+              );
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            const doc = this._documentRegistry.get(request.documentId);
+            if (!doc) {
+              console.warn(
+                `Shared snapshot-load handler: no document registered for "${request.documentId}"`,
+              );
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            await doc.handleSnapshotLoadRequestData(request, stream);
             return [];
+          } finally {
+            stream.close?.();
           }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared snapshot-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const doc = this._documentRegistry.get(request.documentId);
-          if (!doc) {
-            console.warn(
-              `Shared snapshot-load handler: no document registered for "${request.documentId}"`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          await doc.handleSnapshotLoadRequestData(request, stream);
-          return [];
         },
       ).catch((err: unknown) => {
         console.error('Error in shared snapshot-load handler:', err);
