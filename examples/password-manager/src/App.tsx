@@ -42,9 +42,6 @@ function App() {
   const [bootstrapPeers, setBootstrapPeers] = React.useState<
     string[] | undefined
   >();
-  const [signalingServerAddr, setSignalingServerAddr] = React.useState<
-    string | undefined
-  >();
   const [docCache, setDocCache] = React.useState<{
     [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
   }>({});
@@ -129,8 +126,6 @@ function App() {
                 setPublicKey={setPublicKey}
                 userId={userId}
                 setUserId={setUserId}
-                signalingServerAddr={signalingServerAddr}
-                setSignalingServerAddr={setSignalingServerAddr}
                 bootstrapPeers={bootstrapPeers}
                 setBootstrapPeers={setBootstrapPeers}
               />

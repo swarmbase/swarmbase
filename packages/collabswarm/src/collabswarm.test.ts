@@ -209,7 +209,7 @@ describe('Multi-user simulation basics', () => {
  * Tests for the validateDocumentPath control flow used in
  * CollabswarmDocument.open(). These verify the validateDocumentPath callback
  * contract independently of CollabswarmDocument.open() because open() requires
- * a full libp2p/IPFS stack that is tested via integration tests (see e2e/).
+ * a full libp2p/Helia stack that is tested via integration tests (see e2e/).
  * The helper below replicates the exact branching logic so we can cover all
  * code paths (returns true, returns false, throws, async, undefined) in
  * fast unit tests.

@@ -8,7 +8,7 @@ SwarmDB (formerly Collabswarm) is a distributed web document database with dynam
 
 - **CRDTs (Conflict-Free Replicated Data Types)**: Using Yjs for conflict-free document synchronization
 - **libp2p**: For peer discovery, connection management, and transport (WebRTC, WebSockets, TCP)
-- **IPFS**: Content-addressed storage for data integrity and availability
+- **Helia (IPFS)**: Content-addressed storage for data integrity and availability
 - **GossipSub Protocol**: Efficient peer-to-peer message exchange
 - **TypeScript**: Primary language for all packages
 
@@ -42,7 +42,7 @@ swarmbase/
 
 Key files and their purposes:
 
-- `collabswarm.ts`: Main entry point, manages IPFS node and documents
+- `collabswarm.ts`: Main entry point, manages Helia node and documents
 - `collabswarm-document.ts`: Document management, change handling, sync
 - `collabswarm-node.ts`: Node configuration and libp2p setup
 - `crdt-provider.ts`: Interface for CRDT implementations
@@ -156,7 +156,7 @@ Reference: https://dev.to/flyingdot/data-driven-unit-tests-with-jest-26bh
 
 - Place test files alongside source: `auth-subtlecrypto.test.ts`
 - Use `.test.ts` extension
-- Mock external dependencies (WebCrypto, libp2p, IPFS)
+- Mock external dependencies (WebCrypto, libp2p, Helia)
 
 ## Security and Cryptography
 
@@ -186,7 +186,7 @@ Reference: https://dev.to/flyingdot/data-driven-unit-tests-with-jest-26bh
 2. Always verify signatures before applying remote changes
 3. Use secure random number generation for IVs and keys
 4. Implement proper key rotation when revoking access
-5. Encrypt sensitive data before storing in IPFS
+5. Encrypt sensitive data before storing in Helia/IPFS
 
 See `notes/auth.md` and `notes/automerge-db-security.md` for detailed flows.
 
@@ -312,8 +312,8 @@ interface AuthProvider<PrivateKey, PublicKey, DocumentKey> {
 ### Data Persistence
 
 - **Browser storage**: Data can be lost if all clients clear browser storage
-- **Pinning**: Set up IPFS pinning service for persistent storage
-- **Mitigation**: Use remote pinning or dedicated IPFS node
+- **Pinning**: Set up pinning service for persistent storage (via Helia)
+- **Mitigation**: Use remote pinning or dedicated Helia/CollabswarmNode instance
 
 ### Transport Layer
 
@@ -356,11 +356,10 @@ When implementing new protocols:
 
 ### Enable Verbose Logging
 
-libp2p and IPFS have debug logging:
+libp2p has debug logging:
 
 ```bash
-DEBUG=libp2p:* npm start
-DEBUG=ipfs:* npm start
+DEBUG=libp2p:* yarn workspace @collabswarm/browser-test start
 ```
 
 ### Common Issues
@@ -400,6 +399,7 @@ Use multiple browser windows/tabs to test peer discovery and sync. For better te
 - [CRDTs Explained](https://www.serverless.com/blog/crdt-explained-supercharge-serverless-at-edge/)
 - [Yjs Documentation](https://docs.yjs.dev/)
 - [libp2p Concepts](https://docs.libp2p.io/concepts/)
+- [Helia (IPFS) Documentation](https://helia.io/)
 - [IPFS Documentation](https://docs.ipfs.tech/)
 - [GossipSub Spec](https://github.com/libp2p/specs/tree/master/pubsub/gossipsub)
 - [Local-First Software](https://martin.kleppmann.com/papers/local-first.pdf)

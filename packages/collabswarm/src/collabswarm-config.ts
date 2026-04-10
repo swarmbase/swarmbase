@@ -45,10 +45,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
           webRTC(),
           webRTCDirect(),
           webTransport(),
-          // https://github.com/libp2p/js-libp2p-websockets#libp2p-usage-example
-          // circuitRelayTransport({ discoverRelays: 3 }),
         ],
-        //streamMuxers: [mplex()],
         streamMuxers: [yamux()],
         peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
         services: {

@@ -24,12 +24,6 @@ yarn workspace @collabswarm/password-manager start
 
 _Make sure to 'allow' network connections if asked._
 
-Lastly, open another terminal and start the star-signal relay:
-
-```sh
-yarn workspace @collabswarm/password-manager start:relay
-```
-
 Now, you can open a browser tab to:
 
 - <http://localhost:3000/login>

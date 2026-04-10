@@ -38,8 +38,7 @@
   "scripts": {
     "build": "yarn install && yarn build:tsc && yarn install",
     "build:tsc": "yarn workspace @collabswarm/collabswarm tsc && yarn workspace @collabswarm/collabswarm-yjs tsc && yarn workspace @collabswarm/collabswarm-react tsc && yarn workspace @collabswarm/collabswarm-redux tsc && yarn install",
-    "start": "react-scripts start",
-    "start:relay": "npx star-signal"
+    "start": "react-scripts start"
   },
   "eslintConfig": {
     "extends": [
