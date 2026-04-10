@@ -5,43 +5,19 @@
  * the full CRDT state, allowing peers to skip replaying the full change history.
  */
 export interface CompactionConfig {
-  /**
-   * Enable automatic compaction.
-   * When false, snapshots are never created automatically.
-   * Manual snapshots can still be triggered via `document.snapshot()`.
-   */
+  /** Enable automatic compaction; when false, only manual `document.snapshot()` is available. */
   enabled: boolean;
 
-  /**
-   * Create a snapshot every N document change nodes.
-   * Only document-kind changes count (not reader/writer ACL changes).
-   */
+  /** Create a snapshot every N document changes (ACL changes do not count). */
   snapshotInterval: number;
 
-  /**
-   * Minimum number of document changes before the first snapshot is created.
-   * Prevents premature snapshots on short-lived or small documents.
-   */
+  /** Minimum document changes before the first snapshot, to avoid premature snapshots. */
   minChangesBeforeSnapshot: number;
 
-  /**
-   * Whether to prune old DAG nodes from sync messages after a snapshot.
-   * When true, only the snapshot + post-snapshot changes are included in sync messages.
-   * Old blocks remain in the Helia blockstore for peers that already have them.
-   *
-   * Currently implemented: in-memory sync tree pruning (removes old nodes from
-   * `_lastSyncMessage.changes` so they are not retransmitted).
-   * TODO: Helia blockstore unpinning/GC of old blocks is not yet implemented.
-   */
+  /** Prune old nodes from the sync tree and delete their blocks from the Helia blockstore after a snapshot. ACL blocks are always preserved. */
   pruneAfterSnapshot: boolean;
 
-  /**
-   * Keep at least N most recent change nodes in the sync tree even after pruning.
-   * Provides a buffer so that slightly-behind peers can still catch up incrementally.
-   *
-   * Currently implemented: sync tree pruning respects this count.
-   * TODO: Helia blockstore unpinning/GC of old blocks is not yet implemented.
-   */
+  /** Keep at least N recent change nodes after pruning so slightly-behind peers can catch up. */
   keepRecentNodes: number;
 }
 
