@@ -23,6 +23,9 @@ async function main() {
       listen: [
         '/ip4/0.0.0.0/tcp/9001/ws',
         '/ip4/0.0.0.0/tcp/9002',
+        // IPv6 listeners omitted by default — on platforms where :: is
+        // dual-stack, binding both on the same port causes EADDRINUSE.
+        // Add '/ip6/::/tcp/9001/ws' and '/ip6/::/tcp/9002' if needed.
       ],
     },
     transports: [

@@ -19,10 +19,17 @@ const PUBSUB_PEER_DISCOVERY_TOPIC = 'swarmdb._peer-discovery._p2p._pubsub'
 const DOCUMENT_PUBLISH_PATH = process.env.DOCUMENT_PUBLISH_PATH || '/documents'
 
 // Configurable listen addresses via environment variables.
+// IPv4 listeners are always enabled. IPv6 dual-stack listeners are opt-in
+// because on platforms where :: is already dual-stack, binding both IPv4
+// and IPv6 on the same port causes EADDRINUSE.
+// Set ENABLE_IPV6=1 to add explicit IPv6 listeners.
 const WS_PORT = process.env.WS_PORT || '9001'
 const TCP_PORT = process.env.TCP_PORT || '9002'
 const WS_LISTEN = process.env.WS_LISTEN || `/ip4/0.0.0.0/tcp/${WS_PORT}/ws`
 const TCP_LISTEN = process.env.TCP_LISTEN || `/ip4/0.0.0.0/tcp/${TCP_PORT}`
+const IPV6_ENABLED = process.env.ENABLE_IPV6 === '1'
+const WS_LISTEN_V6 = process.env.WS_LISTEN_V6 ?? `/ip6/::/tcp/${WS_PORT}/ws`
+const TCP_LISTEN_V6 = process.env.TCP_LISTEN_V6 ?? `/ip6/::/tcp/${TCP_PORT}`
 
 // Auto-subscribe configuration.
 // TOPIC_ALLOWLIST: comma-separated prefixes. If set, only topics matching
@@ -40,7 +47,11 @@ const MAX_AUTO_TOPICS = (() => {
 async function main() {
   const libp2p = await createLibp2p({
     addresses: {
-      listen: [WS_LISTEN, TCP_LISTEN],
+      listen: [
+        WS_LISTEN,
+        TCP_LISTEN,
+        ...(IPV6_ENABLED ? [WS_LISTEN_V6, TCP_LISTEN_V6] : []),
+      ],
     },
     transports: [
       webSockets(),
