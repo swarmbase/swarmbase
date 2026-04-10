@@ -28,8 +28,8 @@ const TCP_PORT = process.env.TCP_PORT || '9002'
 const WS_LISTEN = process.env.WS_LISTEN || `/ip4/0.0.0.0/tcp/${WS_PORT}/ws`
 const TCP_LISTEN = process.env.TCP_LISTEN || `/ip4/0.0.0.0/tcp/${TCP_PORT}`
 const IPV6_ENABLED = process.env.ENABLE_IPV6 === '1'
-const WS_LISTEN_V6 = process.env.WS_LISTEN_V6 || `/ip6/::/tcp/${WS_PORT}/ws`
-const TCP_LISTEN_V6 = process.env.TCP_LISTEN_V6 || `/ip6/::/tcp/${TCP_PORT}`
+const WS_LISTEN_V6 = process.env.WS_LISTEN_V6 ?? `/ip6/::/tcp/${WS_PORT}/ws`
+const TCP_LISTEN_V6 = process.env.TCP_LISTEN_V6 ?? `/ip6/::/tcp/${TCP_PORT}`
 
 // Auto-subscribe configuration.
 // TOPIC_ALLOWLIST: comma-separated prefixes. If set, only topics matching
