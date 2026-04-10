@@ -1,4 +1,4 @@
-import { describe, expect, test, afterEach } from '@jest/globals';
+import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
 import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
 
 function resetCaches() {
@@ -6,6 +6,10 @@ function resetCaches() {
   openTaskResults.clear();
   subscriberCounts.clear();
 }
+
+beforeEach(() => {
+  resetCaches();
+});
 
 afterEach(() => {
   resetCaches();

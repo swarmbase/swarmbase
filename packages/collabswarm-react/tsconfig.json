@@ -18,7 +18,9 @@
   "exclude": [
     "node_modules",
     "examples",
-    "extras"
+    "extras",
+    "src/**/*.test.ts",
+    "src/test-utils.ts"
   ],
   "include": [
     "src",
