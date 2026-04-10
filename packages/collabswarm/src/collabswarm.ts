@@ -44,6 +44,13 @@ export const MAX_DOCUMENT_PATH_LENGTH = 4096;
 /** Maximum allowed request size for shared protocol handlers (10 MB). */
 const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
 
+/** Minimal stream shape used by shared protocol handlers. */
+interface ProtocolStream {
+  source: AsyncIterable<Uint8ArrayList | Uint8Array>;
+  sink: (data: Iterable<Uint8Array>) => Promise<void>;
+  close?: () => void | Promise<void>;
+}
+
 /**
  * Handler type for peer-connect and peer-disconnect events.
  *
@@ -342,7 +349,7 @@ export class Collabswarm<
     this._sharedHandlersRegistered = true;
 
     // Handler implementation for doc-load requests.
-    const docLoadHandler = ({ stream }: { stream: any }) => {
+    const docLoadHandler = ({ stream }: { stream: ProtocolStream }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -350,7 +357,8 @@ export class Collabswarm<
           try {
             assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
           } catch (err) {
-            console.warn('Shared doc-load handler: request too large, dropping');
+            const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+            console.warn(`Shared doc-load handler: ${reason}, dropping`);
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -382,7 +390,7 @@ export class Collabswarm<
     };
 
     // Handler implementation for snapshot-load requests.
-    const snapshotLoadHandler = ({ stream }: { stream: any }) => {
+    const snapshotLoadHandler = ({ stream }: { stream: ProtocolStream }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -390,7 +398,8 @@ export class Collabswarm<
           try {
             assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
           } catch (err) {
-            console.warn('Shared snapshot-load handler: request too large, dropping');
+            const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+            console.warn(`Shared snapshot-load handler: ${reason}, dropping`);
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -425,7 +434,7 @@ export class Collabswarm<
     // is prefixed with a 4-byte big-endian length followed by the
     // UTF-8 document path. The remaining bytes are the encrypted
     // key-update payload.
-    const keyUpdateHandler = ({ stream }: { stream: any }) => {
+    const keyUpdateHandler = ({ stream }: { stream: ProtocolStream }) => {
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -434,7 +443,8 @@ export class Collabswarm<
             try {
               assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
             } catch (err) {
-              console.warn('Shared key-update handler: request too large, dropping');
+              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+              console.warn(`Shared key-update handler: ${reason}, dropping`);
               return [];
             }
             if (assembled.length < 4) {
