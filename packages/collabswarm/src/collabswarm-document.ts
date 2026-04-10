@@ -814,7 +814,9 @@ export class CollabswarmDocument<
    * the limit is reached are also retained, so the actual count may exceed
    * `keepCount`.
    *
-   * @param keepCount Maximum number of change nodes to retain in the sync tree.
+   * @param keepCount Maximum number of non-ACL document change nodes to retain
+   *   in the sync tree. ACL nodes (reader/writer grants) are always preserved
+   *   regardless of this limit.
    * @returns Set of CID strings for document nodes that were pruned from the tree.
    *   ACL node CIDs are never included (they are always preserved).
    */
@@ -932,25 +934,35 @@ export class CollabswarmDocument<
     const pins = this.swarm.heliaNode.pins;
     let deleted = 0;
 
-    for (const cidStr of prunedCIDs) {
-      try {
-        const cid = CID.parse(cidStr);
+    const BATCH_SIZE = 10;
+    const cidStrs = Array.from(prunedCIDs);
 
-        // Unpin first -- pins.rm is an AsyncGenerator, drain it.
-        try {
-          for await (const _ of pins.rm(cid)) { /* drain */ }
-        } catch (unpinErr) {
-          console.debug(`Unpin skipped for ${cidStr} (may not be pinned):`, unpinErr);
+    for (let i = 0; i < cidStrs.length; i += BATCH_SIZE) {
+      const batch = cidStrs.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (cidStr) => {
+          const cid = CID.parse(cidStr);
+
+          // Unpin first -- pins.rm is an AsyncGenerator, drain it.
+          try {
+            for await (const _ of pins.rm(cid)) { /* drain */ }
+          } catch (unpinErr) {
+            console.debug(`Unpin skipped for ${cidStr} (may not be pinned):`, unpinErr);
+          }
+
+          // Delete the raw block from the blockstore.
+          // Note: we intentionally keep the CID in _hashes so that
+          // _mergeSyncTree() still deduplicates if a peer re-sends
+          // the same change block (e.g., a peer that hasn't compacted).
+          await blockstore.delete(cid);
+        }),
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === 'fulfilled') {
+          deleted++;
+        } else {
+          console.error(`Failed to GC block ${batch[j]}:`, (results[j] as PromiseRejectedResult).reason);
         }
-
-        // Delete the raw block from the blockstore.
-        // Note: we intentionally keep the CID in _hashes so that
-        // _mergeSyncTree() still deduplicates if a peer re-sends
-        // the same change block (e.g., a peer that hasn't compacted).
-        await blockstore.delete(cid);
-        deleted++;
-      } catch (err) {
-        console.error(`Failed to GC block ${cidStr}:`, err);
       }
     }
 
