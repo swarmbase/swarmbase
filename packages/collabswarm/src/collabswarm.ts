@@ -305,10 +305,19 @@ export class Collabswarm<
   /**
    * Removes a document from the shared handler registry.
    *
+   * Instance-safe: only removes the entry if the registered document
+   * matches the provided reference. This prevents a stale close()
+   * from removing a live document that was re-opened at the same path.
+   *
    * Called by CollabswarmDocument.close().
    */
-  unregisterDocument(documentPath: string): void {
-    this._documentRegistry.delete(documentPath);
+  unregisterDocument(
+    documentPath: string,
+    document: CollabswarmDocument<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
+  ): void {
+    if (this._documentRegistry.get(documentPath) === document) {
+      this._documentRegistry.delete(documentPath);
+    }
   }
 
   /**
@@ -360,7 +369,7 @@ export class Collabswarm<
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
-          await doc.handleLoadRequestData(assembled, stream);
+          await doc.handleLoadRequestData(request, stream);
           return [];
         },
       ).catch((err: unknown) => {
@@ -400,7 +409,7 @@ export class Collabswarm<
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
-          await doc.handleSnapshotLoadRequestData(assembled, stream);
+          await doc.handleSnapshotLoadRequestData(request, stream);
           return [];
         },
       ).catch((err: unknown) => {
