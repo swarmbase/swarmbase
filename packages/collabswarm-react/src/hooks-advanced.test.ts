@@ -273,20 +273,22 @@ describe('Change function edge cases', () => {
     // document with an undefined doc reference.
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // Use the default context (no provider) so docCache is empty.
-    render(
-      React.createElement(TestConsumer, {
-        collabswarm: mockSwarm,
-        documentPath: '/not-loaded',
-        captureRef,
-      }),
-    );
+    try {
+      // Use the default context (no provider) so docCache is empty.
+      render(
+        React.createElement(TestConsumer, {
+          collabswarm: mockSwarm,
+          documentPath: '/not-loaded',
+          captureRef,
+        }),
+      );
 
-    // changeFn should be defined but should not throw.
-    expect(typeof captureRef.current.changeFn).toBe('function');
-    expect(() => captureRef.current.changeFn(() => {})).not.toThrow();
-
-    consoleSpy.mockRestore();
+      // changeFn should be defined but should not throw.
+      expect(typeof captureRef.current.changeFn).toBe('function');
+      expect(() => captureRef.current.changeFn(() => {})).not.toThrow();
+    } finally {
+      consoleSpy.mockRestore();
+    }
   });
 });
 
@@ -409,22 +411,24 @@ describe('Error handling', () => {
 
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await act(async () => {
-      render(
-        React.createElement(TestProvider, null,
-          React.createElement(TestConsumer, { collabswarm: mockSwarm, documentPath: '/null-doc' }),
-        ),
-      );
-    });
+    try {
+      await act(async () => {
+        render(
+          React.createElement(TestProvider, null,
+            React.createElement(TestConsumer, { collabswarm: mockSwarm, documentPath: '/null-doc' }),
+          ),
+        );
+      });
 
-    // Wait for the async effect to warn about the null document.
-    await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to open/find document'),
-      );
-    });
-
-    consoleSpy.mockRestore();
+      // Wait for the async effect to warn about the null document.
+      await waitFor(() => {
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to open/find document'),
+        );
+      });
+    } finally {
+      consoleSpy.mockRestore();
+    }
   });
 });
 

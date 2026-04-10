@@ -3,7 +3,8 @@
   "description": "React hooks for collabswarm documents",
   "version": "0.1.0",
   "scripts": {
-    "tsc": "tsc -b",
+    "clean": "rm -rf dist",
+    "tsc": "rm -rf dist && tsc -b",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
