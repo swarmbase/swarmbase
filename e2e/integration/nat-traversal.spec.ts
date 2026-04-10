@@ -27,9 +27,6 @@ function trackConsole(page: Page) {
 
   return {
     messages,
-    has(prefix: string): boolean {
-      return messages.some(m => m.startsWith(prefix));
-    },
     waitFor(prefix: string, timeout = 60_000): Promise<string> {
       const existing = messages.find(m => m.startsWith(prefix));
       if (existing) return Promise.resolve(existing);
@@ -182,7 +179,9 @@ test.describe('Same-LAN Peer Connectivity', () => {
 test.describe('Three-Peer Cross-NAT Sync', () => {
   test.setTimeout(240_000);
 
-  test.skip('message from NAT-A reaches both NAT-A and NAT-B peers', async ({ browser }) => {
+  test.skip(!!process.env.CI, 'Three-peer relay mesh is unreliable in CI');
+
+  test('message from NAT-A reaches both NAT-A and NAT-B peers', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
     const b = await initPage(browser, APP_B_URL);
     const c = await initPage(browser, APP_C_URL);
@@ -212,7 +211,7 @@ test.describe('Three-Peer Cross-NAT Sync', () => {
     }
   });
 
-  test.skip('message from NAT-B reaches all NAT-A peers', async ({ browser }) => {
+  test('message from NAT-B reaches all NAT-A peers', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
     const b = await initPage(browser, APP_B_URL);
     const c = await initPage(browser, APP_C_URL);
@@ -246,7 +245,9 @@ test.describe('Three-Peer Cross-NAT Sync', () => {
 test.describe('Rapid Cross-NAT Concurrent Messages', () => {
   test.setTimeout(180_000);
 
-  test.skip('concurrent messages from both NATs are eventually delivered', async ({ browser }) => {
+  test.skip(!!process.env.CI, 'Concurrent cross-NAT messaging is unreliable in CI');
+
+  test('concurrent messages from both NATs are eventually delivered', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
     const b = await initPage(browser, APP_B_URL);
     try {
