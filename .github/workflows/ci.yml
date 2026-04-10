@@ -49,6 +49,8 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     timeout-minutes: 20
     steps:
@@ -92,6 +94,8 @@ jobs:
 
   nat-traversal:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:

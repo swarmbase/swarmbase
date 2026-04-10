@@ -18,6 +18,7 @@ export default defineConfig({
       use: {
         browserName: 'chromium',
         launchOptions: {
+          // Allow cross-origin requests to test-app containers on different ports
           args: ['--disable-web-security'],
         },
       },
