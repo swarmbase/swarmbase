@@ -15,7 +15,7 @@
  * test-app-a and test-app-c are on the same network (same "LAN").
  * All traffic between nat-a and nat-b must route through the relay.
  */
-import { test, expect, type Page, type ConsoleMessage } from '@playwright/test';
+import { test, expect, type Browser, type Page, type ConsoleMessage } from '@playwright/test';
 
 const APP_A_URL = 'http://localhost:3001';
 const APP_B_URL = 'http://localhost:3002';
@@ -55,7 +55,7 @@ function trackConsole(page: Page) {
   };
 }
 
-async function initPage(browser: any, url: string) {
+async function initPage(browser: Browser, url: string) {
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
@@ -98,6 +98,16 @@ test.describe('Cross-NAT Document Sync', () => {
 
       const messagesB = await b.page.evaluate(() => (window as any).__messages);
       expect(messagesB.some((m: any) => m.text === 'cross-nat-hello')).toBe(true);
+
+      // Verify connection routes through circuit relay
+      const hasCircuitRelay = await a.page.evaluate(() => {
+        const libp2p = (window as any).__libp2p;
+        if (!libp2p) return false;
+        return libp2p.getConnections().some(
+          (conn: any) => conn.remoteAddr.toString().includes('/p2p-circuit'),
+        );
+      });
+      expect(hasCircuitRelay).toBe(true);
     } finally {
       await a.context.close();
       await b.context.close();
