@@ -939,8 +939,8 @@ export class CollabswarmDocument<
         // Unpin first -- pins.rm is an AsyncGenerator, drain it.
         try {
           for await (const _ of pins.rm(cid)) { /* drain */ }
-        } catch {
-          // Block may not be pinned; that's fine.
+        } catch (unpinErr) {
+          console.debug(`Unpin skipped for ${cidStr} (may not be pinned):`, unpinErr);
         }
 
         // Delete the raw block from the blockstore.
