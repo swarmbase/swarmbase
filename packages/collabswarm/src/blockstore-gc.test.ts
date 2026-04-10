@@ -120,8 +120,9 @@ describe('blockstore GC integration with pruning', () => {
   /**
    * Simulate what _pruneChanges does: given a tree and keepCount,
    * prune document nodes beyond the limit and collect pruned CIDs.
-   * This mirrors the logic in CollabswarmDocument._pruneChanges()
-   * to validate the CID collection is correct.
+   * This validates that pruned CID collection is correct; it does NOT
+   * mirror the full _pruneChanges() behavior (e.g. preserved ACL nodes
+   * are not re-attached to the retained subtree).
    */
   function simulatePrune(
     rootCID: string,

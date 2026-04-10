@@ -940,7 +940,11 @@ export class CollabswarmDocument<
         try {
           for await (const _ of pins.rm(cid)) { /* drain */ }
         } catch (unpinErr) {
-          console.debug(`Unpin skipped for ${cidStr} (may not be pinned):`, unpinErr);
+          const msg = String(unpinErr);
+          if (!msg.includes('not pinned') && !msg.includes('is not pinned')) {
+            throw unpinErr;
+          }
+          console.debug(`Unpin skipped for ${cidStr} (not pinned)`);
         }
 
         // Delete the raw block from the blockstore.

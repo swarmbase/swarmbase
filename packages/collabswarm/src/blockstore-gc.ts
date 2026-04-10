@@ -14,6 +14,10 @@ import {
  * Walk a CRDTChangeNode tree (BFS) and collect the CID strings of every
  * node reachable from the root, including the root itself.
  *
+ * Nodes whose children are deferred (`crdtChangeNodeDeferred`) are included
+ * in the result, but their descendants are not traversed and are therefore
+ * excluded from the returned set.
+ *
  * @param rootCID  CID string of the root node.
  * @param root     The root CRDTChangeNode.
  * @returns Set of CID strings present in the tree.
