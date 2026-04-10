@@ -49,6 +49,31 @@ function trackConsole(page: Page) {
         page.on('console', handler);
       });
     },
+    /** Wait for at least `count` messages with the given prefix. */
+    waitForCount(prefix: string, count: number, timeout = 60_000): Promise<string[]> {
+      const matched = () => messages.filter(m => m.startsWith(prefix));
+      if (matched().length >= count) return Promise.resolve(matched().slice(0, count));
+
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          page.off('console', handler);
+          const found = matched();
+          reject(new Error(
+            `Timeout (${timeout}ms) waiting for ${count} "${prefix}" messages (got ${found.length})\n` +
+            `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
+          ));
+        }, timeout);
+        const handler = (msg: ConsoleMessage) => {
+          const found = matched();
+          if (found.length >= count) {
+            clearTimeout(timer);
+            page.off('console', handler);
+            resolve(found.slice(0, count));
+          }
+        };
+        page.on('console', handler);
+      });
+    },
   };
 }
 
@@ -59,15 +84,21 @@ async function initPage(browser: Browser, url: string) {
     const track = trackConsole(page);
     await page.goto(url);
     await track.waitFor('INIT_COMPLETE');
-    return { page, track, context };
+    const peerIdMsg = await track.waitFor('PEER_ID:');
+    const peerId = peerIdMsg.replace('PEER_ID:', '').trim();
+    return { page, track, context, peerId };
   } catch (err) {
     await context.close();
     throw err;
   }
 }
 
+/**
+ * Wait for at least 2 PEER_CONNECTED messages (one relay + one actual peer).
+ * A single PEER_CONNECTED may only be the relay, not the target peer.
+ */
 async function waitForPeerConnection(track: ReturnType<typeof trackConsole>, timeout = 90_000) {
-  await track.waitFor('PEER_CONNECTED:', timeout);
+  await track.waitForCount('PEER_CONNECTED:', 2, timeout);
 }
 
 async function waitForMesh(page: Page, ms = 10_000) {
@@ -96,15 +127,17 @@ test.describe('Cross-NAT Document Sync', () => {
       const messagesB = await b.page.evaluate(() => (window as any).__messages);
       expect(messagesB.some((m: any) => m.text === 'cross-nat-hello')).toBe(true);
 
-      // Verify connection routes through circuit relay
-      const hasCircuitRelay = await a.page.evaluate(() => {
+      // Verify the connection to peer B specifically routes through circuit relay
+      const hasCircuitRelayToB = await a.page.evaluate((remotePeerId: string) => {
         const libp2p = (window as any).__libp2p;
         if (!libp2p) return false;
         return libp2p.getConnections().some(
-          (conn: any) => conn.remoteAddr.toString().includes('/p2p-circuit'),
+          (conn: any) =>
+            conn.remotePeer.toString() === remotePeerId &&
+            conn.remoteAddr.toString().includes('/p2p-circuit'),
         );
-      });
-      expect(hasCircuitRelay).toBe(true);
+      }, b.peerId);
+      expect(hasCircuitRelayToB).toBe(true);
     } finally {
       await a.context.close();
       await b.context.close();
@@ -166,6 +199,18 @@ test.describe('Same-LAN Peer Connectivity', () => {
 
       const messagesC = await c.page.evaluate(() => (window as any).__messages);
       expect(messagesC.some((m: any) => m.text === 'same-lan-msg')).toBe(true);
+
+      // Verify the connection to peer C is direct (not via circuit relay)
+      const usesCircuitRelay = await a.page.evaluate((remotePeerId: string) => {
+        const libp2p = (window as any).__libp2p;
+        if (!libp2p) return false;
+        return libp2p.getConnections().some(
+          (conn: any) =>
+            conn.remotePeer.toString() === remotePeerId &&
+            conn.remoteAddr.toString().includes('/p2p-circuit'),
+        );
+      }, c.peerId);
+      expect(usesCircuitRelay).toBe(false);
     } finally {
       await a.context.close();
       await c.context.close();
@@ -247,7 +292,7 @@ test.describe('Rapid Cross-NAT Concurrent Messages', () => {
 
   test.skip(!!process.env.CI, 'Concurrent cross-NAT messaging is unreliable in CI');
 
-  test('concurrent messages from both NATs are eventually delivered', async ({ browser }) => {
+  test('concurrent messages from both NATs achieve at least 50% delivery', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
     const b = await initPage(browser, APP_B_URL);
     try {
