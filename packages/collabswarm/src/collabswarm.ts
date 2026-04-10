@@ -288,6 +288,8 @@ export class Collabswarm<
    * protocol requests can be routed to it.
    *
    * Called by CollabswarmDocument.open().
+   *
+   * @internal
    */
   registerDocument(
     documentPath: string,
@@ -310,6 +312,8 @@ export class Collabswarm<
    * from removing a live document that was re-opened at the same path.
    *
    * Called by CollabswarmDocument.close().
+   *
+   * @internal
    */
   unregisterDocument(
     documentPath: string,
@@ -425,53 +429,59 @@ export class Collabswarm<
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
-          } catch (err) {
-            console.warn('Shared key-update handler: request too large, dropping');
-            return [];
-          }
-          if (assembled.length < 4) {
-            console.warn('Shared key-update handler: message too short');
-            return [];
-          }
-          // Use unsigned right shift (>>> 0) to ensure the path length
-          // is interpreted as an unsigned 32-bit integer.
-          const pathLength =
-            ((assembled[0] << 24) |
-            (assembled[1] << 16) |
-            (assembled[2] << 8) |
-            assembled[3]) >>> 0;
+            let assembled: Uint8Array;
+            try {
+              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            } catch (err) {
+              console.warn('Shared key-update handler: request too large, dropping');
+              return [];
+            }
+            if (assembled.length < 4) {
+              console.warn('Shared key-update handler: message too short');
+              return [];
+            }
+            // Use unsigned right shift (>>> 0) to ensure the path length
+            // is interpreted as an unsigned 32-bit integer.
+            const pathLength =
+              ((assembled[0] << 24) |
+              (assembled[1] << 16) |
+              (assembled[2] << 8) |
+              assembled[3]) >>> 0;
 
-          // Validate the path length header. If it looks invalid, treat the
-          // message as malformed, log a warning, and drop it rather than
-          // attempting to interpret it as a legacy (V1) payload.
-          if (
-            pathLength === 0 ||
-            pathLength > MAX_DOCUMENT_PATH_LENGTH ||
-            pathLength + 4 > assembled.length
-          ) {
-            console.warn(
-              'Shared key-update handler: invalid path header (pathLength=' +
-              pathLength + '), dropping message',
-            );
-            return [];
-          }
+            // Validate the path length header. If it looks invalid, treat the
+            // message as malformed, log a warning, and drop it rather than
+            // attempting to interpret it as a legacy (V1) payload.
+            if (
+              pathLength === 0 ||
+              pathLength > MAX_DOCUMENT_PATH_LENGTH ||
+              pathLength + 4 > assembled.length
+            ) {
+              console.warn(
+                'Shared key-update handler: invalid path header (pathLength=' +
+                pathLength + '), dropping message',
+              );
+              return [];
+            }
 
-          const documentPath = new TextDecoder().decode(
-            assembled.slice(4, 4 + pathLength),
-          );
-          const payload = assembled.slice(4 + pathLength);
-          const doc = this._documentRegistry.get(documentPath);
-          if (!doc) {
-            console.warn(
-              `Shared key-update handler: no document registered for "${documentPath}"`,
+            const documentPath = new TextDecoder().decode(
+              assembled.slice(4, 4 + pathLength),
             );
+            const payload = assembled.slice(4 + pathLength);
+            const doc = this._documentRegistry.get(documentPath);
+            if (!doc) {
+              console.warn(
+                `Shared key-update handler: no document registered for "${documentPath}"`,
+              );
+              return [];
+            }
+            await doc.handleKeyUpdateRequestData(payload);
             return [];
+          } finally {
+            // Key-update is fire-and-forget (no response via stream.sink),
+            // but the inbound stream must still be closed to release resources.
+            stream.close?.();
           }
-          await doc.handleKeyUpdateRequestData(payload);
-          return [];
         },
       ).catch((err: unknown) => {
         console.error('Error in shared key-update handler:', err);

@@ -1586,92 +1586,91 @@ export class CollabswarmDocument<
       .pubsub as PubSubBaseProtocol;
 
     try {
-    // Register this document with the swarm BEFORE subscribing to pubsub.
-    // registerDocument() throws on duplicate document paths; doing this first
-    // avoids subscribing to a topic that would then be unsubscribed by close()
-    // on failure, which could disrupt an already-open instance for the same path.
-    this.swarm.registerDocument(this.documentPath, this);
+      // Register this document with the swarm BEFORE subscribing to pubsub.
+      // registerDocument() throws on duplicate document paths; doing this first
+      // avoids subscribing to a topic that would then be unsubscribed by close()
+      // on failure, which could disrupt an already-open instance for the same path.
+      this.swarm.registerDocument(this.documentPath, this);
 
-    // Subscribe to pubsub topic.
-    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
-    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
-    pubsub.addEventListener('message', this._pubsubHandler as EventListener);
-    pubsub.subscribe(this._topic);
-    this._subscribed = true;
+      // Subscribe to pubsub topic.
+      // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+      // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
+      pubsub.addEventListener('message', this._pubsubHandler as EventListener);
+      pubsub.subscribe(this._topic);
+      this._subscribed = true;
 
-    // Register GossipSub topic validator for authorization enforcement.
-    // When enabled, messages from unauthorized peers are rejected at the
-    // transport layer with a P4 penalty in peer scoring.
-    // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
-    if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
-      const gossipsubService = pubsub as any;
-      if (typeof gossipsubService.topicValidators?.set === 'function') {
-        gossipsubService.topicValidators.set(
-          this._topic,
-          async (
-            _peerIdStr: string,
-            message: { data: Uint8Array },
-          ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
-            try {
-              // Decrypt the message to access the signature.
-              const blockKeyID = message.data.slice(
-                0,
-                this._keychainProvider.keyIDLength,
-              );
-              const blockNonce = message.data.slice(
-                this._keychainProvider.keyIDLength,
-                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-              );
-              const blockData = message.data.slice(
-                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-              );
-              const rawContent = await this._decryptBlock(
-                blockKeyID,
-                blockNonce,
-                blockData,
-              );
-              if (!rawContent) {
-                // Decryption failed -- key may not be in keychain yet
-                console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
+      // Register GossipSub topic validator for authorization enforcement.
+      // When enabled, messages from unauthorized peers are rejected at the
+      // transport layer with a P4 penalty in peer scoring.
+      // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
+      if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
+        const gossipsubService = pubsub as any;
+        if (typeof gossipsubService.topicValidators?.set === 'function') {
+          gossipsubService.topicValidators.set(
+            this._topic,
+            async (
+              _peerIdStr: string,
+              message: { data: Uint8Array },
+            ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
+              try {
+                // Decrypt the message to access the signature.
+                const blockKeyID = message.data.slice(
+                  0,
+                  this._keychainProvider.keyIDLength,
+                );
+                const blockNonce = message.data.slice(
+                  this._keychainProvider.keyIDLength,
+                  this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+                );
+                const blockData = message.data.slice(
+                  this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+                );
+                const rawContent = await this._decryptBlock(
+                  blockKeyID,
+                  blockNonce,
+                  blockData,
+                );
+                if (!rawContent) {
+                  // Decryption failed -- key may not be in keychain yet
+                  console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
+                  return 'Ignore';
+                }
+
+                const syncMessage =
+                  this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+                if (!syncMessage.signature) {
+                  return 'Reject';
+                }
+
+                const { signature, ...messageWithoutSignature } = syncMessage;
+                const raw =
+                  this._syncMessageSerializer.serializeSyncMessage(
+                    messageWithoutSignature,
+                  );
+
+                // Verify the message was signed by an authorized writer for this document
+                if (await this._verifyWriterSignature(raw, signature)) {
+                  return 'Accept';
+                }
+                return 'Reject';
+              } catch {
+                console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
                 return 'Ignore';
               }
-
-              const syncMessage =
-                this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-
-              if (!syncMessage.signature) {
-                return 'Reject';
-              }
-
-              const { signature, ...messageWithoutSignature } = syncMessage;
-              const raw =
-                this._syncMessageSerializer.serializeSyncMessage(
-                  messageWithoutSignature,
-                );
-
-              // Verify the message was signed by an authorized writer for this document
-              if (await this._verifyWriterSignature(raw, signature)) {
-                return 'Accept';
-              }
-              return 'Reject';
-            } catch {
-              console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
-              return 'Ignore';
-            }
-          },
-        );
+            },
+          );
+        }
       }
-    }
 
-    if (!isExisting) {
-      // Add current user as a writer.
-      await this._writers.add(this._userPublicKey);
+      if (!isExisting) {
+        // Add current user as a writer.
+        await this._writers.add(this._userPublicKey);
 
-      // Add initial document key.
-      console.log(`Adding a key to ${this.documentPath}`);
-      await this._keychain.add();
-    }
-
+        // Add initial document key.
+        console.log(`Adding a key to ${this.documentPath}`);
+        await this._keychain.add();
+      }
     } catch (err) {
       // Clean up any partially-registered state to avoid leaked handlers,
       // subscriptions, or registry entries.
