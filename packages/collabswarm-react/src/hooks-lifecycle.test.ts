@@ -1,7 +1,6 @@
 import { describe, expect, test, jest, afterEach } from '@jest/globals';
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
-import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
 import {
   resetCaches,
   getCacheSizes,
