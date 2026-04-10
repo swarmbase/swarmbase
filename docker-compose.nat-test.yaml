@@ -1,0 +1,92 @@
+# NAT Traversal Integration Testing
+#
+# Simulates cross-NAT connectivity using isolated Docker networks.
+# Clients on separate networks (nat-a, nat-b) can only communicate
+# through the relay, which is connected to both nat-a and nat-b networks.
+#
+# Usage:
+#   docker compose -f docker-compose.nat-test.yaml build
+#   docker compose -f docker-compose.nat-test.yaml up -d
+#   yarn test:nat
+#   docker compose -f docker-compose.nat-test.yaml down -v
+
+services:
+  # Relay server - connected to all networks (acts as bridge)
+  relay:
+    build:
+      context: ./relay-server
+      dockerfile: Dockerfile
+    networks:
+      - relay-net
+      - nat-a
+      - nat-b
+    ports:
+      - "9001:9001"
+      - "9002:9002"
+    volumes:
+      - shared-data:/shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const s = net.createConnection(9001, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Client A - only on nat-a network (cannot reach Client B directly)
+  test-app-a:
+    build:
+      context: ./e2e/test-app
+      dockerfile: Dockerfile
+    networks:
+      - nat-a
+    ports:
+      - "3001:3000"
+    volumes:
+      - shared-data:/shared:ro
+    depends_on:
+      relay:
+        condition: service_healthy
+
+  # Client B - only on nat-b network (cannot reach Client A directly)
+  test-app-b:
+    build:
+      context: ./e2e/test-app
+      dockerfile: Dockerfile
+    networks:
+      - nat-b
+    ports:
+      - "3002:3000"
+    volumes:
+      - shared-data:/shared:ro
+    depends_on:
+      relay:
+        condition: service_healthy
+
+  # Client C - also on nat-a (same "LAN" as Client A)
+  test-app-c:
+    build:
+      context: ./e2e/test-app
+      dockerfile: Dockerfile
+    networks:
+      - nat-a
+    ports:
+      - "3003:3000"
+    volumes:
+      - shared-data:/shared:ro
+    depends_on:
+      relay:
+        condition: service_healthy
+
+networks:
+  # Relay network - only the relay is on all networks
+  relay-net:
+    driver: bridge
+  # Simulated NAT A - clients here cannot reach nat-b directly
+  nat-a:
+    driver: bridge
+  # Simulated NAT B - clients here cannot reach nat-a directly
+  nat-b:
+    driver: bridge
+
+volumes:
+  shared-data:
