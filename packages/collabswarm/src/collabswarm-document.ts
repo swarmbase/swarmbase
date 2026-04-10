@@ -958,19 +958,16 @@ export class CollabswarmDocument<
    * shared protocol handler in Collabswarm after reading and routing.
    *
    * @internal
-   * @param assembledRequest The raw request bytes already read from the stream.
+   * @param message The deserialized load request (already parsed by the shared handler).
    * @param stream The stream object for sending the response.
    */
   public async handleLoadRequestData(
-    assembledRequest: Uint8Array,
+    message: CRDTLoadRequest,
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
   ): Promise<void> {
     try {
-      const message =
-        this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
       console.log(
         `received doc-load request for ${this.documentPath}:`,
-        assembledRequest,
         message,
       );
 
@@ -1073,19 +1070,16 @@ export class CollabswarmDocument<
    * the shared protocol handler in Collabswarm after reading and routing.
    *
    * @internal
-   * @param assembledRequest The raw request bytes already read from the stream.
+   * @param message The deserialized load request (already parsed by the shared handler).
    * @param stream The stream object for sending the response.
    */
   public async handleSnapshotLoadRequestData(
-    assembledRequest: Uint8Array,
+    message: CRDTLoadRequest,
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
   ): Promise<void> {
     try {
-      const message =
-        this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
       console.log(
         `received snapshot-load request for ${this.documentPath}:`,
-        assembledRequest,
         message,
       );
 
@@ -1731,7 +1725,8 @@ export class CollabswarmDocument<
     }
 
     // Unregister this document from the shared V2 protocol handler registry.
-    this.swarm.unregisterDocument(this.documentPath);
+    // Pass `this` so only this instance is removed (instance-safe).
+    this.swarm.unregisterDocument(this.documentPath, this);
   }
 
   /**
