@@ -7,7 +7,7 @@
 
 import { pipe } from 'it-pipe';
 import { Libp2p } from 'libp2p';
-import { Collabswarm } from './collabswarm';
+import { Collabswarm, MAX_DOCUMENT_PATH_LENGTH } from './collabswarm';
 import {
   concatUint8Arrays,
   firstTrue,
@@ -27,7 +27,9 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
-import { documentKeyUpdateV1, documentLoadV1, snapshotLoadV1 } from './wire-protocols';
+import {
+  documentKeyUpdateV2, documentLoadV2, snapshotLoadV2,
+} from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import { documentTopic } from './document-topic';
@@ -42,7 +44,7 @@ import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
 import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { EventHandler, Message, PeerId, StreamHandler } from '@libp2p/interface';
+import { EventHandler, Message, PeerId } from '@libp2p/interface';
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -192,6 +194,11 @@ export class CollabswarmDocument<
   // the document is `.open()`-ed.
   private _pubsubHandler: EventHandler<CustomEvent<Message>> | undefined;
 
+  // Whether this instance has successfully subscribed to the pubsub topic.
+  // Used in close() to avoid unsubscribing when open() failed before subscribing,
+  // which would break other instances listening on the same topic.
+  private _subscribed = false;
+
   // Cached pubsub topic string. Initialized in constructor via _computeTopic()
   // so that callers that invoke _makeChange() before open() (e.g. via load())
   // publish to a valid topic. open() recomputes this with the configured prefix.
@@ -214,23 +221,6 @@ export class CollabswarmDocument<
 
   public get libp2p(): Libp2p {
     return this.swarm.heliaNode.libp2p;
-  }
-
-  public get protocolLoadV1() {
-    return `${documentLoadV1}${this.documentPath}`;
-  }
-
-  public get protocolKeyUpdateV1() {
-    return `${documentKeyUpdateV1}${this.documentPath}`;
-  }
-
-  /**
-   * Returns the versioned snapshot-load protocol string for this document.
-   * Used to register and dial the `/collabswarm/snapshot-load/1.0.0` handler
-   * scoped to this document's path.
-   */
-  public get protocolSnapshotLoadV1() {
-    return `${snapshotLoadV1}${this.documentPath}`;
   }
 
   private heliaFs: UnixFS;
@@ -963,224 +953,232 @@ export class CollabswarmDocument<
     );
   }
 
-  private _handleLoadRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolLoadV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembledRequest = await readUint8Iterable(source);
-        const message =
-          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
-        console.log(
-          `received ${this.protocolLoadV1} request:`,
-          assembledRequest,
-          message,
-        );
+  /**
+   * Handles a doc-load request with pre-read stream data. Called by the
+   * shared protocol handler in Collabswarm after reading and routing.
+   *
+   * @internal
+   * @param message The deserialized load request (already parsed by the shared handler).
+   * @param stream The stream object for sending the response.
+   */
+  public async handleLoadRequestData(
+    message: CRDTLoadRequest,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      console.log(
+        `received doc-load request for ${this.documentPath}:`,
+        message,
+      );
 
-        if (message.documentId !== this.documentPath) {
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        // Bypass: signing disabled, no signature verification needed.
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          // Reject requests with missing/empty signatures (e.g. from peers
+          // that have signing disabled -- they cannot interoperate).
           console.warn(
-            `Received a load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+            `Rejected load request for ${message.documentId}: missing signature`,
           );
           await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+          return;
         }
-
-        // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely -- any peer is treated as authorized.
-        let authorized = false;
-        if (!this._isSigningEnabled()) {
-          // Bypass: signing disabled, no signature verification needed.
-          authorized = true;
-        } else {
-          if (!message.signature) {
-            // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled -- they cannot interoperate).
-            console.warn(
-              `Rejected load request for ${message.documentId}: missing signature`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const readers = (
-            await Promise.all([this._readers.users(), this._writers.users()])
-          ).flat();
-          for (const reader of readers) {
-            if (
-              await this._authProvider.verify(
-                this._encoder.encode(message.documentId),
-                reader,
-                this._deserializeSignature(message.signature),
-              )
-            ) {
-              authorized = true;
-              break;
-            }
-          }
-        }
-
-        if (!authorized) {
-          console.warn(
-            `Detected an unauthorized load request for ${message.documentId}`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
-        }
-
-        // Construct load response based on history visibility setting.
-        const loadMessage = this._createSyncMessage();
-
-        loadMessage.keychainChanges = await this._keychainChangesForVisibility();
-
-        // Include the latest snapshot if available, to accelerate initial sync.
-        if (this._latestSnapshot) {
-          loadMessage.snapshot = this._latestSnapshot;
-        }
-
-        // Sign new message.
-        loadMessage.signature = await this._signAsWriter(loadMessage);
-
-        const serializedLoad =
-          this._syncMessageSerializer.serializeSyncMessage(loadMessage);
-
-        // Encrypt the load response so keychain is not sent in plaintext.
-        // NOTE: This uses the current key, which works for existing peers requesting
-        // a reload (they already have the key). For NEW members being onboarded for
-        // the first time, the key must be delivered out-of-band via BeeKEM Welcome
-        // message -- they cannot decrypt this load response without the key.
-        const [documentKeyID, documentKey] = await this._keychain.current();
-        if (!documentKey) {
-          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-        }
-        const { nonce, data } = await this._authProvider.encrypt(
-          serializedLoad,
-          documentKey,
-        );
-        if (!nonce) {
-          throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
-        }
-        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
-        console.log(
-          `sending ${this.protocolLoadV1} response (encrypted)`,
-        );
-
-        await stream.sink([assembled] as Iterable<Uint8Array>);
-        return [];
-      },
-    ).catch((err: unknown) => {
-      console.error(`Error handling ${this.protocolLoadV1} load request:`, err);
-    });
-  };
-
-  private _handleSnapshotLoadRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolSnapshotLoadV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembledRequest = await readUint8Iterable(source);
-        const message =
-          this._loadMessageSerializer.deserializeLoadRequest(assembledRequest);
-        console.log(
-          `received ${this.protocolSnapshotLoadV1} request:`,
-          assembledRequest,
-          message,
-        );
-
-        if (message.documentId !== this.documentPath) {
-          console.warn(
-            `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
-        }
-
-        // Authorize the requestor. When signing is disabled, skip ACL/signature
-        // checks entirely -- any peer is treated as authorized.
-        let authorized = false;
-        if (!this._isSigningEnabled()) {
-          // Bypass: signing disabled, no signature verification needed.
-          authorized = true;
-        } else {
-          if (!message.signature) {
-            // Reject requests with missing/empty signatures (e.g. from peers
-            // that have signing disabled -- they cannot interoperate).
-            console.warn(
-              `Rejected snapshot load request for ${message.documentId}: missing signature`,
-            );
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          const readers = (
-            await Promise.all([this._readers.users(), this._writers.users()])
-          ).flat();
-          for (const reader of readers) {
-            if (
-              await this._authProvider.verify(
-                this._encoder.encode(message.documentId),
-                reader,
-                this._deserializeSignature(message.signature),
-              )
-            ) {
-              authorized = true;
-              break;
-            }
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
           }
         }
+      }
 
-        if (!authorized) {
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized load request for ${message.documentId}`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Construct load response based on history visibility setting.
+      const loadMessage = this._createSyncMessage();
+
+      loadMessage.keychainChanges = await this._keychainChangesForVisibility();
+
+      // Include the latest snapshot if available, to accelerate initial sync.
+      if (this._latestSnapshot) {
+        loadMessage.snapshot = this._latestSnapshot;
+      }
+
+      // Sign new message.
+      loadMessage.signature = await this._signAsWriter(loadMessage);
+
+      const serializedLoad =
+        this._syncMessageSerializer.serializeSyncMessage(loadMessage);
+
+      // Encrypt the load response so keychain is not sent in plaintext.
+      // NOTE: This uses the current key, which works for existing peers requesting
+      // a reload (they already have the key). For NEW members being onboarded for
+      // the first time, the key must be delivered out-of-band via BeeKEM Welcome
+      // message -- they cannot decrypt this load response without the key.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serializedLoad,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt sync message! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending doc-load response (encrypted) for ${this.documentPath}`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
+      console.error(`Error handling doc-load request for ${this.documentPath}:`, err);
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
+    }
+  }
+
+  /**
+   * Handles a snapshot-load request with pre-read stream data. Called by
+   * the shared protocol handler in Collabswarm after reading and routing.
+   *
+   * @internal
+   * @param message The deserialized load request (already parsed by the shared handler).
+   * @param stream The stream object for sending the response.
+   */
+  public async handleSnapshotLoadRequestData(
+    message: CRDTLoadRequest,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      console.log(
+        `received snapshot-load request for ${this.documentPath}:`,
+        message,
+      );
+
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a snapshot load request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        // Bypass: signing disabled, no signature verification needed.
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          // Reject requests with missing/empty signatures (e.g. from peers
+          // that have signing disabled -- they cannot interoperate).
           console.warn(
-            `Detected an unauthorized snapshot load request for ${message.documentId}`,
+            `Rejected snapshot load request for ${message.documentId}: missing signature`,
           );
           await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+          return;
         }
-
-        if (!this._latestSnapshot) {
-          // No snapshot available -- respond with empty payload so the peer
-          // can fall back to the normal doc-load protocol.
-          console.log(
-            `No snapshot available for ${this.documentPath}, sending empty response`,
-          );
-          await stream.sink([] as Iterable<Uint8Array>);
-          return [];
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
+          }
         }
+      }
 
-        // Build a complete sync message with the snapshot, post-snapshot
-        // changes, and keychain so the peer can fully catch up.
-        const snapshotMessage = this._createSyncMessage();
-        snapshotMessage.snapshot = this._latestSnapshot;
-        snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
-        snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
-
-        const serialized =
-          this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
-
-        // Encrypt the response.
-        const [documentKeyID, documentKey] = await this._keychain.current();
-        if (!documentKey) {
-          throw new Error(`Document ${this.documentPath} has an empty keychain!`);
-        }
-        const { nonce, data } = await this._authProvider.encrypt(
-          serialized,
-          documentKey,
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized snapshot load request for ${message.documentId}`,
         );
-        if (!nonce) {
-          throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
-        }
-        const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      if (!this._latestSnapshot) {
+        // No snapshot available -- respond with empty payload so the peer
+        // can fall back to the normal doc-load protocol.
         console.log(
-          `sending ${this.protocolSnapshotLoadV1} response (encrypted)`,
+          `No snapshot available for ${this.documentPath}, sending empty response`,
         );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
 
-        await stream.sink([assembled] as Iterable<Uint8Array>);
-        return [];
-      },
-    ).catch((err: unknown) => {
+      // Build a complete sync message with the snapshot, post-snapshot
+      // changes, and keychain so the peer can fully catch up.
+      const snapshotMessage = this._createSyncMessage();
+      snapshotMessage.snapshot = this._latestSnapshot;
+      snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
+      snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
+
+      const serialized =
+        this._syncMessageSerializer.serializeSyncMessage(snapshotMessage);
+
+      // Encrypt the response.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serialized,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt snapshot response! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending snapshot-load response (encrypted) for ${this.documentPath}`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
       console.error(
-        `Error handling ${this.protocolSnapshotLoadV1} snapshot load request:`,
+        `Error handling snapshot-load request for ${this.documentPath}:`,
         err,
       );
-    });
-  };
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
+    }
+  }
 
   /**
    * Build the deterministic binary payload used for snapshot signing/verification.
@@ -1448,7 +1446,7 @@ export class CollabswarmDocument<
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         const snapshotStream = await this.libp2p.dialProtocol(peer, [
-          this.protocolSnapshotLoadV1,
+          snapshotLoadV2,
         ]);
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
@@ -1460,13 +1458,13 @@ export class CollabswarmDocument<
       try {
         console.log('Trying doc-load from peer:', peer.toString());
         const docStream = await this.libp2p.dialProtocol(peer, [
-          this.protocolLoadV1,
+          documentLoadV2,
         ]);
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
         if (loaded) return true;
       } catch (err) {
         console.warn(
-          `Failed to load document from (${this.protocolLoadV1}): `,
+          `Failed to load document via ${documentLoadV2}:`,
           peer.toString(),
           err,
         );
@@ -1582,94 +1580,102 @@ export class CollabswarmDocument<
       );
     };
 
-    // Subscribe to pubsub topic and register protocol handlers.
+    // All registration and subscription steps are inside try/catch so that
+    // close() cleans up any partially-registered state on failure.
     const pubsub = this.swarm.heliaNode.libp2p.services
       .pubsub as PubSubBaseProtocol;
-    // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
-    // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
-    pubsub.addEventListener('message', this._pubsubHandler as EventListener);
-    pubsub.subscribe(this._topic);
 
-    // For now we support multiple protocols, one per document path.
-    // TODO: Consider moving this to a single shared handler in Collabswarm and route messages to the
-    //       right document. This should be more efficient.
-    this.libp2p.handle(this.protocolLoadV1, this._handleLoadRequest.bind(this));
-    this.libp2p.handle(this.protocolKeyUpdateV1, this._handleKeyUpdateRequest.bind(this));
-    // Snapshot-load protocol: load() tries this first for faster initial sync,
-    // falling back to protocolLoadV1 if the peer doesn't support it or has no snapshot.
-    this.libp2p.handle(this.protocolSnapshotLoadV1, this._handleSnapshotLoadRequest.bind(this));
+    try {
+      // Register this document with the swarm BEFORE subscribing to pubsub.
+      // registerDocument() throws on duplicate document paths; doing this first
+      // avoids subscribing to a topic that would then be unsubscribed by close()
+      // on failure, which could disrupt an already-open instance for the same path.
+      this.swarm.registerDocument(this.documentPath, this);
 
-    // Register GossipSub topic validator for authorization enforcement.
-    // When enabled, messages from unauthorized peers are rejected at the
-    // transport layer with a P4 penalty in peer scoring.
-    // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
-    if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
-      const gossipsubService = pubsub as any;
-      if (typeof gossipsubService.topicValidators?.set === 'function') {
-        gossipsubService.topicValidators.set(
-          this._topic,
-          async (
-            _peerIdStr: string,
-            message: { data: Uint8Array },
-          ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
-            try {
-              // Decrypt the message to access the signature.
-              const blockKeyID = message.data.slice(
-                0,
-                this._keychainProvider.keyIDLength,
-              );
-              const blockNonce = message.data.slice(
-                this._keychainProvider.keyIDLength,
-                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-              );
-              const blockData = message.data.slice(
-                this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-              );
-              const rawContent = await this._decryptBlock(
-                blockKeyID,
-                blockNonce,
-                blockData,
-              );
-              if (!rawContent) {
-                // Decryption failed -- key may not be in keychain yet
-                console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
+      // Subscribe to pubsub topic.
+      // Cast required: EventHandler<CustomEvent<Message>> is incompatible with PubSubBaseProtocol's
+      // addEventListener due to duplicate @libp2p/interface versions in the dependency tree
+      pubsub.addEventListener('message', this._pubsubHandler as EventListener);
+      pubsub.subscribe(this._topic);
+      this._subscribed = true;
+
+      // Register GossipSub topic validator for authorization enforcement.
+      // When enabled, messages from unauthorized peers are rejected at the
+      // transport layer with a P4 penalty in peer scoring.
+      // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
+      if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
+        const gossipsubService = pubsub as any;
+        if (typeof gossipsubService.topicValidators?.set === 'function') {
+          gossipsubService.topicValidators.set(
+            this._topic,
+            async (
+              _peerIdStr: string,
+              message: { data: Uint8Array },
+            ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
+              try {
+                // Decrypt the message to access the signature.
+                const blockKeyID = message.data.slice(
+                  0,
+                  this._keychainProvider.keyIDLength,
+                );
+                const blockNonce = message.data.slice(
+                  this._keychainProvider.keyIDLength,
+                  this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+                );
+                const blockData = message.data.slice(
+                  this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+                );
+                const rawContent = await this._decryptBlock(
+                  blockKeyID,
+                  blockNonce,
+                  blockData,
+                );
+                if (!rawContent) {
+                  // Decryption failed -- key may not be in keychain yet
+                  console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
+                  return 'Ignore';
+                }
+
+                const syncMessage =
+                  this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+                if (!syncMessage.signature) {
+                  return 'Reject';
+                }
+
+                const { signature, ...messageWithoutSignature } = syncMessage;
+                const raw =
+                  this._syncMessageSerializer.serializeSyncMessage(
+                    messageWithoutSignature,
+                  );
+
+                // Verify the message was signed by an authorized writer for this document
+                if (await this._verifyWriterSignature(raw, signature)) {
+                  return 'Accept';
+                }
+                return 'Reject';
+              } catch {
+                console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
                 return 'Ignore';
               }
-
-              const syncMessage =
-                this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-
-              if (!syncMessage.signature) {
-                return 'Reject';
-              }
-
-              const { signature, ...messageWithoutSignature } = syncMessage;
-              const raw =
-                this._syncMessageSerializer.serializeSyncMessage(
-                  messageWithoutSignature,
-                );
-
-              // Verify the message was signed by an authorized writer for this document
-              if (await this._verifyWriterSignature(raw, signature)) {
-                return 'Accept';
-              }
-              return 'Reject';
-            } catch {
-              console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
-              return 'Ignore';
-            }
-          },
-        );
+            },
+          );
+        }
       }
-    }
 
-    if (!isExisting) {
-      // Add current user as a writer.
-      await this._writers.add(this._userPublicKey);
+      if (!isExisting) {
+        // Add current user as a writer.
+        await this._writers.add(this._userPublicKey);
 
-      // Add initial document key.
-      console.log(`Adding a key to ${this.documentPath}`);
-      await this._keychain.add();
+        // Add initial document key.
+        console.log(`Adding a key to ${this.documentPath}`);
+        await this._keychain.add();
+      }
+    } catch (err) {
+      // Clean up any partially-registered state to avoid leaked handlers,
+      // subscriptions, or registry entries.
+      await this.close().catch(() => {});
+      throw err;
     }
 
     return isExisting;
@@ -1691,7 +1697,14 @@ export class CollabswarmDocument<
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
         .pubsub as PubSubBaseProtocol;
-      pubsub.unsubscribe(topic);
+
+      // Only unsubscribe if this instance actually subscribed. If open()
+      // failed before pubsub.subscribe() completed, unsubscribing here
+      // would remove a subscription belonging to another instance.
+      if (this._subscribed) {
+        pubsub.unsubscribe(topic);
+        this._subscribed = false;
+      }
 
       // Cast required: see addEventListener comment above
       pubsub.removeEventListener('message', this._pubsubHandler as EventListener);
@@ -1710,10 +1723,9 @@ export class CollabswarmDocument<
       gossipsub.topicValidators.delete(topic);
     }
 
-    // Unregister protocol handlers.
-    await this.libp2p.unhandle(this.protocolLoadV1).catch(() => {});
-    await this.libp2p.unhandle(this.protocolKeyUpdateV1).catch(() => {});
-    await this.libp2p.unhandle(this.protocolSnapshotLoadV1).catch(() => {});
+    // Unregister this document from the shared V2 protocol handler registry.
+    // Pass `this` so only this instance is removed (instance-safe).
+    this.swarm.unregisterDocument(this.documentPath, this);
   }
 
   /**
@@ -2376,10 +2388,26 @@ export class CollabswarmDocument<
       throw new Error(`Failed to encrypt key update! Nonce cannot be empty`);
     }
 
-    // Send to all connected peers via the key-update protocol.
+    // Send to all connected peers via the V2 key-update protocol.
+    // V2 payload format: 4-byte big-endian path length + UTF-8 path + encrypted payload
     const peers = this.swarm.heliaNode.libp2p
       .getConnections()
       ?.map((x) => x.remoteAddr);
+
+    const pathBytes = this._encoder.encode(this.documentPath);
+    if (pathBytes.length === 0 || pathBytes.length > MAX_DOCUMENT_PATH_LENGTH) {
+      throw new Error(
+        `Document path "${this.documentPath}" encoded length (${pathBytes.length}) exceeds ` +
+        `the maximum allowed path length (${MAX_DOCUMENT_PATH_LENGTH} bytes) for the V2 key-update protocol`,
+      );
+    }
+    const pathHeader = new Uint8Array(4);
+    pathHeader[0] = (pathBytes.length >> 24) & 0xff;
+    pathHeader[1] = (pathBytes.length >> 16) & 0xff;
+    pathHeader[2] = (pathBytes.length >> 8) & 0xff;
+    pathHeader[3] = pathBytes.length & 0xff;
+
+    const v2Payload = concatUint8Arrays(pathHeader, pathBytes, previousKeyID, nonce, data);
 
     // WARNING: If some peers fail to receive this update, they will be unable
     // to decrypt future messages encrypted with the new key. They will need to
@@ -2388,10 +2416,10 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = await this.libp2p.dialProtocol(peer, [
-          this.protocolKeyUpdateV1,
+          documentKeyUpdateV2,
         ]);
         await pipe(
-          [concatUint8Arrays(previousKeyID, nonce, data)],
+          [v2Payload],
           stream.sink,
         );
       } catch (err) {
@@ -2415,95 +2443,108 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Handle incoming key-update protocol messages.
-   * Verifies the sender is an authorized writer, then merges the keychain changes.
+   * Handles a key-update request with pre-read payload data. Called by
+   * the shared protocol handler in Collabswarm after reading the document
+   * path header and routing.
+   *
+   * @internal
+   * @param payload The encrypted key-update payload (without the document
+   *   path header that was already stripped by the shared handler).
    */
-  private _handleKeyUpdateRequest: StreamHandler = ({ stream }) => {
-    console.log(`received ${this.protocolKeyUpdateV1} dial`);
-    pipe(
-      stream.source,
-      async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-        const assembled = await readUint8Iterable(source);
+  public async handleKeyUpdateRequestData(
+    payload: Uint8Array,
+  ): Promise<void> {
+    try {
+      // Decrypt the key update message.
+      const blockKeyID = payload.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      const blockNonce = payload.slice(
+        this._keychainProvider.keyIDLength,
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
+      const blockData = payload.slice(
+        this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
+      );
 
-        // Decrypt the key update message.
-        const blockKeyID = assembled.slice(
-          0,
-          this._keychainProvider.keyIDLength,
+      let rawContent: Uint8Array | undefined;
+      try {
+        rawContent = await this._decryptBlock(
+          blockKeyID,
+          blockNonce,
+          blockData,
         );
-        const blockNonce = assembled.slice(
-          this._keychainProvider.keyIDLength,
-          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-        );
-        const blockData = assembled.slice(
-          this._keychainProvider.keyIDLength + this._authProvider.nonceBits,
-        );
+      } catch (e) {
+        console.warn('Failed to decrypt key update message:', e);
+      }
 
-        let rawContent: Uint8Array | undefined;
+      if (!rawContent) {
+        console.warn(
+          `Unable to decrypt key update for ${this.documentPath}`,
+        );
+        return;
+      }
+
+      const message =
+        this._syncMessageSerializer.deserializeSyncMessage(rawContent);
+
+      // The shared V2 key-update handler already routes by the
+      // length-prefixed document-path header and drops invalid headers;
+      // this check is kept as a defense-in-depth guard against malformed
+      // or misrouted messages.
+      if (message.documentId && message.documentId !== this.documentPath) {
+        console.warn(
+          `Ignoring key-update for wrong document ` +
+          `(${message.documentId} !== ${this.documentPath})`,
+        );
+        return;
+      }
+
+      // Verify the sender is an authorized writer.
+      if (this._isSigningEnabled()) {
+        if (message.signature) {
+          const { signature, ...messageWithoutSignature } = message;
+          const raw =
+            this._syncMessageSerializer.serializeSyncMessage(
+              messageWithoutSignature,
+            );
+          if (!(await this._verifyWriterSignature(raw, signature))) {
+            console.warn(
+              `Received key update with invalid signature for ${this.documentPath}`,
+            );
+            return;
+          }
+        } else {
+          console.warn(
+            `Received unsigned key update for ${this.documentPath}`,
+          );
+          return;
+        }
+      }
+
+      console.log(`received key-update for ${this.documentPath}`);
+
+      // Merge keychain changes.
+      if (message.keychainChanges) {
         try {
-          rawContent = await this._decryptBlock(
-            blockKeyID,
-            blockNonce,
-            blockData,
+          this._keychain.merge(message.keychainChanges);
+          console.log(
+            `Updated keychain via key-update protocol in ${this.documentPath}`,
           );
         } catch (e) {
-          console.warn('Failed to decrypt key update message:', e);
-        }
-
-        if (!rawContent) {
-          console.warn(
-            `Unable to decrypt key update for ${this.documentPath}`,
+          console.error(
+            'Failed to merge keychain changes from key update:',
+            e,
           );
-          return [];
         }
-
-        const message =
-          this._syncMessageSerializer.deserializeSyncMessage(rawContent);
-
-        // Verify the sender is an authorized writer.
-        if (this._isSigningEnabled()) {
-          if (message.signature) {
-            const { signature, ...messageWithoutSignature } = message;
-            const raw =
-              this._syncMessageSerializer.serializeSyncMessage(
-                messageWithoutSignature,
-              );
-            if (!(await this._verifyWriterSignature(raw, signature))) {
-              console.warn(
-                `Received key update with invalid signature for ${this.documentPath}`,
-              );
-              return [];
-            }
-          } else {
-            console.warn(
-              `Received unsigned key update for ${this.documentPath}`,
-            );
-            return [];
-          }
-        }
-
-        // Merge keychain changes.
-        if (message.keychainChanges) {
-          try {
-            this._keychain.merge(message.keychainChanges);
-            console.log(
-              `Updated keychain via key-update protocol in ${this.documentPath}`,
-            );
-          } catch (e) {
-            console.error(
-              'Failed to merge keychain changes from key update:',
-              e,
-            );
-          }
-        }
-
-        return [];
-      },
-    ).catch((err: unknown) => {
+      }
+    } catch (err: unknown) {
       console.error(
-        `Error handling ${this.protocolKeyUpdateV1} request:`,
+        `Error handling key update request for document ${this.documentPath}:`,
         err,
       );
-    });
-  };
+    }
+  }
 
 }
