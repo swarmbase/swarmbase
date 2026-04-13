@@ -20,7 +20,7 @@ import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer';
-import { AuthProvider } from './auth-provider';
+import { AuthProvider, AesAlgorithmName } from './auth-provider';
 import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
@@ -89,6 +89,7 @@ export * from './beekem';
 export {
   ACL,
   ACLProvider,
+  AesAlgorithmName,
   AuthProvider,
   SubtleCrypto,
   Collabswarm,

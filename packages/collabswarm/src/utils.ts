@@ -112,9 +112,10 @@ export async function importHmacKey(
 export async function importSymmetricKey(
   keyData: Uint8Array,
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
+  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
 ) {
   // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
-  const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, 'AES-GCM', true, [
+  const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, algorithmName, true, [
     'encrypt',
     'decrypt',
   ]);
@@ -122,10 +123,12 @@ export async function importSymmetricKey(
   return key;
 }
 
-export async function generateAndExportSymmetricKey() {
+export async function generateAndExportSymmetricKey(
+  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+) {
   const documentKey = await crypto.subtle.generateKey(
     {
-      name: 'AES-GCM',
+      name: algorithmName,
       length: 256,
     },
     true,

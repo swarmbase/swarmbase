@@ -122,6 +122,27 @@ describe('deriveEncryptionKey', () => {
 
     expect(new Uint8Array(decrypted)).toStrictEqual(plaintext);
   });
+
+  test.each(['AES-CTR', 'AES-CBC'] as const)(
+    'derives key with algorithm %s',
+    async (alg) => {
+      const key = await deriveEncryptionKey(epochSecret, alg);
+      expect(key).toBeDefined();
+      expect((key.algorithm as AesKeyAlgorithm).name).toBe(alg);
+      expect((key.algorithm as AesKeyAlgorithm).length).toBe(256);
+      expect(key.usages).toContain('encrypt');
+      expect(key.usages).toContain('decrypt');
+    },
+  );
+
+  test('different algorithms produce different keys from same secret', async () => {
+    const gcmKey = await deriveEncryptionKey(epochSecret, 'AES-GCM');
+    const ctrKey = await deriveEncryptionKey(epochSecret, 'AES-CTR');
+    const gcmRaw = new Uint8Array(await crypto.subtle.exportKey('raw', gcmKey));
+    const ctrRaw = new Uint8Array(await crypto.subtle.exportKey('raw', ctrKey));
+    // Different HKDF info strings should produce different key material
+    expect(gcmRaw).not.toStrictEqual(ctrRaw);
+  });
 });
 
 describe('createEpoch', () => {

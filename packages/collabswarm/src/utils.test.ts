@@ -258,4 +258,25 @@ describe('crypto key utilities', () => {
     expect(key).toBeDefined();
     expect(key.type).toBe('secret');
   });
+
+  test.each(['AES-GCM', 'AES-CTR', 'AES-CBC'] as const)(
+    'should import symmetric key for %s',
+    async (alg) => {
+      const keyData = new Uint8Array(32);
+      crypto.getRandomValues(keyData);
+      const key = await importSymmetricKey(keyData, 'raw', alg);
+      expect(key).toBeDefined();
+      expect(key.type).toBe('secret');
+      expect(key.algorithm.name).toBe(alg);
+    },
+  );
+
+  test.each(['AES-GCM', 'AES-CTR', 'AES-CBC'] as const)(
+    'should generate and export symmetric key for %s',
+    async (alg) => {
+      const jwk = await generateAndExportSymmetricKey(alg);
+      expect(jwk).toBeDefined();
+      expect(jwk.kty).toBe('oct');
+    },
+  );
 });

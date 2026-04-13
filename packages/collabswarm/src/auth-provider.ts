@@ -1,5 +1,8 @@
 // Restrict access to those on ACL
 
+/** Supported AES encryption algorithm names. */
+export type AesAlgorithmName = 'AES-GCM' | 'AES-CTR' | 'AES-CBC';
+
 export type EncryptionResult = {
   data: Uint8Array;
   nonce?: Uint8Array;
@@ -22,5 +25,10 @@ export interface AuthProvider<PrivateKey, PublicKey, DocumentKey = string> {
     nonce?: Uint8Array,
   ): Promise<Uint8Array>;
 
+  /**
+   * Returns the nonce/IV size **in bytes** for the configured encryption
+   * algorithm. The property name is a historical artifact — it represents
+   * a byte count, not a bit count.
+   */
   readonly nonceBits: number;
 }

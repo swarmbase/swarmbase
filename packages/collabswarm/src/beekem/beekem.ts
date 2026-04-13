@@ -694,6 +694,8 @@ export class BeeKEM {
       false,
       ['deriveKey'],
     );
+    // ECIES key wrapping always uses AES-GCM for its built-in AEAD
+    // authentication, regardless of the document encryption algorithm.
     const aesKey = await crypto.subtle.deriveKey(
       {
         name: 'HKDF',
@@ -788,6 +790,7 @@ export class BeeKEM {
       false,
       ['deriveKey'],
     );
+    // ECIES key unwrapping always uses AES-GCM (see _encryptNodeKey comment).
     const aesKey = await crypto.subtle.deriveKey(
       {
         name: 'HKDF',
