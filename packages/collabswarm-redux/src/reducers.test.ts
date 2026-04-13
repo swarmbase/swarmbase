@@ -106,6 +106,28 @@ describe('action creators', () => {
       peerAddress: '/ip4/192.168.1.1/tcp/4001',
     });
   });
+
+  test('action creators include _trace when provided', () => {
+    const trace = 'Error\n    at test';
+    expect(initialize({} as any, trace)).toHaveProperty('_trace', trace);
+    expect(connect([], trace)).toHaveProperty('_trace', trace);
+    expect(openDocument('doc', {} as any, trace)).toHaveProperty('_trace', trace);
+    expect(closeDocument('doc', trace)).toHaveProperty('_trace', trace);
+    expect(syncDocument('doc', {}, trace)).toHaveProperty('_trace', trace);
+    expect(changeDocument('doc', {}, trace)).toHaveProperty('_trace', trace);
+    expect(peerConnect('addr', trace)).toHaveProperty('_trace', trace);
+    expect(peerDisconnect('addr', trace)).toHaveProperty('_trace', trace);
+  });
+
+  test('action creators omit _trace when not provided', () => {
+    expect(initialize({} as any)).not.toHaveProperty('_trace');
+    expect(connect([])).not.toHaveProperty('_trace');
+    expect(closeDocument('doc')).not.toHaveProperty('_trace');
+    expect(syncDocument('doc', {})).not.toHaveProperty('_trace');
+    expect(changeDocument('doc', {})).not.toHaveProperty('_trace');
+    expect(peerConnect('addr')).not.toHaveProperty('_trace');
+    expect(peerDisconnect('addr')).not.toHaveProperty('_trace');
+  });
 });
 
 describe('collabswarmReducer', () => {
@@ -274,9 +296,77 @@ describe('collabswarmReducer', () => {
     expect(newState).toBe(state);
   });
 
-  test('unknown action returns same state', () => {
+  test('unknown action returns same state without warning', () => {
     const state = createMockState();
     const newState = reducer(state, { type: 'UNKNOWN_ACTION' } as any);
     expect(newState).toBe(state);
+    // Redux reducers should silently ignore unknown actions
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  test('OPEN_DOCUMENT overwrites already-open document with warning', () => {
+    const docRef1 = { document: { text: 'first' } } as any;
+    const docRef2 = { document: { text: 'second' } } as any;
+    const state: CollabswarmState<any, any, any, any, any, any> = {
+      ...createMockState(),
+      documents: {
+        'doc-1': { documentRef: docRef1, document: docRef1.document, peers: [] },
+      },
+    };
+    const newState = reducer(state, openDocument('doc-1', docRef2));
+    expect(newState.documents['doc-1'].document).toEqual({ text: 'second' });
+    expect(newState.documents['doc-1'].documentRef).toBe(docRef2);
+    expect(console.warn).toHaveBeenCalledWith(
+      'Overwriting already open document:',
+      'doc-1',
+    );
+  });
+
+  test('multiple documents can be open simultaneously', () => {
+    const state = createMockState();
+    const docRef1 = { document: { text: 'doc1' } } as any;
+    const docRef2 = { document: { text: 'doc2' } } as any;
+    const state1 = reducer(state, openDocument('doc-1', docRef1));
+    const state2 = reducer(state1, openDocument('doc-2', docRef2));
+    expect(Object.keys(state2.documents)).toEqual(['doc-1', 'doc-2']);
+    expect(state2.documents['doc-1'].document).toEqual({ text: 'doc1' });
+    expect(state2.documents['doc-2'].document).toEqual({ text: 'doc2' });
+  });
+
+  test('CLOSE_DOCUMENT does not affect other open documents', () => {
+    const docRef1 = { document: { text: 'doc1' } } as any;
+    const docRef2 = { document: { text: 'doc2' } } as any;
+    const state: CollabswarmState<any, any, any, any, any, any> = {
+      ...createMockState(),
+      documents: {
+        'doc-1': { documentRef: docRef1, document: docRef1.document, peers: [] },
+        'doc-2': { documentRef: docRef2, document: docRef2.document, peers: [] },
+      },
+    };
+    const newState = reducer(state, closeDocument('doc-1'));
+    expect(newState.documents['doc-1']).toBeUndefined();
+    expect(newState.documents['doc-2'].document).toEqual({ text: 'doc2' });
+  });
+
+  test('multiple PEER_CONNECT actions accumulate peers', () => {
+    const state = createMockState();
+    const state1 = reducer(state, peerConnect('peer-1'));
+    const state2 = reducer(state1, peerConnect('peer-2'));
+    const state3 = reducer(state2, peerConnect('peer-3'));
+    expect(state3.peers).toEqual(['peer-1', 'peer-2', 'peer-3']);
+  });
+
+  test('CHANGE_DOCUMENT preserves documentRef', () => {
+    const docRef = { document: { text: 'old' } } as any;
+    const state: CollabswarmState<any, any, any, any, any, any> = {
+      ...createMockState(),
+      documents: {
+        'doc-1': { documentRef: docRef, document: docRef.document, peers: ['peer-a'] },
+      },
+    };
+    const updatedDoc = { text: 'changed' };
+    const newState = reducer(state, changeDocument('doc-1', updatedDoc));
+    expect(newState.documents['doc-1'].documentRef).toBe(docRef);
+    expect(newState.documents['doc-1'].peers).toEqual(['peer-a']);
   });
 });

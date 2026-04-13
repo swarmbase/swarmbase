@@ -21,8 +21,6 @@ import {
   SyncMessageSerializer,
 } from '@collabswarm/collabswarm';
 
-// user id should be the same as peer id.
-
 export interface CollabswarmDocumentState<
   DocType,
   ChangesType,
@@ -131,7 +129,10 @@ export function collabswarmReducer<
   authProvider: AuthProvider<PrivateKey, PublicKey, DocumentKey>,
   aclProvider: ACLProvider<ChangesType, PublicKey>,
   keychainProvider: KeychainProvider<ChangesType, DocumentKey>,
-) {
+): (
+  state: CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> | undefined,
+  action: CollabswarmActions<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey>,
+) => CollabswarmState<DocType, ChangesType, ChangeFnType, PrivateKey, PublicKey, DocumentKey> {
   return (
     state: CollabswarmState<
       DocType,
@@ -182,7 +183,6 @@ export function collabswarmReducer<
           ...state,
         };
       }
-      // Open Document (two options: 1. Overwrite the "current" document, 2. ???)
       case OPEN_DOCUMENT: {
         if (state.documents[action.documentId]) {
           console.warn('Overwriting already open document:', action.documentId);
@@ -264,8 +264,6 @@ export function collabswarmReducer<
         };
       }
       default: {
-        console.warn('Unrecognized action:', action);
-        console.warn('Unrecognized action (state):', state);
         return state;
       }
     }
