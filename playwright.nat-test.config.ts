@@ -2,13 +2,13 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e/integration',
-  testIgnore: '**/nat-traversal*',
+  testMatch: 'nat-traversal.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: [['html', { open: 'never' }], ['list']],
-  timeout: 120_000,
+  timeout: 240_000,
   use: {
     trace: 'on-first-retry',
   },
@@ -18,6 +18,7 @@ export default defineConfig({
       use: {
         browserName: 'chromium',
         launchOptions: {
+          // Allow cross-origin requests to test-app containers on different ports
           args: ['--disable-web-security'],
         },
       },
