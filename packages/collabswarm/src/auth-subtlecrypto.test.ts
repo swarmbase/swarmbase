@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 import { SubtleCrypto } from './auth-subtlecrypto';
+import type { AesAlgorithmName } from './auth-provider';
 
 const auth = new SubtleCrypto();
 
@@ -53,8 +54,7 @@ const docKeyData2 = {
 };
 
 /**
- * Expects format is jwk and type is either ECDSA or AES-GCM
- * which are the two default choices.
+ * Import a JWK key for the given algorithm.
  */
 async function importKey(
   keyData: JsonWebKey,
@@ -76,14 +76,16 @@ async function importKey(
       };
       break;
     }
-    case 'AES-GCM': {
+    case 'AES-GCM':
+    case 'AES-CTR':
+    case 'AES-CBC': {
       algorithm = {
         name: algorithmName,
       };
       break;
     }
     default: {
-      throw 'Error in key import. Is algorithm type supported?'!;
+      throw new Error(`Unsupported algorithm: ${algorithmName}`);
     }
   }
   if (format !== 'jwk') {
@@ -97,6 +99,15 @@ async function importKey(
     usage,
   );
   return key;
+}
+
+/** Generate a raw 256-bit key for the given algorithm. */
+async function generateKey(algorithmName: AesAlgorithmName): Promise<CryptoKey> {
+  return crypto.subtle.generateKey(
+    { name: algorithmName, length: 256 },
+    true,
+    ['encrypt', 'decrypt'],
+  );
 }
 
 describe('sign and verify', () => {
@@ -170,82 +181,134 @@ describe('sign and verify', () => {
   );
 });
 
-async function tryEncrypt(
-  data: Uint8Array,
-  documentKey: CryptoKey,
-): Promise<{
-  data?: Uint8Array;
-  nonce?: Uint8Array;
-  crashed: boolean;
-}> {
-  try {
-    const res = await auth.encrypt(data, documentKey);
-    return {
-      data: res.data,
-      nonce: res.nonce,
-      crashed: false,
-    };
-  } catch {
-    return {
-      crashed: true,
-    };
-  }
-}
-
-/**
- * Check working by encrypting and decrypting the same data.
- * Use static keys.
- * Confirm type expectations.
- */
 describe('encrypt and decrypt', () => {
-  test.each([
-    [new Uint8Array([43, 99, 250, 83]), docKeyData1, false, false],
-    [new Uint8Array([43, 99, 250, 83, 89, 90, 111]), docKeyData2, false, false],
-  ])(
-    'encrypt and decrypt',
-    async (
-      data: Uint8Array,
-      documentKeyData: JsonWebKey,
-      expectedEncryptCrashed: boolean,
-      expectedDecryptCrashed: boolean,
-    ) => {
-      const documentKey = await importKey(
-        documentKeyData,
-        ['encrypt', 'decrypt'],
-        'AES-GCM',
-      );
-      const {
-        data: encrypted,
-        nonce: nonce,
-        crashed: encryptCrashed,
-      } = await tryEncrypt(data, documentKey);
-      expect(encryptCrashed).toStrictEqual(expectedEncryptCrashed);
-      if (encrypted !== undefined && nonce !== undefined) {
-        let decryptCrashed = false;
-        let decrypted: Uint8Array | undefined;
-        try {
-          decrypted = await auth.decrypt(encrypted, documentKey, nonce);
-        } catch {
-          decryptCrashed = true;
-        }
-        expect(decryptCrashed).toStrictEqual(expectedDecryptCrashed);
-        if (decrypted !== undefined) {
-          expect(decrypted).toStrictEqual(data);
-        }
-      }
+  const algorithms: AesAlgorithmName[] = ['AES-GCM', 'AES-CTR', 'AES-CBC'];
+
+  test.each(algorithms)(
+    'roundtrip with %s',
+    async (alg) => {
+      const instance = new SubtleCrypto(undefined, alg);
+      const key = await generateKey(alg);
+      const plaintext = new Uint8Array([43, 99, 250, 83, 89, 90, 111]);
+
+      const { data: encrypted, nonce } = await instance.encrypt(plaintext, key);
+      expect(encrypted.length).toBeGreaterThan(0);
+      expect(nonce.length).toBe(instance.nonceBits);
+
+      const decrypted = await instance.decrypt(encrypted, key, nonce);
+      expect(decrypted).toStrictEqual(plaintext);
+    },
+  );
+
+  test.each([docKeyData1, docKeyData2])(
+    'roundtrip with AES-GCM JWK key',
+    async (keyData) => {
+      const key = await importKey(keyData, ['encrypt', 'decrypt'], 'AES-GCM');
+      const plaintext = new Uint8Array([43, 99, 250, 83]);
+
+      const { data: encrypted, nonce } = await auth.encrypt(plaintext, key);
+      const decrypted = await auth.decrypt(encrypted, key, nonce);
+      expect(decrypted).toStrictEqual(plaintext);
+    },
+  );
+
+  test('empty plaintext roundtrip', async () => {
+    const key = await generateKey('AES-GCM');
+    const plaintext = new Uint8Array([]);
+
+    const { data: encrypted, nonce } = await auth.encrypt(plaintext, key);
+    const decrypted = await auth.decrypt(encrypted, key, nonce);
+    expect(decrypted).toStrictEqual(plaintext);
+  });
+});
+
+describe('nonce size', () => {
+  test('AES-GCM nonceBits is 12 bytes', () => {
+    const instance = new SubtleCrypto(undefined, 'AES-GCM');
+    expect(instance.nonceBits).toBe(12);
+  });
+
+  test('AES-CTR nonceBits is 16 bytes', () => {
+    const instance = new SubtleCrypto(undefined, 'AES-CTR');
+    expect(instance.nonceBits).toBe(16);
+  });
+
+  test('AES-CBC nonceBits is 16 bytes', () => {
+    const instance = new SubtleCrypto(undefined, 'AES-CBC');
+    expect(instance.nonceBits).toBe(16);
+  });
+
+  test.each(['AES-GCM', 'AES-CTR', 'AES-CBC'] as AesAlgorithmName[])(
+    'encrypt generates nonce of correct size for %s',
+    async (alg) => {
+      const instance = new SubtleCrypto(undefined, alg);
+      const key = await generateKey(alg);
+      const result = await instance.encrypt(new Uint8Array([1, 2, 3]), key);
+      expect(result.nonce.length).toBe(instance.nonceBits);
     },
   );
 });
 
-describe('nonce size', () => {
-  test('encrypt generates nonce of nonceBits bytes', async () => {
-    const documentKey = await importKey(
-      docKeyData1,
-      ['encrypt', 'decrypt'],
-      'AES-GCM',
-    );
-    const result = await auth.encrypt(new Uint8Array([1, 2, 3]), documentKey);
-    expect(result.nonce.length).toBe(auth.nonceBits);
+describe('HMAC tamper detection (CTR/CBC)', () => {
+  const nonGcmAlgorithms: AesAlgorithmName[] = ['AES-CTR', 'AES-CBC'];
+
+  test.each(nonGcmAlgorithms)(
+    '%s: flipping a ciphertext byte causes HMAC failure',
+    async (alg) => {
+      const instance = new SubtleCrypto(undefined, alg);
+      const key = await generateKey(alg);
+      const plaintext = new Uint8Array([10, 20, 30, 40, 50]);
+
+      const { data, nonce } = await instance.encrypt(plaintext, key);
+      // Flip a byte in the ciphertext portion (before the 32-byte HMAC tag)
+      const tampered = new Uint8Array(data);
+      tampered[0] ^= 0xff;
+
+      await expect(instance.decrypt(tampered, key, nonce)).rejects.toThrow(
+        'HMAC verification failed',
+      );
+    },
+  );
+
+  test.each(nonGcmAlgorithms)(
+    '%s: flipping a byte in the HMAC tag causes failure',
+    async (alg) => {
+      const instance = new SubtleCrypto(undefined, alg);
+      const key = await generateKey(alg);
+      const plaintext = new Uint8Array([10, 20, 30, 40, 50]);
+
+      const { data, nonce } = await instance.encrypt(plaintext, key);
+      // Flip the last byte (inside the HMAC tag)
+      const tampered = new Uint8Array(data);
+      tampered[tampered.length - 1] ^= 0xff;
+
+      await expect(instance.decrypt(tampered, key, nonce)).rejects.toThrow(
+        'HMAC verification failed',
+      );
+    },
+  );
+
+  test.each(nonGcmAlgorithms)(
+    '%s: data too short for HMAC tag throws',
+    async (alg) => {
+      const instance = new SubtleCrypto(undefined, alg);
+      const key = await generateKey(alg);
+
+      await expect(
+        instance.decrypt(new Uint8Array(10), key, new Uint8Array(16)),
+      ).rejects.toThrow('Ciphertext too short');
+    },
+  );
+});
+
+describe('AES-GCM tamper detection', () => {
+  test('flipping a ciphertext byte causes GCM auth failure', async () => {
+    const key = await generateKey('AES-GCM');
+    const { data, nonce } = await auth.encrypt(new Uint8Array([1, 2, 3]), key);
+    const tampered = new Uint8Array(data);
+    tampered[0] ^= 0xff;
+
+    await expect(auth.decrypt(tampered, key, nonce)).rejects.toThrow();
   });
 });
 
@@ -292,25 +355,15 @@ describe('_extractNonce', () => {
   });
 });
 
-describe('_encryptionAlgorithmParams error cases', () => {
-  test('throws for AES-CTR', () => {
-    const aesCtr = new SubtleCrypto(96, undefined as any, 'AES-CTR');
-    expect(() => aesCtr._encryptionAlgorithmParams()).toThrow(
-      'AES-CTR is not yet supported',
-    );
-  });
+describe('cross-algorithm failure', () => {
+  test('GCM-encrypted data cannot be decrypted by CTR instance', async () => {
+    const gcm = new SubtleCrypto(undefined, 'AES-GCM');
+    const ctr = new SubtleCrypto(undefined, 'AES-CTR');
+    const gcmKey = await generateKey('AES-GCM');
+    const ctrKey = await generateKey('AES-CTR');
 
-  test('throws for AES-CBC', () => {
-    const aesCbc = new SubtleCrypto(96, undefined as any, 'AES-CBC');
-    expect(() => aesCbc._encryptionAlgorithmParams()).toThrow(
-      'AES-CBC is not yet supported',
-    );
-  });
-
-  test('throws for unknown algorithm', () => {
-    const unknown = new SubtleCrypto(96, undefined as any, 'UNKNOWN' as any);
-    expect(() => unknown._encryptionAlgorithmParams()).toThrow(
-      'Unknown encryption algorithm: UNKNOWN',
-    );
+    const { data, nonce } = await gcm.encrypt(new Uint8Array([1, 2, 3]), gcmKey);
+    // Different key + different algorithm = failure
+    await expect(ctr.decrypt(data, ctrKey, nonce)).rejects.toThrow();
   });
 });
