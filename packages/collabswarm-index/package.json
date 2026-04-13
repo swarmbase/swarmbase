@@ -96,6 +96,7 @@
       "^@libp2p/kad-dht$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/interface$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/pubsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/mdns$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/peer-id$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.cjs",
