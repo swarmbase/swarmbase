@@ -147,7 +147,7 @@ export async function deriveEncryptionKey(
  * Create a complete epoch with a derived encryption key.
  *
  * This generates the epoch ID, derives the epoch secret, and then derives
- * the AES-256-GCM encryption key in a single call.
+ * the AES-256 encryption key in a single call.
  *
  * @param groupSecret - The shared group secret from key agreement.
  * @param members - Set of member public key hashes for this epoch.
@@ -211,17 +211,21 @@ export class EpochManager {
    * @param groupSecret - The new shared group secret from key agreement.
    * @param members - The updated set of member public key hashes.
    * @param reason - The reason for the epoch transition.
-   * @param affectedMember - The public key hash of the added/removed member, if applicable.
-   * @param algorithmName - The AES algorithm for the encryption key (default: AES-GCM).
+   * @param options - Optional settings for the transition.
+   * @param options.affectedMember - The public key hash of the added/removed member, if applicable.
+   * @param options.algorithmName - The AES algorithm for the encryption key (default: AES-GCM).
    * @returns The {@link EpochTransition} describing the new epoch and its cause.
    */
   async transitionEpoch(
     groupSecret: Uint8Array,
     members: Set<string>,
     reason: EpochTransition['reason'],
-    affectedMember?: string,
-    algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+    options?: {
+      affectedMember?: string;
+      algorithmName?: 'AES-GCM' | 'AES-CTR' | 'AES-CBC';
+    },
   ): Promise<EpochTransition> {
+    const { affectedMember, algorithmName = 'AES-GCM' } = options ?? {};
     const epoch = await createEpoch(groupSecret, members, this._currentEpochId, algorithmName);
     this.addEpoch(epoch);
 
