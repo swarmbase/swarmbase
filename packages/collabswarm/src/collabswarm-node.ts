@@ -21,6 +21,9 @@ import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
 import { kadDHT } from '@libp2p/kad-dht';
+// mDNS is Node-only: it depends on the `dgram` built-in for UDP multicast,
+// which is unavailable in browsers. The browser-compatible default config in
+// collabswarm-config.ts intentionally omits it.
 import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
@@ -35,6 +38,13 @@ import { bitswap } from '@helia/block-brokers';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 
+/**
+ * Default config for Node.js environments.
+ *
+ * Includes mDNS peer discovery, which advertises and discovers peers on the
+ * local LAN via UDP multicast. This allows same-network nodes to find each
+ * other without relay servers or bootstrap peers.
+ */
 export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
   ({
     helia: {

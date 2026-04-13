@@ -1,7 +1,6 @@
 import { HeliaInit } from 'helia';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
-import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
@@ -23,8 +22,10 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 /**
  * Default collabswarm config to use if none is provided.
  *
- * Note: This default configuration does not contain any other bootstrap nodes
- *       so upon startup this node will be in a swarm of one.
+ * Note: This is a browser-compatible default. It does not include mDNS
+ *       (which requires the Node-only `dgram` module). Without bootstrap
+ *       nodes this node will be in a swarm of one; use
+ *       `collabswarm.connect()` or pass bootstrap addresses to join peers.
  */
 export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
   ({
@@ -48,7 +49,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
+        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
         services: {
           identify: identify(),
           autoNAT: autoNAT(),
