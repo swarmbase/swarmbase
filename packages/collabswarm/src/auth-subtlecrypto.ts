@@ -105,11 +105,8 @@ export class SubtleCrypto
       }
       case 'AES-CTR':
       case 'AES-CBC':
-        // NOTE: Only AES-GCM is currently supported. AES-CTR and AES-CBC throw -- see PR description.
-        // TODO: AES-CTR and AES-CBC support is planned but not yet implemented.
-        // They require different nonce sizes (16 bytes) and key import
-        // parameters than AES-GCM. Implementation is deferred until the
-        // key derivation paths and wire format header parsing are updated.
+        // Only AES-GCM is supported. AES-CTR and AES-CBC require different
+        // nonce sizes (16 bytes) and key import parameters.
         throw new Error(`${this._encryptionAlgorithmName} is not yet supported. Use AES-GCM.`);
       default:
         throw new Error(`Unknown encryption algorithm: ${this._encryptionAlgorithmName}`);
