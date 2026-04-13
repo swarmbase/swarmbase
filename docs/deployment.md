@@ -49,7 +49,22 @@ Example output:
 }
 ```
 
-Pass the `wsMultiaddr` value to your SwarmDB client configuration so browsers
+**Important:** The `wsMultiaddr` in `relay-info.json` contains the relay's
+*listen* address (e.g. `/ip4/0.0.0.0/...`), which is not dialable from another
+machine. Clients must construct a multiaddr using the relay's public IP or DNS
+name and the `peerId`:
+
+```
+/dns4/relay.example.com/tcp/9001/ws/p2p/<peerId>
+```
+
+or for a bare IP:
+
+```
+/ip4/<PUBLIC_IP>/tcp/9001/ws/p2p/<peerId>
+```
+
+Pass this constructed multiaddr to your SwarmDB client configuration so browsers
 know where to connect.
 
 Or use the provided single-server Compose file:
@@ -67,7 +82,7 @@ docker compose -f guides/docker/docker-compose.single.yaml \
 All configuration is done through environment variables on the relay process.
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `WS_PORT` | `9001` | WebSocket listen port |
 | `TCP_PORT` | `9002` | TCP listen port |
 | `WS_LISTEN` | `/ip4/0.0.0.0/tcp/$WS_PORT/ws` | Full WebSocket multiaddr |
@@ -76,9 +91,9 @@ All configuration is done through environment variables on the relay process.
 | `WS_LISTEN_V6` | `/ip6/::/tcp/$WS_PORT/ws` | IPv6 WebSocket multiaddr |
 | `TCP_LISTEN_V6` | `/ip6/::/tcp/$TCP_PORT` | IPv6 TCP multiaddr |
 | `DOCUMENT_PUBLISH_PATH` | `/documents` | Topic for document publish notifications |
-| `EXTRA_TOPICS` | (unset) | Comma-separated additional topics to subscribe to |
-| `TOPIC_ALLOWLIST` | (unset) | Comma-separated topic prefixes. Only matching topics are auto-subscribed. Unset means open mode (all non-system topics allowed). Example: `/document/,/documents` |
-| `MAX_AUTO_TOPICS` | `1000` | Maximum number of auto-subscribed topics. Prevents unbounded memory growth from topic spam. |
+| `EXTRA_TOPICS` | (unset) | Comma-separated additional topics to subscribe |
+| `TOPIC_ALLOWLIST` | (unset) | Comma-separated topic prefixes for auto-subscribe. Unset = open mode. Example: `/document/,/documents` |
+| `MAX_AUTO_TOPICS` | `1000` | Cap on auto-subscribed topics to prevent unbounded growth |
 
 ### IPv6 Notes
 
@@ -107,7 +122,15 @@ configuration.
 1. A domain name with DNS A records pointing to your server (e.g.
    `relay.example.com`).
 2. Ports 80 and 443 open for Caddy's automatic Let's Encrypt certificates.
-3. Port 9002 open between relay servers for TCP mesh communication.
+3. Port 9002 open between relay servers if you plan to peer them (see
+   "Inter-Relay Peering" below).
+
+> **Limitation:** By default each relay server is standalone -- it does not
+> configure bootstrap peers or attempt to discover other relays. Clients
+> connected to different relays will **not** see each other's pubsub messages
+> unless the relays are manually peered (e.g. by dialing each other's TCP
+> multiaddr at startup). A future release may add automatic inter-relay
+> discovery.
 
 ### Deploy
 
@@ -124,8 +147,14 @@ This starts:
 - **relay-1** -- Primary relay / bootstrap node.
 - **relay-2** -- Secondary relay node.
 
-Browser clients connect to `wss://relay.example.com` instead of a raw
-WebSocket port.
+Browser clients connect using a libp2p multiaddr through the TLS-terminated
+proxy. The multiaddr format is:
+
+```
+/dns4/relay.example.com/tcp/443/wss/p2p/<relay-peerId>
+```
+
+This replaces the raw WebSocket multiaddr used in the single-server setup.
 
 ### Scaling Beyond Two Relays
 
@@ -157,13 +186,14 @@ Caddy (or your own load balancer) at their IP addresses.
 
 ## Docker Images
 
-The repository provides three Dockerfiles:
+The repository provides four relay-related Dockerfiles:
 
 | File | Purpose | Build command |
-|---|---|---|
+| --- | --- | --- |
 | `relay-server/Dockerfile` | Standard relay (used by `docker-compose.yaml`) | `docker build -t swarmdb-relay relay-server/` |
+| `Dockerfile.relay` | Relay built from repo root context | `docker build -f Dockerfile.relay -t swarmdb-relay .` |
 | `guides/docker/Dockerfile.relay` | Standalone relay with extended comments | `docker build -f guides/docker/Dockerfile.relay -t swarmdb-relay relay-server/` |
-| `guides/docker/Dockerfile.bootstrap` | Dedicated DHT bootstrap node (500+ peers) | `docker build -f guides/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/` |
+| `guides/docker/Dockerfile.bootstrap` | Relay with pubsub peer discovery (same code) | `docker build -f guides/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/` |
 
 All images are based on `node:22-alpine`, run as a non-root `app` user, and
 include a built-in health check.
@@ -173,9 +203,10 @@ include a built-in health check.
 For most deployments, the standard relay server is sufficient. It provides both
 circuit relay and pubsub-based peer discovery.
 
-A dedicated bootstrap node (`Dockerfile.bootstrap`) is only needed for large
-deployments (500+ peers) where pubsub-based discovery alone is insufficient and
-Kademlia DHT bootstrap is required.
+`Dockerfile.bootstrap` currently runs the **same relay-server code** -- it does
+not configure Kademlia DHT. The separate Dockerfile exists as a placeholder for
+future large-scale deployments where DHT-based discovery may be added. Today,
+all peer discovery goes through GossipSub pubsub.
 
 ## Kubernetes Deployment
 
@@ -188,9 +219,12 @@ SwarmDB relay servers are stateless and straightforward to run on Kubernetes.
   aware ingress controller (NGINX Ingress, Traefik, etc.).
 - **Health checks**: Use the built-in TCP check on port 9001 for both liveness
   and readiness probes.
-- **Scaling**: Each relay is independent. Scale the Deployment replica count as
-  needed. Peers discover each other through pubsub, so relays do not need to
-  know about each other ahead of time.
+- **Scaling**: Scale the Deployment replica count as needed. **Important:**
+  each relay maintains its own independent pubsub mesh. Peers connected to
+  different relay pods will not see each other's messages unless the relays
+  are peered. For multi-replica deployments, configure relays to dial each
+  other on startup (e.g. via an init container or headless Service DNS) so
+  they form a connected pubsub graph.
 
 ### Example Manifests
 
