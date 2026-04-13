@@ -21,6 +21,7 @@ import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
 import { kadDHT } from '@libp2p/kad-dht';
+import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
 import { webSockets } from '@libp2p/websockets';
@@ -55,7 +56,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
+        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
         services: {
           identify: identify(),
           autoNAT: autoNAT(),

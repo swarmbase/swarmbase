@@ -2010,6 +2010,7 @@ __metadata:
     "@libp2p/identify": "npm:^3.0.39"
     "@libp2p/interface": "npm:^2.11.0"
     "@libp2p/kad-dht": "npm:^15.0.2"
+    "@libp2p/mdns": "npm:^11.0.47"
     "@libp2p/peer-id": "npm:^5.1.9"
     "@libp2p/pubsub-peer-discovery": "npm:^11.0.2"
     "@libp2p/topology": "npm:^4.0.3"
@@ -3849,7 +3850,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/mdns@npm:^11.0.20":
+"@libp2p/mdns@npm:^11.0.20, @libp2p/mdns@npm:^11.0.47":
   version: 11.0.47
   resolution: "@libp2p/mdns@npm:11.0.47"
   dependencies:

@@ -1,6 +1,7 @@
 import { HeliaInit } from 'helia';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
+import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
@@ -47,7 +48,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
+        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
         services: {
           identify: identify(),
           autoNAT: autoNAT(),
