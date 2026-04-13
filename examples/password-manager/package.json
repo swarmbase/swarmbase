@@ -17,9 +17,9 @@
     "@types/uuid": "^10.0.0",
     "bootstrap": "^5.3.8",
     "quill-delta": "^5.1.0",
-    "react": "^18.3.1",
+    "react": "^19.2.5",
     "react-bootstrap": "^2.10.5",
-    "react-dom": "^19.2.4",
+    "react-dom": "^19.2.5",
     "react-router-bootstrap": "^0.26.3",
     "react-router-dom": "^6.26.2",
     "react-scripts": "^5.0.1",
@@ -30,7 +30,7 @@
   "type": "module",
   "devDependencies": {
     "@types/bootstrap": "^5.2.10",
-    "@types/react": "^18.3.11",
+    "@types/react": "^19.2.3",
     "@types/react-bootstrap": "^0.32.37",
     "@types/react-dom": "^19.2.3",
     "@types/testing-library__jest-dom": "^6"
