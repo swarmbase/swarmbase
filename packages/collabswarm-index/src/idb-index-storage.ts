@@ -35,6 +35,16 @@ export class IDBIndexStorage implements IndexStorage {
     if (storeAlreadyExists) {
       // Store already exists -- just reopen at current version
       this._db = await openDB(this._dbName, currentVersion);
+      // Read actual indexes from the existing store instead of trusting the requested fields
+      const tx = this._db.transaction(indexName, 'readonly');
+      const store = tx.objectStore(indexName);
+      const existingFieldSet = new Set<string>();
+      for (const idxName of store.indexNames) {
+        existingFieldSet.add(idxName);
+      }
+      this._indexedFields.set(indexName, existingFieldSet);
+      this._initializedStores.add(indexName);
+      return;
     } else {
       // Need to create a new object store -- requires version upgrade
       const newVersion = currentVersion + 1;
@@ -215,10 +225,7 @@ export class IDBIndexStorage implements IndexStorage {
           break;
         case 'prefix': {
           if (typeof filter.value !== 'string') continue;
-          const lower = filter.value;
-          // Upper bound: increment the last character to form an exclusive upper bound
-          const upper = filter.value.slice(0, -1) + String.fromCharCode(filter.value.charCodeAt(filter.value.length - 1) + 1);
-          keyRange = IDBKeyRange.bound(lower, upper, false, true);
+          keyRange = IDBKeyRange.bound(filter.value, filter.value + '\uffff', false, false);
           break;
         }
         default:
