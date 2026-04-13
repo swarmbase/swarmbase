@@ -10,6 +10,8 @@ export class IDBIndexStorage implements IndexStorage {
   private _dbName: string;
   private _db: IDBPDatabase | null = null;
   private _initializedStores: Set<string> = new Set();
+  /** Tracks which IDB indexes exist per store, so query() can use them for fast lookups. */
+  private _indexedFields: Map<string, Set<string>> = new Map();
 
   constructor(dbName: string = 'collabswarm-index') {
     this._dbName = dbName;
@@ -48,6 +50,13 @@ export class IDBIndexStorage implements IndexStorage {
       });
     }
 
+    // Track which fields have IDB indexes for this store
+    const fieldSet = new Set<string>();
+    for (const field of fields) {
+      fieldSet.add(field.path);
+    }
+    this._indexedFields.set(indexName, fieldSet);
+
     this._initializedStores.add(indexName);
   }
 
@@ -84,18 +93,31 @@ export class IDBIndexStorage implements IndexStorage {
 
     let results: IndexEntry[] = [];
 
-    // TODO: Optimization opportunity -- leverage IDB indexes for common single-field
-    // equality/range queries instead of always doing a full JS scan. Currently IDB indexes
-    // are created in initialize() but not used during query(). For simple cases (single eq
-    // filter on an indexed field), we could use store.index(field).getAll(value) for a
-    // significant speedup on large datasets.
-    let cursor = await store.openCursor();
-    while (cursor) {
-      const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
-      if (this._matchesFilters(record.fields, filters)) {
-        results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+    // Optimization: leverage IDB indexes for single-field equality or range queries
+    // on indexed fields instead of always doing a full JS scan.
+    const idbStrategy = this._pickIDBStrategy(indexName, filters);
+
+    if (idbStrategy) {
+      const { indexFieldPath, keyRange, remainingFilters } = idbStrategy;
+      const idbIndex = store.index(indexFieldPath);
+      let cursor = await idbIndex.openCursor(keyRange);
+      while (cursor) {
+        const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
+        if (this._matchesFilters(record.fields, remainingFilters)) {
+          results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+        }
+        cursor = await cursor.continue();
       }
-      cursor = await cursor.continue();
+    } else {
+      // Fallback: full scan with JS-side filtering
+      let cursor = await store.openCursor();
+      while (cursor) {
+        const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
+        if (this._matchesFilters(record.fields, filters)) {
+          results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+        }
+        cursor = await cursor.continue();
+      }
     }
 
     await tx.done;
@@ -145,6 +167,70 @@ export class IDBIndexStorage implements IndexStorage {
       throw new Error('IDBIndexStorage: database not initialized. Call initialize() first.');
     }
     return this._db;
+  }
+
+  /**
+   * Determine whether an IDB index can accelerate the query.
+   *
+   * Eligible cases (the first matching filter wins):
+   *   - A single-field `eq` filter on an indexed field uses `IDBKeyRange.only(value)`.
+   *   - A single-field `gt`/`gte`/`lt`/`lte` filter on an indexed field uses
+   *     the corresponding open/closed bound.
+   *   - A `prefix` filter on an indexed string field uses a lower/upper bound range.
+   *
+   * Any remaining filters that cannot be served by the IDB index are returned
+   * as `remainingFilters` and applied in JavaScript after the cursor scan.
+   */
+  private _pickIDBStrategy(
+    indexName: string,
+    filters: FieldFilter[],
+  ): { indexFieldPath: string; keyRange: IDBKeyRange | null; remainingFilters: FieldFilter[] } | null {
+    if (filters.length === 0) return null;
+
+    const indexedFields = this._indexedFields.get(indexName);
+    if (!indexedFields) return null;
+
+    for (let i = 0; i < filters.length; i++) {
+      const filter = filters[i];
+      // Only use IDB indexes for simple (non-nested) field paths that were registered
+      if (!indexedFields.has(filter.path)) continue;
+
+      let keyRange: IDBKeyRange | null = null;
+
+      switch (filter.operator) {
+        case 'eq':
+          keyRange = IDBKeyRange.only(filter.value);
+          break;
+        case 'gt':
+          keyRange = IDBKeyRange.lowerBound(filter.value, true);
+          break;
+        case 'gte':
+          keyRange = IDBKeyRange.lowerBound(filter.value, false);
+          break;
+        case 'lt':
+          keyRange = IDBKeyRange.upperBound(filter.value, true);
+          break;
+        case 'lte':
+          keyRange = IDBKeyRange.upperBound(filter.value, false);
+          break;
+        case 'prefix': {
+          if (typeof filter.value !== 'string') continue;
+          const lower = filter.value;
+          // Upper bound: increment the last character to form an exclusive upper bound
+          const upper = filter.value.slice(0, -1) + String.fromCharCode(filter.value.charCodeAt(filter.value.length - 1) + 1);
+          keyRange = IDBKeyRange.bound(lower, upper, false, true);
+          break;
+        }
+        default:
+          continue;
+      }
+
+      // Remove the accelerated filter; the rest still need JS-side evaluation
+      const remainingFilters = filters.filter((_, idx) => idx !== i);
+      return { indexFieldPath: filter.path, keyRange, remainingFilters };
+    }
+
+    return null;
   }
 
   private _matchesFilters(fields: Record<string, unknown>, filters: FieldFilter[]): boolean {

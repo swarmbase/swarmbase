@@ -31,9 +31,11 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    * @returns A non-extractable CryptoKey usable with `computeToken` and `computeCompoundToken`.
    * @throws If fieldPath is empty/blank or if masterKey is not extractable.
    */
-  // TODO: Consider accepting raw key material (Uint8Array) instead of CryptoKey
-  // to allow the master key to remain non-extractable. Current API requires
-  // extractable master keys, which weakens key-handling guarantees.
+  /**
+   * Derive a field-specific HMAC key from a CryptoKey master key.
+   * The master key must be extractable so its raw bytes can be fed into HKDF.
+   * Prefer `deriveFieldKeyFromRaw` when possible to avoid requiring extractable keys.
+   */
   async deriveFieldKey(masterKey: CryptoKey, fieldPath: string): Promise<CryptoKey> {
     if (!fieldPath || fieldPath.trim().length === 0) {
       throw new Error('fieldPath must be a non-empty string');
@@ -44,7 +46,36 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
     } catch {
       throw new Error('Master key must be extractable. Generate with extractable: true.');
     }
-    const hkdfKey = await crypto.subtle.importKey('raw', rawMaster, 'HKDF', false, ['deriveKey']);
+    return this._deriveFromRawBytes(new Uint8Array(rawMaster), fieldPath);
+  }
+
+  /**
+   * Derive a field-specific HMAC key from raw key material (Uint8Array).
+   * This avoids the need for an extractable CryptoKey, strengthening key-handling
+   * guarantees. The raw bytes are imported as a non-extractable HKDF key internally.
+   *
+   * @param rawKeyMaterial Raw secret bytes (e.g., 32 bytes of randomness).
+   *   Must be at least 16 bytes.
+   * @param fieldPath Dot-notation path identifying the field (e.g., "title").
+   *   Must be a non-empty string.
+   * @returns A non-extractable CryptoKey usable with `computeToken` and `computeCompoundToken`.
+   */
+  async deriveFieldKeyFromRaw(rawKeyMaterial: Uint8Array, fieldPath: string): Promise<CryptoKey> {
+    if (!fieldPath || fieldPath.trim().length === 0) {
+      throw new Error('fieldPath must be a non-empty string');
+    }
+    if (rawKeyMaterial.length < 16) {
+      throw new RangeError(`rawKeyMaterial must be at least 16 bytes, got ${rawKeyMaterial.length}`);
+    }
+    return this._deriveFromRawBytes(rawKeyMaterial, fieldPath);
+  }
+
+  /**
+   * Shared HKDF derivation logic used by both `deriveFieldKey` and `deriveFieldKeyFromRaw`.
+   */
+  private async _deriveFromRawBytes(raw: Uint8Array, fieldPath: string): Promise<CryptoKey> {
+    // Use .buffer.slice() to get a proper ArrayBuffer that satisfies the BufferSource type
+    const hkdfKey = await crypto.subtle.importKey('raw', raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer, 'HKDF', false, ['deriveKey']);
     const encoder = new TextEncoder();
     return crypto.subtle.deriveKey(
       {
