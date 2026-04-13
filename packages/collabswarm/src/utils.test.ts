@@ -277,6 +277,16 @@ describe('crypto key utilities', () => {
       const jwk = await generateAndExportSymmetricKey(alg);
       expect(jwk).toBeDefined();
       expect(jwk.kty).toBe('oct');
+
+      // Re-import the JWK and verify the algorithm matches
+      const reimported = await crypto.subtle.importKey(
+        'jwk',
+        jwk,
+        { name: alg, length: 256 },
+        true,
+        ['encrypt', 'decrypt'],
+      );
+      expect(reimported.algorithm.name).toBe(alg);
     },
   );
 });

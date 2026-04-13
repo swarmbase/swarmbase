@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { SubtleCrypto } from './auth-subtlecrypto';
 import type { AesAlgorithmName } from './auth-provider';
+import { importSymmetricKey } from './utils';
 
 const auth = new SubtleCrypto();
 
@@ -356,14 +357,18 @@ describe('_extractNonce', () => {
 });
 
 describe('cross-algorithm failure', () => {
-  test('GCM-encrypted data cannot be decrypted by CTR instance', async () => {
+  test('GCM-encrypted data cannot be decrypted by CTR instance using same key material', async () => {
     const gcm = new SubtleCrypto(undefined, 'AES-GCM');
     const ctr = new SubtleCrypto(undefined, 'AES-CTR');
-    const gcmKey = await generateKey('AES-GCM');
-    const ctrKey = await generateKey('AES-CTR');
+
+    // Use the same raw key material imported under both algorithms
+    const rawKeyBytes = new Uint8Array(32);
+    crypto.getRandomValues(rawKeyBytes);
+    const gcmKey = await importSymmetricKey(rawKeyBytes, 'raw', 'AES-GCM');
+    const ctrKey = await importSymmetricKey(rawKeyBytes, 'raw', 'AES-CTR');
 
     const { data, nonce } = await gcm.encrypt(new Uint8Array([1, 2, 3]), gcmKey);
-    // Different key + different algorithm = failure
+    // Same key material but different algorithm = failure
     await expect(ctr.decrypt(data, ctrKey, nonce)).rejects.toThrow();
   });
 });

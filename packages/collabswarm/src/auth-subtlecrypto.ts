@@ -103,16 +103,25 @@ export class SubtleCrypto
   _encryptionAlgorithmParams(nonce?: Uint8Array): AesGcmParams | AesCtrParams | AesCbcParams {
     switch (this._encryptionAlgorithmName) {
       case 'AES-GCM': {
+        if (nonce && nonce.length !== 12) {
+          throw new Error(`AES-GCM nonce must be 12 bytes, got ${nonce.length}`);
+        }
         const iv = nonce ?? crypto.getRandomValues(new Uint8Array(12));
         return { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> };
       }
       case 'AES-CTR': {
+        if (nonce && nonce.length !== 16) {
+          throw new Error(`AES-CTR counter must be 16 bytes, got ${nonce.length}`);
+        }
         const counter = nonce ?? crypto.getRandomValues(new Uint8Array(16));
         // length: 64 means the lower 64 bits of the 128-bit counter block
         // are incremented, allowing up to 2^64 blocks per nonce.
         return { name: 'AES-CTR', counter: counter as Uint8Array<ArrayBuffer>, length: 64 };
       }
       case 'AES-CBC': {
+        if (nonce && nonce.length !== 16) {
+          throw new Error(`AES-CBC IV must be 16 bytes, got ${nonce.length}`);
+        }
         const iv = nonce ?? crypto.getRandomValues(new Uint8Array(16));
         return { name: 'AES-CBC', iv: iv as Uint8Array<ArrayBuffer> };
       }
@@ -128,6 +137,12 @@ export class SubtleCrypto
     const cached = this._hmacKeyCache.get(documentKey);
     if (cached) return cached;
 
+    if (!documentKey.extractable) {
+      throw new Error(
+        'Cannot derive HMAC key: the document encryption key must be extractable. ' +
+        'Ensure the key was created with extractable: true.',
+      );
+    }
     const rawBytes = await crypto.subtle.exportKey('raw', documentKey);
     const hkdfKey = await crypto.subtle.importKey(
       'raw',

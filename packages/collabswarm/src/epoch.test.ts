@@ -229,7 +229,7 @@ describe('EpochManager', () => {
       groupSecret2,
       new Set(['a', 'b']),
       'member_added',
-      'b',
+      { affectedMember: 'b' },
     );
 
     expect(transition.epoch.parentEpochId).toBeDefined();
@@ -252,7 +252,7 @@ describe('EpochManager', () => {
         groupSecret2,
         new Set(['a']),
         reason,
-        affectedMember,
+        affectedMember ? { affectedMember } : undefined,
       );
 
       expect(transition.reason).toBe(reason);
@@ -270,13 +270,13 @@ describe('EpochManager', () => {
       secrets[1],
       new Set(['a', 'b']),
       'member_added',
-      'b',
+      { affectedMember: 'b' },
     );
     const t2 = await manager.transitionEpoch(
       secrets[2],
       new Set(['a']),
       'member_removed',
-      'b',
+      { affectedMember: 'b' },
     );
 
     // Verify the chain: epoch0 <- t1 <- t2
