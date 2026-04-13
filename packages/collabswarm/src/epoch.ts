@@ -1,3 +1,5 @@
+import type { AesAlgorithmName } from './auth-provider';
+
 /** Length of an epoch ID in bytes (SHA-256 hash). */
 export const EPOCH_ID_LENGTH = 32;
 
@@ -8,7 +10,7 @@ export const NONCE_LENGTH = 12;
 export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
 
 /** HKDF info strings for deriving encryption keys, keyed by algorithm. */
-export const ENCRYPTION_KEY_INFO: Record<string, string> = {
+export const ENCRYPTION_KEY_INFO: Record<AesAlgorithmName, string> = {
   'AES-GCM': 'aes-gcm-key',
   'AES-CTR': 'aes-ctr-key',
   'AES-CBC': 'aes-cbc-key',
@@ -120,7 +122,7 @@ export async function deriveEpochSecret(
  */
 export async function deriveEncryptionKey(
   epochSecret: Uint8Array,
-  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     'raw',
@@ -138,6 +140,9 @@ export async function deriveEncryptionKey(
     },
     baseKey,
     { name: algorithmName, length: 256 },
+    // extractable: true is required so that AES-CTR and AES-CBC modes can
+    // export the raw key bytes to derive an HMAC key (via HKDF) for the
+    // encrypt-then-MAC construction in SubtleCrypto._deriveHmacKey().
     true,
     ['encrypt', 'decrypt'],
   );
@@ -159,7 +164,7 @@ export async function createEpoch(
   groupSecret: Uint8Array,
   members: Set<string>,
   parentEpochId?: Uint8Array,
-  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ): Promise<Epoch> {
   const epochId = await generateEpochId(groupSecret, parentEpochId);
   const epochSecret = await deriveEpochSecret(groupSecret, epochId);
@@ -222,7 +227,7 @@ export class EpochManager {
     reason: EpochTransition['reason'],
     options?: {
       affectedMember?: string;
-      algorithmName?: 'AES-GCM' | 'AES-CTR' | 'AES-CBC';
+      algorithmName?: AesAlgorithmName;
     },
   ): Promise<EpochTransition> {
     const { affectedMember, algorithmName = 'AES-GCM' } = options ?? {};

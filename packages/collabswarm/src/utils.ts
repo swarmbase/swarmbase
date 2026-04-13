@@ -1,5 +1,6 @@
 import BufferList from 'bl';
 import type { Uint8ArrayList } from 'uint8arraylist';
+import type { AesAlgorithmName } from './auth-provider';
 
 export function shuffleArray<T>(array: T[]) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -112,7 +113,7 @@ export async function importHmacKey(
 export async function importSymmetricKey(
   keyData: Uint8Array,
   format: Exclude<KeyFormat, 'jwk'> = 'raw',
-  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ) {
   // Cast needed: Uint8Array<ArrayBufferLike> does not satisfy BufferSource (excludes SharedArrayBuffer)
   const key = await crypto.subtle.importKey(format, keyData as Uint8Array<ArrayBuffer>, algorithmName, true, [
@@ -124,7 +125,7 @@ export async function importSymmetricKey(
 }
 
 export async function generateAndExportSymmetricKey(
-  algorithmName: 'AES-GCM' | 'AES-CTR' | 'AES-CBC' = 'AES-GCM',
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ) {
   const documentKey = await crypto.subtle.generateKey(
     {

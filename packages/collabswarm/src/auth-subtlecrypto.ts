@@ -31,6 +31,13 @@ export class SubtleCrypto
   /** Cache derived HMAC keys to avoid re-deriving per call. */
   private _hmacKeyCache = new WeakMap<CryptoKey, CryptoKey>();
 
+  /**
+   * @remarks The `nonceBits` constructor parameter was removed in the
+   * AES-CTR/CBC support update. Nonce size is now derived automatically
+   * from the configured encryption algorithm (12 bytes for GCM, 16 bytes
+   * for CTR/CBC) via the `nonceBits` getter. No migration is needed as
+   * there are no live consumers of the previous constructor signature.
+   */
   constructor(
     /**
      * The type of algorithm used for signature and verification keys.
@@ -217,6 +224,10 @@ export class SubtleCrypto
     documentKey: CryptoKey,
     nonce?: Uint8Array,
   ): Promise<Uint8Array> {
+    if (!nonce) {
+      throw new Error('Nonce is required for decryption');
+    }
+
     if (this._encryptionAlgorithmName !== 'AES-GCM') {
       // Split ciphertext and HMAC tag
       if (data.length < HMAC_TAG_LENGTH) {
