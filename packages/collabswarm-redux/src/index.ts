@@ -1,81 +1,46 @@
-import {
+export {
+  // Async action creators
   initializeAsync,
-  INITIALIZE,
-  InitializeAction,
-  initialize,
-
   connectAsync,
-  CONNECT,
-  ConnectAction,
-  connect,
-
   openDocumentAsync,
-  OPEN_DOCUMENT,
-  OpenDocumentAction,
-  openDocument,
-
   closeDocumentAsync,
-  CLOSE_DOCUMENT,
-  CloseDocumentAction,
-  closeDocument,
-
-  SYNC_DOCUMENT,
-  SyncDocumentAction,
-  syncDocument,
-  
   changeDocumentAsync,
-  CHANGE_DOCUMENT,
-  ChangeDocumentAction,
-  changeDocument,
 
-  CollabswarmActions
-} from "./actions";
-import {
-  CollabswarmState,
-  CollabswarmDocumentState,
-  initialState,
-  collabswarmReducer
-} from "./reducers";
+  // Action type constants
+  INITIALIZE,
+  CONNECT,
+  OPEN_DOCUMENT,
+  CLOSE_DOCUMENT,
+  SYNC_DOCUMENT,
+  CHANGE_DOCUMENT,
+  PEER_CONNECT,
+  PEER_DISCONNECT,
+
+  // Action interfaces
+  type InitializeAction,
+  type ConnectAction,
+  type OpenDocumentAction,
+  type CloseDocumentAction,
+  type SyncDocumentAction,
+  type ChangeDocumentAction,
+  type PeerConnectAction,
+  type PeerDisconnectAction,
+  type CollabswarmActions,
+
+  // Synchronous action creators
+  initialize,
+  connect,
+  openDocument,
+  closeDocument,
+  syncDocument,
+  changeDocument,
+  peerConnect,
+  peerDisconnect,
+} from './actions';
 
 export {
-  // Actions
-
-  initializeAsync,
-  INITIALIZE,
-  InitializeAction,
-  initialize,
-
-  connectAsync,
-  CONNECT,
-  ConnectAction,
-  connect,
-
-  openDocumentAsync,
-  OPEN_DOCUMENT,
-  OpenDocumentAction,
-  openDocument,
-
-  closeDocumentAsync,
-  CLOSE_DOCUMENT,
-  CloseDocumentAction,
-  closeDocument,
-
-  SYNC_DOCUMENT,
-  SyncDocumentAction,
-  syncDocument,
-  
-  changeDocumentAsync,
-  CHANGE_DOCUMENT,
-  ChangeDocumentAction,
-  changeDocument,
-
-  CollabswarmActions,
-
-
-  // Reducer
-
-  CollabswarmState,
-  CollabswarmDocumentState,
+  type CollabswarmState,
+  type CollabswarmDocumentState,
   initialState,
-  collabswarmReducer
-};
+  collabswarmReducer,
+} from './reducers';

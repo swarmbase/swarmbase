@@ -1962,8 +1962,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/collabswarm-redux@workspace:packages/collabswarm-redux"
   dependencies:
-    "@automerge/automerge": "npm:^3.2.4"
-    "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@types/jest": "npm:^29.5.14"
     eslint: "npm:^10.0.2"
     jest: "npm:^29.2.5"
@@ -1971,6 +1969,10 @@ __metadata:
     redux-thunk: "npm:^3.1.0"
     ts-jest: "npm:^29.2.5"
     typescript: "npm:^5.9.3"
+  peerDependencies:
+    "@collabswarm/collabswarm": "workspace:*"
+    redux: ^4.0.0 || ^5.0.0
+    redux-thunk: ^2.0.0 || ^3.0.0
   languageName: unknown
   linkType: soft
 

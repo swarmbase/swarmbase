@@ -92,7 +92,6 @@ export function initializeAsync<
     });
     await node.initialize(config);
     dispatch(initialize(node, captureTrace()));
-    console.log('Node information:', node);
     return node;
   };
 }
@@ -191,8 +190,6 @@ export function connectAsync<
     }
     await node.connect(addresses);
     dispatch(connect(addresses, captureTrace()));
-    console.log('Node information:', node);
-    console.log('Connected to:', addresses);
   };
 }
 

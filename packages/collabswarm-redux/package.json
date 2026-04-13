@@ -25,9 +25,10 @@
     "ts-jest": "^29.2.5",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "@automerge/automerge": "^3.2.4",
-    "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
+  "peerDependencies": {
+    "@collabswarm/collabswarm": "workspace:*",
+    "redux": "^4.0.0 || ^5.0.0",
+    "redux-thunk": "^2.0.0 || ^3.0.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
