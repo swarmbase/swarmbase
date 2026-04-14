@@ -36,7 +36,7 @@ import {
 } from './crdt-change-node';
 import {
   EPOCH_ID_LENGTH,
-  NONCE_LENGTH,
+  GCM_NONCE_LENGTH,
   EPOCH_SECRET_INFO,
   ENCRYPTION_KEY_INFO,
   Epoch,
@@ -107,7 +107,7 @@ export {
   CRDTProvider,
   ChangesSerializer,
   EPOCH_ID_LENGTH,
-  NONCE_LENGTH,
+  GCM_NONCE_LENGTH,
   EPOCH_SECRET_INFO,
   ENCRYPTION_KEY_INFO,
   Epoch,

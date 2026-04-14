@@ -3,8 +3,8 @@ import type { AesAlgorithmName } from './auth-provider';
 /** Length of an epoch ID in bytes (SHA-256 hash). */
 export const EPOCH_ID_LENGTH = 32;
 
-/** Length of AES-256-GCM nonce in bytes. */
-export const NONCE_LENGTH = 12;
+/** Length of AES-256-GCM nonce in bytes. CTR and CBC use 16-byte nonces instead. */
+export const GCM_NONCE_LENGTH = 12;
 
 /** HKDF info string for deriving the epoch secret. */
 export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
@@ -140,10 +140,9 @@ export async function deriveEncryptionKey(
     },
     baseKey,
     { name: algorithmName, length: 256 },
-    // extractable: true is required so that AES-CTR and AES-CBC modes can
-    // export the raw key bytes to derive an HMAC key (via HKDF) for the
-    // encrypt-then-MAC construction in SubtleCrypto._deriveHmacKey().
-    true,
+    // CTR/CBC require extractable keys so we can derive HMAC keys via exportKey.
+    // GCM keys do not need extraction, so keep them non-extractable for security.
+    algorithmName !== 'AES-GCM',
     ['encrypt', 'decrypt'],
   );
 }
