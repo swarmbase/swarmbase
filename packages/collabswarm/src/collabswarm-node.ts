@@ -1,3 +1,15 @@
+/**
+ * @module collabswarm-node
+ *
+ * **Node-only module.** Do not import in browser environments.
+ *
+ * This module depends on Node.js built-ins (`fs`, `dgram` via `@libp2p/mdns`)
+ * that are unavailable in browsers. It is intentionally excluded from the
+ * barrel export in `index.ts` to keep the main entry point browser-compatible.
+ *
+ * Import directly when running in Node.js:
+ *   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/src/collabswarm-node';
+ */
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
