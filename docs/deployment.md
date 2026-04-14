@@ -148,10 +148,26 @@ This starts:
 - **relay-2** -- Secondary relay node.
 
 Browser clients connect using a libp2p multiaddr through the TLS-terminated
-proxy. The multiaddr format is:
+proxy.
+
+> **Important:** A single load-balanced hostname does **not** work as a libp2p
+> multiaddr because each relay generates a unique peer ID. A connection to
+> `/dns4/relay.example.com/tcp/443/wss/p2p/<peerId-of-relay-1>` will fail if the
+> load balancer routes the TCP connection to relay-2 instead. You have two
+> options:
+>
+> 1. **One multiaddr per relay.** Give each relay its own DNS name (e.g.
+>    `relay-1.example.com`, `relay-2.example.com`) and configure clients with
+>    all of them.
+> 2. **Stable peer IDs.** Pre-generate a libp2p key for each relay and inject
+>    it at startup so the peer ID is deterministic. Then use sticky sessions
+>    (e.g. Caddy `lb_policy ip_hash`) so a client always reaches the relay
+>    whose peer ID it dialed.
+
+The multiaddr format for each relay is:
 
 ```
-/dns4/relay.example.com/tcp/443/wss/p2p/<relay-peerId>
+/dns4/relay-1.example.com/tcp/443/wss/p2p/<relay-1-peerId>
 ```
 
 This replaces the raw WebSocket multiaddr used in the single-server setup.
@@ -181,8 +197,10 @@ Caddy (or your own load balancer) at their IP addresses.
 - Set `MAX_AUTO_TOPICS` to cap memory usage from topic subscriptions.
 - Run the relay as a non-root user (the Dockerfiles already do this).
 - Use `restart: unless-stopped` in Compose (already set in the production file).
-- Monitor the health check endpoint -- the relay verifies port 9001 is
-  accepting TCP connections.
+- Monitor container health via Docker's built-in `HEALTHCHECK` -- the relay
+  image's health check verifies port 9001 is accepting TCP connections
+  (`docker inspect --format='{{.State.Health.Status}}' swarmdb-relay`). There
+  is no HTTP health endpoint.
 
 ## Docker Images
 
@@ -196,7 +214,13 @@ The repository provides four relay-related Dockerfiles:
 | `guides/docker/Dockerfile.bootstrap` | Relay with pubsub peer discovery (same code) | `docker build -f guides/docker/Dockerfile.bootstrap -t swarmdb-bootstrap relay-server/` |
 
 All images are based on `node:22-alpine`, run as a non-root `app` user, and
-include a built-in health check.
+include a built-in health check (TCP connect on port 9001).
+
+> **Note:** `Dockerfile.relay` (repo root) does **not** create or chown the
+> `/shared` directory. If you mount a volume at `/shared`, the non-root `app`
+> user will get `EACCES` when writing `relay-info.json`. Either use one of the
+> other Dockerfiles (which do create `/shared`), or pre-create the directory on
+> the host with appropriate permissions before mounting.
 
 ### Bootstrap Node vs Relay Server
 
