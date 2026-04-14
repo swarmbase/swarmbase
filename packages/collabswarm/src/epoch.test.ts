@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
 import {
   EPOCH_ID_LENGTH,
-  NONCE_LENGTH,
+  GCM_NONCE_LENGTH,
   generateEpochId,
   deriveEpochSecret,
   deriveEncryptionKey,
@@ -106,7 +106,7 @@ describe('deriveEncryptionKey', () => {
   test('encryption round-trip works with derived key', async () => {
     const key = await deriveEncryptionKey(epochSecret);
     const plaintext = new TextEncoder().encode('hello swarmdb');
-    const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+    const nonce = crypto.getRandomValues(new Uint8Array(GCM_NONCE_LENGTH));
 
     const ciphertext = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: nonce },
@@ -136,12 +136,22 @@ describe('deriveEncryptionKey', () => {
   );
 
   test('different algorithms produce different keys from same secret', async () => {
+    // Use CTR and CBC (both extractable) to verify distinct key material
+    const ctrKey = await deriveEncryptionKey(epochSecret, 'AES-CTR');
+    const cbcKey = await deriveEncryptionKey(epochSecret, 'AES-CBC');
+    const ctrRaw = new Uint8Array(await crypto.subtle.exportKey('raw', ctrKey));
+    const cbcRaw = new Uint8Array(await crypto.subtle.exportKey('raw', cbcKey));
+    // Different HKDF info strings should produce different key material
+    expect(ctrRaw).not.toStrictEqual(cbcRaw);
+  });
+
+  test('GCM key is non-extractable, CTR/CBC keys are extractable', async () => {
     const gcmKey = await deriveEncryptionKey(epochSecret, 'AES-GCM');
     const ctrKey = await deriveEncryptionKey(epochSecret, 'AES-CTR');
-    const gcmRaw = new Uint8Array(await crypto.subtle.exportKey('raw', gcmKey));
-    const ctrRaw = new Uint8Array(await crypto.subtle.exportKey('raw', ctrKey));
-    // Different HKDF info strings should produce different key material
-    expect(gcmRaw).not.toStrictEqual(ctrRaw);
+    const cbcKey = await deriveEncryptionKey(epochSecret, 'AES-CBC');
+    expect(gcmKey.extractable).toBe(false);
+    expect(ctrKey.extractable).toBe(true);
+    expect(cbcKey.extractable).toBe(true);
   });
 });
 
@@ -174,7 +184,7 @@ describe('createEpoch', () => {
   test('encryption key can encrypt and decrypt data', async () => {
     const epoch = await createEpoch(groupSecret1, members);
     const plaintext = new TextEncoder().encode('epoch test data');
-    const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+    const nonce = crypto.getRandomValues(new Uint8Array(GCM_NONCE_LENGTH));
 
     const ciphertext = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: nonce },

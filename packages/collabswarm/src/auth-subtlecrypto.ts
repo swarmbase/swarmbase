@@ -69,6 +69,11 @@ export class SubtleCrypto
    * - AES-GCM: 12 bytes (96-bit IV, standard)
    * - AES-CTR: 16 bytes (128-bit counter block)
    * - AES-CBC: 16 bytes (128-bit IV)
+   *
+   * **Breaking change:** GCM nonce was previously 96 *bytes* (a bug).
+   * It is now 12 bytes (96 bits) per the NIST recommendation. Blocks
+   * encrypted with the old 96-byte nonce cannot be decrypted with this
+   * version. There are no known live users, so no migration is provided.
    */
   get nonceBits(): number {
     switch (this._encryptionAlgorithmName) {
@@ -77,6 +82,8 @@ export class SubtleCrypto
       case 'AES-CTR':
       case 'AES-CBC':
         return 16;
+      default:
+        throw new Error(`Unsupported encryption algorithm: ${this._encryptionAlgorithmName}`);
     }
   }
 
@@ -132,6 +139,8 @@ export class SubtleCrypto
         const iv = nonce ?? crypto.getRandomValues(new Uint8Array(16));
         return { name: 'AES-CBC', iv: iv as Uint8Array<ArrayBuffer> };
       }
+      default:
+        throw new Error(`Unsupported encryption algorithm: ${this._encryptionAlgorithmName}`);
     }
   }
 
@@ -163,7 +172,7 @@ export class SubtleCrypto
         name: 'HKDF',
         hash: 'SHA-256',
         salt: new ArrayBuffer(0),
-        info: new TextEncoder().encode('hmac-auth'),
+        info: new TextEncoder().encode(`hmac-auth-${this._encryptionAlgorithmName.toLowerCase()}`),
       },
       hkdfKey,
       { name: 'HMAC', hash: 'SHA-256', length: 256 },
