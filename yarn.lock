@@ -2106,7 +2106,7 @@ __metadata:
     redux: "npm:^5.0.1"
     redux-thunk: "npm:^3.1.0"
     slate: "npm:^0.103.0"
-    slate-history: "npm:^0.109.0"
+    slate-history: "npm:^0.113.1"
     slate-react: "npm:^0.110.1"
     typescript: "npm:^5.9.3"
   languageName: unknown
@@ -18317,14 +18317,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"slate-history@npm:^0.109.0":
-  version: 0.109.0
-  resolution: "slate-history@npm:0.109.0"
+"slate-history@npm:^0.113.1":
+  version: 0.113.1
+  resolution: "slate-history@npm:0.113.1"
   dependencies:
     is-plain-object: "npm:^5.0.0"
   peerDependencies:
     slate: ">=0.65.3"
-  checksum: 10/2370b5e294cee13d619f34a9aa84cc97faecfcaa2871a903493f83a3fec800ed05b4e82f4a1b74662ee85a33616c2624a10c07a30cc2f486ec5b9640f408837d
+  checksum: 10/e7797cecb2b4d28d891ce791a4a2a09c9bb52bb01b9998bc9d9aefa805fab2e40d1ca598d4f9b90c76b0e29a0e1512a758c3ad2f62ac515a5615fd3f382b35fb
   languageName: node
   linkType: hard
 
