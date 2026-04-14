@@ -202,11 +202,18 @@ export class IDBIndexStorage implements IndexStorage {
 
     for (let i = 0; i < filters.length; i++) {
       const filter = filters[i];
-      // Only use IDB indexes for simple (non-nested) field paths that were registered
+      // Only use IDB-accelerated lookup when an IDB index exists for this field
       if (!indexedFields.has(filter.path)) continue;
 
       let keyRange: IDBKeyRange | null = null;
 
+      // Note: IDB key ranges use filter.value as-is (no normalization).
+      // The JS-side _matchesFilter path normalizes values (e.g., Date → timestamp,
+      // ISO-8601 string → timestamp) via _normalizeForComparison, but IDB indexes
+      // store raw field values. Therefore IDB-accelerated queries only produce
+      // correct results when filter.value is a primitive that matches the stored
+      // type exactly (string or number). Date objects or values requiring
+      // normalization will not match and should fall through to the JS scan path.
       switch (filter.operator) {
         case 'eq':
           keyRange = IDBKeyRange.only(filter.value);
