@@ -72,8 +72,9 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    * Shared HKDF derivation logic used by both `deriveFieldKey` and `deriveFieldKeyFromRaw`.
    */
   private async _deriveFromRawBytes(raw: Uint8Array, fieldPath: string): Promise<CryptoKey> {
-    // Use .buffer.slice() to get a proper ArrayBuffer that satisfies the BufferSource type
-    const hkdfKey = await crypto.subtle.importKey('raw', raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer, 'HKDF', false, ['deriveKey']);
+    // Uint8Array already satisfies BufferSource; pass it directly to avoid an
+    // unnecessary copy into a fresh ArrayBuffer.
+    const hkdfKey = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
     const encoder = new TextEncoder();
     return crypto.subtle.deriveKey(
       {
