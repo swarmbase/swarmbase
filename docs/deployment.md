@@ -113,14 +113,26 @@ accepted, and keep `MAX_AUTO_TOPICS` at a reasonable limit for your deployment.
 
 ## Production Multi-Server Deployment
 
-For reliability, run two or more relay servers behind a reverse proxy with TLS.
-The `guides/docker/` directory contains a ready-made Compose file and Caddy
-configuration.
+For reliability, run two or more relay servers with TLS. The `guides/docker/`
+directory contains an example Compose file and Caddy configuration, but it is
+**not** a drop-in production setup for multiple relays behind a single
+load-balanced hostname.
+
+Each relay has its own libp2p peer ID, so clients must be able to dial a
+specific relay address. With the current relay implementation, a single shared
+hostname that load-balances across multiple relays will break dialing (see the
+"Important" callout below). For production, use **one public DNS name per
+relay** (e.g. `relay-1.example.com`, `relay-2.example.com`) so each hostname
+consistently resolves to exactly one relay. The provided `guides/docker/`
+config is a starting point -- treat the single-hostname `round_robin` example
+as a demo, and adapt it to one DNS name per relay (or implement stable peer
+IDs + sticky sessions) before deploying to production.
 
 ### Prerequisites
 
-1. A domain name with DNS A records pointing to your server (e.g.
-   `relay.example.com`).
+1. Public DNS names for each relay server, with A/AAAA records pointing to the
+   host that serves that relay (e.g. `relay-1.example.com` and
+   `relay-2.example.com`).
 2. Ports 80 and 443 open for Caddy's automatic Let's Encrypt certificates.
 3. Port 9002 open between relay servers if you plan to peer them (see
    "Inter-Relay Peering" below).
