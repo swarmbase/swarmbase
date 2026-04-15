@@ -22,8 +22,10 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 /**
  * Default collabswarm config to use if none is provided.
  *
- * Note: This default configuration does not contain any other bootstrap nodes
- *       so upon startup this node will be in a swarm of one.
+ * Note: This is a browser-compatible default. It does not include mDNS
+ *       (which requires the Node-only `dgram` module). Without bootstrap
+ *       nodes this node will be in a swarm of one; use
+ *       `collabswarm.connect()` or pass bootstrap addresses to join peers.
  */
 export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
   ({

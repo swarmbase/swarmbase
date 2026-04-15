@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import {
-  CollabswarmNode,
   defaultBootstrapConfig,
-  defaultNodeConfig,
   SubtleCrypto,
 } from '@collabswarm/collabswarm';
+import {
+  CollabswarmNode,
+  defaultNodeConfig,
+} from '@collabswarm/collabswarm/src/collabswarm-node';
 import { AutomergeJSONSerializer, AutomergeProvider } from '../src';
 import {
   AutomergeACLProvider,

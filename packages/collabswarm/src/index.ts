@@ -11,7 +11,11 @@ import {
   HistoryVisibility,
 } from './collabswarm-document';
 import { CRDTSyncMessage } from './crdt-sync-message';
-import { CollabswarmNode, defaultNodeConfig } from './collabswarm-node';
+// CollabswarmNode is intentionally excluded from this barrel export.
+// It is a Node-only module (imports `fs`, `@libp2p/mdns` which depends on
+// `dgram`) and must not be bundled by browser consumers. Import it from the
+// dedicated Node subpath export:
+//   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
 import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
@@ -93,7 +97,6 @@ export {
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
   HistoryVisibility,
-  CollabswarmNode,
   CRDTChangeBlock,
   CRDTChangeNodeKind,
   CRDTChangeNodeDeferred,
@@ -127,7 +130,6 @@ export {
   defaultConfig,
   defaultBootstrapConfig,
   getDefaultConfig,
-  defaultNodeConfig,
   // Capabilities
   CAP_DOC_ADMIN,
   CAP_DOC_WRITE,

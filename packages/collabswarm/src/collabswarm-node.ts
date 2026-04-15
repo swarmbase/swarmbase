@@ -1,3 +1,15 @@
+/**
+ * @module collabswarm-node
+ *
+ * **Node-only module.** Do not import in browser environments.
+ *
+ * This module depends on Node.js built-ins (`fs`, `dgram` via `@libp2p/mdns`)
+ * that are unavailable in browsers. It is intentionally excluded from the
+ * barrel export in `index.ts` to keep the main entry point browser-compatible.
+ *
+ * Import from the dedicated `/node` subpath export when running in Node.js:
+ *   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
+ */
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
@@ -21,6 +33,10 @@ import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
 import { kadDHT } from '@libp2p/kad-dht';
+// mDNS is Node-only: it depends on the `dgram` built-in for UDP multicast,
+// which is unavailable in browsers. The browser-compatible default config in
+// collabswarm-config.ts intentionally omits it.
+import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
 import { webSockets } from '@libp2p/websockets';
@@ -34,6 +50,17 @@ import { bitswap } from '@helia/block-brokers';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 
+/**
+ * Default config for Node.js environments.
+ *
+ * **Note on mDNS (LAN broadcast):** This default includes mDNS peer discovery,
+ * which advertises and discovers peers on the local LAN via UDP multicast.
+ * This allows same-network nodes to find each other without relay servers or
+ * bootstrap peers. Because this actively broadcasts the node's presence on the
+ * local network, privacy-sensitive deployments should disable it by building a
+ * custom config (copy this one and omit `mdns()` from `peerDiscovery`) rather
+ * than using `defaultNodeConfig` directly.
+ */
 export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
   ({
     helia: {
@@ -55,7 +82,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
+        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
         services: {
           identify: identify(),
           autoNAT: autoNAT(),
