@@ -12,6 +12,21 @@
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./node": {
+      "types": "./dist/src/collabswarm-node.d.ts",
+      "default": "./dist/src/collabswarm-node.js"
+    },
+    "./src/*": {
+      "types": "./dist/src/*.d.ts",
+      "default": "./dist/src/*.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],

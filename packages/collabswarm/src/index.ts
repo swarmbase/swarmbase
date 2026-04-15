@@ -13,8 +13,9 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 // CollabswarmNode is intentionally excluded from this barrel export.
 // It is a Node-only module (imports `fs`, `@libp2p/mdns` which depends on
-// `dgram`) and must not be bundled by browser consumers. Import it directly:
-//   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/src/collabswarm-node';
+// `dgram`) and must not be bundled by browser consumers. Import it from the
+// dedicated Node subpath export:
+//   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
 import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';

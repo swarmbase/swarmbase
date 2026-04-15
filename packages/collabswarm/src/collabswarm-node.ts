@@ -7,8 +7,8 @@
  * that are unavailable in browsers. It is intentionally excluded from the
  * barrel export in `index.ts` to keep the main entry point browser-compatible.
  *
- * Import directly when running in Node.js:
- *   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/src/collabswarm-node';
+ * Import from the dedicated `/node` subpath export when running in Node.js:
+ *   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
  */
 import * as fs from 'fs';
 import {
@@ -53,9 +53,13 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 /**
  * Default config for Node.js environments.
  *
- * Includes mDNS peer discovery, which advertises and discovers peers on the
- * local LAN via UDP multicast. This allows same-network nodes to find each
- * other without relay servers or bootstrap peers.
+ * **Note on mDNS (LAN broadcast):** This default includes mDNS peer discovery,
+ * which advertises and discovers peers on the local LAN via UDP multicast.
+ * This allows same-network nodes to find each other without relay servers or
+ * bootstrap peers. Because this actively broadcasts the node's presence on the
+ * local network, privacy-sensitive deployments should disable it by building a
+ * custom config (copy this one and omit `mdns()` from `peerDiscovery`) rather
+ * than using `defaultNodeConfig` directly.
  */
 export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
   ({
