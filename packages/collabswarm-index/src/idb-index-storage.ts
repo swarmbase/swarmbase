@@ -46,6 +46,10 @@ export class IDBIndexStorage implements IndexStorage {
         const idxName = indexNames.item(i);
         if (idxName !== null) existingFieldSet.add(idxName);
       }
+      // Await the readonly transaction before returning. We issued no requests,
+      // but some IDB implementations hold locks until the transaction completes
+      // so awaiting here avoids keeping it alive past this function.
+      await tx.done;
       this._indexedFields.set(indexName, existingFieldSet);
       this._initializedStores.add(indexName);
       return;
@@ -256,16 +260,30 @@ export class IDBIndexStorage implements IndexStorage {
    * Determine whether a filter value is safe to use directly in an IDBKeyRange
    * without diverging from the JS-side `_normalizeForComparison` semantics.
    *
-   * Returns true only when the value is a plain string or number. Date objects
-   * and ISO-8601-like date strings are excluded because they are normalized to
-   * numeric timestamps in JS-side comparisons but stored/compared as their raw
-   * types by IDB, which would produce inconsistent results.
+   * Range operators (`gt`/`gte`/`lt`/`lte`) are accelerated only for numeric
+   * filter values because JS comparison coerces cross-type operands (e.g.
+   * `10 > '2'` is true) while `IDBKeyRange` treats strings and numbers as
+   * distinct key types -- allowing a string filter value would silently change
+   * the result set when the stored key is numeric. `eq` is safe for both
+   * strings and numbers because it is a direct equality on matching types.
+   * Date objects and ISO-8601-like date strings are excluded outright because
+   * they are normalized to numeric timestamps in JS-side comparisons but
+   * stored/compared as their raw types by IDB, which would produce
+   * inconsistent results.
    */
   private _isIDBAcceleratable(operator: FieldFilter['operator'], value: unknown): boolean {
     if (operator === 'prefix') {
       return typeof value === 'string';
     }
-    if (typeof value === 'number') return true;
+    // Range operators: restrict to numbers only to avoid cross-type mismatch
+    // with stored numeric keys (JS coerces, IDB does not).
+    if (operator === 'gt' || operator === 'gte' || operator === 'lt' || operator === 'lte') {
+      return typeof value === 'number' && Number.isFinite(value);
+    }
+    // `eq` (and any other remaining equality-style operators): string or number
+    // are both safe because IDBKeyRange.only does an exact-type equality match
+    // and JS `===` likewise requires matching types.
+    if (typeof value === 'number') return Number.isFinite(value);
     if (typeof value === 'string') {
       // Exclude ISO-8601-like date strings that get normalized to timestamps
       // in JS comparisons, since IDB would compare them lexicographically.
