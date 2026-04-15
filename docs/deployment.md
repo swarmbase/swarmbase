@@ -9,6 +9,14 @@ The relay server in `relay-server/` fulfills both roles. Every deployment needs
 at least one relay server. Browser peers connect to it over WebSocket; Node.js
 peers can also connect over TCP.
 
+> **Scope.** This document is the operational reference for running the
+> relay/bootstrap server (Docker images, TLS, multi-relay, Kubernetes,
+> monitoring, troubleshooting). For a broader overview of *all* SwarmDB
+> coordination server types -- including signaling, STUN/TURN, and pinning
+> services -- see [`guides/coordination-servers.md`](../guides/coordination-servers.md).
+> Where the two documents disagree on relay/bootstrap operations, this one is
+> authoritative; the overview doc will be reconciled in a follow-up.
+
 ## Quick Start -- Single Server
 
 The fastest way to get a relay running:
@@ -134,8 +142,12 @@ IDs + sticky sessions) before deploying to production.
    host that serves that relay (e.g. `relay-1.example.com` and
    `relay-2.example.com`).
 2. Ports 80 and 443 open for Caddy's automatic Let's Encrypt certificates.
-3. Port 9002 open between relay servers if you plan to peer them (see
-   "Inter-Relay Peering" below).
+3. For inter-relay peering in a real multi-host deployment, expose TCP port
+   `9002` on each relay server (see "Inter-Relay Peering" below). The
+   `guides/docker/` single-host demo may remap a second relay to a different
+   host port such as `9012:9002` only to avoid local port conflicts; that
+   offset is for the demo host layout and does not change the relay's actual
+   service port.
 
 > **Limitation:** By default each relay server is standalone -- it does not
 > configure bootstrap peers or attempt to discover other relays. Clients
@@ -256,23 +268,54 @@ all peer discovery goes through GossipSub pubsub.
 
 ## Kubernetes Deployment
 
-SwarmDB relay servers are stateless and straightforward to run on Kubernetes.
+SwarmDB relay servers are straightforward to run on Kubernetes, but they are
+**not** fully interchangeable replicas: each pod has its own libp2p peer
+identity. That identity matters because clients dial relays using multiaddrs
+such as `/dns4/relay.example.com/tcp/9001/wss/p2p/<peerId>`. If a load
+balancer sends that connection to a different pod than the one that owns
+`<peerId>`, the dial can fail. If pod identities are regenerated on restart,
+previously advertised addresses can also break.
 
 ### Key Considerations
 
 - **WebSocket affinity**: The relay uses long-lived WebSocket connections. Use
   session affinity (`service.spec.sessionAffinity: ClientIP`) or a WebSocket-
-  aware ingress controller (NGINX Ingress, Traefik, etc.).
+  aware ingress controller (NGINX Ingress, Traefik, etc.). This keeps existing
+  upgraded connections stable, but by itself does **not** solve the peer-ID
+  matching problem for new dials.
+- **Stable relay identity**: For multi-replica Kubernetes deployments, prefer a
+  `StatefulSet` with one persisted libp2p identity per replica and a headless
+  Service that gives each pod stable DNS (for example,
+  `swarmdb-relay-0.swarmdb-relay-headless.default.svc.cluster.local`). Publish
+  each pod's own address with its own peer ID, and let clients dial the
+  specific replica they intend to reach. The current `relay-server/` code does
+  not expose a configuration option for a deterministic peer identity -- every
+  start generates a fresh peer ID -- so using this pattern requires modifying
+  the relay image to load a persisted key.
+- **Avoid one shared address for many peer IDs**: Do not put multiple relay
+  pods behind a single Service/Ingress address and then advertise
+  `/.../p2p/<peerId>` for those pods unless you also make peer IDs
+  deterministic/persistent and can guarantee sticky routing to the pod that
+  owns the advertised peer ID. Otherwise `/.../p2p/<peerId>` may resolve to the
+  wrong backend or break after pod restarts.
 - **Health checks**: Use the built-in TCP check on port 9001 for both liveness
   and readiness probes.
-- **Scaling**: Scale the Deployment replica count as needed. **Important:**
-  each relay maintains its own independent pubsub mesh. Peers connected to
-  different relay pods will not see each other's messages unless the relays
+- **Scaling and pubsub topology**: Multiple relay pods are also multiple pubsub
+  nodes. Each relay maintains its own independent pubsub mesh. Peers connected
+  to different relay pods will not see each other's messages unless the relays
   are peered. For multi-replica deployments, configure relays to dial each
-  other on startup (e.g. via an init container or headless Service DNS) so
-  they form a connected pubsub graph.
+  other on startup (for example via stable per-pod DNS from a headless
+  Service) so they form a connected pubsub graph. This pubsub peering
+  requirement is in addition to the stable identity/routing requirements
+  above.
 
 ### Example Manifests
+
+The following `Deployment` shows the basic container ports, probes, and
+resource settings. If you intend to advertise more than one relay replica to
+clients, adapt this to a `StatefulSet` with persistent per-pod libp2p identity
+and stable per-pod DNS rather than placing multiple interchangeable pods
+behind one shared relay address.
 
 ```yaml
 apiVersion: apps/v1
