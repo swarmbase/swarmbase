@@ -38,9 +38,13 @@ export class IDBIndexStorage implements IndexStorage {
       // Read actual indexes from the existing store instead of trusting the requested fields
       const tx = this._db.transaction(indexName, 'readonly');
       const store = tx.objectStore(indexName);
+      // Iterate via length/item() because DOMStringList is not iterable under
+      // this project's tsconfig (lib includes "DOM" but not "DOM.Iterable").
       const existingFieldSet = new Set<string>();
-      for (const idxName of store.indexNames) {
-        existingFieldSet.add(idxName);
+      const indexNames = store.indexNames;
+      for (let i = 0; i < indexNames.length; i++) {
+        const idxName = indexNames.item(i);
+        if (idxName !== null) existingFieldSet.add(idxName);
       }
       this._indexedFields.set(indexName, existingFieldSet);
       this._initializedStores.add(indexName);
@@ -207,13 +211,15 @@ export class IDBIndexStorage implements IndexStorage {
 
       let keyRange: IDBKeyRange | null = null;
 
-      // Note: IDB key ranges use filter.value as-is (no normalization).
-      // The JS-side _matchesFilter path normalizes values (e.g., Date → timestamp,
-      // ISO-8601 string → timestamp) via _normalizeForComparison, but IDB indexes
-      // store raw field values. Therefore IDB-accelerated queries only produce
-      // correct results when filter.value is a primitive that matches the stored
-      // type exactly (string or number). Date objects or values requiring
-      // normalization will not match and should fall through to the JS scan path.
+      // IDB key ranges compare filter.value against the raw stored field value,
+      // while the JS-side _matchesFilter path normalizes values via
+      // _normalizeForComparison (e.g., Date -> timestamp, ISO-8601 string ->
+      // timestamp). Using the IDB strategy for values that require normalization
+      // would produce different results from the JS path, so we restrict the
+      // IDB-accelerated path to filter values that are primitive strings/numbers
+      // for which normalization is a no-op.
+      if (!this._isIDBAcceleratable(filter.operator, filter.value)) continue;
+
       switch (filter.operator) {
         case 'eq':
           keyRange = IDBKeyRange.only(filter.value);
@@ -231,8 +237,7 @@ export class IDBIndexStorage implements IndexStorage {
           keyRange = IDBKeyRange.upperBound(filter.value, false);
           break;
         case 'prefix': {
-          if (typeof filter.value !== 'string') continue;
-          keyRange = IDBKeyRange.bound(filter.value, filter.value + '\uffff', false, false);
+          keyRange = IDBKeyRange.bound(filter.value as string, (filter.value as string) + '\uffff', false, false);
           break;
         }
         default:
@@ -245,6 +250,32 @@ export class IDBIndexStorage implements IndexStorage {
     }
 
     return null;
+  }
+
+  /**
+   * Determine whether a filter value is safe to use directly in an IDBKeyRange
+   * without diverging from the JS-side `_normalizeForComparison` semantics.
+   *
+   * Returns true only when the value is a plain string or number. Date objects
+   * and ISO-8601-like date strings are excluded because they are normalized to
+   * numeric timestamps in JS-side comparisons but stored/compared as their raw
+   * types by IDB, which would produce inconsistent results.
+   */
+  private _isIDBAcceleratable(operator: FieldFilter['operator'], value: unknown): boolean {
+    if (operator === 'prefix') {
+      return typeof value === 'string';
+    }
+    if (typeof value === 'number') return true;
+    if (typeof value === 'string') {
+      // Exclude ISO-8601-like date strings that get normalized to timestamps
+      // in JS comparisons, since IDB would compare them lexicographically.
+      if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+        const timestamp = Date.parse(value);
+        if (!isNaN(timestamp)) return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   private _matchesFilters(fields: Record<string, unknown>, filters: FieldFilter[]): boolean {
