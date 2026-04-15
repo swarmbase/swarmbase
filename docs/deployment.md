@@ -54,13 +54,13 @@ Example output:
 machine. Clients must construct a multiaddr using the relay's public IP or DNS
 name and the `peerId`:
 
-```
+```text
 /dns4/relay.example.com/tcp/9001/ws/p2p/<peerId>
 ```
 
 or for a bare IP:
 
-```
+```text
 /ip4/<PUBLIC_IP>/tcp/9001/ws/p2p/<peerId>
 ```
 
@@ -159,14 +159,19 @@ proxy.
 > 1. **One multiaddr per relay.** Give each relay its own DNS name (e.g.
 >    `relay-1.example.com`, `relay-2.example.com`) and configure clients with
 >    all of them.
-> 2. **Stable peer IDs.** Pre-generate a libp2p key for each relay and inject
->    it at startup so the peer ID is deterministic. Then use sticky sessions
->    (e.g. Caddy `lb_policy ip_hash`) so a client always reaches the relay
->    whose peer ID it dialed.
+> 2. **Stable peer IDs (requires relay changes).** In principle, you can
+>    pre-generate a libp2p key for each relay and inject it at startup so the
+>    peer ID is deterministic, then use sticky sessions (e.g. Caddy
+>    `lb_policy ip_hash`) so a client always reaches the relay whose peer ID
+>    it dialed. The current `relay-server/` implementation does **not** expose
+>    a configuration option for a deterministic peer identity -- every start
+>    generates a fresh peer ID. Using this approach requires modifying the
+>    relay code/image to load a persisted key. Option 1 above is the supported
+>    path today.
 
 The multiaddr format for each relay is:
 
-```
+```text
 /dns4/relay-1.example.com/tcp/443/wss/p2p/<relay-1-peerId>
 ```
 
@@ -177,10 +182,15 @@ This replaces the raw WebSocket multiaddr used in the single-server setup.
 Add more relay services to `docker-compose.production.yaml` and include them in
 the Caddyfile's `reverse_proxy` upstream list:
 
-```
+```caddyfile
 # Caddyfile
 {$RELAY_DOMAIN} {
     reverse_proxy relay-1:9001 relay-2:9001 relay-3:9001 {
+        # NOTE: `round_robin` only works with option 1 above (one DNS name per
+        # relay, clients configured with multiple multiaddrs). If you are using
+        # a single load-balanced hostname, switch to `lb_policy ip_hash` and
+        # use stable, pre-generated peer IDs so a client is always routed back
+        # to the relay whose peer ID it dialed.
         lb_policy round_robin
         header_up Connection {>Connection}
         header_up Upgrade {>Upgrade}
@@ -360,7 +370,11 @@ to monitor relay health.
 
 **Peers cannot discover each other**
 - Verify the relay is running and healthy: `docker exec swarmdb-relay cat /shared/relay-info.json`
-- Ensure browser clients are configured with the correct `wsMultiaddr`.
+- Ensure browser clients are configured with a constructed public dialable
+  multiaddr (e.g. `/dns4/relay.example.com/tcp/443/wss/p2p/<peerId>` or
+  `/ip4/<PUBLIC_IP>/tcp/9001/ws/p2p/<peerId>`) -- not the raw `wsMultiaddr`
+  value from `/shared/relay-info.json`, which contains a `0.0.0.0` listen
+  address that is not dialable from another host.
 - Check that port 9001 is accessible from the browser's network.
 
 **Messages not relaying between peers**
