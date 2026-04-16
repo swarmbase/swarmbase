@@ -261,9 +261,20 @@ The relay-info.json output path is determined automatically: `/shared/relay-info
 
 ## 3. Production Multi-Server Deployment
 
+> **See also:** [`docs/deployment.md`](../docs/deployment.md) is the
+> authoritative operations reference for running the relay/bootstrap server
+> (Docker, TLS, multi-relay, Kubernetes, monitoring, troubleshooting).
+> The sections below give a higher-level topology overview; where the two
+> documents disagree on relay operations, `docs/deployment.md` wins.
+
 ### 3.1 Architecture
 
-For production with 100+ peers, deploy multiple relay nodes behind a load balancer.
+For production with 100+ peers, deploy multiple relay nodes. Note that each
+relay has its own libp2p peer ID, so a single load-balanced hostname that
+routes clients to arbitrary backends will break dialing of
+`/.../p2p/<peerId>` addresses. The supported pattern is one public DNS name
+per relay (clients are configured with all of them); see
+[`docs/deployment.md`](../docs/deployment.md) for details.
 
 ```text
                           ┌──────────────┐
@@ -355,7 +366,13 @@ peerDiscovery: [
 
 - A **TLS-terminating reverse proxy** (nginx, Caddy, Traefik) in front of a single relay is fine and required for `wss://` in production (see Section 2.6). The proxy terminates TLS and forwards WebSocket frames transparently via `Upgrade` headers — this is technically Layer 7 but preserves the connection end-to-end.
 - Do **not** use a **connection-splitting proxy** that terminates one WebSocket and opens a new upstream WebSocket, as this breaks libp2p's connection state and multiplexed streams.
-- For **multiple relay nodes**, use DNS round-robin or give clients all relay addresses and let libp2p handle connection management. If using a load balancer across multiple backends, configure it for TCP/Layer 4 passthrough or sticky sessions so each WebSocket stays on a single backend.
+- For **multiple relay nodes**, give clients all relay addresses (one
+  multiaddr per relay, each with its own peer ID) and let libp2p handle
+  connection management. A single shared hostname that load-balances across
+  backends with different peer IDs is **not** supported unless you also
+  pre-generate stable per-relay peer IDs and enforce sticky routing — see
+  [`docs/deployment.md`](../docs/deployment.md) for the caveats. DNS
+  round-robin on a single hostname has the same problem.
 
 ### 3.6 Monitoring and Health Checks
 
