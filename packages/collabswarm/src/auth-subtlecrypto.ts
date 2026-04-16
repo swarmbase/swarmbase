@@ -127,9 +127,20 @@ export class SubtleCrypto
         if (nonce && nonce.length !== 16) {
           throw new Error(`AES-CTR counter must be 16 bytes, got ${nonce.length}`);
         }
-        const counter = nonce ?? crypto.getRandomValues(new Uint8Array(16));
-        // length: 64 means the lower 64 bits of the 128-bit counter block
-        // are incremented, allowing up to 2^64 blocks per nonce.
+        // length: 64 means the lower 64 bits of the 128-bit counter block are
+        // the incrementing portion, so the upper 64 bits act as a per-message
+        // nonce. When we generate the counter ourselves, randomize only the
+        // upper 64 bits and leave the lower 64 counter bits at zero so the
+        // incrementing portion starts at a safe value (cannot wrap within the
+        // message). An externally supplied `nonce` is used as-is; the caller
+        // is responsible for choosing a safe initial counter value.
+        let counter: Uint8Array;
+        if (nonce) {
+          counter = nonce;
+        } else {
+          counter = new Uint8Array(16);
+          crypto.getRandomValues(counter.subarray(0, 8));
+        }
         return { name: 'AES-CTR', counter: counter as Uint8Array<ArrayBuffer>, length: 64 };
       }
       case 'AES-CBC': {
