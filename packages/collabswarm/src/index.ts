@@ -20,7 +20,7 @@ import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer';
-import { AuthProvider } from './auth-provider';
+import { AuthProvider, AesAlgorithmName } from './auth-provider';
 import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
@@ -36,7 +36,7 @@ import {
 } from './crdt-change-node';
 import {
   EPOCH_ID_LENGTH,
-  NONCE_LENGTH,
+  GCM_NONCE_LENGTH,
   EPOCH_SECRET_INFO,
   ENCRYPTION_KEY_INFO,
   Epoch,
@@ -89,6 +89,7 @@ export * from './beekem';
 export {
   ACL,
   ACLProvider,
+  AesAlgorithmName,
   AuthProvider,
   SubtleCrypto,
   Collabswarm,
@@ -106,7 +107,7 @@ export {
   CRDTProvider,
   ChangesSerializer,
   EPOCH_ID_LENGTH,
-  NONCE_LENGTH,
+  GCM_NONCE_LENGTH,
   EPOCH_SECRET_INFO,
   ENCRYPTION_KEY_INFO,
   Epoch,
