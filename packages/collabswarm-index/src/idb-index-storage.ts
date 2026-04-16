@@ -10,6 +10,8 @@ export class IDBIndexStorage implements IndexStorage {
   private _dbName: string;
   private _db: IDBPDatabase | null = null;
   private _initializedStores: Set<string> = new Set();
+  /** Tracks which IDB indexes exist per store, so query() can use them for fast lookups. */
+  private _indexedFields: Map<string, Set<string>> = new Map();
 
   constructor(dbName: string = 'collabswarm-index') {
     this._dbName = dbName;
@@ -33,6 +35,24 @@ export class IDBIndexStorage implements IndexStorage {
     if (storeAlreadyExists) {
       // Store already exists -- just reopen at current version
       this._db = await openDB(this._dbName, currentVersion);
+      // Read actual indexes from the existing store instead of trusting the requested fields
+      const tx = this._db.transaction(indexName, 'readonly');
+      const store = tx.objectStore(indexName);
+      // Iterate via length/item() because DOMStringList is not iterable under
+      // this project's tsconfig (lib includes "DOM" but not "DOM.Iterable").
+      const existingFieldSet = new Set<string>();
+      const indexNames = store.indexNames;
+      for (let i = 0; i < indexNames.length; i++) {
+        const idxName = indexNames.item(i);
+        if (idxName !== null) existingFieldSet.add(idxName);
+      }
+      // Await the readonly transaction before returning. We issued no requests,
+      // but some IDB implementations hold locks until the transaction completes
+      // so awaiting here avoids keeping it alive past this function.
+      await tx.done;
+      this._indexedFields.set(indexName, existingFieldSet);
+      this._initializedStores.add(indexName);
+      return;
     } else {
       // Need to create a new object store -- requires version upgrade
       const newVersion = currentVersion + 1;
@@ -47,6 +67,13 @@ export class IDBIndexStorage implements IndexStorage {
         },
       });
     }
+
+    // Track which fields have IDB indexes for this store
+    const fieldSet = new Set<string>();
+    for (const field of fields) {
+      fieldSet.add(field.path);
+    }
+    this._indexedFields.set(indexName, fieldSet);
 
     this._initializedStores.add(indexName);
   }
@@ -84,18 +111,31 @@ export class IDBIndexStorage implements IndexStorage {
 
     let results: IndexEntry[] = [];
 
-    // TODO: Optimization opportunity -- leverage IDB indexes for common single-field
-    // equality/range queries instead of always doing a full JS scan. Currently IDB indexes
-    // are created in initialize() but not used during query(). For simple cases (single eq
-    // filter on an indexed field), we could use store.index(field).getAll(value) for a
-    // significant speedup on large datasets.
-    let cursor = await store.openCursor();
-    while (cursor) {
-      const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
-      if (this._matchesFilters(record.fields, filters)) {
-        results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+    // Optimization: leverage IDB indexes for single-field equality or range queries
+    // on indexed fields instead of always doing a full JS scan.
+    const idbStrategy = this._pickIDBStrategy(indexName, filters);
+
+    if (idbStrategy) {
+      const { indexFieldPath, keyRange, remainingFilters } = idbStrategy;
+      const idbIndex = store.index(indexFieldPath);
+      let cursor = await idbIndex.openCursor(keyRange);
+      while (cursor) {
+        const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
+        if (this._matchesFilters(record.fields, remainingFilters)) {
+          results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+        }
+        cursor = await cursor.continue();
       }
-      cursor = await cursor.continue();
+    } else {
+      // Fallback: full scan with JS-side filtering
+      let cursor = await store.openCursor();
+      while (cursor) {
+        const record = cursor.value as { documentPath: string; fields: Record<string, unknown> };
+        if (this._matchesFilters(record.fields, filters)) {
+          results.push({ documentPath: record.documentPath, fields: { ...record.fields } });
+        }
+        cursor = await cursor.continue();
+      }
     }
 
     await tx.done;
@@ -145,6 +185,133 @@ export class IDBIndexStorage implements IndexStorage {
       throw new Error('IDBIndexStorage: database not initialized. Call initialize() first.');
     }
     return this._db;
+  }
+
+  /**
+   * Determine whether an IDB index can accelerate the query.
+   *
+   * Eligible cases (the first matching filter wins):
+   *   - A single-field `eq` filter on an indexed field uses `IDBKeyRange.only(value)`.
+   *   - A single-field `gt`/`gte`/`lt`/`lte` filter on an indexed field uses
+   *     the corresponding open/closed bound.
+   *   - A `prefix` filter on an indexed string field uses a lower/upper bound range.
+   *
+   * Any remaining filters that cannot be served by the IDB index are returned
+   * as `remainingFilters` and applied in JavaScript after the cursor scan.
+   */
+  private _pickIDBStrategy(
+    indexName: string,
+    filters: FieldFilter[],
+  ): { indexFieldPath: string; keyRange: IDBKeyRange | null; remainingFilters: FieldFilter[] } | null {
+    if (filters.length === 0) return null;
+
+    const indexedFields = this._indexedFields.get(indexName);
+    if (!indexedFields) return null;
+
+    for (let i = 0; i < filters.length; i++) {
+      const filter = filters[i];
+      // Only use IDB-accelerated lookup when an IDB index exists for this field
+      if (!indexedFields.has(filter.path)) continue;
+
+      let keyRange: IDBKeyRange | null = null;
+
+      // IDB key ranges compare filter.value against the raw stored field value,
+      // while the JS-side _matchesFilter path normalizes values via
+      // _normalizeForComparison (e.g., Date -> timestamp, ISO-8601 string ->
+      // timestamp). Using the IDB strategy for values that require normalization
+      // would produce different results from the JS path, so we restrict the
+      // IDB-accelerated path to filter values that are primitive strings/numbers
+      // for which normalization is a no-op.
+      if (!this._isIDBAcceleratable(filter.operator, filter.value)) continue;
+
+      // `eq` and `prefix` are "exact" ranges (IDBKeyRange.only / bounded
+      // string range) whose IDB cursor only yields keys that already satisfy
+      // the filter, so they can be removed from `remainingFilters`.
+      //
+      // Range operators (`gt`/`gte`/`lt`/`lte`) cannot: IDB's total key order
+      // (per the W3C IndexedDB spec) is `number < Date < string < binary <
+      // Array`, so e.g. a numeric `lowerBound(5)` cursor will also iterate
+      // over every Date, string, binary, and Array key in the index. To
+      // prevent those cross-type false positives from reaching the caller,
+      // keep the range filter in `remainingFilters` so the JS-side
+      // `_matchesFilter` re-checks the type and bound on each candidate.
+      let dropAcceleratedFilter = false;
+      switch (filter.operator) {
+        case 'eq':
+          keyRange = IDBKeyRange.only(filter.value);
+          dropAcceleratedFilter = true;
+          break;
+        case 'gt':
+          keyRange = IDBKeyRange.lowerBound(filter.value, true);
+          break;
+        case 'gte':
+          keyRange = IDBKeyRange.lowerBound(filter.value, false);
+          break;
+        case 'lt':
+          keyRange = IDBKeyRange.upperBound(filter.value, true);
+          break;
+        case 'lte':
+          keyRange = IDBKeyRange.upperBound(filter.value, false);
+          break;
+        case 'prefix': {
+          keyRange = IDBKeyRange.bound(filter.value as string, (filter.value as string) + '\uffff', false, false);
+          dropAcceleratedFilter = true;
+          break;
+        }
+        default:
+          continue;
+      }
+
+      const remainingFilters = dropAcceleratedFilter
+        ? filters.filter((_, idx) => idx !== i)
+        : filters.slice();
+      return { indexFieldPath: filter.path, keyRange, remainingFilters };
+    }
+
+    return null;
+  }
+
+  /**
+   * Determine whether a filter value is safe to use directly in an IDBKeyRange
+   * without diverging from the JS-side `_matchesFilter` / `_normalizeForComparison`
+   * semantics.
+   *
+   * - `eq`: safe for both strings and numbers. `IDBKeyRange.only` does an
+   *   exact-type equality match, and the JS-side `eq` path uses `===` (no
+   *   normalization), so ISO-8601-like date strings are acceptable here -- they
+   *   are only problematic when the two sides disagree about normalization.
+   * - `prefix`: safe only for strings (bounded string range).
+   * - `gt`/`gte`/`lt`/`lte`: accelerated only for finite numeric filter values.
+   *   JS comparison coerces cross-type operands (e.g. `10 > '2'` is true) while
+   *   `IDBKeyRange` treats each key type as distinct, so allowing strings for
+   *   a range operator would silently change the result set when stored keys
+   *   are numeric. Date objects and ISO-8601-like date strings are excluded to
+   *   avoid diverging from `_normalizeForComparison`, which normalizes them to
+   *   numeric timestamps for the JS range path while IDB would compare them by
+   *   their raw native ordering.
+   */
+  private _isIDBAcceleratable(operator: FieldFilter['operator'], value: unknown): boolean {
+    if (operator === 'prefix') {
+      return typeof value === 'string';
+    }
+    // Range operators: restrict to finite numbers only to avoid cross-type
+    // mismatch with stored numeric keys (JS coerces, IDB does not).
+    if (operator === 'gt' || operator === 'gte' || operator === 'lt' || operator === 'lte') {
+      return typeof value === 'number' && Number.isFinite(value);
+    }
+    // `eq`: strict-equality on both sides — safe for numbers and strings,
+    // including ISO date strings. Date objects are excluded here because the
+    // two sides disagree on Date equality: `IDBKeyRange.only(dateObj)`
+    // matches stored Dates by timestamp, while JS `===` in `_matchesFilter`
+    // compares by object identity. Accelerating would silently change which
+    // records match.
+    if (operator === 'eq') {
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'string') return true;
+      return false;
+    }
+    // Any other operators (neq / in / contains) are not accelerated.
+    return false;
   }
 
   private _matchesFilters(fields: Record<string, unknown>, filters: FieldFilter[]): boolean {
