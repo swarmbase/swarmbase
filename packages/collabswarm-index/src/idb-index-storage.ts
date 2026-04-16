@@ -229,10 +229,11 @@ export class IDBIndexStorage implements IndexStorage {
       // the filter, so they can be removed from `remainingFilters`.
       //
       // Range operators (`gt`/`gte`/`lt`/`lte`) cannot: IDB's total key order
-      // is `number < string < Date < Array`, so e.g. a numeric `lowerBound(5)`
-      // cursor will also iterate over every string/Date/Array key in the
-      // index. To prevent those cross-type false positives from reaching the
-      // caller, keep the range filter in `remainingFilters` so the JS-side
+      // (per the W3C IndexedDB spec) is `number < Date < string < binary <
+      // Array`, so e.g. a numeric `lowerBound(5)` cursor will also iterate
+      // over every Date, string, binary, and Array key in the index. To
+      // prevent those cross-type false positives from reaching the caller,
+      // keep the range filter in `remainingFilters` so the JS-side
       // `_matchesFilter` re-checks the type and bound on each candidate.
       let dropAcceleratedFilter = false;
       switch (filter.operator) {
@@ -284,9 +285,10 @@ export class IDBIndexStorage implements IndexStorage {
    *   JS comparison coerces cross-type operands (e.g. `10 > '2'` is true) while
    *   `IDBKeyRange` treats each key type as distinct, so allowing strings for
    *   a range operator would silently change the result set when stored keys
-   *   are numeric. Date objects and ISO-8601-like date strings are excluded
-   *   because they are normalized to numeric timestamps in JS-side comparisons
-   *   but stored/compared as their raw types by IDB.
+   *   are numeric. Date objects and ISO-8601-like date strings are excluded to
+   *   avoid diverging from `_normalizeForComparison`, which normalizes them to
+   *   numeric timestamps for the JS range path while IDB would compare them by
+   *   their raw native ordering.
    */
   private _isIDBAcceleratable(operator: FieldFilter['operator'], value: unknown): boolean {
     if (operator === 'prefix') {
@@ -298,8 +300,11 @@ export class IDBIndexStorage implements IndexStorage {
       return typeof value === 'number' && Number.isFinite(value);
     }
     // `eq`: strict-equality on both sides — safe for numbers and strings,
-    // including ISO date strings. (Date objects still excluded because they
-    // are not valid IDB keys and would fail strict equality anyway.)
+    // including ISO date strings. Date objects are excluded here because the
+    // two sides disagree on Date equality: `IDBKeyRange.only(dateObj)`
+    // matches stored Dates by timestamp, while JS `===` in `_matchesFilter`
+    // compares by object identity. Accelerating would silently change which
+    // records match.
     if (operator === 'eq') {
       if (typeof value === 'number') return Number.isFinite(value);
       if (typeof value === 'string') return true;
