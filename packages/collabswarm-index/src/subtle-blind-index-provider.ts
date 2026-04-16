@@ -72,11 +72,15 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    * Shared HKDF derivation logic used by both `deriveFieldKey` and `deriveFieldKeyFromRaw`.
    */
   private async _deriveFromRawBytes(raw: Uint8Array, fieldPath: string): Promise<CryptoKey> {
-    // Must copy via .buffer.slice() to get a concrete `ArrayBuffer`. Under
-    // this tsconfig, `Uint8Array` is typed as `Uint8Array<ArrayBufferLike>`
-    // which includes `SharedArrayBuffer` and therefore does not satisfy the
-    // stricter `ArrayBuffer`-only `BufferSource` overload of `importKey`.
-    const hkdfKey = await crypto.subtle.importKey('raw', raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer, 'HKDF', false, ['deriveKey']);
+    // Copy into a fresh Uint8Array backed by a non-shared ArrayBuffer. Calling
+    // `.buffer.slice()` on `raw` is not reliable: if `raw` is backed by a
+    // `SharedArrayBuffer`, `slice()` returns another `SharedArrayBuffer` which
+    // is not a valid `BufferSource` for WebCrypto in many runtimes. The
+    // `new Uint8Array(ArrayLike)` constructor allocates a fresh ArrayBuffer
+    // and copies the bytes, yielding a `Uint8Array<ArrayBuffer>` that
+    // satisfies `importKey`'s BufferSource typing under this tsconfig.
+    const copy = new Uint8Array(raw);
+    const hkdfKey = await crypto.subtle.importKey('raw', copy, 'HKDF', false, ['deriveKey']);
     const encoder = new TextEncoder();
     return crypto.subtle.deriveKey(
       {
