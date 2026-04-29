@@ -18,7 +18,17 @@ export class IDBIndexStorage implements IndexStorage {
   }
 
   async initialize(indexName: string, fields: IndexFieldDefinition[]): Promise<void> {
-    if (this._initializedStores.has(indexName) && this._db) return;
+    // If we've previously initialized this store and the connection is open,
+    // we can skip reopening *only* when the cached IDB-index set already
+    // covers every field the caller is requesting. Callers may invoke
+    // `initialize(indexName, fields)` again later in the same process with
+    // additional fields (e.g. as the application defines new indexes), and
+    // we must perform a schema upgrade to create indexes for those fields.
+    if (this._initializedStores.has(indexName) && this._db) {
+      const cached = this._indexedFields.get(indexName);
+      const allCovered = !!cached && fields.every((f) => cached.has(f.path));
+      if (allCovered) return;
+    }
 
     // Close existing connection before upgrading
     if (this._db) {
@@ -253,17 +263,21 @@ export class IDBIndexStorage implements IndexStorage {
       // We keep the range filter in `remainingFilters` so the JS-side
       // `_matchesFilter` re-checks the type and bound on each candidate.
       //
-      // `prefix` likewise cannot be dropped. A naive upper bound of
-      // `value + '\uffff'` would miss strings whose tail contains `\uffff`
-      // characters (e.g. prefix "hello" would miss "hello\uffff\uffff"
-      // because that key sorts above "hello\uffff"). We mitigate this by
-      // padding the upper bound with multiple `\uffff` code units, which is
-      // sufficient for any realistic input (strings of `\uffff`-only suffixes
-      // are vanishingly rare; `\uffff` is a Unicode noncharacter). We also
-      // keep the prefix filter in `remainingFilters` so JS-side
-      // `_matchesFilter` re-validates every candidate with
-      // `String.prototype.startsWith` -- both as a defense in depth and so
-      // any future change to the bound can't silently widen the result set.
+      // `prefix` likewise cannot be dropped. We need a true lexicographic
+      // successor of the prefix as the upper bound so the cursor doesn't
+      // skip stored keys whose suffix happens to consist of high code units.
+      // A simple `value + '\uffff'` (or any fixed-length `\uffff` padding)
+      // is incorrect: e.g. prefix "hello" would miss "hello\uffff\uffff"
+      // because that key sorts above "hello\uffff" but below
+      // "hello\uffff\uffff\uffff". We compute the true successor by
+      // incrementing the final code unit; if the prefix ends in a code unit
+      // that cannot be incremented (or is empty), we fall back to a
+      // lower-bound-only range so the cursor visits every key >= prefix and
+      // the JS-side filter rejects non-matches. We also keep the prefix
+      // filter in `remainingFilters` so `_matchesFilter` re-validates every
+      // candidate with `String.prototype.startsWith` -- both as defense in
+      // depth and so any future change to the bound can't silently widen
+      // the result set.
       let dropAcceleratedFilter = false;
       switch (filter.operator) {
         case 'eq':
@@ -283,12 +297,18 @@ export class IDBIndexStorage implements IndexStorage {
           keyRange = IDBKeyRange.upperBound(filter.value, false);
           break;
         case 'prefix': {
-          // Pad with multiple \uffff code units to make the upper bound sort
-          // above any practical real-world string starting with the prefix.
-          // The JS-side filter still validates candidates, so this is a loose
-          // bound by design.
-          const upper = (filter.value as string) + '\uffff\uffff\uffff\uffff\uffff\uffff\uffff\uffff';
-          keyRange = IDBKeyRange.bound(filter.value as string, upper, false, false);
+          const prefix = filter.value as string;
+          const successor = this._lexicographicSuccessor(prefix);
+          if (successor === null) {
+            // No representable successor (empty prefix or final code unit at
+            // 0xFFFF). Fall back to an open-ended lower bound; the JS-side
+            // filter still validates `startsWith`.
+            keyRange = IDBKeyRange.lowerBound(prefix, false);
+          } else {
+            // Half-open range [prefix, successor): every key with the given
+            // prefix is included, no padding heuristics required.
+            keyRange = IDBKeyRange.bound(prefix, successor, false, true);
+          }
           break;
         }
         default:
@@ -345,6 +365,31 @@ export class IDBIndexStorage implements IndexStorage {
     }
     // Any other operators (neq / in / contains) are not accelerated.
     return false;
+  }
+
+  /**
+   * Compute the lexicographic successor of `prefix` for the purpose of
+   * forming a half-open IDB key range `[prefix, successor)` that matches
+   * every string with the given prefix.
+   *
+   * Strategy: walk back from the final code unit and increment the first
+   * one that is not 0xFFFF, truncating any trailing 0xFFFFs. If no code
+   * unit is incrementable (the prefix is empty or consists entirely of
+   * 0xFFFF), return null so the caller can fall back to a lower-bound-only
+   * range.
+   *
+   * Note: we operate on UTF-16 code units (not code points). This is
+   * correct for IDB string ordering, which compares strings code-unit by
+   * code-unit per the W3C IndexedDB spec.
+   */
+  private _lexicographicSuccessor(prefix: string): string | null {
+    for (let i = prefix.length - 1; i >= 0; i--) {
+      const code = prefix.charCodeAt(i);
+      if (code < 0xffff) {
+        return prefix.slice(0, i) + String.fromCharCode(code + 1);
+      }
+    }
+    return null;
   }
 
   private _matchesFilters(fields: Record<string, unknown>, filters: FieldFilter[]): boolean {
