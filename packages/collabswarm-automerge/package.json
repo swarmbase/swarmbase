@@ -32,7 +32,7 @@
   "dependencies": {
     "@automerge/automerge": "^3.2.4",
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
-    "uuid": "^10.0.0"
+    "uuid": "^14.0.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {

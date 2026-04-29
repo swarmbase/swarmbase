@@ -1910,7 +1910,7 @@ __metadata:
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
   bin:
     collabswarm-automerge-d: dist/bin/collabswarm-automerge-d.js
   languageName: unknown
@@ -2068,7 +2068,7 @@ __metadata:
     react-router-dom: "npm:^6.26.2"
     react-scripts: "npm:^5.0.1"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
     web-vitals: "npm:^4.2.3"
   languageName: unknown
   linkType: soft
@@ -6646,14 +6646,14 @@ __metadata:
   linkType: hard
 
 "ajv@npm:^6.12.0, ajv@npm:^6.12.2, ajv@npm:^6.12.4, ajv@npm:^6.12.5, ajv@npm:^6.12.6, ajv@npm:^6.14.0":
-  version: 6.14.0
-  resolution: "ajv@npm:6.14.0"
+  version: 6.15.0
+  resolution: "ajv@npm:6.15.0"
   dependencies:
     fast-deep-equal: "npm:^3.1.1"
     fast-json-stable-stringify: "npm:^2.0.0"
     json-schema-traverse: "npm:^0.4.1"
     uri-js: "npm:^4.2.2"
-  checksum: 10/c71f14dd2b6f2535d043f74019c8169f7aeb1106bafbb741af96f34fdbf932255c919ddd46344043d03b62ea0ccb319f83667ec5eedf612393f29054fe5ce4a5
+  checksum: 10/0916dda09c152fb5857bc1cc7ce61718e9cec5b7faeff44a74f5e324eed8a556e1a84856724ea322a067b436ecad9f74ac8295fd395449788cca52f0c25bd5fb
   languageName: node
   linkType: hard
 
@@ -20003,12 +20003,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "uuid@npm:10.0.0"
+"uuid@npm:^14.0.0":
+  version: 14.0.0
+  resolution: "uuid@npm:14.0.0"
   bin:
-    uuid: dist/bin/uuid
-  checksum: 10/35aa60614811a201ff90f8ca5e9ecb7076a75c3821e17f0f5ff72d44e36c2d35fcbc2ceee9c4ac7317f4cc41895da30e74f3885e30313bee48fda6338f250538
+    uuid: dist-node/bin/uuid
+  checksum: 10/8ee9b98f9650e25555515f7a28d3c3ae9364e72f7bb19b9e08b681bc135338beba5509b2830f6ae1cfaba4d45401da0d16d4d109b977097bc3d6ba0c5583341b
   languageName: node
   linkType: hard
 
