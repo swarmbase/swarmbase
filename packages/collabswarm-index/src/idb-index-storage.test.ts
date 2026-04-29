@@ -129,7 +129,10 @@ describe('IDBIndexStorage', () => {
       // lexicographic successor as the half-open upper bound (and falls
       // back to a lowerBound-only range when no successor is representable),
       // and the JS-side filter validates `startsWith` on every candidate.
-      const tricky = 'Alpha￿￿￿_tail';
+      // (The U+FFFF code units below are written as escapes rather than
+      // literals because some tooling and editors don't render noncharacters
+      // consistently.)
+      const tricky = 'Alpha\uffff\uffff\uffff_tail';
       await storage.put(indexName, '/doc/uffff', { title: tricky, count: 99, active: true });
       const results = await storage.query(indexName, [
         { path: 'title', operator: 'prefix', value: 'Alpha' },

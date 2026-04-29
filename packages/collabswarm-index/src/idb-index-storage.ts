@@ -36,61 +36,81 @@ export class IDBIndexStorage implements IndexStorage {
       this._db = null;
     }
 
-    // Read current version + existing schema from the DB so we can decide
-    // whether we need to upgrade to create a new store or add missing indexes.
-    const existingDb = await openDB(this._dbName);
-    const currentVersion = existingDb.version;
-    const storeAlreadyExists = existingDb.objectStoreNames.contains(indexName);
-    // Capture the indexes already present on the persisted store (if any) so
-    // we can detect missing indexes that were added in a newer version of the
-    // calling code without reopening the DB twice.
-    const existingIndexNames: string[] = [];
-    if (storeAlreadyExists) {
-      const tx = existingDb.transaction(indexName, 'readonly');
-      const store = tx.objectStore(indexName);
-      // DOMStringList isn't iterable under this project's tsconfig
-      // (lib includes "DOM" but not "DOM.Iterable"), so iterate by index.
-      const idxNames = store.indexNames;
-      for (let i = 0; i < idxNames.length; i++) {
-        const idxName = idxNames.item(i);
-        if (idxName !== null) existingIndexNames.push(idxName);
+    // Open + (optionally) upgrade. Wrapped in a retry loop because another
+    // tab/worker may upgrade the DB between our version-read and our reopen,
+    // causing `openDB(name, currentVersion + 1)` to throw a VersionError.
+    // On VersionError we re-read the current version and try again.
+    const MAX_OPEN_RETRIES = 3;
+    let existingIndexNames: string[] = [];
+    for (let attempt = 0; attempt <= MAX_OPEN_RETRIES; attempt++) {
+      // Read current version + existing schema so we can decide whether we
+      // need to upgrade to create a new store or add missing indexes.
+      const existingDb = await openDB(this._dbName);
+      const currentVersion = existingDb.version;
+      const storeAlreadyExists = existingDb.objectStoreNames.contains(indexName);
+      const probedIndexNames: string[] = [];
+      if (storeAlreadyExists) {
+        const tx = existingDb.transaction(indexName, 'readonly');
+        const store = tx.objectStore(indexName);
+        // DOMStringList isn't iterable under this project's tsconfig
+        // (lib includes "DOM" but not "DOM.Iterable"), so iterate by index.
+        const idxNames = store.indexNames;
+        for (let i = 0; i < idxNames.length; i++) {
+          const idxName = idxNames.item(i);
+          if (idxName !== null) probedIndexNames.push(idxName);
+        }
+        // Await the readonly transaction before closing the DB. We issued no
+        // requests, but some IDB implementations hold locks until the
+        // transaction completes so awaiting here avoids keeping it alive.
+        await tx.done;
       }
-      // Await the readonly transaction before closing the DB. We issued no
-      // requests, but some IDB implementations hold locks until the
-      // transaction completes so awaiting here avoids keeping it alive.
-      await tx.done;
-    }
-    existingDb.close();
+      existingDb.close();
 
-    // Determine which requested fields are missing IDB indexes on the
-    // persisted store. If any are missing we need to bump the version and
-    // create them in an `upgrade` callback; otherwise we can reopen at the
-    // current version.
-    const missingIndexFields = storeAlreadyExists
-      ? fields.filter((f) => !existingIndexNames.includes(f.path))
-      : fields;
-    const needsUpgrade = !storeAlreadyExists || missingIndexFields.length > 0;
+      // Determine which requested fields are missing IDB indexes on the
+      // persisted store. If any are missing we need to bump the version and
+      // create them in an `upgrade` callback; otherwise we can reopen at the
+      // current version.
+      const missingIndexFields = storeAlreadyExists
+        ? fields.filter((f) => !probedIndexNames.includes(f.path))
+        : fields;
+      const needsUpgrade = !storeAlreadyExists || missingIndexFields.length > 0;
 
-    if (needsUpgrade) {
-      const newVersion = currentVersion + 1;
-      this._db = await openDB(this._dbName, newVersion, {
-        upgrade(db, _oldVersion, _newVersion, tx) {
-          let store;
-          if (!db.objectStoreNames.contains(indexName)) {
-            store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
-          } else {
-            store = tx.objectStore(indexName);
-          }
-          for (const field of missingIndexFields) {
-            // Guard in case a concurrent upgrade already created the index.
-            if (!store.indexNames.contains(field.path)) {
-              store.createIndex(field.path, `fields.${field.path}`, { unique: false });
-            }
-          }
-        },
-      });
-    } else {
-      this._db = await openDB(this._dbName, currentVersion);
+      try {
+        if (needsUpgrade) {
+          const newVersion = currentVersion + 1;
+          this._db = await openDB(this._dbName, newVersion, {
+            upgrade(db, _oldVersion, _newVersion, tx) {
+              let store;
+              if (!db.objectStoreNames.contains(indexName)) {
+                store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
+              } else {
+                store = tx.objectStore(indexName);
+              }
+              for (const field of missingIndexFields) {
+                // Guard in case a concurrent upgrade already created the index.
+                if (!store.indexNames.contains(field.path)) {
+                  store.createIndex(field.path, `fields.${field.path}`, { unique: false });
+                }
+              }
+            },
+          });
+        } else {
+          this._db = await openDB(this._dbName, currentVersion);
+        }
+        existingIndexNames = probedIndexNames;
+        break;
+      } catch (err) {
+        const isVersionError =
+          typeof DOMException !== 'undefined' &&
+          err instanceof DOMException &&
+          err.name === 'VersionError';
+        if (isVersionError && attempt < MAX_OPEN_RETRIES) {
+          // A concurrent tab/worker upgraded the DB between our two opens.
+          // Loop and re-probe at the new version.
+          continue;
+        }
+        throw err;
+      }
     }
 
     // Track which fields now have IDB indexes for this store. Combine the
