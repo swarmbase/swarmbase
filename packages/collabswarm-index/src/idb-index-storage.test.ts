@@ -125,8 +125,10 @@ describe('IDBIndexStorage', () => {
     test('prefix: matches strings containing \\uffff after the prefix', async () => {
       // Regression test for the IDB-accelerated prefix path. A naive upper
       // bound of value + '￿' would miss strings whose tail contains
-      // additional ￿ code units; the implementation pads the upper
-      // bound and validates in JS to handle this safely.
+      // additional ￿ code units; the implementation computes a true
+      // lexicographic successor as the half-open upper bound (and falls
+      // back to a lowerBound-only range when no successor is representable),
+      // and the JS-side filter validates `startsWith` on every candidate.
       const tricky = 'Alpha￿￿￿_tail';
       await storage.put(indexName, '/doc/uffff', { title: tricky, count: 99, active: true });
       const results = await storage.query(indexName, [
