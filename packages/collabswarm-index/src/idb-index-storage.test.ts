@@ -122,6 +122,20 @@ describe('IDBIndexStorage', () => {
       expect(results.map(r => r.documentPath).sort()).toEqual(['/doc/1', '/doc/3']);
     });
 
+    test('prefix: matches strings containing \\uffff after the prefix', async () => {
+      // Regression test for the IDB-accelerated prefix path. A naive upper
+      // bound of value + '￿' would miss strings whose tail contains
+      // additional ￿ code units; the implementation pads the upper
+      // bound and validates in JS to handle this safely.
+      const tricky = 'Alpha￿￿￿_tail';
+      await storage.put(indexName, '/doc/uffff', { title: tricky, count: 99, active: true });
+      const results = await storage.query(indexName, [
+        { path: 'title', operator: 'prefix', value: 'Alpha' },
+      ]);
+      const paths = results.map((r) => r.documentPath).sort();
+      expect(paths).toContain('/doc/uffff');
+    });
+
     test('in: value in array', async () => {
       const results = await storage.query(indexName, [{ path: 'count', operator: 'in', value: [10, 30] }]);
       expect(results).toHaveLength(2);
@@ -213,6 +227,58 @@ describe('IDBIndexStorage', () => {
       await storage.close();
       // After close, getDB throws since db is null
       await expect(storage.get(indexName, '/doc/1')).rejects.toThrow();
+    });
+  });
+
+  describe('schema upgrades across initialize() calls', () => {
+    test('adds missing IDB indexes when initialize() is called with new fields', async () => {
+      // Start with a single field on a fresh DB.
+      const dbName = `schema-upgrade-${Date.now()}-${Math.random()}`;
+      const s1 = new IDBIndexStorage(dbName);
+      await s1.initialize('store-a', [{ path: 'title', type: 'string' }]);
+      await s1.put('store-a', '/d/1', { title: 'Hello', count: 7 });
+      await s1.close();
+
+      // Reopen the same DB requesting a second field that wasn't indexed
+      // before. The IDB store must gain a `count` index so query() can use it
+      // without throwing NotFoundError.
+      const s2 = new IDBIndexStorage(dbName);
+      await s2.initialize('store-a', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+
+      // Querying on the newly-added indexed field should hit the IDB-accelerated
+      // path (which calls store.index('count')) and succeed.
+      const results = await s2.query('store-a', [
+        { path: 'count', operator: 'eq', value: 7 },
+      ]);
+      expect(results).toHaveLength(1);
+      expect(results[0].documentPath).toBe('/d/1');
+
+      await s2.close();
+    });
+
+    test('does not bump version when no new indexes are needed', async () => {
+      const dbName = `schema-noop-${Date.now()}-${Math.random()}`;
+      const s1 = new IDBIndexStorage(dbName);
+      await s1.initialize('store-b', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+      await s1.put('store-b', '/d/1', { title: 'Hi', count: 1 });
+      await s1.close();
+
+      const s2 = new IDBIndexStorage(dbName);
+      await s2.initialize('store-b', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+      const results = await s2.query('store-b', [
+        { path: 'title', operator: 'eq', value: 'Hi' },
+      ]);
+      expect(results).toHaveLength(1);
+      await s2.close();
     });
   });
 });

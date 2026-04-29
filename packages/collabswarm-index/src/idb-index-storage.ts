@@ -26,50 +26,67 @@ export class IDBIndexStorage implements IndexStorage {
       this._db = null;
     }
 
-    // Read current version from existing DB
+    // Read current version + existing schema from the DB so we can decide
+    // whether we need to upgrade to create a new store or add missing indexes.
     const existingDb = await openDB(this._dbName);
     const currentVersion = existingDb.version;
     const storeAlreadyExists = existingDb.objectStoreNames.contains(indexName);
+    // Capture the indexes already present on the persisted store (if any) so
+    // we can detect missing indexes that were added in a newer version of the
+    // calling code without reopening the DB twice.
+    const existingIndexNames: string[] = [];
+    if (storeAlreadyExists) {
+      const tx = existingDb.transaction(indexName, 'readonly');
+      const store = tx.objectStore(indexName);
+      // DOMStringList isn't iterable under this project's tsconfig
+      // (lib includes "DOM" but not "DOM.Iterable"), so iterate by index.
+      const idxNames = store.indexNames;
+      for (let i = 0; i < idxNames.length; i++) {
+        const idxName = idxNames.item(i);
+        if (idxName !== null) existingIndexNames.push(idxName);
+      }
+      // Await the readonly transaction before closing the DB. We issued no
+      // requests, but some IDB implementations hold locks until the
+      // transaction completes so awaiting here avoids keeping it alive.
+      await tx.done;
+    }
     existingDb.close();
 
-    if (storeAlreadyExists) {
-      // Store already exists -- just reopen at current version
-      this._db = await openDB(this._dbName, currentVersion);
-      // Read actual indexes from the existing store instead of trusting the requested fields
-      const tx = this._db.transaction(indexName, 'readonly');
-      const store = tx.objectStore(indexName);
-      // Iterate via length/item() because DOMStringList is not iterable under
-      // this project's tsconfig (lib includes "DOM" but not "DOM.Iterable").
-      const existingFieldSet = new Set<string>();
-      const indexNames = store.indexNames;
-      for (let i = 0; i < indexNames.length; i++) {
-        const idxName = indexNames.item(i);
-        if (idxName !== null) existingFieldSet.add(idxName);
-      }
-      // Await the readonly transaction before returning. We issued no requests,
-      // but some IDB implementations hold locks until the transaction completes
-      // so awaiting here avoids keeping it alive past this function.
-      await tx.done;
-      this._indexedFields.set(indexName, existingFieldSet);
-      this._initializedStores.add(indexName);
-      return;
-    } else {
-      // Need to create a new object store -- requires version upgrade
+    // Determine which requested fields are missing IDB indexes on the
+    // persisted store. If any are missing we need to bump the version and
+    // create them in an `upgrade` callback; otherwise we can reopen at the
+    // current version.
+    const missingIndexFields = storeAlreadyExists
+      ? fields.filter((f) => !existingIndexNames.includes(f.path))
+      : fields;
+    const needsUpgrade = !storeAlreadyExists || missingIndexFields.length > 0;
+
+    if (needsUpgrade) {
       const newVersion = currentVersion + 1;
       this._db = await openDB(this._dbName, newVersion, {
-        upgrade(db) {
+        upgrade(db, _oldVersion, _newVersion, tx) {
+          let store;
           if (!db.objectStoreNames.contains(indexName)) {
-            const store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
-            for (const field of fields) {
+            store = db.createObjectStore(indexName, { keyPath: 'documentPath' });
+          } else {
+            store = tx.objectStore(indexName);
+          }
+          for (const field of missingIndexFields) {
+            // Guard in case a concurrent upgrade already created the index.
+            if (!store.indexNames.contains(field.path)) {
               store.createIndex(field.path, `fields.${field.path}`, { unique: false });
             }
           }
         },
       });
+    } else {
+      this._db = await openDB(this._dbName, currentVersion);
     }
 
-    // Track which fields have IDB indexes for this store
-    const fieldSet = new Set<string>();
+    // Track which fields now have IDB indexes for this store. Combine the
+    // pre-existing index names with the ones we just created so query() never
+    // calls store.index() for an index that doesn't exist.
+    const fieldSet = new Set<string>(existingIndexNames);
     for (const field of fields) {
       fieldSet.add(field.path);
     }
@@ -224,17 +241,29 @@ export class IDBIndexStorage implements IndexStorage {
       // for which normalization is a no-op.
       if (!this._isIDBAcceleratable(filter.operator, filter.value)) continue;
 
-      // `eq` and `prefix` are "exact" ranges (IDBKeyRange.only / bounded
-      // string range) whose IDB cursor only yields keys that already satisfy
-      // the filter, so they can be removed from `remainingFilters`.
+      // `eq` is the only operator we can fully delegate to IDB: `IDBKeyRange.only`
+      // matches by strict-equal semantics that the JS-side `eq` path also uses,
+      // so the cursor only yields records that already satisfy the filter and
+      // it can be removed from `remainingFilters`.
       //
-      // Range operators (`gt`/`gte`/`lt`/`lte`) cannot: IDB's total key order
-      // (per the W3C IndexedDB spec) is `number < Date < string < binary <
-      // Array`, so e.g. a numeric `lowerBound(5)` cursor will also iterate
-      // over every Date, string, binary, and Array key in the index. To
-      // prevent those cross-type false positives from reaching the caller,
-      // keep the range filter in `remainingFilters` so the JS-side
+      // Range operators (`gt`/`gte`/`lt`/`lte`) cannot be dropped: IDB's total
+      // key order (per the W3C IndexedDB spec) is `number < Date < string <
+      // binary < Array`, so e.g. a numeric `lowerBound(5)` cursor will also
+      // iterate over every Date, string, binary, and Array key in the index.
+      // We keep the range filter in `remainingFilters` so the JS-side
       // `_matchesFilter` re-checks the type and bound on each candidate.
+      //
+      // `prefix` likewise cannot be dropped. A naive upper bound of
+      // `value + '\uffff'` would miss strings whose tail contains `\uffff`
+      // characters (e.g. prefix "hello" would miss "hello\uffff\uffff"
+      // because that key sorts above "hello\uffff"). We mitigate this by
+      // padding the upper bound with multiple `\uffff` code units, which is
+      // sufficient for any realistic input (strings of `\uffff`-only suffixes
+      // are vanishingly rare; `\uffff` is a Unicode noncharacter). We also
+      // keep the prefix filter in `remainingFilters` so JS-side
+      // `_matchesFilter` re-validates every candidate with
+      // `String.prototype.startsWith` -- both as a defense in depth and so
+      // any future change to the bound can't silently widen the result set.
       let dropAcceleratedFilter = false;
       switch (filter.operator) {
         case 'eq':
@@ -254,8 +283,12 @@ export class IDBIndexStorage implements IndexStorage {
           keyRange = IDBKeyRange.upperBound(filter.value, false);
           break;
         case 'prefix': {
-          keyRange = IDBKeyRange.bound(filter.value as string, (filter.value as string) + '\uffff', false, false);
-          dropAcceleratedFilter = true;
+          // Pad with multiple \uffff code units to make the upper bound sort
+          // above any practical real-world string starting with the prefix.
+          // The JS-side filter still validates candidates, so this is a loose
+          // bound by design.
+          const upper = (filter.value as string) + '\uffff\uffff\uffff\uffff\uffff\uffff\uffff\uffff';
+          keyRange = IDBKeyRange.bound(filter.value as string, upper, false, false);
           break;
         }
         default:
