@@ -20,7 +20,6 @@ import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';
 import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer';
-import type { AuthProvider, AesAlgorithmName } from './auth-provider';
 import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
