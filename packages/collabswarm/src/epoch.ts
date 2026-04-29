@@ -1,14 +1,33 @@
+import type { AesAlgorithmName } from './auth-provider';
+
 /** Length of an epoch ID in bytes (SHA-256 hash). */
 export const EPOCH_ID_LENGTH = 32;
 
-/** Length of AES-256-GCM nonce in bytes. */
-export const NONCE_LENGTH = 12;
+/**
+ * Length of AES-256-GCM nonce in bytes. CTR and CBC use 16-byte nonces instead.
+ *
+ * @remarks Renamed from `NONCE_LENGTH` in the AES-CTR/CBC support update. This
+ * is a breaking rename, but no migration alias is provided: SwarmDB is in
+ * pre-1.0 alpha and has no known live consumers.
+ */
+export const GCM_NONCE_LENGTH = 12;
 
 /** HKDF info string for deriving the epoch secret. */
 export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
 
-/** HKDF info string for deriving the AES-GCM encryption key. */
-export const ENCRYPTION_KEY_INFO = 'aes-gcm-key';
+/**
+ * HKDF info strings for deriving encryption keys, keyed by algorithm.
+ *
+ * @remarks Changed from a single string (the previous AES-GCM-only value
+ * `'aes-gcm-key'`) to an algorithm-keyed record in the AES-CTR/CBC support
+ * update. This is a breaking type change, accepted because SwarmDB is in
+ * pre-1.0 alpha with no known live consumers.
+ */
+export const ENCRYPTION_KEY_INFO: Record<AesAlgorithmName, string> = {
+  'AES-GCM': 'aes-gcm-key',
+  'AES-CTR': 'aes-ctr-key',
+  'AES-CBC': 'aes-cbc-key',
+};
 
 /**
  * Represents an epoch -- a contiguous period during which a specific set of
@@ -18,7 +37,7 @@ export const ENCRYPTION_KEY_INFO = 'aes-gcm-key';
 export interface Epoch {
   /** 32-byte SHA-256 hash identifying this epoch. */
   id: Uint8Array;
-  /** The symmetric AES-256-GCM encryption key for this epoch. */
+  /** The symmetric AES-256 encryption key for this epoch (GCM, CTR, or CBC). */
   encryptionKey: CryptoKey;
   /** Set of member public key hashes in this epoch. */
   memberHashes: Set<string>;
@@ -105,17 +124,18 @@ export async function deriveEpochSecret(
 }
 
 /**
- * Derive an AES-256-GCM CryptoKey from an epoch secret using HKDF-SHA256.
+ * Derive an AES-256 CryptoKey from an epoch secret using HKDF-SHA256.
  *
- * ```
- * encryption_key = HKDF-SHA256(ikm: epochSecret, info: "aes-gcm-key", length: 32)
- * ```
+ * The HKDF info string includes the algorithm name for domain separation,
+ * ensuring keys derived for different algorithms are distinct.
  *
  * @param epochSecret - The 32-byte epoch secret from {@link deriveEpochSecret}.
- * @returns A CryptoKey suitable for AES-256-GCM encrypt/decrypt.
+ * @param algorithmName - The AES algorithm to bind the key to (default: AES-GCM).
+ * @returns A CryptoKey suitable for the specified algorithm's encrypt/decrypt.
  */
 export async function deriveEncryptionKey(
   epochSecret: Uint8Array,
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     'raw',
@@ -129,11 +149,13 @@ export async function deriveEncryptionKey(
       name: 'HKDF',
       hash: 'SHA-256',
       salt: new ArrayBuffer(0),
-      info: new TextEncoder().encode(ENCRYPTION_KEY_INFO),
+      info: new TextEncoder().encode(ENCRYPTION_KEY_INFO[algorithmName]),
     },
     baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
+    { name: algorithmName, length: 256 },
+    // CTR/CBC require extractable keys so we can derive HMAC keys via exportKey.
+    // GCM keys do not need extraction, so keep them non-extractable for security.
+    algorithmName !== 'AES-GCM',
     ['encrypt', 'decrypt'],
   );
 }
@@ -142,21 +164,23 @@ export async function deriveEncryptionKey(
  * Create a complete epoch with a derived encryption key.
  *
  * This generates the epoch ID, derives the epoch secret, and then derives
- * the AES-256-GCM encryption key in a single call.
+ * the AES-256 encryption key in a single call.
  *
  * @param groupSecret - The shared group secret from key agreement.
  * @param members - Set of member public key hashes for this epoch.
  * @param parentEpochId - The parent epoch ID, if any.
+ * @param algorithmName - The AES algorithm for the encryption key (default: AES-GCM).
  * @returns A fully constructed {@link Epoch}.
  */
 export async function createEpoch(
   groupSecret: Uint8Array,
   members: Set<string>,
   parentEpochId?: Uint8Array,
+  algorithmName: AesAlgorithmName = 'AES-GCM',
 ): Promise<Epoch> {
   const epochId = await generateEpochId(groupSecret, parentEpochId);
   const epochSecret = await deriveEpochSecret(groupSecret, epochId);
-  const encryptionKey = await deriveEncryptionKey(epochSecret);
+  const encryptionKey = await deriveEncryptionKey(epochSecret, algorithmName);
 
   return {
     id: epochId,
@@ -204,16 +228,28 @@ export class EpochManager {
    * @param groupSecret - The new shared group secret from key agreement.
    * @param members - The updated set of member public key hashes.
    * @param reason - The reason for the epoch transition.
-   * @param affectedMember - The public key hash of the added/removed member, if applicable.
+   * @param options - Optional settings for the transition.
+   * @param options.affectedMember - The public key hash of the added/removed member, if applicable.
+   * @param options.algorithmName - The AES algorithm for the encryption key (default: AES-GCM).
    * @returns The {@link EpochTransition} describing the new epoch and its cause.
+   *
+   * @remarks The 4th parameter changed from a positional `affectedMember?: string`
+   * to an `options` object in the AES-CTR/CBC support update so the algorithm
+   * choice cannot be silently swallowed by a stringly-typed positional arg.
+   * This is a breaking signature change, accepted because SwarmDB is in pre-1.0
+   * alpha with no known live consumers; no overload shim is provided.
    */
   async transitionEpoch(
     groupSecret: Uint8Array,
     members: Set<string>,
     reason: EpochTransition['reason'],
-    affectedMember?: string,
+    options?: {
+      affectedMember?: string;
+      algorithmName?: AesAlgorithmName;
+    },
   ): Promise<EpochTransition> {
-    const epoch = await createEpoch(groupSecret, members, this._currentEpochId);
+    const { affectedMember, algorithmName = 'AES-GCM' } = options ?? {};
+    const epoch = await createEpoch(groupSecret, members, this._currentEpochId, algorithmName);
     this.addEpoch(epoch);
 
     return {
