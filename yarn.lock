@@ -1869,7 +1869,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/browser-test@workspace:examples/browser-test"
   dependencies:
-    "@automerge/automerge": "npm:^3.2.4"
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@collabswarm/collabswarm-redux": "workspace:packages/collabswarm-redux"
@@ -1911,9 +1910,7 @@ __metadata:
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
-  peerDependencies:
-    "@automerge/automerge": ^3.2.4
+    uuid: "npm:^14.0.0"
   bin:
     collabswarm-automerge-d: dist/bin/collabswarm-automerge-d.js
   languageName: unknown
@@ -1992,8 +1989,6 @@ __metadata:
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
     yjs: "npm:^13.6.30"
-  peerDependencies:
-    yjs: ^13.6.30
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
   languageName: unknown
@@ -2012,7 +2007,6 @@ __metadata:
     "@libp2p/autonat": "npm:^2.0.38"
     "@libp2p/bootstrap": "npm:^11.0.47"
     "@libp2p/circuit-relay-v2": "npm:^3.2.24"
-    "@libp2p/dcutr": "npm:^2.0.38"
     "@libp2p/identify": "npm:^3.0.39"
     "@libp2p/interface": "npm:^2.11.0"
     "@libp2p/kad-dht": "npm:^15.0.2"
@@ -2075,9 +2069,8 @@ __metadata:
     react-router-dom: "npm:^6.26.2"
     react-scripts: "npm:^5.0.1"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
     web-vitals: "npm:^4.2.3"
-    yjs: "npm:^13.6.30"
   languageName: unknown
   linkType: soft
 
@@ -2085,7 +2078,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/wiki-swarm@workspace:examples/wiki-swarm"
   dependencies:
-    "@automerge/automerge": "npm:^3.2.4"
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@collabswarm/collabswarm-redux": "workspace:packages/collabswarm-redux"
@@ -3538,7 +3530,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/dcutr@npm:^2.0.18, @libp2p/dcutr@npm:^2.0.38":
+"@libp2p/dcutr@npm:^2.0.18":
   version: 2.0.38
   resolution: "@libp2p/dcutr@npm:2.0.38"
   dependencies:
@@ -20012,12 +20004,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "uuid@npm:10.0.0"
+"uuid@npm:^14.0.0":
+  version: 14.0.0
+  resolution: "uuid@npm:14.0.0"
   bin:
-    uuid: dist/bin/uuid
-  checksum: 10/35aa60614811a201ff90f8ca5e9ecb7076a75c3821e17f0f5ff72d44e36c2d35fcbc2ceee9c4ac7317f4cc41895da30e74f3885e30313bee48fda6338f250538
+    uuid: dist-node/bin/uuid
+  checksum: 10/8ee9b98f9650e25555515f7a28d3c3ae9364e72f7bb19b9e08b681bc135338beba5509b2830f6ae1cfaba4d45401da0d16d4d109b977097bc3d6ba0c5583341b
   languageName: node
   linkType: hard
 
