@@ -3,13 +3,26 @@ import type { AesAlgorithmName } from './auth-provider';
 /** Length of an epoch ID in bytes (SHA-256 hash). */
 export const EPOCH_ID_LENGTH = 32;
 
-/** Length of AES-256-GCM nonce in bytes. CTR and CBC use 16-byte nonces instead. */
+/**
+ * Length of AES-256-GCM nonce in bytes. CTR and CBC use 16-byte nonces instead.
+ *
+ * @remarks Renamed from `NONCE_LENGTH` in the AES-CTR/CBC support update. This
+ * is a breaking rename, but no migration alias is provided: SwarmDB is in
+ * pre-1.0 alpha and has no known live consumers.
+ */
 export const GCM_NONCE_LENGTH = 12;
 
 /** HKDF info string for deriving the epoch secret. */
 export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
 
-/** HKDF info strings for deriving encryption keys, keyed by algorithm. */
+/**
+ * HKDF info strings for deriving encryption keys, keyed by algorithm.
+ *
+ * @remarks Changed from a single string (the previous AES-GCM-only value
+ * `'aes-gcm-key'`) to an algorithm-keyed record in the AES-CTR/CBC support
+ * update. This is a breaking type change, accepted because SwarmDB is in
+ * pre-1.0 alpha with no known live consumers.
+ */
 export const ENCRYPTION_KEY_INFO: Record<AesAlgorithmName, string> = {
   'AES-GCM': 'aes-gcm-key',
   'AES-CTR': 'aes-ctr-key',
@@ -219,6 +232,12 @@ export class EpochManager {
    * @param options.affectedMember - The public key hash of the added/removed member, if applicable.
    * @param options.algorithmName - The AES algorithm for the encryption key (default: AES-GCM).
    * @returns The {@link EpochTransition} describing the new epoch and its cause.
+   *
+   * @remarks The 4th parameter changed from a positional `affectedMember?: string`
+   * to an `options` object in the AES-CTR/CBC support update so the algorithm
+   * choice cannot be silently swallowed by a stringly-typed positional arg.
+   * This is a breaking signature change, accepted because SwarmDB is in pre-1.0
+   * alpha with no known live consumers; no overload shim is provided.
    */
   async transitionEpoch(
     groupSecret: Uint8Array,

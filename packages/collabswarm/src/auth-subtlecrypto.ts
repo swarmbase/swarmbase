@@ -305,6 +305,9 @@ export class SubtleCrypto
     documentKey: CryptoKey,
   ): Promise<SubtleCryptoEncryptionResult> {
     const algorithmParams = this._encryptionAlgorithmParams();
+    // Note: WebCrypto's AES-CBC implementation applies PKCS#7 padding automatically
+    // per the W3C WebCrypto spec, so plaintext of any length is accepted here.
+    // See: https://www.w3.org/TR/WebCryptoAPI/#aes-cbc-operations
     const ciphertext = new Uint8Array(
       await crypto.subtle.encrypt(
         algorithmParams,
