@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
 import 'fake-indexeddb/auto';
+import { openDB } from 'idb';
 import { IDBIndexStorage } from './idb-index-storage';
 
 describe('IDBIndexStorage', () => {
@@ -274,6 +275,12 @@ describe('IDBIndexStorage', () => {
       await s1.put('store-b', '/d/1', { title: 'Hi', count: 1 });
       await s1.close();
 
+      // Read the DB version after initial setup (via a raw open) so we can
+      // assert the no-op reopen doesn't trigger an unnecessary version bump.
+      const probe1 = await openDB(dbName);
+      const versionBeforeReopen = probe1.version;
+      probe1.close();
+
       const s2 = new IDBIndexStorage(dbName);
       await s2.initialize('store-b', [
         { path: 'title', type: 'string' },
@@ -284,6 +291,11 @@ describe('IDBIndexStorage', () => {
       ]);
       expect(results).toHaveLength(1);
       await s2.close();
+
+      const probe2 = await openDB(dbName);
+      const versionAfterReopen = probe2.version;
+      probe2.close();
+      expect(versionAfterReopen).toBe(versionBeforeReopen);
     });
   });
 });

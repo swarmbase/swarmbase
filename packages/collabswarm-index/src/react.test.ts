@@ -17,7 +17,6 @@ import { QueryResult } from './types';
 function subscribeAndWait<T extends Record<string, unknown>>(
   manager: IndexManager<T>,
   options: Parameters<IndexManager<T>['subscribe']>[0],
-  minResults = 1,
   timeoutMs = 1000,
 ): {
   results: QueryResult<Record<string, unknown>>[];
@@ -55,9 +54,6 @@ function subscribeAndWait<T extends Record<string, unknown>>(
       waiters.push({ target: count, resolve, reject, timer });
     });
   };
-
-  // Pre-arm the initial wait so callers can chain on it.
-  void waitForResults(minResults).catch(() => { /* surfaced via await below */ });
 
   return { results, unsubscribe, waitForResults };
 }

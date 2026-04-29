@@ -40,9 +40,9 @@ export class IDBIndexStorage implements IndexStorage {
     // tab/worker may upgrade the DB between our version-read and our reopen,
     // causing `openDB(name, currentVersion + 1)` to throw a VersionError.
     // On VersionError we re-read the current version and try again.
-    const MAX_OPEN_RETRIES = 3;
+    const MAX_OPEN_ATTEMPTS = 4;
     let existingIndexNames: string[] = [];
-    for (let attempt = 0; attempt <= MAX_OPEN_RETRIES; attempt++) {
+    for (let attempt = 0; attempt < MAX_OPEN_ATTEMPTS; attempt++) {
       // Read current version + existing schema so we can decide whether we
       // need to upgrade to create a new store or add missing indexes.
       const existingDb = await openDB(this._dbName);
@@ -104,7 +104,7 @@ export class IDBIndexStorage implements IndexStorage {
           typeof DOMException !== 'undefined' &&
           err instanceof DOMException &&
           err.name === 'VersionError';
-        if (isVersionError && attempt < MAX_OPEN_RETRIES) {
+        if (isVersionError && attempt < MAX_OPEN_ATTEMPTS - 1) {
           // A concurrent tab/worker upgraded the DB between our two opens.
           // Loop and re-probe at the new version.
           continue;

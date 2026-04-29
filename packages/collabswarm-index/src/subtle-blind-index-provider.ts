@@ -25,14 +25,18 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
    * Each unique field path produces a distinct key, ensuring index tokens for different fields
    * are cryptographically isolated.
    *
-   * The master key must be extractable so its raw bytes can be fed into HKDF.
-   * Prefer `deriveFieldKeyFromRaw` when possible to avoid requiring extractable keys.
+   * The master key must be a raw-exportable secret key (e.g., AES-GCM/HMAC),
+   * so its bytes can be fed into HKDF via `exportKey('raw', ...)`. Keys whose
+   * type only supports JWK or PKCS#8 export (asymmetric keys, or symmetric
+   * keys generated with raw export disabled) will not work here even if
+   * `extractable: true` was set. Prefer `deriveFieldKeyFromRaw` when possible
+   * to avoid requiring an extractable master key at all.
    *
-   * @param masterKey An extractable CryptoKey used as the root secret.
+   * @param masterKey A raw-exportable secret CryptoKey used as the root secret.
    * @param fieldPath Dot-notation path identifying the field (e.g., "title", "metadata.author").
    *   Must be a non-empty string.
    * @returns A non-extractable CryptoKey usable with `computeToken` and `computeCompoundToken`.
-   * @throws If fieldPath is empty/blank or if masterKey is not extractable.
+   * @throws If fieldPath is empty/blank or if masterKey cannot be exported as raw bytes.
    */
   async deriveFieldKey(masterKey: CryptoKey, fieldPath: string): Promise<CryptoKey> {
     if (!fieldPath || fieldPath.trim().length === 0) {
@@ -42,7 +46,9 @@ export class SubtleBlindIndexProvider implements BlindIndexProvider {
     try {
       rawMaster = await crypto.subtle.exportKey('raw', masterKey);
     } catch {
-      throw new Error('Master key must be extractable. Generate with extractable: true.');
+      throw new Error(
+        'Master key must be a raw-exportable secret key (extractable, with raw export supported by the key type).',
+      );
     }
     return this._deriveFromRawBytes(new Uint8Array(rawMaster), fieldPath);
   }
