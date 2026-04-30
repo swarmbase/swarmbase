@@ -117,6 +117,22 @@ describe('IDBIndexStorage', () => {
       expect(results).toHaveLength(3);
     });
 
+    test('lt/lte: matches string-typed values that coerce numerically', async () => {
+      // Regression test: the IDB-accelerated path used to apply
+      // `IDBKeyRange.upperBound(numericValue)`, which silently dropped any
+      // stored keys of non-numeric type (Date / string / binary / Array all
+      // sort above numbers in IDB key order). JS comparison, however,
+      // coerces operand types — `'2' <= 5` is true — so a stored string
+      // numeric like `'2'` would match the JS-only path but be missed by
+      // the cursor. We now route lt/lte through the full-scan fallback so
+      // both backends agree.
+      await storage.put(indexName, '/doc/str-2', { title: 'StrNum', count: '2' as unknown as number, active: true });
+      const lte = await storage.query(indexName, [{ path: 'count', operator: 'lte', value: 5 }]);
+      expect(lte.map((r) => r.documentPath)).toContain('/doc/str-2');
+      const lt = await storage.query(indexName, [{ path: 'count', operator: 'lt', value: 5 }]);
+      expect(lt.map((r) => r.documentPath)).toContain('/doc/str-2');
+    });
+
     test('prefix: string prefix match', async () => {
       const results = await storage.query(indexName, [{ path: 'title', operator: 'prefix', value: 'Alpha' }]);
       expect(results).toHaveLength(2);

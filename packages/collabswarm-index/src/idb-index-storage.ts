@@ -367,10 +367,25 @@ export class IDBIndexStorage implements IndexStorage {
     if (operator === 'prefix') {
       return typeof value === 'string';
     }
-    // Range operators: restrict to finite numbers only to avoid cross-type
-    // mismatch with stored numeric keys (JS coerces, IDB does not).
-    if (operator === 'gt' || operator === 'gte' || operator === 'lt' || operator === 'lte') {
+    // Range operators: only `gt`/`gte` are safe to accelerate.
+    //
+    // IDB key ordering is `number < Date < string < binary < Array`, while
+    // JS `<`/`<=`/`>`/`>=` coerce cross-type operands. With a numeric filter
+    // value:
+    //   - `lowerBound(N)` (gt/gte): yields all keys >= N, *including* Date,
+    //     string, binary, and Array keys (they sort above numbers). The JS
+    //     `_matchesFilter` re-checks each candidate, so any cross-type
+    //     records are correctly filtered out — at worst we visit too many.
+    //   - `upperBound(N)` (lt/lte): yields only numeric keys <= N. Stored
+    //     string keys like `'2'` that JS `<=` would coerce-and-match are
+    //     *never visited* by the cursor, so JS can't recover them. To keep
+    //     query results identical to the JS-only path under mixed-type
+    //     data, we leave `lt`/`lte` to the full-scan fallback.
+    if (operator === 'gt' || operator === 'gte') {
       return typeof value === 'number' && Number.isFinite(value);
+    }
+    if (operator === 'lt' || operator === 'lte') {
+      return false;
     }
     // `eq`: strict-equality on both sides — safe for numbers and strings,
     // including ISO date strings. Date objects are excluded here because the
