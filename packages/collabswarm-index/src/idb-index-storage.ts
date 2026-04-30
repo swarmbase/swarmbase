@@ -239,8 +239,9 @@ export class IDBIndexStorage implements IndexStorage {
    *
    * Eligible cases (the first matching filter wins):
    *   - A single-field `eq` filter on an indexed field uses `IDBKeyRange.only(value)`.
-   *   - A single-field `gt`/`gte`/`lt`/`lte` filter on an indexed field uses
-   *     the corresponding open/closed bound.
+   *   - A single-field `gt`/`gte` filter on an indexed numeric field uses
+   *     `IDBKeyRange.lowerBound(value)`. (`lt`/`lte` are intentionally
+   *     full-scanned — see the comment in `_isIDBAcceleratable`.)
    *   - A `prefix` filter on an indexed string field uses a lower/upper bound range.
    *
    * Any remaining filters that cannot be served by the IDB index are returned
@@ -310,12 +311,8 @@ export class IDBIndexStorage implements IndexStorage {
         case 'gte':
           keyRange = IDBKeyRange.lowerBound(filter.value, false);
           break;
-        case 'lt':
-          keyRange = IDBKeyRange.upperBound(filter.value, true);
-          break;
-        case 'lte':
-          keyRange = IDBKeyRange.upperBound(filter.value, false);
-          break;
+        // `lt`/`lte` are rejected by `_isIDBAcceleratable` (see comment there)
+        // and so never reach this switch — handled by the full-scan fallback.
         case 'prefix': {
           const prefix = filter.value as string;
           const successor = this._lexicographicSuccessor(prefix);
