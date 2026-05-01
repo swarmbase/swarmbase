@@ -460,8 +460,7 @@ export class Collabswarm<
               assembled[3]) >>> 0;
 
             // Validate the path length header. If it looks invalid, treat the
-            // message as malformed, log a warning, and drop it rather than
-            // attempting to interpret it as a legacy (V1) payload.
+            // message as malformed, log a warning, and drop it.
             if (
               pathLength === 0 ||
               pathLength > MAX_DOCUMENT_PATH_LENGTH ||

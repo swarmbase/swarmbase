@@ -77,7 +77,7 @@ import {
 } from './ucan-acl';
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
-import { bloomFilterUpdateV1, snapshotLoadV1 } from './wire-protocols';
+import { bloomFilterUpdateV1 } from './wire-protocols';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -149,7 +149,6 @@ export {
   UCANACLProvider,
   // Wire protocols
   bloomFilterUpdateV1,
-  snapshotLoadV1,
   // Compaction
   defaultCompactionConfig,
   // Network statistics
