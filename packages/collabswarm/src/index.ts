@@ -1,6 +1,7 @@
 import { Collabswarm, CollabswarmPeersHandler } from './collabswarm';
 import {
   CollabswarmConfig,
+  DEFAULT_WEBRTC_ICE_SERVERS,
   defaultConfig,
   defaultBootstrapConfig,
   getDefaultConfig,
@@ -128,6 +129,7 @@ export {
   defaultConfig,
   defaultBootstrapConfig,
   getDefaultConfig,
+  DEFAULT_WEBRTC_ICE_SERVERS,
   // Capabilities
   CAP_DOC_ADMIN,
   CAP_DOC_WRITE,

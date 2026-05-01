@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
+  DEFAULT_WEBRTC_ICE_SERVERS,
   defaultBootstrapConfig,
   defaultConfig,
 } from './collabswarm-config';
@@ -60,9 +61,22 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  * local network, privacy-sensitive deployments should disable it by building a
  * custom config (copy this one and omit `mdns()` from `peerDiscovery`) rather
  * than using `defaultNodeConfig` directly.
+ *
+ * @param bootstrapConfig Bootstrap peer list to seed peer discovery.
+ * @param webrtcIceServers Optional override for the WebRTC ICE server list.
+ *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used so peers can
+ *   discover their public address mappings via STUN without relying on relay
+ *   infrastructure for data plane forwarding (issue #236 phase 3).
  */
-export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
-  ({
+export const defaultNodeConfig = (
+  bootstrapConfig: BootstrapInit,
+  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
+) => {
+  // Copy into a fresh mutable array so libp2p's `RTCConfiguration.iceServers`
+  // type (mutable `RTCIceServer[]`) is satisfied without exposing the frozen
+  // `DEFAULT_WEBRTC_ICE_SERVERS` to mutation.
+  const iceServers: RTCIceServer[] = [...(webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS)];
+  return ({
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
@@ -77,8 +91,10 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
             reservationConcurrency: 1,
           }),
           webSockets({ filter: all }),
-          webRTC(),
-          webRTCDirect(),
+          // Pass STUN servers so RTCPeerConnection can gather server-reflexive
+          // candidates and attempt direct connections without relay forwarding.
+          webRTC({ rtcConfiguration: { iceServers } }),
+          webRTCDirect({ rtcConfiguration: { iceServers } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -104,8 +120,10 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
     },
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
+    webrtcIceServers: iceServers,
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
+};
 
 export class CollabswarmNode<
   DocType,
