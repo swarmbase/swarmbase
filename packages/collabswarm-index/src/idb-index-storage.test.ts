@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
 import 'fake-indexeddb/auto';
+import { openDB } from 'idb';
 import { IDBIndexStorage } from './idb-index-storage';
 
 describe('IDBIndexStorage', () => {
@@ -116,10 +117,45 @@ describe('IDBIndexStorage', () => {
       expect(results).toHaveLength(3);
     });
 
+    test('lt/lte: matches string-typed values that coerce numerically', async () => {
+      // Regression test: the IDB-accelerated path used to apply
+      // `IDBKeyRange.upperBound(numericValue)`, which silently dropped any
+      // stored keys of non-numeric type (Date / string / binary / Array all
+      // sort above numbers in IDB key order). JS comparison, however,
+      // coerces operand types — `'2' <= 5` is true — so a stored string
+      // numeric like `'2'` would match the JS-only path but be missed by
+      // the cursor. We now route lt/lte through the full-scan fallback so
+      // both backends agree.
+      await storage.put(indexName, '/doc/str-2', { title: 'StrNum', count: '2' as unknown as number, active: true });
+      const lte = await storage.query(indexName, [{ path: 'count', operator: 'lte', value: 5 }]);
+      expect(lte.map((r) => r.documentPath)).toContain('/doc/str-2');
+      const lt = await storage.query(indexName, [{ path: 'count', operator: 'lt', value: 5 }]);
+      expect(lt.map((r) => r.documentPath)).toContain('/doc/str-2');
+    });
+
     test('prefix: string prefix match', async () => {
       const results = await storage.query(indexName, [{ path: 'title', operator: 'prefix', value: 'Alpha' }]);
       expect(results).toHaveLength(2);
       expect(results.map(r => r.documentPath).sort()).toEqual(['/doc/1', '/doc/3']);
+    });
+
+    test('prefix: matches strings containing \\uffff after the prefix', async () => {
+      // Regression test for the IDB-accelerated prefix path. A naive upper
+      // bound of value + '￿' would miss strings whose tail contains
+      // additional ￿ code units; the implementation computes a true
+      // lexicographic successor as the half-open upper bound (and falls
+      // back to a lowerBound-only range when no successor is representable),
+      // and the JS-side filter validates `startsWith` on every candidate.
+      // (The U+FFFF code units below are written as escapes rather than
+      // literals because some tooling and editors don't render noncharacters
+      // consistently.)
+      const tricky = 'Alpha\uffff\uffff\uffff_tail';
+      await storage.put(indexName, '/doc/uffff', { title: tricky, count: 99, active: true });
+      const results = await storage.query(indexName, [
+        { path: 'title', operator: 'prefix', value: 'Alpha' },
+      ]);
+      const paths = results.map((r) => r.documentPath).sort();
+      expect(paths).toContain('/doc/uffff');
     });
 
     test('in: value in array', async () => {
@@ -213,6 +249,69 @@ describe('IDBIndexStorage', () => {
       await storage.close();
       // After close, getDB throws since db is null
       await expect(storage.get(indexName, '/doc/1')).rejects.toThrow();
+    });
+  });
+
+  describe('schema upgrades across initialize() calls', () => {
+    test('adds missing IDB indexes when initialize() is called with new fields', async () => {
+      // Start with a single field on a fresh DB.
+      const dbName = `schema-upgrade-${Date.now()}-${Math.random()}`;
+      const s1 = new IDBIndexStorage(dbName);
+      await s1.initialize('store-a', [{ path: 'title', type: 'string' }]);
+      await s1.put('store-a', '/d/1', { title: 'Hello', count: 7 });
+      await s1.close();
+
+      // Reopen the same DB requesting a second field that wasn't indexed
+      // before. The IDB store must gain a `count` index so query() can use it
+      // without throwing NotFoundError.
+      const s2 = new IDBIndexStorage(dbName);
+      await s2.initialize('store-a', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+
+      // Querying on the newly-added indexed field should hit the IDB-accelerated
+      // path (which calls store.index('count')) and succeed.
+      const results = await s2.query('store-a', [
+        { path: 'count', operator: 'eq', value: 7 },
+      ]);
+      expect(results).toHaveLength(1);
+      expect(results[0].documentPath).toBe('/d/1');
+
+      await s2.close();
+    });
+
+    test('does not bump version when no new indexes are needed', async () => {
+      const dbName = `schema-noop-${Date.now()}-${Math.random()}`;
+      const s1 = new IDBIndexStorage(dbName);
+      await s1.initialize('store-b', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+      await s1.put('store-b', '/d/1', { title: 'Hi', count: 1 });
+      await s1.close();
+
+      // Read the DB version after initial setup (via a raw open) so we can
+      // assert the no-op reopen doesn't trigger an unnecessary version bump.
+      const probe1 = await openDB(dbName);
+      const versionBeforeReopen = probe1.version;
+      probe1.close();
+
+      const s2 = new IDBIndexStorage(dbName);
+      await s2.initialize('store-b', [
+        { path: 'title', type: 'string' },
+        { path: 'count', type: 'number' },
+      ]);
+      const results = await s2.query('store-b', [
+        { path: 'title', operator: 'eq', value: 'Hi' },
+      ]);
+      expect(results).toHaveLength(1);
+      await s2.close();
+
+      const probe2 = await openDB(dbName);
+      const versionAfterReopen = probe2.version;
+      probe2.close();
+      expect(versionAfterReopen).toBe(versionBeforeReopen);
     });
   });
 });

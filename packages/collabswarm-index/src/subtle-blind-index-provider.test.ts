@@ -105,6 +105,56 @@ describe('SubtleBlindIndexProvider', () => {
     });
   });
 
+  describe('deriveFieldKeyFromRaw', () => {
+    test('should derive a usable field key from raw bytes', async () => {
+      const rawKey = crypto.getRandomValues(new Uint8Array(32));
+      const fieldKey = await provider.deriveFieldKeyFromRaw(rawKey, 'title');
+      const token = await provider.computeToken(fieldKey, 'hello');
+      expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+    });
+
+    test('should produce deterministic tokens from same raw material', async () => {
+      const rawKey = crypto.getRandomValues(new Uint8Array(32));
+      const key1 = await provider.deriveFieldKeyFromRaw(rawKey, 'title');
+      const key2 = await provider.deriveFieldKeyFromRaw(rawKey, 'title');
+      const token1 = await provider.computeToken(key1, 'test');
+      const token2 = await provider.computeToken(key2, 'test');
+      expect(token1).toEqual(token2);
+    });
+
+    test('should produce different keys for different field paths', async () => {
+      const rawKey = crypto.getRandomValues(new Uint8Array(32));
+      const key1 = await provider.deriveFieldKeyFromRaw(rawKey, 'title');
+      const key2 = await provider.deriveFieldKeyFromRaw(rawKey, 'author');
+      const token1 = await provider.computeToken(key1, 'test');
+      const token2 = await provider.computeToken(key2, 'test');
+      expect(token1).not.toEqual(token2);
+    });
+
+    test('should produce same tokens as deriveFieldKey with equivalent raw material', async () => {
+      // Export the master key to raw bytes, then use both paths
+      const rawMaster = await crypto.subtle.exportKey('raw', masterKey);
+      const rawBytes = new Uint8Array(rawMaster);
+
+      const keyFromCrypto = await provider.deriveFieldKey(masterKey, 'name');
+      const keyFromRaw = await provider.deriveFieldKeyFromRaw(rawBytes, 'name');
+
+      const tokenCrypto = await provider.computeToken(keyFromCrypto, 'Alice');
+      const tokenRaw = await provider.computeToken(keyFromRaw, 'Alice');
+      expect(tokenCrypto).toEqual(tokenRaw);
+    });
+
+    test('should reject raw material shorter than 16 bytes', async () => {
+      const shortKey = new Uint8Array(8);
+      await expect(provider.deriveFieldKeyFromRaw(shortKey, 'title')).rejects.toThrow(RangeError);
+    });
+
+    test('should reject empty fieldPath', async () => {
+      const rawKey = crypto.getRandomValues(new Uint8Array(32));
+      await expect(provider.deriveFieldKeyFromRaw(rawKey, '')).rejects.toThrow('non-empty');
+    });
+  });
+
   describe('token truncation', () => {
     test('should produce shorter tokens with smaller tokenLengthBytes', async () => {
       const shortProvider = new SubtleBlindIndexProvider(8);
