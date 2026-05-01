@@ -15,9 +15,6 @@ if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle 
 }
 
 import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner';
-import { BenchmarkRunner } from './benchmark-runner';
-import { BenchmarkResult } from '../types';
-import { runAllScenarios } from './scenarios';
 import { runIndexQueryScalingBenchmarks } from './index-query-scaling';
 import { runBlindIndexPerfBenchmarks } from './blind-index-perf';
 import { runBloomFilterScalingBenchmarks } from './bloom-filter-scaling';
@@ -36,20 +33,6 @@ async function main() {
   console.log(`Running index benchmarks with ${iterations} iterations...\n`);
 
   const allSuites: BenchmarkSuiteResult[] = [];
-
-  // --- Legacy scenarios (existing benchmarks) ---
-  console.log('=== Legacy Index Scenarios ===');
-  const legacyScales = [100, 1000, 10000];
-  const allLegacyResults: BenchmarkResult[] = [];
-  for (const count of legacyScales) {
-    console.log(`\n## Running legacy benchmarks at ${count} documents...`);
-    const results = await runAllScenarios(count);
-    allLegacyResults.push(...results);
-    console.log(BenchmarkRunner.formatTable(results));
-  }
-  console.log();
-
-  // --- New paper-quality benchmarks ---
 
   // 1. Index Query Scaling
   console.log('=== Index Query Scaling ===');
@@ -76,11 +59,6 @@ async function main() {
   const outPath = join(__dirname, 'results.json');
   fs.writeFileSync(outPath, JSON.stringify(allSuites, null, 2));
   console.log(`Results written to ${outPath}`);
-
-  // Also write legacy results
-  const legacyOutPath = join(__dirname, 'legacy-results.json');
-  fs.writeFileSync(legacyOutPath, JSON.stringify(allLegacyResults, null, 2));
-  console.log(`Legacy results written to ${legacyOutPath}`);
 }
 
 main().catch((error) => {
