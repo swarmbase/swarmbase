@@ -20,15 +20,51 @@ import { CompactionConfig } from './compaction-config';
 import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 
 /**
+ * Default list of free public STUN servers used to populate the WebRTC
+ * `iceServers` configuration when none is provided by the consumer.
+ *
+ * STUN lets peers discover their public IP/port mapping so they can attempt
+ * direct browser-to-browser WebRTC connections without depending on a
+ * Circuit Relay for data forwarding (issue #236, layered NAT-traversal phase 3).
+ *
+ * The list is intentionally kept small (3-4 servers across multiple operators)
+ * so we get redundancy without flooding ICE gathering with redundant probes.
+ *
+ * Sources:
+ * - Google: `stun.l.google.com:19302` -- the de-facto reference public STUN
+ *   server, widely used in WebRTC examples and production apps.
+ * - Cloudflare: `stun.cloudflare.com:3478` -- operated by Cloudflare's
+ *   public WebRTC infra; geographically diverse from Google's anycast.
+ * - Twilio (Mozilla-style fallback): `global.stun.twilio.com:3478` --
+ *   commonly recommended free public STUN endpoint.
+ */
+export const DEFAULT_WEBRTC_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
+
+/**
  * Default collabswarm config to use if none is provided.
  *
  * Note: This is a browser-compatible default. It does not include mDNS
  *       (which requires the Node-only `dgram` module). Without bootstrap
  *       nodes this node will be in a swarm of one; use
  *       `collabswarm.connect()` or pass bootstrap addresses to join peers.
+ *
+ * @param bootstrapConfig Bootstrap peer list to seed peer discovery.
+ * @param webrtcIceServers Optional override for the WebRTC ICE server list.
+ *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used so peers can
+ *   discover their public address mappings via STUN without relying on relay
+ *   infrastructure for data plane forwarding.
  */
-export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
-  ({
+export const defaultConfig = (
+  bootstrapConfig: BootstrapInit,
+  webrtcIceServers?: RTCIceServer[],
+) => {
+  const iceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
+  return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
@@ -44,8 +80,10 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
             reservationConcurrency: 1,
           }),
           webSockets({ filter: all }),
-          webRTC(),
-          webRTCDirect(),
+          // Pass STUN servers so RTCPeerConnection can gather server-reflexive
+          // candidates and attempt direct connections without relay forwarding.
+          webRTC({ rtcConfiguration: { iceServers } }),
+          webRTCDirect({ rtcConfiguration: { iceServers } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -72,8 +110,10 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
 
     pubsubDocumentPrefix: DEFAULT_DOCUMENT_TOPIC_PREFIX,
     pubsubDocumentPublishPath: '/documents',
+    webrtcIceServers: iceServers,
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
+};
 
 /**
  * CollabswarmConfig is a settings object for collabswarm.
@@ -152,6 +192,27 @@ export interface CollabswarmConfig {
   enableNetworkStats?: boolean;
 
   /**
+   * Optional override for the WebRTC ICE server list used by the `webRTC()`
+   * and `webRTCDirect()` transports. When undefined, the built-in
+   * {@link DEFAULT_WEBRTC_ICE_SERVERS} list (Google + Cloudflare + Twilio
+   * public STUN endpoints) is used so peers can discover their public
+   * address mappings without depending on Circuit Relay for the data plane.
+   *
+   * Pass an empty array (`[]`) to disable STUN entirely (e.g. for
+   * fully-internal LAN deployments where mDNS is sufficient), or supply
+   * custom STUN/TURN servers for self-hosted infrastructure.
+   *
+   * Note: this field is informational once the libp2p config has already
+   * been built by {@link defaultConfig}; to actually change the ICE
+   * configuration, pass the override into `defaultConfig(bootstrap, ice)`
+   * (or `getDefaultConfig(ice)`) so it is wired into the transports at
+   * construction time.
+   *
+   * @default DEFAULT_WEBRTC_ICE_SERVERS
+   */
+  webrtcIceServers?: RTCIceServer[];
+
+  /**
    * Optional callback to validate document paths before creation.
    *
    * Called when `open()` determines the document is new (i.e., `load()` returned
@@ -202,7 +263,12 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  *
  * **Note:** Lazily instantiated -- safe to import in Node.js test environments
  * that lack IndexedDB as long as the function is not called.
+ *
+ * @param webrtcIceServers Optional override for the WebRTC ICE server list.
+ *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used.
  */
-export function getDefaultConfig(): CollabswarmConfig {
-  return defaultConfig(defaultBootstrapConfig([]));
+export function getDefaultConfig(
+  webrtcIceServers?: RTCIceServer[],
+): CollabswarmConfig {
+  return defaultConfig(defaultBootstrapConfig([]), webrtcIceServers);
 }
