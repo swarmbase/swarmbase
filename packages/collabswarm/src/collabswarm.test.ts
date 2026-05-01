@@ -340,29 +340,43 @@ describe('writer key cache', () => {
   // Minimal harness mirroring the document-scoped cache and the three
   // mutation paths (merge / add / remove). Production code lives in
   // CollabswarmDocument (collabswarm-document.ts).
+  //
+  // The version counter exists for race-safety: an in-flight `getKeys()` that
+  // started before an invalidation captures the version at fetch time and
+  // refuses to commit its result if the version has advanced. Without it, a
+  // stale fetch could overwrite the freshly-invalidated null cache with a
+  // pre-revocation writer list.
   class WriterCacheHarness<T> {
     private _cached: T[] | null = null;
+    private _version = 0;
     public usersCalls = 0;
     constructor(private readonly _backing: { users: () => Promise<T[]>; merge: () => void; add: () => Promise<void>; remove: () => Promise<void>; }) {}
 
     async getKeys(): Promise<T[]> {
-      if (this._cached === null) {
-        this.usersCalls++;
-        this._cached = await this._backing.users();
+      if (this._cached !== null) return this._cached;
+      this.usersCalls++;
+      const versionAtStart = this._version;
+      const fetched = await this._backing.users();
+      if (this._version === versionAtStart) {
+        this._cached = fetched;
       }
-      return this._cached;
+      return fetched;
+    }
+    private _invalidate(): void {
+      this._cached = null;
+      this._version++;
     }
     merge(): void {
       this._backing.merge();
-      this._cached = null;
+      this._invalidate();
     }
     async add(): Promise<void> {
       await this._backing.add();
-      this._cached = null;
+      this._invalidate();
     }
     async remove(): Promise<void> {
       await this._backing.remove();
-      this._cached = null;
+      this._invalidate();
     }
   }
 
@@ -418,6 +432,53 @@ describe('writer key cache', () => {
     await cache.remove();
     expect(await cache.getKeys()).toEqual(['k1', 'merged']);
     expect(cache.usersCalls).toBe(4);
+  });
+
+  test('invalidation during in-flight users() fetch does not overwrite the cleared cache', async () => {
+    // Reproduces the race fixed in the writer-key cache: while a getKeys()
+    // call is awaiting users(), an invalidation (e.g. revoking a writer)
+    // races in. The pre-invalidation fetch must NOT commit its (now-stale)
+    // result back to the cache, or the next reader could see the revoked
+    // writer in the trusted set.
+    const pendingResolves: Array<(keys: string[]) => void> = [];
+    let usersCalls = 0;
+    let currentKeys = ['k1', 'revoked'];
+    const backing = {
+      users: () => {
+        usersCalls++;
+        return new Promise<string[]>((resolve) => {
+          pendingResolves.push(resolve);
+        });
+      },
+      merge: () => { currentKeys = currentKeys.filter((k) => k !== 'revoked'); },
+      add: async () => {},
+      remove: async () => {},
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    // Start a getKeys() that captures the OLD writer set.
+    const inFlight = cache.getKeys();
+    expect(usersCalls).toBe(1);
+    expect(pendingResolves.length).toBe(1);
+
+    // Race: an ACL update revokes the writer mid-fetch.
+    cache.merge();
+
+    // Resolve the pre-invalidation fetch with the stale list.
+    pendingResolves[0](['k1', 'revoked']);
+    const result = await inFlight;
+    // The resolved value still reflects what users() returned, but...
+    expect(result).toEqual(['k1', 'revoked']);
+
+    // ...the next read must NOT reuse it: the cache was cleared by merge,
+    // and the in-flight fetch must have refused to assign back. So
+    // getKeys() re-queries the backing.
+    const nextPromise = cache.getKeys();
+    expect(usersCalls).toBe(2);
+    expect(pendingResolves.length).toBe(2);
+    pendingResolves[1](currentKeys.slice());
+    const next = await nextPromise;
+    expect(next).toEqual(['k1']); // would be ['k1', 'revoked'] without the version guard
   });
 });
 

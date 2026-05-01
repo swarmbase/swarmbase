@@ -144,10 +144,16 @@ export class CollabswarmDocument<
 
   // Cached snapshot of `_writers.users()` for hot-path signature verification.
   // Document-scoped (not per-DAG-node): every signature check needs the current
-  // trusted writer set, so a single lazy cache is sufficient. Invalidated to
-  // `null` whenever `_writers` is mutated via `_mergeWriters` / `_addWriter` /
-  // `_removeWriter`. All ACL mutations must go through those helpers.
+  // trusted writer set, so a single lazy cache is sufficient. Invalidated by
+  // bumping `_writerKeysVersion` whenever `_writers` is mutated via
+  // `_mergeWriters` / `_addWriter` / `_removeWriter`. All ACL mutations must
+  // go through those helpers. The version counter is what makes invalidation
+  // race-safe: `_getWriterKeys` captures the version before awaiting and only
+  // commits the result if the version is still current, so an in-flight fetch
+  // that races with an invalidation cannot overwrite the new null state with
+  // a stale list (which could otherwise admit signatures from a revoked writer).
   private _cachedWriterKeys: PublicKey[] | null = null;
+  private _writerKeysVersion = 0;
 
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
@@ -635,31 +641,50 @@ export class CollabswarmDocument<
    * the document-scoped cache on miss. Callers must not mutate the result.
    * The cache is invalidated by `_mergeWriters`, `_addWriter`, and
    * `_removeWriter` -- the only sanctioned mutation paths for `_writers`.
+   *
+   * Race-safety: we capture `_writerKeysVersion` before awaiting and only
+   * assign the result back to the cache if the version is unchanged. A
+   * concurrent invalidation bumps the version, so an in-flight fetch from
+   * before the invalidation can no longer overwrite the (now-null) cache
+   * with a stale writer list -- preventing acceptance of signatures from a
+   * just-revoked writer.
    */
   private async _getWriterKeys(): Promise<PublicKey[]> {
-    if (this._cachedWriterKeys === null) {
-      this._cachedWriterKeys = await this._writers.users();
+    if (this._cachedWriterKeys !== null) {
+      return this._cachedWriterKeys;
     }
-    return this._cachedWriterKeys;
+    const versionAtStart = this._writerKeysVersion;
+    const fetched = await this._writers.users();
+    if (this._writerKeysVersion === versionAtStart) {
+      this._cachedWriterKeys = fetched;
+    }
+    return fetched;
+  }
+
+  /** Bump the writer-keys version so any in-flight `_getWriterKeys` aborts
+   *  its assignment, and clear the cache for the next caller. */
+  private _invalidateWriterKeyCache(): void {
+    this._cachedWriterKeys = null;
+    this._writerKeysVersion++;
   }
 
   /** Apply a writer ACL change and invalidate the cached key list. */
   private _mergeWriters(changes: ChangesType): void {
     this._writers.merge(changes);
-    this._cachedWriterKeys = null;
+    this._invalidateWriterKeyCache();
   }
 
   /** Add a writer and invalidate the cached key list. */
   private async _addWriter(publicKey: PublicKey): Promise<ChangesType> {
     const changes = await this._writers.add(publicKey);
-    this._cachedWriterKeys = null;
+    this._invalidateWriterKeyCache();
     return changes;
   }
 
   /** Remove a writer and invalidate the cached key list. */
   private async _removeWriter(publicKey: PublicKey): Promise<ChangesType> {
     const changes = await this._writers.remove(publicKey);
-    this._cachedWriterKeys = null;
+    this._invalidateWriterKeyCache();
     return changes;
   }
 
