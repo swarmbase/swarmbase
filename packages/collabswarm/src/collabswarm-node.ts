@@ -70,9 +70,12 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  */
 export const defaultNodeConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: RTCIceServer[],
+  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
 ) => {
-  const iceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
+  // Copy into a fresh mutable array so libp2p's `RTCConfiguration.iceServers`
+  // type (mutable `RTCIceServer[]`) is satisfied without exposing the frozen
+  // `DEFAULT_WEBRTC_ICE_SERVERS` to mutation.
+  const iceServers: RTCIceServer[] = [...(webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS)];
   return ({
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),

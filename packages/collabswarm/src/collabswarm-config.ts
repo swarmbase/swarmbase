@@ -38,12 +38,13 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
  * - Twilio (Mozilla-style fallback): `global.stun.twilio.com:3478` --
  *   commonly recommended free public STUN endpoint.
  */
-export const DEFAULT_WEBRTC_ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-];
+export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
+  Object.freeze([
+    Object.freeze({ urls: 'stun:stun.l.google.com:19302' }),
+    Object.freeze({ urls: 'stun:stun1.l.google.com:19302' }),
+    Object.freeze({ urls: 'stun:stun.cloudflare.com:3478' }),
+    Object.freeze({ urls: 'stun:global.stun.twilio.com:3478' }),
+  ]);
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -61,9 +62,12 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: RTCIceServer[] = [
  */
 export const defaultConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: RTCIceServer[],
+  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
 ) => {
-  const iceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
+  // Copy into a fresh mutable array so libp2p's `RTCConfiguration.iceServers`
+  // type (mutable `RTCIceServer[]`) is satisfied without exposing the frozen
+  // `DEFAULT_WEBRTC_ICE_SERVERS` to mutation.
+  const iceServers: RTCIceServer[] = [...(webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS)];
   return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
     helia: {
@@ -210,7 +214,7 @@ export interface CollabswarmConfig {
    *
    * @default DEFAULT_WEBRTC_ICE_SERVERS
    */
-  webrtcIceServers?: RTCIceServer[];
+  webrtcIceServers?: ReadonlyArray<RTCIceServer>;
 
   /**
    * Optional callback to validate document paths before creation.
@@ -268,7 +272,7 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used.
  */
 export function getDefaultConfig(
-  webrtcIceServers?: RTCIceServer[],
+  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
 ): CollabswarmConfig {
   return defaultConfig(defaultBootstrapConfig([]), webrtcIceServers);
 }
