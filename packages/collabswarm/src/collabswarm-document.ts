@@ -142,6 +142,13 @@ export class CollabswarmDocument<
   // Document writers ACL.
   private _writers;
 
+  // Cached snapshot of `_writers.users()` for hot-path signature verification.
+  // Document-scoped (not per-DAG-node): every signature check needs the current
+  // trusted writer set, so a single lazy cache is sufficient. Invalidated to
+  // `null` whenever `_writers` is mutated via `_mergeWriters` / `_addWriter` /
+  // `_removeWriter`. All ACL mutations must go through those helpers.
+  private _cachedWriterKeys: PublicKey[] | null = null;
+
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain;
@@ -515,7 +522,7 @@ export class CollabswarmDocument<
           }
           case crdtWriterChangeNode: {
             // Apply the changes that were sent directly.
-            this._writers.merge(sentChanges);
+            this._mergeWriters(sentChanges);
             newDocumentHashes.push(sentHash);
             break;
           }
@@ -561,7 +568,7 @@ export class CollabswarmDocument<
                   return;
                 }
                 case crdtWriterChangeNode: {
-                  this._writers.merge(missingChanges);
+                  this._mergeWriters(missingChanges);
                   this._hashes.add(missingHash);
                   await this._fireRemoteUpdateHandlers([missingHash]);
                   return;
@@ -603,7 +610,7 @@ export class CollabswarmDocument<
   private _applyACLFromTree(node: CRDTChangeNode<ChangesType>) {
     if (node.change) {
       if (node.kind === crdtWriterChangeNode) {
-        this._writers.merge(node.change);
+        this._mergeWriters(node.change);
       } else if (node.kind === crdtReaderChangeNode) {
         this._readers.merge(node.change);
       }
@@ -623,20 +630,50 @@ export class CollabswarmDocument<
     return this.swarm.config?.enableSigning !== false;
   }
 
+  /**
+   * Returns the current list of authorized writer public keys, populating
+   * the document-scoped cache on miss. Callers must not mutate the result.
+   * The cache is invalidated by `_mergeWriters`, `_addWriter`, and
+   * `_removeWriter` -- the only sanctioned mutation paths for `_writers`.
+   */
+  private async _getWriterKeys(): Promise<PublicKey[]> {
+    if (this._cachedWriterKeys === null) {
+      this._cachedWriterKeys = await this._writers.users();
+    }
+    return this._cachedWriterKeys;
+  }
+
+  /** Apply a writer ACL change and invalidate the cached key list. */
+  private _mergeWriters(changes: ChangesType): void {
+    this._writers.merge(changes);
+    this._cachedWriterKeys = null;
+  }
+
+  /** Add a writer and invalidate the cached key list. */
+  private async _addWriter(publicKey: PublicKey): Promise<ChangesType> {
+    const changes = await this._writers.add(publicKey);
+    this._cachedWriterKeys = null;
+    return changes;
+  }
+
+  /** Remove a writer and invalidate the cached key list. */
+  private async _removeWriter(publicKey: PublicKey): Promise<ChangesType> {
+    const changes = await this._writers.remove(publicKey);
+    this._cachedWriterKeys = null;
+    return changes;
+  }
+
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
     if (!this._isSigningEnabled()) {
       return true;
     }
 
-    // TODO: Cache list of current writers per dag node for now.
+    const writerKeys = await this._getWriterKeys();
+    const signatureBytes = this._deserializeSignature(signature);
     const verificationTasks: Promise<boolean>[] = [];
-    for (const writerKey of await this._writers.users()) {
+    for (const writerKey of writerKeys) {
       verificationTasks.push(
-        this._authProvider.verify(
-          raw,
-          writerKey,
-          this._deserializeSignature(signature),
-        ),
+        this._authProvider.verify(raw, writerKey, signatureBytes),
       );
     }
     return firstTrue(verificationTasks);
@@ -654,8 +691,9 @@ export class CollabswarmDocument<
       return true;
     }
 
+    const writerKeys = await this._getWriterKeys();
     const verificationTasks: Promise<boolean>[] = [];
-    for (const writerKey of await this._writers.users()) {
+    for (const writerKey of writerKeys) {
       verificationTasks.push(
         this._authProvider.verify(payload, writerKey, signature),
       );
@@ -1336,7 +1374,7 @@ export class CollabswarmDocument<
         // On first load (_writers is empty / bootstrapping), we cannot
         // verify -- trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
-        const preLoadWriters = await this._writers.users();
+        const preLoadWriters = await this._getWriterKeys();
         if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
           if (!message.signature) {
             console.warn(
@@ -1665,7 +1703,7 @@ export class CollabswarmDocument<
 
       if (!isExisting) {
         // Add current user as a writer.
-        await this._writers.add(this._userPublicKey);
+        await this._addWriter(this._userPublicKey);
 
         // Add initial document key.
         console.log(`Adding a key to ${this.documentPath}`);
@@ -2246,7 +2284,7 @@ export class CollabswarmDocument<
     }
 
     // Construct a new writer ACL change.
-    const changes = await this._writers.add(writer);
+    const changes = await this._addWriter(writer);
 
     await this._makeChange(changes, crdtWriterChangeNode);
   }
@@ -2265,7 +2303,7 @@ export class CollabswarmDocument<
     }
 
     // Construct a new writer ACL change.
-    const changes = await this._writers.remove(writer);
+    const changes = await this._removeWriter(writer);
 
     await this._makeChange(changes, crdtWriterChangeNode);
 

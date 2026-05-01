@@ -329,3 +329,95 @@ describe('getReaders() dedup logic', () => {
   });
 });
 
+/**
+ * Tests for the writer-key caching pattern in CollabswarmDocument's
+ * `_getWriterKeys` / `_mergeWriters` / `_addWriter` / `_removeWriter` helpers.
+ * Replicates the cache + invalidation logic against a mock ACL so we can
+ * exercise hit/miss and invalidation paths in isolation, without standing up
+ * a full libp2p/Helia stack.
+ */
+describe('writer key cache', () => {
+  // Minimal harness mirroring the document-scoped cache and the three
+  // mutation paths (merge / add / remove). Production code lives in
+  // CollabswarmDocument (collabswarm-document.ts).
+  class WriterCacheHarness<T> {
+    private _cached: T[] | null = null;
+    public usersCalls = 0;
+    constructor(private readonly _backing: { users: () => Promise<T[]>; merge: () => void; add: () => Promise<void>; remove: () => Promise<void>; }) {}
+
+    async getKeys(): Promise<T[]> {
+      if (this._cached === null) {
+        this.usersCalls++;
+        this._cached = await this._backing.users();
+      }
+      return this._cached;
+    }
+    merge(): void {
+      this._backing.merge();
+      this._cached = null;
+    }
+    async add(): Promise<void> {
+      await this._backing.add();
+      this._cached = null;
+    }
+    async remove(): Promise<void> {
+      await this._backing.remove();
+      this._cached = null;
+    }
+  }
+
+  test('caches users() and reuses on subsequent calls', async () => {
+    const keys = ['k1', 'k2'];
+    const backing = {
+      users: async () => keys.slice(),
+      merge: () => {},
+      add: async () => {},
+      remove: async () => {},
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    const a = await cache.getKeys();
+    const b = await cache.getKeys();
+    const c = await cache.getKeys();
+
+    expect(a).toEqual(keys);
+    expect(b).toEqual(keys);
+    expect(c).toEqual(keys);
+    // backing.users() should have been called exactly once across three lookups
+    expect(cache.usersCalls).toBe(1);
+  });
+
+  test('invalidates the cache on merge / add / remove', async () => {
+    let currentKeys = ['k1'];
+    const backing = {
+      users: async () => currentKeys.slice(),
+      merge: () => { currentKeys = [...currentKeys, 'merged']; },
+      add: async () => { currentKeys = [...currentKeys, 'added']; },
+      remove: async () => { currentKeys = currentKeys.slice(0, -1); },
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    expect(await cache.getKeys()).toEqual(['k1']);
+    expect(cache.usersCalls).toBe(1);
+
+    // merge invalidates -- next read sees the new state and re-queries.
+    cache.merge();
+    expect(await cache.getKeys()).toEqual(['k1', 'merged']);
+    expect(cache.usersCalls).toBe(2);
+
+    // Reads after merge stay cached.
+    expect(await cache.getKeys()).toEqual(['k1', 'merged']);
+    expect(cache.usersCalls).toBe(2);
+
+    // add invalidates.
+    await cache.add();
+    expect(await cache.getKeys()).toEqual(['k1', 'merged', 'added']);
+    expect(cache.usersCalls).toBe(3);
+
+    // remove invalidates.
+    await cache.remove();
+    expect(await cache.getKeys()).toEqual(['k1', 'merged']);
+    expect(cache.usersCalls).toBe(4);
+  });
+});
+
