@@ -41,6 +41,7 @@ export class IDBIndexStorage implements IndexStorage {
     // causing `openDB(name, currentVersion + 1)` to throw a VersionError.
     // On VersionError we re-read the current version and try again.
     const MAX_OPEN_ATTEMPTS = 4;
+    const RETRY_BASE_DELAY_MS = 25;
     let existingIndexNames: string[] = [];
     for (let attempt = 0; attempt < MAX_OPEN_ATTEMPTS; attempt++) {
       // Read current version + existing schema so we can decide whether we
@@ -106,7 +107,11 @@ export class IDBIndexStorage implements IndexStorage {
           err.name === 'VersionError';
         if (isVersionError && attempt < MAX_OPEN_ATTEMPTS - 1) {
           // A concurrent tab/worker upgraded the DB between our two opens.
-          // Loop and re-probe at the new version.
+          // Back off briefly with exponential delay + jitter to break ties
+          // when many openers race to upgrade, then re-probe at the new
+          // version.
+          const delay = RETRY_BASE_DELAY_MS * (1 << attempt) + Math.floor(Math.random() * RETRY_BASE_DELAY_MS);
+          await new Promise<void>((resolve) => setTimeout(resolve, delay));
           continue;
         }
         throw err;
