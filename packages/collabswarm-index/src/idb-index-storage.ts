@@ -389,7 +389,9 @@ export class IDBIndexStorage implements IndexStorage {
     // two sides disagree on Date equality: `IDBKeyRange.only(dateObj)`
     // matches stored Dates by timestamp, while JS `===` in `_matchesFilter`
     // compares by object identity. Accelerating would silently change which
-    // records match.
+    // records match. Booleans are excluded because they are not valid IDB
+    // keys per the IndexedDB spec — `IDBKeyRange.only(true/false)` throws
+    // `DataError` at runtime, so they must use the JS-side scan path.
     if (operator === 'eq') {
       if (typeof value === 'number') return Number.isFinite(value);
       if (typeof value === 'string') return true;

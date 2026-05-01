@@ -9,10 +9,15 @@ import { QueryResult } from './types';
 // overhead of standing up a React renderer and jsdom.
 
 /**
- * Subscribe to the manager and wait until at least `minResults` callbacks
- * have fired (or timeout). This avoids the flakiness of fixed-duration
- * `setTimeout` waits: we proceed as soon as the callback is observed, and
- * we still bail out instead of hanging forever if it never fires.
+ * Subscribe to the manager and return a `waitForResults(count)` helper that
+ * resolves once at least `count` callbacks have fired (or rejects on
+ * timeout). This avoids the flakiness of fixed-duration `setTimeout` waits:
+ * we proceed as soon as the callback is observed, and we still bail out
+ * instead of hanging forever if it never fires.
+ *
+ * The returned `unsubscribe` both detaches from the manager and rejects any
+ * outstanding `waitForResults` promises, clearing their timers — so callers
+ * who unsubscribe early do not leave Jest open-handle warnings behind.
  */
 function subscribeAndWait<T extends Record<string, unknown>>(
   manager: IndexManager<T>,
@@ -31,7 +36,7 @@ function subscribeAndWait<T extends Record<string, unknown>>(
     timer: ReturnType<typeof setTimeout>;
   }> = [];
 
-  const unsubscribe = manager.subscribe(options, (r) => {
+  const innerUnsubscribe = manager.subscribe(options, (r) => {
     results.push(r);
     // Wake up any waiters whose target count has been reached.
     for (let i = waiters.length - 1; i >= 0; i--) {
@@ -53,6 +58,15 @@ function subscribeAndWait<T extends Record<string, unknown>>(
       }, timeout);
       waiters.push({ target: count, resolve, reject, timer });
     });
+  };
+
+  const unsubscribe = () => {
+    innerUnsubscribe();
+    while (waiters.length > 0) {
+      const w = waiters.pop()!;
+      clearTimeout(w.timer);
+      w.reject(new Error('subscribeAndWait: unsubscribed before results arrived'));
+    }
   };
 
   return { results, unsubscribe, waitForResults };
