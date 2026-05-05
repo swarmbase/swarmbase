@@ -48,6 +48,26 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
   ]);
 
 /**
+ * Returns a deep-enough copy of an `RTCIceServer` so callers can hand the
+ * result to libp2p (which expects a mutable `RTCIceServer`) without sharing
+ * any inner references with the source object.
+ *
+ * In particular:
+ * - the top-level object is a fresh `{ ...server }` so mutating fields like
+ *   `username`/`credential` on the copy cannot affect the source;
+ * - if `urls` is an array, it is copied to a fresh array so `push()`/`splice()`
+ *   on the copy cannot affect the source's URL list (a single `string` value
+ *   is immutable, so it is forwarded as-is).
+ *
+ * Exported so {@link defaultNodeConfig} (and any future config helpers) can
+ * share the same defensive-copy behavior.
+ */
+export const cloneIceServer = (server: RTCIceServer): RTCIceServer => ({
+  ...server,
+  urls: Array.isArray(server.urls) ? [...server.urls] : server.urls,
+});
+
+/**
  * Default collabswarm config to use if none is provided.
  *
  * Note: This is a browser-compatible default. It does not include mDNS
@@ -63,17 +83,19 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
  */
 export const defaultConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
+  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
 ) => {
   // Resolve once from the (possibly readonly) input or the frozen defaults.
-  // Each consumer below gets its own independent copy so mutating any one of
+  // Each consumer below gets its own independent copy (including a deep-enough
+  // clone of every server object via `cloneIceServer`) so mutating any one of
   // them (e.g., the array exposed on the returned config, or the array
-  // libp2p's webRTC transport stores internally) cannot leak into the others.
+  // libp2p's webRTC transport stores internally, or any individual server's
+  // fields) cannot leak into the others.
   const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
   // Defensive copy for the exposed config: freeze so consumers cannot mutate
   // it in place and inadvertently shift state shared with anything else.
   const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => Object.freeze({ ...server })),
+    sourceIceServers.map((server) => Object.freeze(cloneIceServer(server))),
   );
   return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
@@ -93,10 +115,11 @@ export const defaultConfig = (
           webSockets({ filter: all }),
           // Pass STUN servers so RTCPeerConnection can gather server-reflexive
           // candidates and attempt direct connections without relay forwarding.
-          // Each transport gets its own fresh mutable copy to avoid aliasing
-          // with the array exposed on `config.webrtcIceServers` below.
-          webRTC({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
-          webRTCDirect({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
+          // Each transport gets its own fresh mutable copy (with each server
+          // object also deep-enough-cloned via `cloneIceServer`) to avoid
+          // aliasing with the array exposed on `config.webrtcIceServers` below.
+          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -224,7 +247,7 @@ export interface CollabswarmConfig {
    *
    * @default DEFAULT_WEBRTC_ICE_SERVERS
    */
-  webrtcIceServers?: ReadonlyArray<RTCIceServer>;
+  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>;
 
   /**
    * Optional callback to validate document paths before creation.
@@ -282,7 +305,7 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used.
  */
 export function getDefaultConfig(
-  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
+  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
 ): CollabswarmConfig {
   return defaultConfig(defaultBootstrapConfig([]), webrtcIceServers);
 }

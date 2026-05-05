@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import {
   CollabswarmConfig,
   DEFAULT_WEBRTC_ICE_SERVERS,
+  cloneIceServer,
   defaultBootstrapConfig,
   defaultConfig,
 } from './collabswarm-config';
@@ -71,17 +72,19 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  */
 export const defaultNodeConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: ReadonlyArray<RTCIceServer>,
+  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
 ) => {
   // Resolve once from the (possibly readonly) input or the frozen defaults.
-  // Each consumer below gets its own independent copy so mutating any one of
+  // Each consumer below gets its own independent copy (including a deep-enough
+  // clone of every server object via `cloneIceServer`) so mutating any one of
   // them (e.g., the array exposed on the returned config, or the array
-  // libp2p's webRTC transport stores internally) cannot leak into the others.
+  // libp2p's webRTC transport stores internally, or any individual server's
+  // fields) cannot leak into the others.
   const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
   // Defensive copy for the exposed config: freeze so consumers cannot mutate
   // it in place and inadvertently shift state shared with anything else.
   const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => Object.freeze({ ...server })),
+    sourceIceServers.map((server) => Object.freeze(cloneIceServer(server))),
   );
   return ({
     helia: {
@@ -100,10 +103,11 @@ export const defaultNodeConfig = (
           webSockets({ filter: all }),
           // Pass STUN servers so RTCPeerConnection can gather server-reflexive
           // candidates and attempt direct connections without relay forwarding.
-          // Each transport gets its own fresh mutable copy to avoid aliasing
-          // with the array exposed on `config.webrtcIceServers` below.
-          webRTC({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
-          webRTCDirect({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
+          // Each transport gets its own fresh mutable copy (with each server
+          // object also deep-enough-cloned via `cloneIceServer`) to avoid
+          // aliasing with the array exposed on `config.webrtcIceServers` below.
+          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
