@@ -65,10 +65,16 @@ export const defaultConfig = (
   bootstrapConfig: BootstrapInit,
   webrtcIceServers?: ReadonlyArray<RTCIceServer>,
 ) => {
-  // Copy into a fresh mutable array so libp2p's `RTCConfiguration.iceServers`
-  // type (mutable `RTCIceServer[]`) is satisfied without exposing the frozen
-  // `DEFAULT_WEBRTC_ICE_SERVERS` to mutation.
-  const iceServers: RTCIceServer[] = [...(webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS)];
+  // Resolve once from the (possibly readonly) input or the frozen defaults.
+  // Each consumer below gets its own independent copy so mutating any one of
+  // them (e.g., the array exposed on the returned config, or the array
+  // libp2p's webRTC transport stores internally) cannot leak into the others.
+  const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
+  // Defensive copy for the exposed config: freeze so consumers cannot mutate
+  // it in place and inadvertently shift state shared with anything else.
+  const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
+    sourceIceServers.map((server) => Object.freeze({ ...server })),
+  );
   return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
     helia: {
@@ -87,8 +93,10 @@ export const defaultConfig = (
           webSockets({ filter: all }),
           // Pass STUN servers so RTCPeerConnection can gather server-reflexive
           // candidates and attempt direct connections without relay forwarding.
-          webRTC({ rtcConfiguration: { iceServers } }),
-          webRTCDirect({ rtcConfiguration: { iceServers } }),
+          // Each transport gets its own fresh mutable copy to avoid aliasing
+          // with the array exposed on `config.webrtcIceServers` below.
+          webRTC({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: [...sourceIceServers] } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -116,7 +124,7 @@ export const defaultConfig = (
 
     pubsubDocumentPrefix: DEFAULT_DOCUMENT_TOPIC_PREFIX,
     pubsubDocumentPublishPath: '/documents',
-    webrtcIceServers: iceServers,
+    webrtcIceServers: exposedIceServers,
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
 };
