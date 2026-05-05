@@ -642,23 +642,33 @@ export class CollabswarmDocument<
    * The cache is invalidated by `_mergeWriters`, `_addWriter`, and
    * `_removeWriter` -- the only sanctioned mutation paths for `_writers`.
    *
-   * Race-safety: we capture `_writerKeysVersion` before awaiting and only
-   * assign the result back to the cache if the version is unchanged. A
-   * concurrent invalidation bumps the version, so an in-flight fetch from
-   * before the invalidation can no longer overwrite the (now-null) cache
-   * with a stale writer list -- preventing acceptance of signatures from a
-   * just-revoked writer.
+   * Race-safety: we capture `_writerKeysVersion` before awaiting. If a
+   * concurrent invalidation bumps the version while the fetch is in
+   * flight, the fetched list reflects the *pre*-invalidation ACL and is
+   * unsafe to return -- handing it to the caller (signature verification)
+   * could verify a just-revoked writer one last time. So we discard the
+   * stale fetch and loop, re-reading the (now-cleared) cache and starting
+   * a fresh `users()` call. The loop converges once a fetch completes
+   * with no intervening invalidation; under continuous invalidation it
+   * would spin, but invalidations are bounded (one per ACL mutation) and
+   * not adversarial.
    */
   private async _getWriterKeys(): Promise<PublicKey[]> {
-    if (this._cachedWriterKeys !== null) {
-      return this._cachedWriterKeys;
+    while (true) {
+      if (this._cachedWriterKeys !== null) {
+        return this._cachedWriterKeys;
+      }
+      const versionAtStart = this._writerKeysVersion;
+      const fetched = await this._writers.users();
+      if (this._writerKeysVersion === versionAtStart) {
+        this._cachedWriterKeys = fetched;
+        return fetched;
+      }
+      // Version advanced during fetch -- the fetched list reflects the
+      // pre-invalidation ACL. Discard it and retry with the post-
+      // invalidation state to avoid handing a stale list to signature
+      // verification.
     }
-    const versionAtStart = this._writerKeysVersion;
-    const fetched = await this._writers.users();
-    if (this._writerKeysVersion === versionAtStart) {
-      this._cachedWriterKeys = fetched;
-    }
-    return fetched;
   }
 
   /** Bump the writer-keys version so any in-flight `_getWriterKeys` aborts

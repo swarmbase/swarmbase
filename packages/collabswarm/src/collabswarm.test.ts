@@ -341,11 +341,11 @@ describe('writer key cache', () => {
   // mutation paths (merge / add / remove). Production code lives in
   // CollabswarmDocument (collabswarm-document.ts).
   //
-  // The version counter exists for race-safety: an in-flight `getKeys()` that
-  // started before an invalidation captures the version at fetch time and
-  // refuses to commit its result if the version has advanced. Without it, a
-  // stale fetch could overwrite the freshly-invalidated null cache with a
-  // pre-revocation writer list.
+  // The version counter exists for race-safety: if an invalidation bumps
+  // the version while `getKeys()` is awaiting `users()`, the fetched list
+  // reflects the *pre*-invalidation ACL and is unsafe to return -- it
+  // could verify a just-revoked writer. So `getKeys()` loops, discarding
+  // the stale fetch and re-fetching with the post-invalidation state.
   class WriterCacheHarness<T> {
     private _cached: T[] | null = null;
     private _version = 0;
@@ -353,14 +353,17 @@ describe('writer key cache', () => {
     constructor(private readonly _backing: { users: () => Promise<T[]>; merge: () => void; add: () => Promise<void>; remove: () => Promise<void>; }) {}
 
     async getKeys(): Promise<T[]> {
-      if (this._cached !== null) return this._cached;
-      this.usersCalls++;
-      const versionAtStart = this._version;
-      const fetched = await this._backing.users();
-      if (this._version === versionAtStart) {
-        this._cached = fetched;
+      while (true) {
+        if (this._cached !== null) return this._cached;
+        this.usersCalls++;
+        const versionAtStart = this._version;
+        const fetched = await this._backing.users();
+        if (this._version === versionAtStart) {
+          this._cached = fetched;
+          return fetched;
+        }
+        // Version advanced during fetch -- discard stale result and retry.
       }
-      return fetched;
     }
     private _invalidate(): void {
       this._cached = null;
@@ -439,7 +442,9 @@ describe('writer key cache', () => {
     // call is awaiting users(), an invalidation (e.g. revoking a writer)
     // races in. The pre-invalidation fetch must NOT commit its (now-stale)
     // result back to the cache, or the next reader could see the revoked
-    // writer in the trusted set.
+    // writer in the trusted set. After the loop fix, the in-flight call
+    // ALSO retries internally so the caller never sees the stale list --
+    // see the sibling test below for that assertion.
     const pendingResolves: Array<(keys: string[]) => void> = [];
     let usersCalls = 0;
     let currentKeys = ['k1', 'revoked'];
@@ -464,21 +469,129 @@ describe('writer key cache', () => {
     // Race: an ACL update revokes the writer mid-fetch.
     cache.merge();
 
-    // Resolve the pre-invalidation fetch with the stale list.
+    // Resolve the pre-invalidation fetch with the stale list. The harness
+    // must NOT commit it to the cache (version advanced) and the loop
+    // must re-fetch -- so a second users() call appears immediately.
     pendingResolves[0](['k1', 'revoked']);
-    const result = await inFlight;
-    // The resolved value still reflects what users() returned, but...
-    expect(result).toEqual(['k1', 'revoked']);
-
-    // ...the next read must NOT reuse it: the cache was cleared by merge,
-    // and the in-flight fetch must have refused to assign back. So
-    // getKeys() re-queries the backing.
-    const nextPromise = cache.getKeys();
+    // Yield so the loop can observe the version mismatch and start the
+    // retry fetch.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(usersCalls).toBe(2);
     expect(pendingResolves.length).toBe(2);
+
+    // Resolve the retry fetch with the post-invalidation list.
     pendingResolves[1](currentKeys.slice());
-    const next = await nextPromise;
-    expect(next).toEqual(['k1']); // would be ['k1', 'revoked'] without the version guard
+    const result = await inFlight;
+    // The caller sees the fresh list, not the stale one -- this is the
+    // critical fix for CodeRabbit's round-3 comment.
+    expect(result).toEqual(['k1']);
+
+    // Cache should now be populated with the fresh list, so a follow-up
+    // read is a hit (no new users() call).
+    const next = await cache.getKeys();
+    expect(next).toEqual(['k1']);
+    expect(usersCalls).toBe(2);
+  });
+
+  test('in-flight getKeys() retries until version is current and returns the fresh list', async () => {
+    // Round-3 CodeRabbit fix: even the in-flight caller must not get the
+    // stale (pre-invalidation) writer list. Previously, a revocation
+    // racing the first cache fill could let the in-flight call return
+    // the pre-invalidation list, allowing one final signature
+    // verification against a just-revoked writer. The loop in getKeys()
+    // discards the stale fetch and re-fetches until the version is
+    // stable.
+    const pendingResolves: Array<(keys: string[]) => void> = [];
+    let usersCalls = 0;
+    // Tracks the "current" backing state -- starts with revoked writer,
+    // becomes fresh after merge() invalidates.
+    let currentKeys = ['k1', 'revoked'];
+    const backing = {
+      users: () => {
+        usersCalls++;
+        return new Promise<string[]>((resolve) => {
+          pendingResolves.push(resolve);
+        });
+      },
+      merge: () => { currentKeys = ['k1']; },
+      add: async () => {},
+      remove: async () => {},
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    // Start the first (in-flight) getKeys() call.
+    const inFlight = cache.getKeys();
+    expect(usersCalls).toBe(1);
+
+    // Invalidate while the fetch is in flight.
+    cache.merge();
+
+    // Resolve the in-flight fetch with the *pre*-invalidation (stale) list.
+    pendingResolves[0](['k1', 'revoked']);
+    // Allow the loop to observe the version mismatch and kick off retry.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The harness must have started a SECOND fetch.
+    expect(usersCalls).toBe(2);
+    expect(pendingResolves.length).toBe(2);
+
+    // Resolve the retry with the fresh post-invalidation list.
+    pendingResolves[1](currentKeys.slice());
+    const result = await inFlight;
+
+    // Critical assertion: the in-flight caller sees the fresh list, NOT
+    // the stale ['k1', 'revoked'] list. Without the loop, this would
+    // still be the stale list and a revoked writer's signature could
+    // still verify once.
+    expect(result).toEqual(['k1']);
+  });
+
+  test('in-flight getKeys() retries multiple times under repeated invalidation', async () => {
+    // Bounded multi-retry: invalidate twice while a fetch is in flight
+    // each time. The loop should converge on the third fetch when no
+    // invalidation races it. Verifies the loop does not "give up" after
+    // a single retry.
+    const pendingResolves: Array<(keys: string[]) => void> = [];
+    let usersCalls = 0;
+    let currentKeys = ['v0'];
+    const backing = {
+      users: () => {
+        usersCalls++;
+        return new Promise<string[]>((resolve) => {
+          pendingResolves.push(resolve);
+        });
+      },
+      merge: () => { /* state mutation handled outside */ },
+      add: async () => {},
+      remove: async () => {},
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    const inFlight = cache.getKeys();
+    expect(usersCalls).toBe(1);
+
+    // First invalidation while fetch 1 is in flight.
+    currentKeys = ['v1'];
+    cache.merge();
+    pendingResolves[0](['v0']);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(usersCalls).toBe(2);
+
+    // Second invalidation while fetch 2 is in flight.
+    currentKeys = ['v2'];
+    cache.merge();
+    pendingResolves[1](['v1']);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(usersCalls).toBe(3);
+
+    // Now resolve fetch 3 with no further invalidation -- loop converges.
+    pendingResolves[2](currentKeys.slice());
+    const result = await inFlight;
+    expect(result).toEqual(['v2']);
   });
 });
 
