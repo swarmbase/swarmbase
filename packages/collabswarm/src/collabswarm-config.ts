@@ -45,7 +45,28 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
  * - Twilio (Mozilla-style fallback): `global.stun.twilio.com:3478` --
  *   commonly recommended free public STUN endpoint.
  */
-export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
+/**
+ * Project-local ICE-server interface used in place of the DOM lib's
+ * `RTCIceServer` so consumers don't need `lib: ["DOM"]` in their tsconfig
+ * (especially Node-only consumers of `collabswarm-node.ts`). The shape
+ * mirrors the subset of WebIDL `RTCIceServer` collabswarm actually reads
+ * and forwards into libp2p's webRTC transport configuration.
+ *
+ * Structurally compatible with `RTCIceServer` in browser environments, so
+ * values typed as `IceServer` can be cast to `RTCIceServer[]` at the
+ * libp2p call site without runtime conversion.
+ */
+export interface IceServer {
+  /** A single STUN/TURN URL or a list of URLs for this server entry. */
+  urls: string | string[];
+  /** Username for TURN authentication. Optional. */
+  username?: string;
+  /** Credential (typically a shared secret / password) for TURN
+   *  authentication. Optional. */
+  credential?: string;
+}
+
+export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<IceServer>> =
   Object.freeze([
     Object.freeze({ urls: 'stun:stun.l.google.com:19302' }),
     Object.freeze({ urls: 'stun:stun1.l.google.com:19302' }),
@@ -54,63 +75,51 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
   ]);
 
 /**
- * Returns a deep-enough copy of an `RTCIceServer` so callers can hand the
+ * Returns a deep-enough copy of an {@link IceServer} so callers can hand the
  * result to libp2p (which expects a mutable `RTCIceServer`) without sharing
  * any inner references with the source object.
  *
  * In particular:
  * - the top-level object is a fresh `{ ...server }` so mutating fields like
- *   `username` on the copy cannot affect the source;
+ *   `username`/`credential` on the copy cannot affect the source;
  * - if `urls` is an array, it is copied to a fresh array so `push()`/`splice()`
  *   on the copy cannot affect the source's URL list (a single `string` value
- *   is immutable, so it is forwarded as-is);
- * - if `credential` is an object (e.g. the historical `RTCOAuthCredential`
- *   shape, which is no longer in the current TS lib.dom but can still appear
- *   at runtime), it is shallow-copied so mutating its fields on the copy
- *   cannot affect the source. A `string` credential is immutable and is
- *   forwarded as-is.
+ *   is immutable, so it is forwarded as-is).
+ *
+ * `credential` is a `string` in the project-local {@link IceServer} shape
+ * (and strings are immutable), so no nested copy is needed there.
  *
  * Exported so {@link defaultNodeConfig} (and any future config helpers) can
  * share the same defensive-copy behavior.
  */
-export const cloneIceServer = (server: RTCIceServer): RTCIceServer => {
-  const clone: RTCIceServer = { ...server };
+export const cloneIceServer = (server: IceServer): IceServer => {
+  const clone: IceServer = { ...server };
   if (Array.isArray(server.urls)) {
     clone.urls = [...server.urls];
-  }
-  // `credential` is typed as `string | undefined` in current TS lib.dom, but
-  // older WebIDL allowed an `RTCOAuthCredential` object and some runtimes
-  // still accept one. Guard with a runtime check (cast to `unknown` first to
-  // bypass the narrowed type) so we copy object credentials defensively.
-  const credential = server.credential as unknown;
-  if (typeof credential === 'object' && credential !== null) {
-    (clone as { credential?: unknown }).credential = { ...(credential as object) };
   }
   return clone;
 };
 
 /**
- * Freezes an `RTCIceServer` and any nested mutable structures it owns so the
- * returned value is safe to expose to consumers as deeply-immutable.
+ * Freezes an {@link IceServer} and any nested mutable structures it owns so
+ * the returned value is safe to expose to consumers as deeply-immutable.
  *
- * `Object.freeze` is shallow, so without freezing nested arrays/objects a
- * caller could still mutate `server.urls` (when it's an array) or an object
- * `credential` through the exposed reference. This helper closes that gap.
+ * `Object.freeze` is shallow, so without also freezing the nested `urls`
+ * array (when present) a caller could still mutate it through the exposed
+ * reference. This helper closes that gap. `urls` as a plain `string` and
+ * the `string` `credential`/`username` fields are already immutable and
+ * need no extra handling.
  *
- * Mutates the input in place (then returns it) -- callers should pair it with
- * {@link cloneIceServer} when they need to freeze a copy without affecting
- * the source.
+ * Mutates the input in place (then returns it) -- callers should pair it
+ * with {@link cloneIceServer} when they need to freeze a copy without
+ * affecting the source.
  *
  * Exported so {@link defaultNodeConfig} (and any future config helpers) can
  * share the same deep-freeze behavior.
  */
-export const freezeIceServer = (server: RTCIceServer): Readonly<RTCIceServer> => {
+export const freezeIceServer = (server: IceServer): Readonly<IceServer> => {
   if (Array.isArray(server.urls)) {
     Object.freeze(server.urls);
-  }
-  const credential = server.credential as unknown;
-  if (typeof credential === 'object' && credential !== null) {
-    Object.freeze(credential);
   }
   return Object.freeze(server);
 };
@@ -129,12 +138,12 @@ export const freezeIceServer = (server: RTCIceServer): Readonly<RTCIceServer> =>
  * Not exported from the package barrel: this is an implementation detail of
  * the default config builders.
  */
-export function resolveIceServers(override?: ReadonlyArray<Readonly<RTCIceServer>>): {
-  sourceIceServers: ReadonlyArray<Readonly<RTCIceServer>>;
-  exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>>;
+export function resolveIceServers(override?: ReadonlyArray<Readonly<IceServer>>): {
+  sourceIceServers: ReadonlyArray<Readonly<IceServer>>;
+  exposedIceServers: ReadonlyArray<Readonly<IceServer>>;
 } {
   const sourceIceServers = override ?? DEFAULT_WEBRTC_ICE_SERVERS;
-  const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
+  const exposedIceServers: ReadonlyArray<Readonly<IceServer>> = Object.freeze(
     sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
   );
   return { sourceIceServers, exposedIceServers };
@@ -156,7 +165,7 @@ export function resolveIceServers(override?: ReadonlyArray<Readonly<RTCIceServer
  */
 export const defaultConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
+  webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>,
 ) => {
   // Resolve the source list and a deeply-frozen exposed view in one place so
   // the browser and Node defaults stay in sync. Each transport below still
@@ -184,8 +193,10 @@ export const defaultConfig = (
           // Each transport gets its own fresh mutable copy (with each server
           // object also deep-enough-cloned via `cloneIceServer`) to avoid
           // aliasing with the array exposed on `config.webrtcIceServers` below.
-          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
-          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
+          // Cast to `RTCIceServer[]` only at the libp2p call site so the
+          // public collabswarm API stays free of DOM lib types.
+          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -315,7 +326,7 @@ export interface CollabswarmConfig {
    *
    * @default DEFAULT_WEBRTC_ICE_SERVERS
    */
-  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>;
+  webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>;
 
   /**
    * Optional callback to validate document paths before creation.
@@ -373,7 +384,7 @@ export const defaultBootstrapConfig = (clientAddresses: string[]) =>
  *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used.
  */
 export function getDefaultConfig(
-  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
+  webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>,
 ): CollabswarmConfig {
   return defaultConfig(defaultBootstrapConfig([]), webrtcIceServers);
 }

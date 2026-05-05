@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
+  IceServer,
   cloneIceServer,
   defaultBootstrapConfig,
   defaultConfig,
@@ -72,7 +73,7 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  */
 export const defaultNodeConfig = (
   bootstrapConfig: BootstrapInit,
-  webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
+  webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>,
 ) => {
   // Resolve the source list and a deeply-frozen exposed view in one place so
   // the browser and Node defaults stay in sync. Each transport below still
@@ -99,8 +100,10 @@ export const defaultNodeConfig = (
           // Each transport gets its own fresh mutable copy (with each server
           // object also deep-enough-cloned via `cloneIceServer`) to avoid
           // aliasing with the array exposed on `config.webrtcIceServers` below.
-          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
-          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) } }),
+          // Cast to `RTCIceServer[]` only at the libp2p call site so the
+          // public collabswarm API stays free of DOM lib types.
+          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
