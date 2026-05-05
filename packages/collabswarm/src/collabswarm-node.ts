@@ -17,6 +17,7 @@ import {
   cloneIceServer,
   defaultBootstrapConfig,
   defaultConfig,
+  freezeIceServer,
 } from './collabswarm-config';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
@@ -81,10 +82,11 @@ export const defaultNodeConfig = (
   // libp2p's webRTC transport stores internally, or any individual server's
   // fields) cannot leak into the others.
   const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
-  // Defensive copy for the exposed config: freeze so consumers cannot mutate
-  // it in place and inadvertently shift state shared with anything else.
+  // Defensive copy for the exposed config: deep-freeze so consumers cannot
+  // mutate it (or any nested `urls` array / object `credential`) in place and
+  // inadvertently shift state shared with anything else.
   const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => Object.freeze(cloneIceServer(server))),
+    sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
   );
   return ({
     helia: {

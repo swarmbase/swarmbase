@@ -54,18 +54,60 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<RTCIceServer>> =
  *
  * In particular:
  * - the top-level object is a fresh `{ ...server }` so mutating fields like
- *   `username`/`credential` on the copy cannot affect the source;
+ *   `username` on the copy cannot affect the source;
  * - if `urls` is an array, it is copied to a fresh array so `push()`/`splice()`
  *   on the copy cannot affect the source's URL list (a single `string` value
- *   is immutable, so it is forwarded as-is).
+ *   is immutable, so it is forwarded as-is);
+ * - if `credential` is an object (e.g. the historical `RTCOAuthCredential`
+ *   shape, which is no longer in the current TS lib.dom but can still appear
+ *   at runtime), it is shallow-copied so mutating its fields on the copy
+ *   cannot affect the source. A `string` credential is immutable and is
+ *   forwarded as-is.
  *
  * Exported so {@link defaultNodeConfig} (and any future config helpers) can
  * share the same defensive-copy behavior.
  */
-export const cloneIceServer = (server: RTCIceServer): RTCIceServer => ({
-  ...server,
-  urls: Array.isArray(server.urls) ? [...server.urls] : server.urls,
-});
+export const cloneIceServer = (server: RTCIceServer): RTCIceServer => {
+  const clone: RTCIceServer = { ...server };
+  if (Array.isArray(server.urls)) {
+    clone.urls = [...server.urls];
+  }
+  // `credential` is typed as `string | undefined` in current TS lib.dom, but
+  // older WebIDL allowed an `RTCOAuthCredential` object and some runtimes
+  // still accept one. Guard with a runtime check (cast to `unknown` first to
+  // bypass the narrowed type) so we copy object credentials defensively.
+  const credential = server.credential as unknown;
+  if (typeof credential === 'object' && credential !== null) {
+    (clone as { credential?: unknown }).credential = { ...(credential as object) };
+  }
+  return clone;
+};
+
+/**
+ * Freezes an `RTCIceServer` and any nested mutable structures it owns so the
+ * returned value is safe to expose to consumers as deeply-immutable.
+ *
+ * `Object.freeze` is shallow, so without freezing nested arrays/objects a
+ * caller could still mutate `server.urls` (when it's an array) or an object
+ * `credential` through the exposed reference. This helper closes that gap.
+ *
+ * Mutates the input in place (then returns it) -- callers should pair it with
+ * {@link cloneIceServer} when they need to freeze a copy without affecting
+ * the source.
+ *
+ * Exported so {@link defaultNodeConfig} (and any future config helpers) can
+ * share the same deep-freeze behavior.
+ */
+export const freezeIceServer = (server: RTCIceServer): Readonly<RTCIceServer> => {
+  if (Array.isArray(server.urls)) {
+    Object.freeze(server.urls);
+  }
+  const credential = server.credential as unknown;
+  if (typeof credential === 'object' && credential !== null) {
+    Object.freeze(credential);
+  }
+  return Object.freeze(server);
+};
 
 /**
  * Default collabswarm config to use if none is provided.
@@ -92,10 +134,11 @@ export const defaultConfig = (
   // libp2p's webRTC transport stores internally, or any individual server's
   // fields) cannot leak into the others.
   const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
-  // Defensive copy for the exposed config: freeze so consumers cannot mutate
-  // it in place and inadvertently shift state shared with anything else.
+  // Defensive copy for the exposed config: deep-freeze so consumers cannot
+  // mutate it (or any nested `urls` array / object `credential`) in place and
+  // inadvertently shift state shared with anything else.
   const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => Object.freeze(cloneIceServer(server))),
+    sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
   );
   return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
