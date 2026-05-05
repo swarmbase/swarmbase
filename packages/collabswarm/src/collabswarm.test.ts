@@ -554,7 +554,6 @@ describe('writer key cache', () => {
     // a single retry.
     const pendingResolves: Array<(keys: string[]) => void> = [];
     let usersCalls = 0;
-    let currentKeys = ['v0'];
     const backing = {
       users: () => {
         usersCalls++;
@@ -562,7 +561,7 @@ describe('writer key cache', () => {
           pendingResolves.push(resolve);
         });
       },
-      merge: () => { /* state mutation handled outside */ },
+      merge: () => {},
       add: async () => {},
       remove: async () => {},
     };
@@ -571,16 +570,16 @@ describe('writer key cache', () => {
     const inFlight = cache.getKeys();
     expect(usersCalls).toBe(1);
 
-    // First invalidation while fetch 1 is in flight.
-    currentKeys = ['v1'];
+    // First invalidation while fetch 1 is in flight; resolve fetch 1 with
+    // the pre-invalidation list (which the loop must discard).
     cache.merge();
     pendingResolves[0](['v0']);
     await Promise.resolve();
     await Promise.resolve();
     expect(usersCalls).toBe(2);
 
-    // Second invalidation while fetch 2 is in flight.
-    currentKeys = ['v2'];
+    // Second invalidation while fetch 2 is in flight; resolve fetch 2 with
+    // the now-stale intermediate list.
     cache.merge();
     pendingResolves[1](['v1']);
     await Promise.resolve();
@@ -588,7 +587,7 @@ describe('writer key cache', () => {
     expect(usersCalls).toBe(3);
 
     // Now resolve fetch 3 with no further invalidation -- loop converges.
-    pendingResolves[2](currentKeys.slice());
+    pendingResolves[2](['v2']);
     const result = await inFlight;
     expect(result).toEqual(['v2']);
   });

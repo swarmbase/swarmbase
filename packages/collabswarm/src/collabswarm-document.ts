@@ -1427,41 +1427,43 @@ export class CollabswarmDocument<
         // On first load (_writers is empty / bootstrapping), we cannot
         // verify -- trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
-        const preLoadWriters = await this._getWriterKeys();
-        if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
-          if (!message.signature) {
-            console.warn(
-              `Load response for ${this.documentPath}: missing signature, skipping peer`,
+        if (this._isSigningEnabled()) {
+          const preLoadWriters = await this._getWriterKeys();
+          if (preLoadWriters.length > 0) {
+            if (!message.signature) {
+              console.warn(
+                `Load response for ${this.documentPath}: missing signature, skipping peer`,
+              );
+              return false;
+            }
+            const { signature, ...messageWithoutSignature } = message;
+            const raw = this._syncMessageSerializer.serializeSyncMessage(
+              messageWithoutSignature,
             );
-            return false;
-          }
-          const { signature, ...messageWithoutSignature } = message;
-          const raw = this._syncMessageSerializer.serializeSyncMessage(
-            messageWithoutSignature,
-          );
-          // Mirror `_verifyWriterSignature`: a malformed/non-string signature
-          // can cause `js-base64` to throw. Treat decode failure as a
-          // verification failure for this peer (skip and let the caller try
-          // the next one) rather than letting the exception escape -- the
-          // outer snapshot-load attempt swallows errors via a blanket
-          // catch{}, which would hide the malformed input entirely.
-          let signatureBytes: Uint8Array;
-          try {
-            signatureBytes = this._deserializeSignature(signature);
-          } catch {
-            console.warn(
-              `Load response for ${this.documentPath}: malformed signature, skipping peer`,
+            // Mirror `_verifyWriterSignature`: a malformed/non-string signature
+            // can cause `js-base64` to throw. Treat decode failure as a
+            // verification failure for this peer (skip and let the caller try
+            // the next one) rather than letting the exception escape -- the
+            // outer snapshot-load attempt swallows errors via a blanket
+            // catch{}, which would hide the malformed input entirely.
+            let signatureBytes: Uint8Array;
+            try {
+              signatureBytes = this._deserializeSignature(signature);
+            } catch {
+              console.warn(
+                `Load response for ${this.documentPath}: malformed signature, skipping peer`,
+              );
+              return false;
+            }
+            const verifyTasks = preLoadWriters.map((writerKey) =>
+              this._authProvider.verify(raw, writerKey, signatureBytes),
             );
-            return false;
-          }
-          const verifyTasks = preLoadWriters.map((writerKey) =>
-            this._authProvider.verify(raw, writerKey, signatureBytes),
-          );
-          if (!(await firstTrue(verifyTasks))) {
-            console.warn(
-              `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
-            );
-            return false;
+            if (!(await firstTrue(verifyTasks))) {
+              console.warn(
+                `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
+              );
+              return false;
+            }
           }
         }
 
