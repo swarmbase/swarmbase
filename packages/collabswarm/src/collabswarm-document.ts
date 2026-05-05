@@ -694,7 +694,22 @@ export class CollabswarmDocument<
     }
 
     const writerKeys = await this._getWriterKeys();
-    const signatureBytes = this._deserializeSignature(signature);
+    // Short-circuit: with no writers, no signature can verify. Avoids the
+    // base64 decode for an unverifiable input.
+    if (writerKeys.length === 0) {
+      return false;
+    }
+    // Malformed base64 throws inside js-base64. A bad signature must surface
+    // as a verification failure, not an exception -- the topic validator path
+    // turns thrown errors into Ignore (effectively dropping the message
+    // silently), which is a DoS surface for malformed input. Treat decode
+    // failure as `false`.
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = this._deserializeSignature(signature);
+    } catch {
+      return false;
+    }
     const verificationTasks: Promise<boolean>[] = [];
     for (const writerKey of writerKeys) {
       verificationTasks.push(

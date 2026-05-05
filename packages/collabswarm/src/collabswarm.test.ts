@@ -482,3 +482,99 @@ describe('writer key cache', () => {
   });
 });
 
+/**
+ * Tests for the malformed-signature defense in `_verifyWriterSignature`.
+ * The production code lives in CollabswarmDocument; the harness below
+ * replicates its decode-then-verify control flow so we can drive it with
+ * forced-throw decoders (matching the pattern used elsewhere in this file).
+ *
+ * Why the guard exists: `Base64.toUint8Array` *can* throw on certain inputs
+ * (notably non-string values that slip through type erasure in over-the-wire
+ * messages). In the topic validator path, a thrown error is caught and
+ * mapped to `Ignore`, silently dropping the message -- which is a usable
+ * DoS surface for malformed input. Catching decode failures and returning
+ * `false` instead surfaces the failure cleanly as "signature did not
+ * verify" without crashing.
+ */
+describe('verifyWriterSignature malformed-signature handling', () => {
+  // Replicates the relevant control flow from
+  // CollabswarmDocument._verifyWriterSignature so we can test the
+  // short-circuit and try/catch in isolation. If the production logic
+  // changes, mirror it here.
+  async function verifyWriterSignature<PublicKey>(opts: {
+    signingEnabled: boolean;
+    writerKeys: PublicKey[];
+    signature: string;
+    deserialize: (s: string) => Uint8Array;
+    verify: (raw: Uint8Array, key: PublicKey, sig: Uint8Array) => Promise<boolean>;
+    raw: Uint8Array;
+  }): Promise<boolean> {
+    if (!opts.signingEnabled) return true;
+    if (opts.writerKeys.length === 0) return false;
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = opts.deserialize(opts.signature);
+    } catch {
+      return false;
+    }
+    const tasks = opts.writerKeys.map((k) => opts.verify(opts.raw, k, signatureBytes));
+    const results = await Promise.all(tasks);
+    return results.some((r) => r);
+  }
+
+  test('returns false when base64 decode throws (does not propagate exception)', async () => {
+    // Force a throw to mimic js-base64 throwing on a malformed input
+    // (e.g. a non-string sneaking through, or a rejected encoding).
+    const throwingDecode = (_: string): Uint8Array => {
+      throw new TypeError('malformed base64');
+    };
+    let verifyCalled = false;
+    const result = await verifyWriterSignature<string>({
+      signingEnabled: true,
+      writerKeys: ['writer1', 'writer2'],
+      signature: 'not-actually-decoded-because-throw',
+      deserialize: throwingDecode,
+      verify: async () => { verifyCalled = true; return true; },
+      raw: new Uint8Array([1, 2, 3]),
+    });
+    expect(result).toBe(false);
+    // verify() must NOT be called when decode fails -- otherwise we'd be
+    // doing crypto on undefined bytes.
+    expect(verifyCalled).toBe(false);
+  });
+
+  test('returns false (without decoding) when writerKeys is empty', async () => {
+    // No writers -> nothing could possibly verify. Skip the decode entirely
+    // so a junk signature on a doc with no writers can't even reach
+    // js-base64 in the first place.
+    let decodeCalled = false;
+    const decode = (_: string): Uint8Array => {
+      decodeCalled = true;
+      return new Uint8Array();
+    };
+    const result = await verifyWriterSignature<string>({
+      signingEnabled: true,
+      writerKeys: [],
+      signature: 'anything',
+      deserialize: decode,
+      verify: async () => true,
+      raw: new Uint8Array([1, 2, 3]),
+    });
+    expect(result).toBe(false);
+    expect(decodeCalled).toBe(false);
+  });
+
+  test('still verifies normally when decode succeeds', async () => {
+    // Sanity: the try/catch guard must not break the happy path.
+    const decode = (s: string): Uint8Array => new Uint8Array([s.length]);
+    const result = await verifyWriterSignature<string>({
+      signingEnabled: true,
+      writerKeys: ['writer1'],
+      signature: 'AAAA',
+      deserialize: decode,
+      verify: async (_raw, _key, sig) => sig.length === 1 && sig[0] === 4,
+      raw: new Uint8Array([1, 2, 3]),
+    });
+    expect(result).toBe(true);
+  });
+});
