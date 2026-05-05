@@ -142,6 +142,31 @@ export class CollabswarmDocument<
   // Document writers ACL.
   private _writers;
 
+  // Cached snapshot of `_writers.users()` for hot-path signature verification.
+  // Document-scoped (not per-DAG-node): every signature check needs the current
+  // trusted writer set, so a single lazy cache is sufficient. Invalidated by
+  // bumping `_writerKeysVersion` whenever `_writers` is mutated via
+  // `_mergeWriters` / `_addWriter` / `_removeWriter`. All ACL mutations must
+  // go through those helpers. The version counter is what makes invalidation
+  // race-safe: `_getWriterKeys` captures the version before awaiting and only
+  // commits the result if the version is still current, so an in-flight fetch
+  // that races with an invalidation cannot overwrite the new null state with
+  // a stale list (which could otherwise admit signatures from a revoked writer).
+  // Typed `ReadonlyArray` so an accidental mutation by an internal caller is
+  // a type error rather than a silent cache corruption that would affect
+  // later signature verification.
+  private _cachedWriterKeys: ReadonlyArray<PublicKey> | null = null;
+  private _writerKeysVersion = 0;
+  // Counter of in-flight `_writers` mutations (add/remove/merge). Some ACL
+  // implementations (e.g. UCANACL.remove, YjsACL.remove) mutate their
+  // backing state *before* their returned Promise resolves, so during the
+  // mutation window `_writers.users()` may already reflect the new state
+  // even though the helper has not yet reached its post-await invalidation
+  // line. While this counter is nonzero, `_getWriterKeys` bypasses the
+  // cache entirely and always re-fetches, so a signature check that races
+  // a mutation cannot observe the stale pre-mutation list.
+  private _writerMutationsInFlight = 0;
+
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
   private _keychain;
@@ -515,7 +540,7 @@ export class CollabswarmDocument<
           }
           case crdtWriterChangeNode: {
             // Apply the changes that were sent directly.
-            this._writers.merge(sentChanges);
+            this._mergeWriters(sentChanges);
             newDocumentHashes.push(sentHash);
             break;
           }
@@ -561,7 +586,7 @@ export class CollabswarmDocument<
                   return;
                 }
                 case crdtWriterChangeNode: {
-                  this._writers.merge(missingChanges);
+                  this._mergeWriters(missingChanges);
                   this._hashes.add(missingHash);
                   await this._fireRemoteUpdateHandlers([missingHash]);
                   return;
@@ -603,7 +628,7 @@ export class CollabswarmDocument<
   private _applyACLFromTree(node: CRDTChangeNode<ChangesType>) {
     if (node.change) {
       if (node.kind === crdtWriterChangeNode) {
-        this._writers.merge(node.change);
+        this._mergeWriters(node.change);
       } else if (node.kind === crdtReaderChangeNode) {
         this._readers.merge(node.change);
       }
@@ -623,20 +648,148 @@ export class CollabswarmDocument<
     return this.swarm.config?.enableSigning !== false;
   }
 
+  /**
+   * Returns the current list of authorized writer public keys, populating
+   * the document-scoped cache on miss. Callers must not mutate the result.
+   * The cache is invalidated by `_mergeWriters`, `_addWriter`, and
+   * `_removeWriter` -- the only sanctioned mutation paths for `_writers`.
+   *
+   * Race-safety has two layers:
+   *  - Mutation-in-flight bypass: while `_writerMutationsInFlight > 0`,
+   *    skip the cache entirely. Some ACLs mutate their backing state
+   *    before their `add`/`remove` Promise resolves, so the cached list
+   *    can be stale even though the post-await invalidation has not yet
+   *    run. Bypassing forces a fresh `users()` read each call until all
+   *    mutations have finished and the cache is re-populated by a clean
+   *    miss.
+   *  - Version check on cache fill: capture `_writerKeysVersion` before
+   *    awaiting. If the version advances mid-fetch, the fetched list
+   *    reflects the *pre*-invalidation ACL and is unsafe to return --
+   *    discard it and loop. The loop converges once a fetch completes
+   *    with no intervening invalidation; under continuous invalidation
+   *    it would spin, but invalidations are bounded (one per ACL
+   *    mutation) and not adversarial.
+   */
+  private async _getWriterKeys(): Promise<ReadonlyArray<PublicKey>> {
+    while (true) {
+      if (
+        this._writerMutationsInFlight === 0 &&
+        this._cachedWriterKeys !== null
+      ) {
+        return this._cachedWriterKeys;
+      }
+      const versionAtStart = this._writerKeysVersion;
+      const fetched = await this._writers.users();
+      // Only commit to the cache if (a) the version is still current AND
+      // (b) no mutations are in flight. Either condition means the fetch
+      // could be racing a still-incomplete mutation; in that case return
+      // the freshly fetched list to the caller but leave the cache null
+      // so the next caller re-fetches.
+      if (
+        this._writerKeysVersion === versionAtStart &&
+        this._writerMutationsInFlight === 0
+      ) {
+        this._cachedWriterKeys = fetched;
+        return fetched;
+      }
+      if (this._writerKeysVersion !== versionAtStart) {
+        // Version advanced during fetch -- the fetched list reflects the
+        // pre-invalidation ACL. Discard it and retry with the post-
+        // invalidation state to avoid handing a stale list to signature
+        // verification.
+        continue;
+      }
+      // Mutation still in flight but version unchanged: the fetched list
+      // reflects whatever the ACL exposed at this moment, which is the
+      // best the caller can get. Don't cache (so subsequent reads see
+      // the post-mutation state once it lands), but return the value.
+      return fetched;
+    }
+  }
+
+  /** Bump the writer-keys version so any in-flight `_getWriterKeys` aborts
+   *  its assignment, and clear the cache for the next caller. */
+  private _invalidateWriterKeyCache(): void {
+    this._cachedWriterKeys = null;
+    this._writerKeysVersion++;
+  }
+
+  /**
+   * Run a writer-ACL mutation under a guard that closes the gap between
+   * "underlying ACL state has changed" and "_getWriterKeys reflects the
+   * change." We invalidate the cache *before* the mutation (so any
+   * concurrent `_getWriterKeys` re-fetches against whatever state the
+   * ACL exposes at that moment) AND set a mutation-in-flight flag that
+   * forces `_getWriterKeys` to bypass the cache entirely while the
+   * mutation runs. Both bookkeeping operations live in the prelude/
+   * finally so they cannot drift out of sync with the underlying call.
+   */
+  private async _runWriterMutation<T>(op: () => Promise<T> | T): Promise<T> {
+    this._writerMutationsInFlight++;
+    this._invalidateWriterKeyCache();
+    try {
+      return await op();
+    } finally {
+      this._writerMutationsInFlight--;
+      // Invalidate again post-mutation: the underlying ACL is now
+      // authoritative and any value that landed in the cache during the
+      // window must be discarded. Idempotent and cheap.
+      this._invalidateWriterKeyCache();
+    }
+  }
+
+  /** Apply a writer ACL change and invalidate the cached key list. */
+  private _mergeWriters(changes: ChangesType): void {
+    // Synchronous mutation: increment-mutate-decrement around the
+    // `merge()` call so any concurrent `_getWriterKeys` running on
+    // another microtask sees the in-flight flag. Both invalidations
+    // (pre and post) match the async helper's behavior.
+    this._writerMutationsInFlight++;
+    this._invalidateWriterKeyCache();
+    try {
+      this._writers.merge(changes);
+    } finally {
+      this._writerMutationsInFlight--;
+      this._invalidateWriterKeyCache();
+    }
+  }
+
+  /** Add a writer and invalidate the cached key list. */
+  private async _addWriter(publicKey: PublicKey): Promise<ChangesType> {
+    return this._runWriterMutation(() => this._writers.add(publicKey));
+  }
+
+  /** Remove a writer and invalidate the cached key list. */
+  private async _removeWriter(publicKey: PublicKey): Promise<ChangesType> {
+    return this._runWriterMutation(() => this._writers.remove(publicKey));
+  }
+
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {
     if (!this._isSigningEnabled()) {
       return true;
     }
 
-    // TODO: Cache list of current writers per dag node for now.
+    const writerKeys = await this._getWriterKeys();
+    // Short-circuit: with no writers, no signature can verify. Avoids the
+    // base64 decode for an unverifiable input.
+    if (writerKeys.length === 0) {
+      return false;
+    }
+    // Malformed base64 throws inside js-base64. A bad signature must surface
+    // as a verification failure, not an exception -- the topic validator path
+    // turns thrown errors into Ignore (effectively dropping the message
+    // silently), which is a DoS surface for malformed input. Treat decode
+    // failure as `false`.
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = this._deserializeSignature(signature);
+    } catch {
+      return false;
+    }
     const verificationTasks: Promise<boolean>[] = [];
-    for (const writerKey of await this._writers.users()) {
+    for (const writerKey of writerKeys) {
       verificationTasks.push(
-        this._authProvider.verify(
-          raw,
-          writerKey,
-          this._deserializeSignature(signature),
-        ),
+        this._authProvider.verify(raw, writerKey, signatureBytes),
       );
     }
     return firstTrue(verificationTasks);
@@ -654,8 +807,9 @@ export class CollabswarmDocument<
       return true;
     }
 
+    const writerKeys = await this._getWriterKeys();
     const verificationTasks: Promise<boolean>[] = [];
-    for (const writerKey of await this._writers.users()) {
+    for (const writerKey of writerKeys) {
       verificationTasks.push(
         this._authProvider.verify(payload, writerKey, signature),
       );
@@ -1336,27 +1490,43 @@ export class CollabswarmDocument<
         // On first load (_writers is empty / bootstrapping), we cannot
         // verify -- trust relies on the encrypted channel (only peers
         // with the document key can decrypt the response).
-        const preLoadWriters = await this._writers.users();
-        if (preLoadWriters.length > 0 && this._isSigningEnabled()) {
-          if (!message.signature) {
-            console.warn(
-              `Load response for ${this.documentPath}: missing signature, skipping peer`,
+        if (this._isSigningEnabled()) {
+          const preLoadWriters = await this._getWriterKeys();
+          if (preLoadWriters.length > 0) {
+            if (!message.signature) {
+              console.warn(
+                `Load response for ${this.documentPath}: missing signature, skipping peer`,
+              );
+              return false;
+            }
+            const { signature, ...messageWithoutSignature } = message;
+            const raw = this._syncMessageSerializer.serializeSyncMessage(
+              messageWithoutSignature,
             );
-            return false;
-          }
-          const { signature, ...messageWithoutSignature } = message;
-          const raw = this._syncMessageSerializer.serializeSyncMessage(
-            messageWithoutSignature,
-          );
-          const signatureBytes = this._deserializeSignature(signature);
-          const verifyTasks = preLoadWriters.map((writerKey) =>
-            this._authProvider.verify(raw, writerKey, signatureBytes),
-          );
-          if (!(await firstTrue(verifyTasks))) {
-            console.warn(
-              `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
+            // Mirror `_verifyWriterSignature`: a malformed/non-string signature
+            // can cause `js-base64` to throw. Treat decode failure as a
+            // verification failure for this peer (skip and let the caller try
+            // the next one) rather than letting the exception escape -- the
+            // outer snapshot-load attempt swallows errors via a blanket
+            // catch{}, which would hide the malformed input entirely.
+            let signatureBytes: Uint8Array;
+            try {
+              signatureBytes = this._deserializeSignature(signature);
+            } catch {
+              console.warn(
+                `Load response for ${this.documentPath}: malformed signature, skipping peer`,
+              );
+              return false;
+            }
+            const verifyTasks = preLoadWriters.map((writerKey) =>
+              this._authProvider.verify(raw, writerKey, signatureBytes),
             );
-            return false;
+            if (!(await firstTrue(verifyTasks))) {
+              console.warn(
+                `Load response for ${this.documentPath} failed writer signature verification, skipping peer`,
+              );
+              return false;
+            }
           }
         }
 
@@ -1665,7 +1835,7 @@ export class CollabswarmDocument<
 
       if (!isExisting) {
         // Add current user as a writer.
-        await this._writers.add(this._userPublicKey);
+        await this._addWriter(this._userPublicKey);
 
         // Add initial document key.
         console.log(`Adding a key to ${this.documentPath}`);
@@ -2246,7 +2416,7 @@ export class CollabswarmDocument<
     }
 
     // Construct a new writer ACL change.
-    const changes = await this._writers.add(writer);
+    const changes = await this._addWriter(writer);
 
     await this._makeChange(changes, crdtWriterChangeNode);
   }
@@ -2265,7 +2435,7 @@ export class CollabswarmDocument<
     }
 
     // Construct a new writer ACL change.
-    const changes = await this._writers.remove(writer);
+    const changes = await this._removeWriter(writer);
 
     await this._makeChange(changes, crdtWriterChangeNode);
 
