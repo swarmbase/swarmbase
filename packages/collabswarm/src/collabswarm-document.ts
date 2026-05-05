@@ -152,7 +152,10 @@ export class CollabswarmDocument<
   // commits the result if the version is still current, so an in-flight fetch
   // that races with an invalidation cannot overwrite the new null state with
   // a stale list (which could otherwise admit signatures from a revoked writer).
-  private _cachedWriterKeys: PublicKey[] | null = null;
+  // Typed `ReadonlyArray` so an accidental mutation by an internal caller is
+  // a type error rather than a silent cache corruption that would affect
+  // later signature verification.
+  private _cachedWriterKeys: ReadonlyArray<PublicKey> | null = null;
   private _writerKeysVersion = 0;
 
   // List of document encryption keys. Lower index numbers mean more recent.
@@ -653,7 +656,7 @@ export class CollabswarmDocument<
    * would spin, but invalidations are bounded (one per ACL mutation) and
    * not adversarial.
    */
-  private async _getWriterKeys(): Promise<PublicKey[]> {
+  private async _getWriterKeys(): Promise<ReadonlyArray<PublicKey>> {
     while (true) {
       if (this._cachedWriterKeys !== null) {
         return this._cachedWriterKeys;

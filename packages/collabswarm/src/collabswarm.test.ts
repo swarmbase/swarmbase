@@ -483,8 +483,9 @@ describe('writer key cache', () => {
     // Resolve the retry fetch with the post-invalidation list.
     pendingResolves[1](currentKeys.slice());
     const result = await inFlight;
-    // The caller sees the fresh list, not the stale one -- this is the
-    // critical fix for CodeRabbit's round-3 comment.
+    // The caller sees the fresh list, not the stale one. Otherwise a
+    // revoked writer's signature could verify one final time before the
+    // next caller saw the cleared cache.
     expect(result).toEqual(['k1']);
 
     // Cache should now be populated with the fresh list, so a follow-up
@@ -495,13 +496,12 @@ describe('writer key cache', () => {
   });
 
   test('in-flight getKeys() retries until version is current and returns the fresh list', async () => {
-    // Round-3 CodeRabbit fix: even the in-flight caller must not get the
-    // stale (pre-invalidation) writer list. Previously, a revocation
-    // racing the first cache fill could let the in-flight call return
-    // the pre-invalidation list, allowing one final signature
-    // verification against a just-revoked writer. The loop in getKeys()
-    // discards the stale fetch and re-fetches until the version is
-    // stable.
+    // The in-flight caller must not get the pre-invalidation writer
+    // list. A revocation racing the first cache fill, without the
+    // retry loop, would let the in-flight call return the stale list
+    // and authorize one final signature against a just-revoked writer.
+    // The loop discards the stale fetch and re-fetches until the
+    // version is stable before returning.
     const pendingResolves: Array<(keys: string[]) => void> = [];
     let usersCalls = 0;
     // Tracks the "current" backing state -- starts with revoked writer,
@@ -541,10 +541,9 @@ describe('writer key cache', () => {
     pendingResolves[1](currentKeys.slice());
     const result = await inFlight;
 
-    // Critical assertion: the in-flight caller sees the fresh list, NOT
-    // the stale ['k1', 'revoked'] list. Without the loop, this would
-    // still be the stale list and a revoked writer's signature could
-    // still verify once.
+    // The in-flight caller sees the fresh list, not the stale
+    // ['k1', 'revoked'] list -- a revoked writer's signature must not
+    // verify even on a single in-flight call.
     expect(result).toEqual(['k1']);
   });
 
@@ -723,12 +722,11 @@ describe('verifyWriterSignature malformed-signature handling', () => {
   }
 
   test('pre-load verify: returns false on malformed-base64 signature without throwing', async () => {
-    // The reproducer for the round-2 Copilot comment: the load-response
-    // verification path used to call _deserializeSignature unguarded. A
-    // throwing decoder would propagate out of _sendLoadRequestAndSync
-    // (and be silently swallowed by the snapshot-load catch{}). With the
-    // try/catch in place, the helper returns false (skip this peer)
-    // instead of throwing.
+    // A throwing decoder must not propagate out of the load-response
+    // verification path -- the snapshot-load attempt swallows errors via
+    // a blanket catch{}, which would hide malformed input entirely.
+    // Decode failure should surface as "skip this peer" so the caller
+    // can try the next one.
     const throwingDecode = (_: string): Uint8Array => {
       throw new TypeError('malformed base64 in load response');
     };
