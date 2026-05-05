@@ -1426,7 +1426,21 @@ export class CollabswarmDocument<
           const raw = this._syncMessageSerializer.serializeSyncMessage(
             messageWithoutSignature,
           );
-          const signatureBytes = this._deserializeSignature(signature);
+          // Mirror `_verifyWriterSignature`: a malformed/non-string signature
+          // can cause `js-base64` to throw. Treat decode failure as a
+          // verification failure for this peer (skip and let the caller try
+          // the next one) rather than letting the exception escape -- the
+          // outer snapshot-load attempt swallows errors via a blanket
+          // catch{}, which would hide the malformed input entirely.
+          let signatureBytes: Uint8Array;
+          try {
+            signatureBytes = this._deserializeSignature(signature);
+          } catch {
+            console.warn(
+              `Load response for ${this.documentPath}: malformed signature, skipping peer`,
+            );
+            return false;
+          }
           const verifyTasks = preLoadWriters.map((writerKey) =>
             this._authProvider.verify(raw, writerKey, signatureBytes),
           );
