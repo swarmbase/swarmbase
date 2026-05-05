@@ -157,6 +157,15 @@ export class CollabswarmDocument<
   // later signature verification.
   private _cachedWriterKeys: ReadonlyArray<PublicKey> | null = null;
   private _writerKeysVersion = 0;
+  // Counter of in-flight `_writers` mutations (add/remove/merge). Some ACL
+  // implementations (e.g. UCANACL.remove, YjsACL.remove) mutate their
+  // backing state *before* their returned Promise resolves, so during the
+  // mutation window `_writers.users()` may already reflect the new state
+  // even though the helper has not yet reached its post-await invalidation
+  // line. While this counter is nonzero, `_getWriterKeys` bypasses the
+  // cache entirely and always re-fetches, so a signature check that races
+  // a mutation cannot observe the stale pre-mutation list.
+  private _writerMutationsInFlight = 0;
 
   // List of document encryption keys. Lower index numbers mean more recent.
   // Since the document is created from change history, all keys are needed.
@@ -645,32 +654,56 @@ export class CollabswarmDocument<
    * The cache is invalidated by `_mergeWriters`, `_addWriter`, and
    * `_removeWriter` -- the only sanctioned mutation paths for `_writers`.
    *
-   * Race-safety: we capture `_writerKeysVersion` before awaiting. If a
-   * concurrent invalidation bumps the version while the fetch is in
-   * flight, the fetched list reflects the *pre*-invalidation ACL and is
-   * unsafe to return -- handing it to the caller (signature verification)
-   * could verify a just-revoked writer one last time. So we discard the
-   * stale fetch and loop, re-reading the (now-cleared) cache and starting
-   * a fresh `users()` call. The loop converges once a fetch completes
-   * with no intervening invalidation; under continuous invalidation it
-   * would spin, but invalidations are bounded (one per ACL mutation) and
-   * not adversarial.
+   * Race-safety has two layers:
+   *  - Mutation-in-flight bypass: while `_writerMutationsInFlight > 0`,
+   *    skip the cache entirely. Some ACLs mutate their backing state
+   *    before their `add`/`remove` Promise resolves, so the cached list
+   *    can be stale even though the post-await invalidation has not yet
+   *    run. Bypassing forces a fresh `users()` read each call until all
+   *    mutations have finished and the cache is re-populated by a clean
+   *    miss.
+   *  - Version check on cache fill: capture `_writerKeysVersion` before
+   *    awaiting. If the version advances mid-fetch, the fetched list
+   *    reflects the *pre*-invalidation ACL and is unsafe to return --
+   *    discard it and loop. The loop converges once a fetch completes
+   *    with no intervening invalidation; under continuous invalidation
+   *    it would spin, but invalidations are bounded (one per ACL
+   *    mutation) and not adversarial.
    */
   private async _getWriterKeys(): Promise<ReadonlyArray<PublicKey>> {
     while (true) {
-      if (this._cachedWriterKeys !== null) {
+      if (
+        this._writerMutationsInFlight === 0 &&
+        this._cachedWriterKeys !== null
+      ) {
         return this._cachedWriterKeys;
       }
       const versionAtStart = this._writerKeysVersion;
       const fetched = await this._writers.users();
-      if (this._writerKeysVersion === versionAtStart) {
+      // Only commit to the cache if (a) the version is still current AND
+      // (b) no mutations are in flight. Either condition means the fetch
+      // could be racing a still-incomplete mutation; in that case return
+      // the freshly fetched list to the caller but leave the cache null
+      // so the next caller re-fetches.
+      if (
+        this._writerKeysVersion === versionAtStart &&
+        this._writerMutationsInFlight === 0
+      ) {
         this._cachedWriterKeys = fetched;
         return fetched;
       }
-      // Version advanced during fetch -- the fetched list reflects the
-      // pre-invalidation ACL. Discard it and retry with the post-
-      // invalidation state to avoid handing a stale list to signature
-      // verification.
+      if (this._writerKeysVersion !== versionAtStart) {
+        // Version advanced during fetch -- the fetched list reflects the
+        // pre-invalidation ACL. Discard it and retry with the post-
+        // invalidation state to avoid handing a stale list to signature
+        // verification.
+        continue;
+      }
+      // Mutation still in flight but version unchanged: the fetched list
+      // reflects whatever the ACL exposed at this moment, which is the
+      // best the caller can get. Don't cache (so subsequent reads see
+      // the post-mutation state once it lands), but return the value.
+      return fetched;
     }
   }
 
@@ -681,24 +714,54 @@ export class CollabswarmDocument<
     this._writerKeysVersion++;
   }
 
+  /**
+   * Run a writer-ACL mutation under a guard that closes the gap between
+   * "underlying ACL state has changed" and "_getWriterKeys reflects the
+   * change." We invalidate the cache *before* the mutation (so any
+   * concurrent `_getWriterKeys` re-fetches against whatever state the
+   * ACL exposes at that moment) AND set a mutation-in-flight flag that
+   * forces `_getWriterKeys` to bypass the cache entirely while the
+   * mutation runs. Both bookkeeping operations live in the prelude/
+   * finally so they cannot drift out of sync with the underlying call.
+   */
+  private async _runWriterMutation<T>(op: () => Promise<T> | T): Promise<T> {
+    this._writerMutationsInFlight++;
+    this._invalidateWriterKeyCache();
+    try {
+      return await op();
+    } finally {
+      this._writerMutationsInFlight--;
+      // Invalidate again post-mutation: the underlying ACL is now
+      // authoritative and any value that landed in the cache during the
+      // window must be discarded. Idempotent and cheap.
+      this._invalidateWriterKeyCache();
+    }
+  }
+
   /** Apply a writer ACL change and invalidate the cached key list. */
   private _mergeWriters(changes: ChangesType): void {
-    this._writers.merge(changes);
+    // Synchronous mutation: increment-mutate-decrement around the
+    // `merge()` call so any concurrent `_getWriterKeys` running on
+    // another microtask sees the in-flight flag. Both invalidations
+    // (pre and post) match the async helper's behavior.
+    this._writerMutationsInFlight++;
     this._invalidateWriterKeyCache();
+    try {
+      this._writers.merge(changes);
+    } finally {
+      this._writerMutationsInFlight--;
+      this._invalidateWriterKeyCache();
+    }
   }
 
   /** Add a writer and invalidate the cached key list. */
   private async _addWriter(publicKey: PublicKey): Promise<ChangesType> {
-    const changes = await this._writers.add(publicKey);
-    this._invalidateWriterKeyCache();
-    return changes;
+    return this._runWriterMutation(() => this._writers.add(publicKey));
   }
 
   /** Remove a writer and invalidate the cached key list. */
   private async _removeWriter(publicKey: PublicKey): Promise<ChangesType> {
-    const changes = await this._writers.remove(publicKey);
-    this._invalidateWriterKeyCache();
-    return changes;
+    return this._runWriterMutation(() => this._writers.remove(publicKey));
   }
 
   private async _verifyWriterSignature(raw: Uint8Array, signature: string) {

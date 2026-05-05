@@ -341,28 +341,47 @@ describe('writer key cache', () => {
   // mutation paths (merge / add / remove). Production code lives in
   // CollabswarmDocument (collabswarm-document.ts).
   //
-  // The version counter exists for race-safety: if an invalidation bumps
-  // the version while `getKeys()` is awaiting `users()`, the fetched list
-  // reflects the *pre*-invalidation ACL and is unsafe to return -- it
-  // could verify a just-revoked writer. So `getKeys()` loops, discarding
-  // the stale fetch and re-fetching with the post-invalidation state.
+  // Two race-safety mechanisms:
+  //  - Mutation-in-flight counter: while a mutation is running, `getKeys()`
+  //    bypasses the cache because some real ACLs (e.g. UCANACL.remove,
+  //    YjsACL.remove) mutate their backing state *before* their Promise
+  //    resolves -- so even though the post-await invalidation hasn't run
+  //    yet, the cached list is already stale. Bypassing forces a fresh
+  //    `users()` read, which returns the post-mutation state.
+  //  - Version counter: if an invalidation bumps the version while
+  //    `getKeys()` is awaiting `users()`, the fetched list reflects the
+  //    pre-invalidation ACL and is unsafe to return -- so `getKeys()`
+  //    discards it and retries.
   class WriterCacheHarness<T> {
     private _cached: T[] | null = null;
     private _version = 0;
+    private _mutationsInFlight = 0;
     public usersCalls = 0;
     constructor(private readonly _backing: { users: () => Promise<T[]>; merge: () => void; add: () => Promise<void>; remove: () => Promise<void>; }) {}
 
     async getKeys(): Promise<T[]> {
       while (true) {
-        if (this._cached !== null) return this._cached;
+        if (this._mutationsInFlight === 0 && this._cached !== null) {
+          return this._cached;
+        }
         this.usersCalls++;
         const versionAtStart = this._version;
         const fetched = await this._backing.users();
-        if (this._version === versionAtStart) {
+        if (
+          this._version === versionAtStart &&
+          this._mutationsInFlight === 0
+        ) {
           this._cached = fetched;
           return fetched;
         }
-        // Version advanced during fetch -- discard stale result and retry.
+        if (this._version !== versionAtStart) {
+          // Version advanced during fetch -- discard stale result and retry.
+          continue;
+        }
+        // Mutation still in flight -- return the freshly fetched value but
+        // do not cache; subsequent reads will re-fetch until mutations
+        // finish.
+        return fetched;
       }
     }
     private _invalidate(): void {
@@ -370,16 +389,34 @@ describe('writer key cache', () => {
       this._version++;
     }
     merge(): void {
-      this._backing.merge();
+      this._mutationsInFlight++;
       this._invalidate();
+      try {
+        this._backing.merge();
+      } finally {
+        this._mutationsInFlight--;
+        this._invalidate();
+      }
     }
     async add(): Promise<void> {
-      await this._backing.add();
+      this._mutationsInFlight++;
       this._invalidate();
+      try {
+        await this._backing.add();
+      } finally {
+        this._mutationsInFlight--;
+        this._invalidate();
+      }
     }
     async remove(): Promise<void> {
-      await this._backing.remove();
+      this._mutationsInFlight++;
       this._invalidate();
+      try {
+        await this._backing.remove();
+      } finally {
+        this._mutationsInFlight--;
+        this._invalidate();
+      }
     }
   }
 
@@ -590,6 +627,53 @@ describe('writer key cache', () => {
     pendingResolves[2](['v2']);
     const result = await inFlight;
     expect(result).toEqual(['v2']);
+  });
+
+  test('getKeys() during a backing mutation that mutates state before resolving observes the new state', async () => {
+    // Models real ACL implementations (e.g. UCANACL.remove, YjsACL.remove)
+    // that update their backing state *before* their returned Promise
+    // resolves. Without the in-flight mutation guard, a `getKeys()` call
+    // racing the mutation could see the cached pre-mutation list even
+    // though `users()` would already return the post-mutation list --
+    // letting a just-revoked writer's signature verify one final time.
+    let currentKeys = ['k1', 'revoked'];
+    let resolveRemove: (() => void) | null = null;
+    const backing = {
+      users: async () => currentKeys.slice(),
+      merge: () => {},
+      add: async () => {},
+      remove: () => {
+        // Mutate backing state immediately, then return a pending promise.
+        currentKeys = ['k1'];
+        return new Promise<void>((resolve) => {
+          resolveRemove = resolve;
+        });
+      },
+    };
+    const cache = new WriterCacheHarness<string>(backing);
+
+    // Prime the cache with the pre-mutation list.
+    expect(await cache.getKeys()).toEqual(['k1', 'revoked']);
+
+    // Kick off a remove. Backing mutation has already happened (currentKeys
+    // is now ['k1']), but the Promise is still pending.
+    const removePromise = cache.remove();
+
+    // While the mutation is in flight, getKeys() must observe the new
+    // state -- the cache is bypassed and a fresh users() runs.
+    const inFlightRead = await cache.getKeys();
+    expect(inFlightRead).toEqual(['k1']);
+
+    // Resolve the mutation. The post-mutation invalidation runs in finally.
+    resolveRemove!();
+    await removePromise;
+
+    // Subsequent reads continue to see the new state and re-prime the cache.
+    expect(await cache.getKeys()).toEqual(['k1']);
+    // A follow-up read is a hit -- no new users() call.
+    const callsBefore = cache.usersCalls;
+    expect(await cache.getKeys()).toEqual(['k1']);
+    expect(cache.usersCalls).toBe(callsBefore);
   });
 });
 
