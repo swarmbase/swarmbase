@@ -13,11 +13,10 @@
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
-  DEFAULT_WEBRTC_ICE_SERVERS,
   cloneIceServer,
   defaultBootstrapConfig,
   defaultConfig,
-  freezeIceServer,
+  resolveIceServers,
 } from './collabswarm-config';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
@@ -75,19 +74,11 @@ export const defaultNodeConfig = (
   bootstrapConfig: BootstrapInit,
   webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
 ) => {
-  // Resolve once from the (possibly readonly) input or the frozen defaults.
-  // Each consumer below gets its own independent copy (including a deep-enough
-  // clone of every server object via `cloneIceServer`) so mutating any one of
-  // them (e.g., the array exposed on the returned config, or the array
-  // libp2p's webRTC transport stores internally, or any individual server's
-  // fields) cannot leak into the others.
-  const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
-  // Defensive copy for the exposed config: deep-freeze so consumers cannot
-  // mutate it (or any nested `urls` array / object `credential`) in place and
-  // inadvertently shift state shared with anything else.
-  const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
-  );
+  // Resolve the source list and a deeply-frozen exposed view in one place so
+  // the browser and Node defaults stay in sync. Each transport below still
+  // gets its own fresh `cloneIceServer`-deep-cloned copy of `sourceIceServers`
+  // so mutations never leak between transport state and `config.webrtcIceServers`.
+  const { sourceIceServers, exposedIceServers } = resolveIceServers(webrtcIceServers);
   return ({
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),

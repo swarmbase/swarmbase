@@ -31,6 +31,12 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
  * The list is intentionally kept small (3-4 servers across multiple operators)
  * so we get redundancy without flooding ICE gathering with redundant probes.
  *
+ * **Privacy note:** Using these defaults discloses each peer's public
+ * IP/port mapping (and approximate location/ISP) to the listed third-party
+ * STUN operators. Privacy-sensitive deployments should pass `[]` to disable
+ * STUN entirely, or supply their own self-hosted STUN/TURN endpoints via
+ * the `webrtcIceServers` parameter.
+ *
  * Sources:
  * - Google: `stun.l.google.com:19302` -- the de-facto reference public STUN
  *   server, widely used in WebRTC examples and production apps.
@@ -110,6 +116,31 @@ export const freezeIceServer = (server: RTCIceServer): Readonly<RTCIceServer> =>
 };
 
 /**
+ * Internal helper: resolve the source ICE-server list (override or frozen
+ * defaults) and produce a deeply-frozen, defensively-cloned `exposed` view
+ * suitable for assigning to `config.webrtcIceServers`.
+ *
+ * Returning both halves lets the caller hand out fresh per-transport copies
+ * of `sourceIceServers` (via `cloneIceServer`) without re-deriving the
+ * source, while sharing the deep-freeze/clone setup between the browser
+ * (`defaultConfig`) and Node (`defaultNodeConfig`) defaults so they cannot
+ * drift over time.
+ *
+ * Not exported from the package barrel: this is an implementation detail of
+ * the default config builders.
+ */
+export function resolveIceServers(override?: ReadonlyArray<Readonly<RTCIceServer>>): {
+  sourceIceServers: ReadonlyArray<Readonly<RTCIceServer>>;
+  exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>>;
+} {
+  const sourceIceServers = override ?? DEFAULT_WEBRTC_ICE_SERVERS;
+  const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
+    sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
+  );
+  return { sourceIceServers, exposedIceServers };
+}
+
+/**
  * Default collabswarm config to use if none is provided.
  *
  * Note: This is a browser-compatible default. It does not include mDNS
@@ -127,19 +158,11 @@ export const defaultConfig = (
   bootstrapConfig: BootstrapInit,
   webrtcIceServers?: ReadonlyArray<Readonly<RTCIceServer>>,
 ) => {
-  // Resolve once from the (possibly readonly) input or the frozen defaults.
-  // Each consumer below gets its own independent copy (including a deep-enough
-  // clone of every server object via `cloneIceServer`) so mutating any one of
-  // them (e.g., the array exposed on the returned config, or the array
-  // libp2p's webRTC transport stores internally, or any individual server's
-  // fields) cannot leak into the others.
-  const sourceIceServers = webrtcIceServers ?? DEFAULT_WEBRTC_ICE_SERVERS;
-  // Defensive copy for the exposed config: deep-freeze so consumers cannot
-  // mutate it (or any nested `urls` array / object `credential`) in place and
-  // inadvertently shift state shared with anything else.
-  const exposedIceServers: ReadonlyArray<Readonly<RTCIceServer>> = Object.freeze(
-    sourceIceServers.map((server) => freezeIceServer(cloneIceServer(server))),
-  );
+  // Resolve the source list and a deeply-frozen exposed view in one place so
+  // the browser and Node defaults stay in sync. Each transport below still
+  // gets its own fresh `cloneIceServer`-deep-cloned copy of `sourceIceServers`
+  // so mutations never leak between transport state and `config.webrtcIceServers`.
+  const { sourceIceServers, exposedIceServers } = resolveIceServers(webrtcIceServers);
   return ({
     // Helia configuration (ref: https://gist.github.com/bellbind/23ad8d6e3a1509335253ff074fcd3cb6)
     helia: {
@@ -278,9 +301,11 @@ export interface CollabswarmConfig {
    * public STUN endpoints) is used so peers can discover their public
    * address mappings without depending on Circuit Relay for the data plane.
    *
-   * Pass an empty array (`[]`) to disable STUN entirely (e.g. for
-   * fully-internal LAN deployments where mDNS is sufficient), or supply
-   * custom STUN/TURN servers for self-hosted infrastructure.
+   * **Privacy note:** Using the public STUN defaults discloses each peer's
+   * public IP/port mapping to the third-party STUN operators. For
+   * privacy-sensitive deployments, pass `[]` to disable STUN entirely (e.g.
+   * for fully-internal LAN deployments where mDNS is sufficient), or supply
+   * self-hosted STUN/TURN servers.
    *
    * Note: this field is informational once the libp2p config has already
    * been built by {@link defaultConfig}; to actually change the ICE
