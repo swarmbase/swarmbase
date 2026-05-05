@@ -281,8 +281,14 @@ export class CollabswarmNode<
   // Start
   public async start(boostrapAddresses?: string[]) {
     await this.swarm.initialize(this.config);
+    // Thread the Node-side ICE override (already resolved and exposed on
+    // `this.config.webrtcIceServers` by `defaultNodeConfig`) into the
+    // browser-side client config so a deployment that customizes STUN/TURN
+    // (or disables it via `[]`) ends up with the same list on both sides
+    // rather than silently falling back to `DEFAULT_WEBRTC_ICE_SERVERS`.
     const clientConfig = defaultConfig(
       defaultBootstrapConfig(boostrapAddresses ?? []),
+      this.config.webrtcIceServers,
     );
     const clientConfigFile =
       process.env.REACT_APP_CLIENT_CONFIG_FILE || 'client-config.env';
