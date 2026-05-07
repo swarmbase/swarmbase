@@ -282,16 +282,25 @@ export class CollabswarmNode<
   }
 
   // Start
-  public async start(boostrapAddresses?: string[]) {
+  public async start(bootstrapAddresses?: string[]) {
     await this.swarm.initialize(this.config);
     // Thread the Node-side ICE override (already resolved and exposed on
     // `this.config.webrtcIceServers` by `defaultNodeConfig`) into the
     // browser-side client config so a deployment that customizes STUN/TURN
     // (or disables it via `[]`) ends up with the same list on both sides
     // rather than silently falling back to `DEFAULT_WEBRTC_ICE_SERVERS`.
+    //
+    // Strip `username`/`credential` before passing the list across: TURN
+    // credentials are server-side secrets and the resulting `clientConfig`
+    // is written to a file that can be bundled into browser builds. Browsers
+    // that need authenticated TURN should obtain ephemeral credentials at
+    // runtime instead of receiving long-lived secrets via this file.
+    const browserSafeIceServers = this.config.webrtcIceServers?.map(
+      ({ username: _username, credential: _credential, ...rest }) => rest,
+    );
     const clientConfig = defaultConfig(
-      defaultBootstrapConfig(boostrapAddresses ?? []),
-      this.config.webrtcIceServers,
+      defaultBootstrapConfig(bootstrapAddresses ?? []),
+      browserSafeIceServers,
     );
     const clientConfigFile =
       process.env.REACT_APP_CLIENT_CONFIG_FILE || 'client-config.env';
