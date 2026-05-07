@@ -21,6 +21,27 @@ import { CompactionConfig } from './compaction-config';
 import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 
 /**
+ * Project-local ICE-server interface used in place of the DOM lib's
+ * `RTCIceServer` so consumers don't need `lib: ["DOM"]` in their tsconfig
+ * (especially Node-only consumers of `collabswarm-node.ts`). The shape
+ * mirrors the subset of WebIDL `RTCIceServer` collabswarm actually reads
+ * and forwards into libp2p's webRTC transport configuration.
+ *
+ * Structurally compatible with `RTCIceServer` in browser environments, so
+ * values typed as `IceServer` can be cast to `RTCIceServer[]` at the
+ * libp2p call site without runtime conversion.
+ */
+export interface IceServer {
+  /** A single STUN/TURN URL or a list of URLs for this server entry. */
+  urls: string | string[];
+  /** Username for TURN authentication. Optional. */
+  username?: string;
+  /** Credential (typically a shared secret / password) for TURN
+   *  authentication. Optional. */
+  credential?: string;
+}
+
+/**
  * Default list of free public STUN servers used to populate the WebRTC
  * `iceServers` configuration when none is provided by the consumer.
  *
@@ -45,27 +66,6 @@ import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
  * - Twilio (Mozilla-style fallback): `global.stun.twilio.com:3478` --
  *   commonly recommended free public STUN endpoint.
  */
-/**
- * Project-local ICE-server interface used in place of the DOM lib's
- * `RTCIceServer` so consumers don't need `lib: ["DOM"]` in their tsconfig
- * (especially Node-only consumers of `collabswarm-node.ts`). The shape
- * mirrors the subset of WebIDL `RTCIceServer` collabswarm actually reads
- * and forwards into libp2p's webRTC transport configuration.
- *
- * Structurally compatible with `RTCIceServer` in browser environments, so
- * values typed as `IceServer` can be cast to `RTCIceServer[]` at the
- * libp2p call site without runtime conversion.
- */
-export interface IceServer {
-  /** A single STUN/TURN URL or a list of URLs for this server entry. */
-  urls: string | string[];
-  /** Username for TURN authentication. Optional. */
-  username?: string;
-  /** Credential (typically a shared secret / password) for TURN
-   *  authentication. Optional. */
-  credential?: string;
-}
-
 export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<IceServer>> =
   Object.freeze([
     Object.freeze({ urls: 'stun:stun.l.google.com:19302' }),
