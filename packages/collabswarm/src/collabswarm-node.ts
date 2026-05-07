@@ -301,9 +301,33 @@ export class CollabswarmNode<
     // is written to a file that can be bundled into browser builds. Browsers
     // that need authenticated TURN should obtain ephemeral credentials at
     // runtime instead of receiving long-lived secrets via this file.
+    //
+    // Warn loudly when stripping a non-empty credential: a TURN entry without
+    // its credential will not authenticate, so the browser silently degrades
+    // to STUN-only / host candidates and may fail to connect through
+    // symmetric NATs. Operators should either provide STUN-only entries or
+    // wire up an ephemeral-TURN-credential flow in their app code.
+    const strippedTurnEntries: string[] = [];
     const browserSafeIceServers = this.config.webrtcIceServers?.map(
-      ({ username: _username, credential: _credential, ...rest }) => rest,
+      ({ username, credential, ...rest }) => {
+        if (username !== undefined || credential !== undefined) {
+          const urlsLabel = Array.isArray(rest.urls)
+            ? rest.urls.join(',')
+            : rest.urls;
+          strippedTurnEntries.push(urlsLabel);
+        }
+        return rest;
+      },
     );
+    if (strippedTurnEntries.length > 0) {
+      console.warn(
+        `[collabswarm] Stripped TURN credentials from clientConfig for: ${strippedTurnEntries.join(
+          '; ',
+        )}. Browsers will not authenticate against these TURN servers; ` +
+          'supply ephemeral credentials at runtime instead of long-lived ' +
+          'secrets in clientConfig.',
+      );
+    }
     const clientConfig = defaultConfig(
       defaultBootstrapConfig(bootstrapAddresses ?? []),
       browserSafeIceServers,
