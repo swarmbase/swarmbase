@@ -79,7 +79,8 @@
       "^it-pipe$": "<rootDir>/jest.empty-mock.js",
       "^bl$": "<rootDir>/jest.empty-mock.js",
       "^multiformats$": "<rootDir>/jest.empty-mock.js",
-      "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js"
+      "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js",
+      "^uuid$": "<rootDir>/../collabswarm/jest.uuid-mock.cjs"
     }
   }
 }
