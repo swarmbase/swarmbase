@@ -67,9 +67,10 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  *
  * @param bootstrapConfig Bootstrap peer list to seed peer discovery.
  * @param webrtcIceServers Optional override for the WebRTC ICE server list.
- *   When undefined, {@link DEFAULT_WEBRTC_ICE_SERVERS} is used so peers can
- *   discover their public address mappings via STUN without relying on relay
- *   infrastructure for data plane forwarding (issue #236 phase 3).
+ *   When undefined, the package-level `DEFAULT_WEBRTC_ICE_SERVERS` list is
+ *   used (see `./collabswarm-config`) so peers can discover their public
+ *   address mappings via STUN without relying on relay infrastructure for
+ *   data plane forwarding (issue #236 phase 3).
  */
 export const defaultNodeConfig = (
   bootstrapConfig: BootstrapInit,
@@ -284,11 +285,16 @@ export class CollabswarmNode<
   // Start
   public async start(bootstrapAddresses?: string[]) {
     await this.swarm.initialize(this.config);
-    // Thread the Node-side ICE override (already resolved and exposed on
+    // Thread the Node-side ICE override (resolved and exposed on
     // `this.config.webrtcIceServers` by `defaultNodeConfig`) into the
     // browser-side client config so a deployment that customizes STUN/TURN
-    // (or disables it via `[]`) ends up with the same list on both sides
-    // rather than silently falling back to `DEFAULT_WEBRTC_ICE_SERVERS`.
+    // (or disables it via `[]`) ends up with the same list on both sides.
+    //
+    // Edge case: if a hand-rolled config skips `defaultNodeConfig` and
+    // leaves `webrtcIceServers` unset, `browserSafeIceServers` is left
+    // undefined and `defaultConfig` falls back to its own
+    // `DEFAULT_WEBRTC_ICE_SERVERS`. Configs built via `defaultNodeConfig`
+    // never hit that path.
     //
     // Strip `username`/`credential` before passing the list across: TURN
     // credentials are server-side secrets and the resulting `clientConfig`
