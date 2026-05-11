@@ -1,9 +1,13 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 import {
   CompactionConfig,
   defaultCompactionConfig,
 } from './compaction-config';
 import { CRDTSnapshotNode } from './snapshot-node';
+import {
+  isBlockNotFoundError,
+  loadChangeBlock,
+} from './blockstore-gc';
 
 describe('CompactionConfig', () => {
   test('default config has compaction disabled', () => {
@@ -509,4 +513,165 @@ describe('GC gating logic', () => {
       ).toBe(c.expected);
     });
   }
+});
+
+/**
+ * Tests for the actual `loadChangeBlock` helper used by
+ * `CollabswarmDocument.loadChangeBlock`. The helper lives in `blockstore-gc.ts`
+ * so it can be exercised without dragging in libp2p/helia. The document method
+ * is a thin delegate, so these tests pin the real semantics that the public
+ * API exposes (unknown CID short-circuit, malformed CID rejection, ERR_NOT_FOUND
+ * mapped to `undefined`, decrypt/deserialize failures rethrown).
+ */
+describe('loadChangeBlock helper (real lazy-load semantics)', () => {
+  // Valid CIDv1 (sha256, dag-pb) used as a stand-in for a known change block.
+  const REAL_CID = 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+  // A second valid CID, distinct from REAL_CID -- used as an "unknown but
+  // parseable" CID so we can exercise the unknown-CID short-circuit without
+  // having to construct a separate parse-error case.
+  const OTHER_CID = 'bafybeibwzifw5kdscvuwbpqdfqzkv6kqgvkfknhomh4l5wuojfqsbm5cyy';
+
+  // Identity parser used when we don't care about CID structure; the helper
+  // is generic so the test doesn't need real multiformats.
+  const parseAsString = (c: string) => c;
+  const parseThrowing = (c: string) => {
+    throw new Error(`bad CID ${c}`);
+  };
+
+  test('returns undefined for unknown CIDs without touching the fetcher', async () => {
+    const fetcher = jest.fn(async () => new Uint8Array([1, 2, 3]));
+    const result = await loadChangeBlock<string, Uint8Array>(
+      OTHER_CID,
+      new Set([REAL_CID]),
+      parseAsString,
+      fetcher as unknown as (c: string) => Promise<Uint8Array>,
+    );
+    expect(result).toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  test('returns undefined when _hashes is empty (no change has ever been seen)', async () => {
+    const fetcher = jest.fn(async () => new Uint8Array([1]));
+    const result = await loadChangeBlock<string, Uint8Array>(
+      REAL_CID,
+      new Set(),
+      parseAsString,
+      fetcher as unknown as (c: string) => Promise<Uint8Array>,
+    );
+    expect(result).toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  test('throws on malformed CID with a descriptive error', async () => {
+    await expect(
+      loadChangeBlock<string, Uint8Array>(
+        'malformed',
+        new Set(['malformed']),
+        parseThrowing,
+        async () => new Uint8Array([1]),
+      ),
+    ).rejects.toThrow(/Invalid CID/);
+  });
+
+  test('returns the fetched payload on success', async () => {
+    const payload = new Uint8Array([0xaa, 0xbb]);
+    const result = await loadChangeBlock<string, Uint8Array>(
+      REAL_CID,
+      new Set([REAL_CID]),
+      parseAsString,
+      async () => payload,
+    );
+    expect(result).toEqual(payload);
+  });
+
+  test('returns undefined when the fetcher throws ERR_NOT_FOUND', async () => {
+    const notFound = Object.assign(new Error('block not found'), {
+      code: 'ERR_NOT_FOUND',
+      name: 'NotFoundError',
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = await loadChangeBlock<string, Uint8Array>(
+        REAL_CID,
+        new Set([REAL_CID]),
+        parseAsString,
+        async () => { throw notFound; },
+      );
+      expect(result).toBeUndefined();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('returns undefined when the fetcher throws a NotFoundError (name-only match)', async () => {
+    // Some backing stores re-throw a generic Error with name set but no code.
+    const notFound = Object.assign(new Error('block not found'), {
+      name: 'NotFoundError',
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = await loadChangeBlock<string, Uint8Array>(
+        REAL_CID,
+        new Set([REAL_CID]),
+        parseAsString,
+        async () => { throw notFound; },
+      );
+      expect(result).toBeUndefined();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('rethrows decrypt/deserialize failures (does NOT mask as missing)', async () => {
+    // The fetcher throws a regular error from _getBlock's decrypt path. This
+    // should NOT be mapped to undefined; callers need to see data-integrity
+    // failures.
+    await expect(
+      loadChangeBlock<string, Uint8Array>(
+        REAL_CID,
+        new Set([REAL_CID]),
+        parseAsString,
+        async () => { throw new Error('Failed to decrypt block (CID: ...)'); },
+      ),
+    ).rejects.toThrow(/Failed to decrypt block/);
+  });
+
+  test('rethrows other non-not-found errors (e.g. IO failure)', async () => {
+    await expect(
+      loadChangeBlock<string, Uint8Array>(
+        REAL_CID,
+        new Set([REAL_CID]),
+        parseAsString,
+        async () => { throw new Error('I/O failure'); },
+      ),
+    ).rejects.toThrow(/I\/O failure/);
+  });
+});
+
+describe('isBlockNotFoundError', () => {
+  test('matches the interface-store NotFoundError code', () => {
+    expect(isBlockNotFoundError(
+      Object.assign(new Error(), { code: 'ERR_NOT_FOUND' }),
+    )).toBe(true);
+  });
+
+  test('matches by name when code is missing', () => {
+    expect(isBlockNotFoundError(
+      Object.assign(new Error(), { name: 'NotFoundError' }),
+    )).toBe(true);
+  });
+
+  test('does not match unrelated errors', () => {
+    expect(isBlockNotFoundError(new Error('decrypt failed'))).toBe(false);
+    expect(isBlockNotFoundError(
+      Object.assign(new Error(), { code: 'ERR_OTHER' }),
+    )).toBe(false);
+  });
+
+  test('handles non-error values safely', () => {
+    expect(isBlockNotFoundError(undefined)).toBe(false);
+    expect(isBlockNotFoundError(null)).toBe(false);
+    expect(isBlockNotFoundError('string-error')).toBe(false);
+    expect(isBlockNotFoundError(42)).toBe(false);
+  });
 });

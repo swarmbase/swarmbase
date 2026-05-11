@@ -3,6 +3,10 @@
  *
  * After compaction prunes the in-memory sync tree, these helpers identify
  * unreferenced blocks that can be deleted from the Helia blockstore.
+ *
+ * This module is intentionally free of libp2p/helia imports so it can be
+ * unit-tested directly. The lazy-load helper used by
+ * `CollabswarmDocument.loadChangeBlock` lives here for the same reason.
  */
 
 import {
@@ -84,4 +88,84 @@ export function filterDeletableCIDs<ChangesType>(
     out.add(cid);
   }
   return out;
+}
+
+/**
+ * Returns true when an error thrown by `Blockstore.get` indicates the block
+ * is simply absent (vs. a decrypt/deserialize failure or other unexpected
+ * error). The `interface-store` package exposes a stable `NotFoundError`
+ * whose `code === 'ERR_NOT_FOUND'` and `name === 'NotFoundError'`. We
+ * duck-type on those fields so we don't take a runtime dependency on
+ * `interface-store` and so we still recognise the canonical error type when
+ * a backing store wraps or re-throws it.
+ */
+export function isBlockNotFoundError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: unknown; name?: unknown };
+  if (e.code === 'ERR_NOT_FOUND') return true;
+  if (e.name === 'NotFoundError') return true;
+  return false;
+}
+
+/**
+ * Lazy-load a historical change block by CID.
+ *
+ * Backs `CollabswarmDocument.loadChangeBlock`. Encodes the production
+ * semantics for the lazy-load path so they can be exercised by unit tests
+ * without standing up the full libp2p/helia stack:
+ *
+ * - Unknown CIDs (not in `knownHashes`) return `undefined` and the fetcher
+ *   is NOT invoked -- callers should only request CIDs they have observed
+ *   in the sync tree, snapshot boundary, or via remote tip references.
+ * - Malformed CIDs (parse throws) bubble up wrapped in a descriptive Error.
+ * - Blockstore "not found" errors (see `isBlockNotFoundError`) map to
+ *   `undefined` so callers can fall back to peer fetches.
+ * - All other errors (decryption failure, deserialization failure, IO
+ *   errors, ...) are rethrown so callers can surface them rather than
+ *   masking them as a missing block.
+ *
+ * Generic over the CID type so this module does not need to import
+ * `multiformats` (which would prevent it from being unit-tested in jest's
+ * default ts-jest setup). The document-level caller injects `CID.parse`
+ * and `_getBlock` to bridge to the real types.
+ *
+ * @param cid          CID string of the change block to load.
+ * @param knownHashes  The document's set of known change CIDs.
+ * @param parseCID     Parser for the CID string (typically `CID.parse`).
+ *                     Should throw on malformed input.
+ * @param fetch        Loader that returns the decrypted+deserialized payload
+ *   for a parsed CID. Typically delegates to `CollabswarmDocument._getBlock`.
+ * @param logContext   Optional label used in the warn-log when the block is
+ *   missing locally.
+ */
+export async function loadChangeBlock<ParsedCID, ChangesType>(
+  cid: string,
+  knownHashes: Set<string>,
+  parseCID: (cid: string) => ParsedCID,
+  fetch: (parsedCID: ParsedCID) => Promise<ChangesType>,
+  logContext?: string,
+): Promise<ChangesType | undefined> {
+  if (!knownHashes.has(cid)) {
+    return undefined;
+  }
+  let parsedCID: ParsedCID;
+  try {
+    parsedCID = parseCID(cid);
+  } catch (err) {
+    throw new Error(`Invalid CID '${cid}': ${(err as Error).message}`);
+  }
+  try {
+    return await fetch(parsedCID);
+  } catch (err) {
+    if (isBlockNotFoundError(err)) {
+      console.warn(
+        `loadChangeBlock(${cid}) missing from local blockstore${
+          logContext ? ` for ${logContext}` : ''
+        }:`,
+        err,
+      );
+      return undefined;
+    }
+    throw err;
+  }
 }

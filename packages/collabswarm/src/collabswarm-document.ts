@@ -40,7 +40,10 @@ import {
 } from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
-import { filterDeletableCIDs } from './blockstore-gc';
+import {
+  filterDeletableCIDs,
+  loadChangeBlock as lazyLoadChangeBlock,
+} from './blockstore-gc';
 import { documentTopic } from './document-topic';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
@@ -2414,37 +2417,24 @@ export class CollabswarmDocument<
    *   no peer has re-served it yet). Callers that need stronger guarantees can
    *   fall back to dialing peers via the existing sync protocols.
    *
-   * Throws when the CID is malformed.
+   * Throws when:
+   * - The CID is malformed.
+   * - The block is present locally but decryption fails (wrong/missing
+   *   keychain entry) or the payload fails to deserialize (corrupted data).
+   *   These are treated as hard errors so callers can distinguish a recoverable
+   *   "missing block" condition from a stronger data-integrity issue.
    *
    * @param cid CID string of the change block to load.
    * @returns The deserialized change payload, or `undefined` if unavailable.
    */
   public async loadChangeBlock(cid: string): Promise<ChangesType | undefined> {
-    if (!this._hashes.has(cid)) {
-      // Unknown CID -- refuse to load arbitrary blocks. Callers should only
-      // request CIDs they have observed in the sync tree, snapshot boundary,
-      // or via remote tip references.
-      return undefined;
-    }
-    let parsedCID: CID;
-    try {
-      parsedCID = CID.parse(cid);
-    } catch (err) {
-      throw new Error(`Invalid CID '${cid}': ${(err as Error).message}`);
-    }
-    try {
-      return await this._getBlock(parsedCID);
-    } catch (err) {
-      // Most common failure: blockstore.get throws when the block has been
-      // GC'd locally and no peer has re-published it. Treat as "not available
-      // locally" rather than a hard error -- callers can decide whether to
-      // dial peers or surface to the UI.
-      console.warn(
-        `loadChangeBlock(${cid}) failed for ${this.documentPath}:`,
-        err,
-      );
-      return undefined;
-    }
+    return lazyLoadChangeBlock<CID, ChangesType>(
+      cid,
+      this._hashes,
+      (c) => CID.parse(c),
+      (parsedCID) => this._getBlock(parsedCID),
+      this.documentPath,
+    );
   }
 
   /**
