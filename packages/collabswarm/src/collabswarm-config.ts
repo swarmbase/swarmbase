@@ -245,7 +245,7 @@ export interface CollabswarmConfig {
    * traffic on the pubsub mesh and avoid collisions with other topic types.
    *
    * Set to an empty string (`''`) to disable prefixing; topic strings
-   * will be the bare document path (legacy behavior).
+   * will be the bare document path.
    *
    * @default DEFAULT_DOCUMENT_TOPIC_PREFIX
    */
