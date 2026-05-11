@@ -207,7 +207,7 @@ For browser apps, you can also serve the relay info as a config file:
 
 **For development:** Plain WebSocket (`ws://`) works on localhost or private networks.
 
-**For production:** Browsers require Secure WebSocket (`wss://`) for connections to non-localhost addresses. You need:
+**For production:** When the client is served over HTTPS, browsers' mixed-content policy blocks plain `ws://`, so the relay multiaddr must use `wss://`. (Plain `ws://` is fine from `localhost` or HTTP origins, but production deployments are almost always HTTPS.) You need:
 
 1. A domain name pointing to your server
 2. A TLS certificate (Let's Encrypt is free and automated)
@@ -753,7 +753,7 @@ See individual Dockerfile documentation in `guides/docker/` for build instructio
 1. **Relay not running:** Check `docker compose ps` and `docker compose logs relay`
 2. **Wrong multiaddress:** Verify the peer ID and IP in the client config match the relay's output
 3. **Port blocked:** Ensure port 9001 is open in firewall/security group
-4. **TLS required:** Browsers require `wss://` for non-localhost connections. Set up a reverse proxy with TLS (see Section 2.6)
+4. **TLS required:** When serving the client over HTTPS, browsers' mixed-content policy blocks plain `ws://`, so the relay multiaddr must use `wss://`. (Plain `ws://` is fine from `localhost` or HTTP origins.) Set up a reverse proxy with TLS (see Section 2.6).
 5. **CORS issues:** Not applicable to WebSocket connections, but if serving config.json, ensure CORS headers are set
 
 #### "Peers connect but messages don't sync"
