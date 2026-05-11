@@ -2041,7 +2041,7 @@ __metadata:
     typedoc: "npm:^0.26.7"
     typescript: "npm:^5.9.3"
     uint8arraylist: "npm:^2.4.8"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
   languageName: unknown
   linkType: soft
 
