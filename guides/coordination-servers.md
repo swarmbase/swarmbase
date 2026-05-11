@@ -570,7 +570,11 @@ The public multiaddr your clients should use is constructed from the Fly hostnam
 >   port = 9001
 >   handlers = ["tls"]
 > ```
-> Then set `tls_options.alpn = ["libp2p"]` and redeploy. Clients connect with:
+> Leave ALPN at the Fly defaults so the TLS handshake advertises the standard
+> HTTP values (`http/1.1`, optionally `h2`) that browsers require for the
+> WebSocket upgrade. Do **not** set `tls_options.alpn = ["libp2p"]` — that
+> value is for raw libp2p TLS streams and will prevent browsers from
+> completing the WSS handshake. Redeploy, then clients connect with:
 > ```text
 > /dns4/<APP_NAME>.fly.dev/tcp/9001/wss/p2p/<PEER_ID>
 > ```

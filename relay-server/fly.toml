@@ -23,13 +23,20 @@ primary_region = "iad"           # US East (Virginia); change to your nearest re
 # of going through the HTTP proxy.
 
 # WebSocket port — browser peers connect here (libp2p WebSocket transport).
+#
+# NOTE: `handlers = []` means Fly forwards raw TCP without terminating TLS,
+# so this exposes plain `ws://` (not `wss://`). Browsers reject non-localhost
+# `ws://` connections, so for production browser deployments you must either
+# add the `"tls"` handler here (Fly terminates TLS and serves `wss://`) or
+# front the relay with another TLS terminator. See
+# `guides/coordination-servers.md` §5.3 for the recommended configuration.
 [[services]]
   protocol = "tcp"
   internal_port = 9001
 
   [[services.ports]]
     port = 9001
-    handlers = []                # raw TCP — TLS termination handled by Fly's anycast
+    handlers = []                # plain TCP/WS — see note above for browser (WSS) setup
 
   [services.concurrency]
     type = "connections"
