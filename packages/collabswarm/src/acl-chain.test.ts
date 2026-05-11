@@ -151,7 +151,7 @@ describe('canonical encoding', () => {
       timestamp: 1000,
       parentHash: undefined,
       change: { op: 'add', keys: [bob.hashHex] },
-      signerKeyHash: new Uint8Array([1, 2, 3]),
+      signerKeyId: new Uint8Array([1, 2, 3]),
     };
 
     const h0 = toHex(await computeEntryHash(base, serializeChange));
@@ -180,7 +180,7 @@ describe('canonical encoding', () => {
     // Different signer
     const h4 = toHex(
       await computeEntryHash(
-        { ...base, signerKeyHash: new Uint8Array([9, 9, 9]) },
+        { ...base, signerKeyId: new Uint8Array([9, 9, 9]) },
         serializeChange,
       ),
     );
@@ -190,20 +190,20 @@ describe('canonical encoding', () => {
   test('length-prefixed encoding prevents boundary ambiguity', async () => {
     // Two entries that, without length prefixing, would have the same
     // concatenated representation:
-    //   signerKeyHash=[1,2], change=bytes("3")
-    //   signerKeyHash=[1,2,3], change=bytes("")
+    //   signerKeyId=[1,2], change=bytes("3")
+    //   signerKeyId=[1,2,3], change=bytes("")
     // Both produce bytes [1,2,3] if you forget the length prefixes.
     const a: Omit<ACLEntry<AclChange>, 'signature'> = {
       sequenceNumber: 0,
       timestamp: 0,
       change: { op: 'add', keys: [] }, // serializes to '{"op":"add","keys":[]}'
-      signerKeyHash: new Uint8Array([1, 2]),
+      signerKeyId: new Uint8Array([1, 2]),
     };
     const b: Omit<ACLEntry<AclChange>, 'signature'> = {
       sequenceNumber: 0,
       timestamp: 0,
       change: { op: 'add', keys: [] },
-      signerKeyHash: new Uint8Array([1, 2, 3]),
+      signerKeyId: new Uint8Array([1, 2, 3]),
     };
     const ha = canonicalEntryPayload(a, serializeChange);
     const hb = canonicalEntryPayload(b, serializeChange);
@@ -353,7 +353,7 @@ describe('rejection: unauthorized signer', () => {
       timestamp: Date.now(),
       parentHash: head,
       change: { op: 'add' as const, keys: [eve.hashHex] },
-      signerKeyHash: await serializePublicKey(bob.publicKey),
+      signerKeyId: await serializePublicKey(bob.publicKey),
     };
     const encoded = canonicalEntryPayload(payload, serializeChange);
     const signature = await auth.sign(encoded, bob.privateKey);
@@ -478,7 +478,7 @@ describe('rejection: tampering and replay', () => {
       alice.privateKey,
     );
 
-    // Caller claims Eve signed, but the signerKeyHash inside the entry
+    // Caller claims Eve signed, but the signerKeyId inside the entry
     // says Alice -- mismatch caught before we even try to verify.
     const result = await fresh.ingestEntry(entry, eve.publicKey);
     expect(result.ok).toBe(false);
@@ -525,7 +525,7 @@ describe('rejection: tampering and replay', () => {
       timestamp: 1000,
       parentHash: forkPoint,
       change: { op: 'add' as const, keys: [carol.hashHex] },
-      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signerKeyId: await serializePublicKey(alice.publicKey),
     };
     const sigA = await auth.sign(
       canonicalEntryPayload(payloadA, serializeChange),
@@ -539,7 +539,7 @@ describe('rejection: tampering and replay', () => {
       timestamp: 1001,
       parentHash: forkPoint,
       change: { op: 'add' as const, keys: [eve.hashHex] },
-      signerKeyHash: await serializePublicKey(bob.publicKey),
+      signerKeyId: await serializePublicKey(bob.publicKey),
     };
     const sigB = await auth.sign(
       canonicalEntryPayload(payloadB, serializeChange),
@@ -594,7 +594,7 @@ describe('rejection: tampering and replay', () => {
       timestamp: 9999,
       parentHash: e0Hash,
       change: { op: 'add' as const, keys: [eve.hashHex] },
-      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signerKeyId: await serializePublicKey(alice.publicKey),
     };
     const signature = await auth.sign(
       canonicalEntryPayload(payload, serializeChange),
@@ -620,7 +620,7 @@ describe('rejection: tampering and replay', () => {
       timestamp: 1000,
       parentHash: head,
       change: { op: 'add' as const, keys: [bob.hashHex] },
-      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signerKeyId: await serializePublicKey(alice.publicKey),
     };
     const signature = await auth.sign(
       canonicalEntryPayload(payload, serializeChange),
@@ -696,7 +696,7 @@ describe('replay() snapshot loading', () => {
       timestamp: 5000,
       parentHash: headAfterE1,
       change: { op: 'add' as const, keys: [eve.hashHex] },
-      signerKeyHash: await serializePublicKey(eve.publicKey),
+      signerKeyId: await serializePublicKey(eve.publicKey),
     };
     const signature = await auth.sign(
       canonicalEntryPayload(payload, serializeChange),
@@ -724,7 +724,7 @@ describe('replay() snapshot loading', () => {
     expect(fresh.length).toBe(2);
   });
 
-  test('replay rejects when resolveKey cannot map a signerKeyHash', async () => {
+  test('replay rejects when resolveKey cannot map a signerKeyId', async () => {
     const chain = makeChain([alice.publicKey]);
     const e0 = await chain.authorAndAppend(
       { op: 'add', keys: [alice.hashHex] },
@@ -772,7 +772,7 @@ describe('malformed entry rejection', () => {
       timestamp: 0,
       parentHash: undefined,
       change: { op: 'add' as const, keys: [alice.hashHex] },
-      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signerKeyId: await serializePublicKey(alice.publicKey),
       signature: 'not bytes' as unknown as Uint8Array,
     } as ACLEntry<AclChange>;
     const result = await chain.ingestEntry(broken, alice.publicKey);
@@ -787,7 +787,7 @@ describe('malformed entry rejection', () => {
       timestamp: 0,
       parentHash: undefined,
       change: { op: 'add' as const, keys: [alice.hashHex] },
-      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signerKeyId: await serializePublicKey(alice.publicKey),
       signature: new Uint8Array([1, 2, 3]),
     } as ACLEntry<AclChange>;
     const result = await chain.ingestEntry(broken, alice.publicKey);
@@ -795,14 +795,14 @@ describe('malformed entry rejection', () => {
     if (!result.ok) expect(result.reason).toBe('malformed-entry');
   });
 
-  test('non-Uint8Array signerKeyHash is rejected without throwing', async () => {
+  test('non-Uint8Array signerKeyId is rejected without throwing', async () => {
     const chain = makeChain([alice.publicKey]);
     const broken = {
       sequenceNumber: 0,
       timestamp: 0,
       parentHash: undefined,
       change: { op: 'add' as const, keys: [alice.hashHex] },
-      signerKeyHash: 'not bytes' as unknown as Uint8Array,
+      signerKeyId: 'not bytes' as unknown as Uint8Array,
       signature: new Uint8Array([1, 2, 3]),
     } as ACLEntry<AclChange>;
     const result = await chain.ingestEntry(broken, alice.publicKey);
@@ -818,6 +818,89 @@ describe('malformed entry rejection', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('malformed-entry');
+  });
+
+  // `canonicalEntryPayload` encodes `timestamp` as two unsigned 32-bit
+  // halves; fractional, negative, NaN, and Infinity values would silently
+  // corrupt the encoding (and let an attacker manufacture distinct
+  // timestamps that share canonical bytes). All such values must be
+  // rejected up front as 'malformed-entry'.
+  async function brokenTimestampEntry(
+    timestamp: number,
+  ): Promise<ACLEntry<AclChange>> {
+    return {
+      sequenceNumber: 0,
+      timestamp,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    } as ACLEntry<AclChange>;
+  }
+
+  test('fractional timestamp is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenTimestampEntry(1.5),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/timestamp/);
+    }
+  });
+
+  test('negative timestamp is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenTimestampEntry(-1),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/timestamp/);
+    }
+  });
+
+  test('NaN timestamp is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenTimestampEntry(Number.NaN),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/timestamp/);
+    }
+  });
+
+  test('Infinity timestamp is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenTimestampEntry(Number.POSITIVE_INFINITY),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/timestamp/);
+    }
+  });
+
+  test('timestamp beyond MAX_SAFE_INTEGER is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenTimestampEntry(Number.MAX_SAFE_INTEGER + 1),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/timestamp/);
+    }
   });
 });
 

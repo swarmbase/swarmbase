@@ -99,7 +99,7 @@ export interface ACLState<_ChangesType, _PublicKey> {
  * A single signed entry in the ACL chain.
  *
  * The signature covers the canonical encoding of the entry's payload
- * (`change`, `signerKeyHash`, `sequenceNumber`, `timestamp`, `parentHash`).
+ * (`change`, `signerKeyId`, `sequenceNumber`, `timestamp`, `parentHash`).
  *
  * @typeParam ChangesType The CRDT change block type produced by the ACL.
  */
@@ -112,8 +112,10 @@ export interface ACLEntry<ChangesType> {
 
   /**
    * Author timestamp in Unix milliseconds. Advisory only -- the chain
-   * does not reject entries solely on timestamp, since clocks may drift.
-   * Used to break ties for human-readable audit logs.
+   * does not reject entries based on the *value* of the timestamp (since
+   * clocks may drift); it only requires the value to be a non-negative
+   * safe integer so the canonical encoding is unambiguous. Used to break
+   * ties for human-readable audit logs.
    */
   timestamp: number;
 
@@ -129,13 +131,15 @@ export interface ACLEntry<ChangesType> {
   change: ChangesType;
 
   /**
-   * Stable canonical serialization of the signer's public key
-   * (see {@link SerializePublicKey}). The chain uses this for fast
-   * identity comparisons; the actual public key for signature verification
-   * is supplied separately at {@link ACLChain.authorAndAppend} /
-   * {@link ACLChain.ingestEntry} time.
+   * Stable canonical identifier for the signer's public key.
+   *
+   * These are the raw bytes produced by {@link SerializePublicKey} (e.g. an
+   * SPKI or raw-point encoding of the key) -- *not* a cryptographic digest
+   * of those bytes. The chain uses this for fast identity comparisons; the
+   * actual public key for signature verification is supplied separately at
+   * {@link ACLChain.authorAndAppend} / {@link ACLChain.ingestEntry} time.
    */
-  signerKeyHash: Uint8Array;
+  signerKeyId: Uint8Array;
 
   /**
    * Signature over the canonical encoding of all fields above.
@@ -215,7 +219,7 @@ export interface ACLChainConfig<ChangesType, PrivateKey, PublicKey> {
  *   u32 BE sequenceNumber
  *   u64 BE timestamp (only low 53 bits are meaningful in JS)
  *   u32 BE parentHash.length || parentHash bytes
- *   u32 BE signerKeyHash.length || signerKeyHash bytes
+ *   u32 BE signerKeyId.length || signerKeyId bytes
  *   u32 BE change.length || change bytes
  * ```
  *
@@ -248,7 +252,7 @@ export function canonicalEntryPayload<ChangesType>(
 ): Uint8Array {
   const changeBytes = serializeChange(entry.change);
   const parent = entry.parentHash ?? new Uint8Array(0);
-  const signerKey = entry.signerKeyHash;
+  const signerKey = entry.signerKeyId;
 
   // Header is fixed-size: u32 seq + u64 ts + 3 u32 length prefixes.
   const headerLen = 4 + 8 + 4 + 4 + 4;
@@ -264,8 +268,12 @@ export function canonicalEntryPayload<ChangesType>(
 
   // Split timestamp into hi/lo 32-bit halves so we don't lose precision on
   // values >2^32. JS numbers are safe to 2^53 so this is sufficient.
+  // `validateEntryShape` enforces that this is a non-negative safe integer
+  // before we get here, so the hi/lo split is unambiguous. We keep the
+  // `Math.floor` and `>>> 0` calls as defensive belt-and-braces for the
+  // (test-only) code paths that construct payloads without going through
+  // ingestion.
   const ts = entry.timestamp;
-  // Math.floor handles negatives and fractional values defensively.
   const tsHi = Math.floor(ts / 0x100000000);
   const tsLo = ts >>> 0;
   view.setUint32(off, tsHi, false);
@@ -317,7 +325,7 @@ function toHex(bytes: Uint8Array): string {
 
 /**
  * SHA-256 byte length, used to bound the size of `parentHash` and
- * `signerKeyHash` fields. Network-supplied entries with unreasonably large
+ * `signerKeyId` fields. Network-supplied entries with unreasonably large
  * byte arrays here would otherwise force large allocations during hashing.
  */
 const MAX_HASH_BYTES = 64;
@@ -351,22 +359,30 @@ function validateEntryShape<ChangesType>(
   ) {
     return 'sequenceNumber is not a non-negative safe integer';
   }
+  // `timestamp` is encoded as two unsigned 32-bit halves in
+  // `canonicalEntryPayload`. Fractional values would be silently truncated
+  // and negative values would wrap to enormous unsigned ints, both of which
+  // would let a hostile peer manufacture two *different* timestamp values
+  // that produce identical canonical bytes (and therefore identical
+  // signatures). Reject anything that isn't a non-negative safe integer.
   if (
     typeof entry.timestamp !== 'number' ||
-    !Number.isFinite(entry.timestamp)
+    !Number.isInteger(entry.timestamp) ||
+    entry.timestamp < 0 ||
+    entry.timestamp > Number.MAX_SAFE_INTEGER
   ) {
-    return 'timestamp is not a finite number';
+    return 'timestamp is not a non-negative safe integer';
   }
-  if (!(entry.signerKeyHash instanceof Uint8Array)) {
-    return 'signerKeyHash is not a Uint8Array';
+  if (!(entry.signerKeyId instanceof Uint8Array)) {
+    return 'signerKeyId is not a Uint8Array';
   }
   if (
-    entry.signerKeyHash.byteLength === 0 ||
-    entry.signerKeyHash.byteLength > MAX_HASH_BYTES * 4
+    entry.signerKeyId.byteLength === 0 ||
+    entry.signerKeyId.byteLength > MAX_HASH_BYTES * 4
   ) {
     // Public key encodings are a couple hundred bytes at most; reject
     // anything wildly out of range.
-    return 'signerKeyHash has an implausible length';
+    return 'signerKeyId has an implausible length';
   }
   if (!(entry.signature instanceof Uint8Array)) {
     return 'signature is not a Uint8Array';
@@ -520,14 +536,14 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     timestamp: number = Date.now(),
   ): Promise<ACLEntry<ChangesType>> {
     return this._runExclusive(async () => {
-      const signerKeyHash = await this._config.serializeKey(signerPublicKey);
+      const signerKeyId = await this._config.serializeKey(signerPublicKey);
 
       const payload: Omit<ACLEntry<ChangesType>, 'signature'> = {
         sequenceNumber: this._entries.length,
         timestamp,
         parentHash: this.headHash,
         change,
-        signerKeyHash,
+        signerKeyId,
       };
 
       const encoded = canonicalEntryPayload(payload, this._serializeChange);
@@ -563,7 +579,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    * @param entry The signed entry to apply.
    * @param signerPublicKey The public key that the caller claims signed
    *   `entry`. The chain verifies that this key matches
-   *   `entry.signerKeyHash` (via {@link SerializePublicKey}) AND that it
+   *   `entry.signerKeyId` (via {@link SerializePublicKey}) AND that it
    *   actually signed the payload.
    */
   async ingestEntry(
@@ -601,7 +617,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     }
 
     // 1. Caller-supplied key must match the hash in the entry.
-    const declared = entry.signerKeyHash;
+    const declared = entry.signerKeyId;
     let actual: Uint8Array;
     try {
       actual = await this._config.serializeKey(signerPublicKey);
@@ -618,7 +634,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
         ok: false,
         reason: 'unknown-signer-key',
         message:
-          'supplied public key does not match the entry.signerKeyHash field',
+          'supplied public key does not match the entry.signerKeyId field',
         index,
       };
     }
@@ -820,13 +836,13 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    * throughout the replay.
    *
    * @param entries The full chain to verify. Each entry's signer key must
-   *   be resolvable via `resolveKey(signerKeyHash)`. If `resolveKey`
+   *   be resolvable via `resolveKey(signerKeyId)`. If `resolveKey`
    *   returns `undefined`, the entry is rejected with
    *   `'unknown-signer-key'`.
    */
   async replay(
     entries: ReadonlyArray<ACLEntry<ChangesType>>,
-    resolveKey: (signerKeyHash: Uint8Array) => Promise<PublicKey | undefined>,
+    resolveKey: (signerKeyId: Uint8Array) => Promise<PublicKey | undefined>,
   ): Promise<ACLChainVerifyResult> {
     return this._runExclusive(async () => {
       // Reset internal state so callers can use replay() as a "load from
@@ -843,8 +859,8 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
         const shapeError =
           entry === null || typeof entry !== 'object'
             ? 'entry is not an object'
-            : !(entry.signerKeyHash instanceof Uint8Array)
-              ? 'signerKeyHash is not a Uint8Array'
+            : !(entry.signerKeyId instanceof Uint8Array)
+              ? 'signerKeyId is not a Uint8Array'
               : null;
         if (shapeError !== null) {
           return {
@@ -856,7 +872,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
         }
         let signerKey: PublicKey | undefined;
         try {
-          signerKey = await resolveKey(entry.signerKeyHash);
+          signerKey = await resolveKey(entry.signerKeyId);
         } catch (err) {
           return {
             ok: false,
@@ -869,7 +885,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
           return {
             ok: false,
             reason: 'unknown-signer-key',
-            message: `no public key available for signerKeyHash at entry ${i}`,
+            message: `no public key available for signerKeyId at entry ${i}`,
             index: i,
           };
         }
