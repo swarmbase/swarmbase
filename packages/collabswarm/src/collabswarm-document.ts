@@ -16,7 +16,7 @@ import {
 } from './utils';
 import { wrapStream } from './stream-adapter';
 import { CRDTProvider } from './crdt-provider';
-import { AuthProvider } from './auth-provider';
+import { AuthProvider, requireSerializePublicKey } from './auth-provider';
 import {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
@@ -52,6 +52,7 @@ import {
 import { documentTopic } from './document-topic';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
+import { keychainHistorySinceOrFull } from './keychain';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
@@ -1021,7 +1022,13 @@ export class CollabswarmDocument<
           // window. Future rotations propagate via key-update.
           return await this._keychain.currentKeyChange();
         }
-        return await this._keychain.historySince(this._invitationEpoch);
+        // `historySince` is optional on the Keychain interface for
+        // backwards compatibility; fall back to full history when the
+        // active provider has not implemented it (matches the
+        // documented "boundary unknown" recovery path).
+        return await keychainHistorySinceOrFull(this._keychain)(
+          this._invitationEpoch,
+        );
       case 'current_only':
       default:
         // Only send the current key -- most private option.
@@ -2812,9 +2819,14 @@ export class CollabswarmDocument<
     // Recipient binding: serialize the new reader's public key so
     // recipients that aren't this reader can drop the broadcast Welcome.
     // The signed payload covers this field, so only an authorized writer
-    // can claim a specific recipient.
-    welcomeMessage.welcomeRecipient =
-      await this._authProvider.serializePublicKey(reader);
+    // can claim a specific recipient. `serializePublicKey` is optional
+    // on `AuthProvider` for backwards compatibility, but Welcome
+    // onboarding cannot function without it.
+    const serializePublicKey = requireSerializePublicKey(
+      this._authProvider,
+      'BeeKEM Welcome onboarding',
+    );
+    welcomeMessage.welcomeRecipient = await serializePublicKey(reader);
 
     // Visibility-filtered keychain so the new reader can decrypt the
     // appropriate window of document history. Note: this uses
@@ -2901,12 +2913,19 @@ export class CollabswarmDocument<
       // Run the pure validation gates (extracted to
       // `beekem-welcome-handler.ts` so they can be unit-tested without
       // a full libp2p/Helia stack). On `accept` we apply the keychain
-      // merge + invitation-epoch assignment below.
+      // merge + invitation-epoch assignment below. `serializePublicKey`
+      // is required on the AuthProvider for the recipient-binding gate;
+      // we surface a clear error instead of silently dropping
+      // every Welcome for misconfigured providers.
+      const serializePublicKey = requireSerializePublicKey(
+        this._authProvider,
+        'BeeKEM Welcome onboarding',
+      );
       const decision = await evaluateBeeKEMWelcome(message, {
         documentPath: this.documentPath,
         localUserPublicKey: this._userPublicKey,
         isSigningEnabled: () => this._isSigningEnabled(),
-        serializePublicKey: (pk) => this._authProvider.serializePublicKey(pk),
+        serializePublicKey,
         isReader: (pk) => this._readers.check(pk),
         verifyWriterSignature: (raw, signature) =>
           this._verifyWriterSignature(raw, signature),
@@ -2964,11 +2983,16 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Test/inspection helper: returns the recorded invitation epoch, or
-   * `undefined` if no Welcome has been processed (e.g. founding member).
+   * Test/inspection helper: returns a copy of the recorded invitation
+   * epoch, or `undefined` if no Welcome has been processed (e.g.
+   * founding member). The returned `Uint8Array` is a defensive copy so
+   * external callers cannot mutate the document's internal state and
+   * alter subsequent `since_invited` filtering behavior.
    */
   public get invitationEpoch(): Uint8Array | undefined {
-    return this._invitationEpoch;
+    return this._invitationEpoch === undefined
+      ? undefined
+      : new Uint8Array(this._invitationEpoch);
   }
 
   /**
