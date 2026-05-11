@@ -77,6 +77,11 @@ import {
   UCANACL,
   UCANACLProvider,
 } from './ucan-acl';
+import {
+  ACLChain,
+  canonicalEntryPayload,
+  computeEntryHash,
+} from './acl-chain';
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
 import { bloomFilterUpdateV1 } from './wire-protocols';
@@ -151,6 +156,10 @@ export {
   // UCAN ACL
   UCANACL,
   UCANACLProvider,
+  // ACL chain-of-trust
+  ACLChain,
+  canonicalEntryPayload,
+  computeEntryHash,
   // Wire protocols
   bloomFilterUpdateV1,
   // Compaction
@@ -172,3 +181,12 @@ export type { UCAN, UCANCapability, UCANPayload } from './ucan';
 export type { UCANACLEntry } from './ucan-acl';
 export type { CRDTSnapshotNode } from './snapshot-node';
 export type { CompactionConfig } from './compaction-config';
+export type {
+  ACLChainConfig,
+  ACLChainOps,
+  ACLChainVerifyError,
+  ACLChainVerifyResult,
+  ACLEntry,
+  ACLState,
+  SerializePublicKey,
+} from './acl-chain';
