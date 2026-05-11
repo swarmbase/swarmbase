@@ -307,23 +307,23 @@ export class CollabswarmNode<
     // to STUN-only / host candidates and may fail to connect through
     // symmetric NATs. Operators should either provide STUN-only entries or
     // wire up an ephemeral-TURN-credential flow in their app code.
-    const strippedTurnEntries: string[] = [];
+    const strippedTurnEntries = new Set<string>();
     const browserSafeIceServers = this.config.webrtcIceServers?.map(
       ({ username, credential, ...rest }) => {
         if (username !== undefined || credential !== undefined) {
           const urlsLabel = Array.isArray(rest.urls)
             ? rest.urls.join(',')
             : rest.urls;
-          strippedTurnEntries.push(urlsLabel);
+          strippedTurnEntries.add(urlsLabel);
         }
         return rest;
       },
     );
-    if (strippedTurnEntries.length > 0) {
+    if (strippedTurnEntries.size > 0) {
       console.warn(
-        `[collabswarm] Stripped TURN credentials from clientConfig for: ${strippedTurnEntries.join(
-          '; ',
-        )}. Browsers will not authenticate against these TURN servers; ` +
+        `[collabswarm] Stripped TURN credentials from clientConfig for: ${Array.from(
+          strippedTurnEntries,
+        ).join('; ')}. Browsers will not authenticate against these TURN servers; ` +
           'supply ephemeral credentials at runtime instead of long-lived ' +
           'secrets in clientConfig.',
       );
