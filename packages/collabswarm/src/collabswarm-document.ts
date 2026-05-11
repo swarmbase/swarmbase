@@ -2433,7 +2433,9 @@ export class CollabswarmDocument<
       this._hashes,
       (c) => CID.parse(c),
       (parsedCID) => this._getBlock(parsedCID),
-      this.documentPath,
+      // Intentionally no-op onMissing: missing-after-GC is an expected outcome
+      // for the lazy-load path (audit UIs, diff viewers) and should not spam
+      // logs. Callers that want visibility can detect `undefined` themselves.
     );
   }
 
@@ -2441,6 +2443,13 @@ export class CollabswarmDocument<
    * Check whether a CID is known to this document (i.e. present in the
    * in-memory `_hashes` set). Useful for callers that want to confirm a
    * change exists before attempting a lazy load.
+   *
+   * Note: returning `true` only proves the CID has been observed (it is
+   * tracked in `_hashes` for sync-message dedup). It does NOT guarantee the
+   * underlying block is locally available -- after `gcAfterPrune` runs, the
+   * CID remains in `_hashes` even though the block has been removed from the
+   * blockstore. Callers should therefore still handle `loadChangeBlock(cid)`
+   * resolving to `undefined` (and may need to fall back to dialing peers).
    */
   public hasChange(cid: string): boolean {
     return this._hashes.has(cid);

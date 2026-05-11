@@ -311,15 +311,21 @@ describe('Snapshot tie-breaking', () => {
   });
 });
 
-describe('Lazy load decision logic', () => {
+describe('Lazy load decision logic (simplified sketch)', () => {
   /**
-   * Mirrors the decision tree inside CollabswarmDocument.loadChangeBlock().
-   * Returns either 'unknown' (CID not in hashes), 'invalid' (CID parse error
-   * thrown), 'ok' (block returned), or 'missing' (block not available).
+   * Simplified decision sketch for the lazy-load path. It is intentionally
+   * coarser than the production `loadChangeBlock` helper:
    *
-   * The `getBlock` callback can throw (simulating blockstore.get failure)
-   * or return undefined (simulating "found nothing"). Either outcome should
-   * surface as 'missing'.
+   *   - It maps ALL `getBlock` throws to 'missing' (production rethrows
+   *     non-ERR_NOT_FOUND errors so callers can distinguish decrypt /
+   *     deserialize failures from a locally-missing block).
+   *   - It also coerces an `undefined` resolution to 'missing' (production
+   *     returns whatever the fetcher resolves to).
+   *
+   * Kept around to document the high-level decision tree readably; production
+   * semantics are exercised below in "loadChangeBlock helper (real lazy-load
+   * semantics)". See `loadChangeBlock` in `./blockstore-gc.ts` and
+   * `CollabswarmDocument.loadChangeBlock` for the authoritative behavior.
    */
   async function loadChangeBlockDecision(
     hashes: Set<string>,
@@ -573,6 +579,21 @@ describe('loadChangeBlock helper (real lazy-load semantics)', () => {
     ).rejects.toThrow(/Invalid CID/);
   });
 
+  test('throws a useful message when parseCID rejects with a non-Error value', async () => {
+    // parseCID is permitted to throw any value. Verify the helper coerces
+    // non-Error throws into a useful string instead of "Invalid CID 'x': undefined".
+    await expect(
+      loadChangeBlock<string, Uint8Array>(
+        'malformed',
+        new Set(['malformed']),
+        () => {
+          throw 'string-thrown-value';
+        },
+        async () => new Uint8Array([1]),
+      ),
+    ).rejects.toThrow("Invalid CID 'malformed': string-thrown-value");
+  });
+
   test('returns the fetched payload on success', async () => {
     const payload = new Uint8Array([0xaa, 0xbb]);
     const result = await loadChangeBlock<string, Uint8Array>(
@@ -589,18 +610,18 @@ describe('loadChangeBlock helper (real lazy-load semantics)', () => {
       code: 'ERR_NOT_FOUND',
       name: 'NotFoundError',
     });
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const result = await loadChangeBlock<string, Uint8Array>(
-        REAL_CID,
-        new Set([REAL_CID]),
-        parseAsString,
-        async () => { throw notFound; },
-      );
-      expect(result).toBeUndefined();
-    } finally {
-      warnSpy.mockRestore();
-    }
+    const onMissing = jest.fn();
+    const result = await loadChangeBlock<string, Uint8Array>(
+      REAL_CID,
+      new Set([REAL_CID]),
+      parseAsString,
+      async () => { throw notFound; },
+      onMissing,
+    );
+    expect(result).toBeUndefined();
+    // onMissing callback is invoked exactly once with the same cid + error.
+    expect(onMissing).toHaveBeenCalledTimes(1);
+    expect(onMissing).toHaveBeenCalledWith(REAL_CID, notFound);
   });
 
   test('returns undefined when the fetcher throws a NotFoundError (name-only match)', async () => {
@@ -608,15 +629,31 @@ describe('loadChangeBlock helper (real lazy-load semantics)', () => {
     const notFound = Object.assign(new Error('block not found'), {
       name: 'NotFoundError',
     });
+    const result = await loadChangeBlock<string, Uint8Array>(
+      REAL_CID,
+      new Set([REAL_CID]),
+      parseAsString,
+      async () => { throw notFound; },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test('does NOT log on missing block (callers opt in via onMissing)', async () => {
+    // The helper used to console.warn on every missing block; verify that
+    // behavior is gone so probing for missing history blocks does not spam
+    // logs.
+    const notFound = Object.assign(new Error('block not found'), {
+      code: 'ERR_NOT_FOUND',
+    });
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const result = await loadChangeBlock<string, Uint8Array>(
+      await loadChangeBlock<string, Uint8Array>(
         REAL_CID,
         new Set([REAL_CID]),
         parseAsString,
         async () => { throw notFound; },
       );
-      expect(result).toBeUndefined();
+      expect(warnSpy).not.toHaveBeenCalled();
     } finally {
       warnSpy.mockRestore();
     }

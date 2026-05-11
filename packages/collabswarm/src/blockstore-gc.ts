@@ -135,15 +135,17 @@ export function isBlockNotFoundError(err: unknown): boolean {
  *                     Should throw on malformed input.
  * @param fetch        Loader that returns the decrypted+deserialized payload
  *   for a parsed CID. Typically delegates to `CollabswarmDocument._getBlock`.
- * @param logContext   Optional label used in the warn-log when the block is
- *   missing locally.
+ * @param onMissing    Optional callback invoked when the fetcher reports the
+ *   block is missing locally (ERR_NOT_FOUND). Lets callers decide how/whether
+ *   to log -- the helper itself does NOT log so it doesn't spam consumers that
+ *   routinely probe history for blocks that may have been GC'd locally.
  */
 export async function loadChangeBlock<ParsedCID, ChangesType>(
   cid: string,
   knownHashes: Set<string>,
   parseCID: (cid: string) => ParsedCID,
   fetch: (parsedCID: ParsedCID) => Promise<ChangesType>,
-  logContext?: string,
+  onMissing?: (cid: string, err: unknown) => void,
 ): Promise<ChangesType | undefined> {
   if (!knownHashes.has(cid)) {
     return undefined;
@@ -152,18 +154,19 @@ export async function loadChangeBlock<ParsedCID, ChangesType>(
   try {
     parsedCID = parseCID(cid);
   } catch (err) {
-    throw new Error(`Invalid CID '${cid}': ${(err as Error).message}`);
+    // Normalize: parseCID may throw a non-Error value, in which case
+    // `(err as Error).message` would yield `undefined`. Always produce a
+    // useful message.
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid CID '${cid}': ${msg}`);
   }
   try {
     return await fetch(parsedCID);
   } catch (err) {
     if (isBlockNotFoundError(err)) {
-      console.warn(
-        `loadChangeBlock(${cid}) missing from local blockstore${
-          logContext ? ` for ${logContext}` : ''
-        }:`,
-        err,
-      );
+      if (onMissing) {
+        onMissing(cid, err);
+      }
       return undefined;
     }
     throw err;
