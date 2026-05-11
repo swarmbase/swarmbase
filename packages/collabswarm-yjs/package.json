@@ -35,7 +35,8 @@
     "yjs": "^13.6.30"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+    "@collabswarm/collabswarm": "workspace:packages/collabswarm",
+    "uuid": "^14.0.0"
   },
   "peerDependencies": {
     "yjs": "^13.6.30"

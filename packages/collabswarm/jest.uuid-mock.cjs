@@ -6,6 +6,8 @@
 //   - `stringify(bytes)` — Uint8Array(16) -> UUID string
 const { randomUUID, randomFillSync } = require('crypto');
 
+const HEX_PAIR = /^[0-9a-fA-F]{2}$/;
+
 function v4() {
   if (typeof randomUUID === 'function') {
     return randomUUID();
@@ -27,12 +29,24 @@ function parse(uuid) {
   }
   const bytes = new Uint8Array(16);
   for (let i = 0; i < 16; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    const pair = hex.slice(i * 2, i * 2 + 2);
+    if (!HEX_PAIR.test(pair)) {
+      // Match real `uuid.parse()` semantics: refuse non-hex input rather
+      // than silently coercing NaN -> 0 via Uint8Array assignment.
+      throw new TypeError(`Invalid UUID: ${uuid}`);
+    }
+    bytes[i] = parseInt(pair, 16);
   }
   return bytes;
 }
 
 function stringify(bytes) {
+  // Mirror `uuid.stringify()`: require a 16-byte Uint8Array (or array-like
+  // with byte values) so callers fail loudly on a short/long input instead
+  // of producing a misleading partial UUID.
+  if (!bytes || typeof bytes.length !== 'number' || bytes.length < 16) {
+    throw new TypeError('Invalid UUID byte array: expected length >= 16');
+  }
   const hex = [];
   for (let i = 0; i < 16; i++) {
     hex.push(bytes[i].toString(16).padStart(2, '0'));

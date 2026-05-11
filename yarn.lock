@@ -1904,7 +1904,6 @@ __metadata:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@peculiar/webcrypto": "npm:^1.4.6"
     "@types/node": "npm:^22.7.5"
-    "@types/uuid": "npm:^10"
     eslint: "npm:^10.0.2"
     jest: "npm:^29.2.5"
     ts-jest: "npm:^29.2.5"
@@ -1988,6 +1987,7 @@ __metadata:
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
+    uuid: "npm:^14.0.0"
     yjs: "npm:^13.6.30"
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
@@ -2035,7 +2035,7 @@ __metadata:
     typedoc: "npm:^0.26.7"
     typescript: "npm:^5.9.3"
     uint8arraylist: "npm:^2.4.8"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
   languageName: unknown
   linkType: soft
 
@@ -2059,7 +2059,6 @@ __metadata:
     "@types/react-router-bootstrap": "npm:^0.26.6"
     "@types/react-router-dom": "npm:^5.3.3"
     "@types/testing-library__jest-dom": "npm:^6"
-    "@types/uuid": "npm:^10.0.0"
     bootstrap: "npm:^5.3.8"
     quill-delta: "npm:^5.1.0"
     react: "npm:^19.2.5"
@@ -6047,13 +6046,6 @@ __metadata:
   version: 0.0.6
   resolution: "@types/use-sync-external-store@npm:0.0.6"
   checksum: 10/a95ce330668501ad9b1c5b7f2b14872ad201e552a0e567787b8f1588b22c7040c7c3d80f142cbb9f92d13c4ea41c46af57a20f2af4edf27f224d352abcfe4049
-  languageName: node
-  linkType: hard
-
-"@types/uuid@npm:^10, @types/uuid@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "@types/uuid@npm:10.0.0"
-  checksum: 10/e3958f8b0fe551c86c14431f5940c3470127293280830684154b91dc7eb3514aeb79fe3216968833cf79d4d1c67f580f054b5be2cd562bebf4f728913e73e944
   languageName: node
   linkType: hard
 
