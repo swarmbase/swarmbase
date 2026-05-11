@@ -1,4 +1,4 @@
-import { CollabswarmState } from './reducers';
+import type { CollabswarmState } from './reducers';
 
 /**
  * Default selector used when the collabswarm state sits at the root of the
