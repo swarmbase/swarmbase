@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { collectTreeCIDs } from './blockstore-gc';
+import { collectTreeCIDs, filterDeletableCIDs } from './blockstore-gc';
 import {
   CRDTChangeNode,
   crdtDocumentChangeNode,
@@ -247,4 +247,87 @@ describe('blockstore GC integration with pruning', () => {
     // cid-a and cid-b are retained but their children cid-a1 and cid-b1 are pruned.
     expect(prunedCIDs).toEqual(new Set(['cid-a1', 'cid-b1']));
   });
+});
+
+describe('filterDeletableCIDs', () => {
+  type Case = {
+    name: string;
+    candidates: string[];
+    retainedRootCID: string | undefined;
+    retainedRoot: CRDTChangeNode<Changes> | undefined;
+    protectedCIDs?: string[];
+    expected: string[];
+  };
+
+  const cases: Case[] = [
+    {
+      name: 'returns all candidates when no retained tree',
+      candidates: ['cid-1', 'cid-2'],
+      retainedRootCID: undefined,
+      retainedRoot: undefined,
+      expected: ['cid-1', 'cid-2'],
+    },
+    {
+      name: 'excludes CIDs still reachable from retained tree',
+      candidates: ['cid-1', 'cid-2', 'cid-3'],
+      retainedRootCID: 'cid-root',
+      retainedRoot: docNode({
+        'cid-1': docNode(),
+      }),
+      expected: ['cid-2', 'cid-3'],
+    },
+    {
+      name: 'excludes explicitly protected CIDs (e.g. snapshot boundary)',
+      candidates: ['cid-1', 'cid-snap-boundary', 'cid-2'],
+      retainedRootCID: undefined,
+      retainedRoot: undefined,
+      protectedCIDs: ['cid-snap-boundary'],
+      expected: ['cid-1', 'cid-2'],
+    },
+    {
+      name: 'protects re-attached ACL leaves inside retained tree',
+      candidates: ['cid-doc-1', 'cid-doc-2', 'cid-acl-leaf'],
+      retainedRootCID: 'cid-root',
+      retainedRoot: docNode({
+        'cid-acl-leaf': aclNode(crdtReaderChangeNode),
+      }),
+      expected: ['cid-doc-1', 'cid-doc-2'],
+    },
+    {
+      name: 'returns empty set when all candidates are reachable or protected',
+      candidates: ['cid-1', 'cid-snap'],
+      retainedRootCID: 'cid-root',
+      retainedRoot: docNode({
+        'cid-1': docNode(),
+      }),
+      protectedCIDs: ['cid-snap'],
+      expected: [],
+    },
+    {
+      name: 'returns empty set on empty candidates iterable',
+      candidates: [],
+      retainedRootCID: 'cid-root',
+      retainedRoot: docNode({ 'cid-1': docNode() }),
+      expected: [],
+    },
+    {
+      name: 'protects the retained root CID itself',
+      candidates: ['cid-root', 'cid-other'],
+      retainedRootCID: 'cid-root',
+      retainedRoot: docNode(),
+      expected: ['cid-other'],
+    },
+  ];
+
+  for (const c of cases) {
+    test(c.name, () => {
+      const result = filterDeletableCIDs(
+        c.candidates,
+        c.retainedRootCID,
+        c.retainedRoot,
+        c.protectedCIDs ?? [],
+      );
+      expect(result).toEqual(new Set(c.expected));
+    });
+  }
 });

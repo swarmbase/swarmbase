@@ -17,12 +17,17 @@ describe('CompactionConfig', () => {
     expect(defaultCompactionConfig.keepRecentNodes).toBe(50);
   });
 
+  test('default config has gcAfterPrune disabled', () => {
+    expect(defaultCompactionConfig.gcAfterPrune).toBe(false);
+  });
+
   test('custom config overrides defaults', () => {
     const custom: CompactionConfig = {
       enabled: true,
       snapshotInterval: 100,
       minChangesBeforeSnapshot: 50,
       pruneAfterSnapshot: false,
+      gcAfterPrune: true,
       keepRecentNodes: 10,
     };
 
@@ -30,6 +35,7 @@ describe('CompactionConfig', () => {
     expect(custom.snapshotInterval).toBe(100);
     expect(custom.minChangesBeforeSnapshot).toBe(50);
     expect(custom.pruneAfterSnapshot).toBe(false);
+    expect(custom.gcAfterPrune).toBe(true);
     expect(custom.keepRecentNodes).toBe(10);
   });
 });
@@ -299,4 +305,208 @@ describe('Snapshot tie-breaking', () => {
       makeSnapshot(100, 'cid-a'),
     )).toBe(false);
   });
+});
+
+describe('Lazy load decision logic', () => {
+  /**
+   * Mirrors the decision tree inside CollabswarmDocument.loadChangeBlock().
+   * Returns either 'unknown' (CID not in hashes), 'invalid' (CID parse error
+   * thrown), 'ok' (block returned), or 'missing' (block not available).
+   *
+   * The `getBlock` callback can throw (simulating blockstore.get failure)
+   * or return undefined (simulating "found nothing"). Either outcome should
+   * surface as 'missing'.
+   */
+  async function loadChangeBlockDecision(
+    hashes: Set<string>,
+    cid: string,
+    parseCID: (c: string) => unknown,
+    getBlock: (parsed: unknown) => Promise<Uint8Array | undefined>,
+  ): Promise<'unknown' | 'invalid' | 'ok' | 'missing'> {
+    if (!hashes.has(cid)) return 'unknown';
+    let parsed: unknown;
+    try {
+      parsed = parseCID(cid);
+    } catch {
+      return 'invalid';
+    }
+    try {
+      const result = await getBlock(parsed);
+      return result === undefined ? 'missing' : 'ok';
+    } catch {
+      return 'missing';
+    }
+  }
+
+  const validParse = (c: string) => ({ cid: c });
+  const okGet = async () => new Uint8Array([1, 2, 3]);
+  const throwGet = async () => { throw new Error('blockstore.get failed'); };
+  const undefGet = async () => undefined;
+
+  type Case = {
+    name: string;
+    hashes: string[];
+    cid: string;
+    parseCID: (c: string) => unknown;
+    getBlock: (parsed: unknown) => Promise<Uint8Array | undefined>;
+    expected: 'unknown' | 'invalid' | 'ok' | 'missing';
+  };
+
+  const cases: Case[] = [
+    {
+      name: 'unknown CID is rejected without touching blockstore',
+      hashes: ['cid-1'],
+      cid: 'cid-2',
+      parseCID: validParse,
+      getBlock: okGet,
+      expected: 'unknown',
+    },
+    {
+      name: 'known CID with successful blockstore.get returns ok',
+      hashes: ['cid-1'],
+      cid: 'cid-1',
+      parseCID: validParse,
+      getBlock: okGet,
+      expected: 'ok',
+    },
+    {
+      name: 'known CID with throwing blockstore.get returns missing',
+      hashes: ['cid-1'],
+      cid: 'cid-1',
+      parseCID: validParse,
+      getBlock: throwGet,
+      expected: 'missing',
+    },
+    {
+      name: 'known CID with undefined blockstore.get result returns missing',
+      hashes: ['cid-1'],
+      cid: 'cid-1',
+      parseCID: validParse,
+      getBlock: undefGet,
+      expected: 'missing',
+    },
+    {
+      name: 'malformed CID throws invalid',
+      hashes: ['cid-bad'],
+      cid: 'cid-bad',
+      parseCID: () => { throw new Error('parse error'); },
+      getBlock: okGet,
+      expected: 'invalid',
+    },
+    {
+      name: 'empty hashes set always reports unknown',
+      hashes: [],
+      cid: 'cid-1',
+      parseCID: validParse,
+      getBlock: okGet,
+      expected: 'unknown',
+    },
+  ];
+
+  for (const c of cases) {
+    test(c.name, async () => {
+      const result = await loadChangeBlockDecision(
+        new Set(c.hashes),
+        c.cid,
+        c.parseCID,
+        c.getBlock,
+      );
+      expect(result).toBe(c.expected);
+    });
+  }
+
+  test('blockstore is not touched when CID is unknown', async () => {
+    let getBlockCalls = 0;
+    const spyGet = async () => {
+      getBlockCalls++;
+      return new Uint8Array([1]);
+    };
+    const result = await loadChangeBlockDecision(
+      new Set(['cid-1']),
+      'cid-unknown',
+      validParse,
+      spyGet,
+    );
+    expect(result).toBe('unknown');
+    expect(getBlockCalls).toBe(0);
+  });
+});
+
+describe('GC gating logic', () => {
+  /**
+   * Mirrors the boolean expression in CollabswarmDocument.snapshot() that
+   * decides whether to invoke `_gcPrunedBlocks` after a snapshot is created.
+   */
+  function shouldGC(
+    pruneAfterSnapshot: boolean,
+    gcAfterPrune: boolean,
+    prunedCount: number,
+    haveSyncTree: boolean,
+  ): boolean {
+    if (!pruneAfterSnapshot) return false;
+    if (!gcAfterPrune) return false;
+    if (prunedCount === 0) return false;
+    if (!haveSyncTree) return false;
+    return true;
+  }
+
+  type Case = {
+    name: string;
+    pruneAfterSnapshot: boolean;
+    gcAfterPrune: boolean;
+    prunedCount: number;
+    haveSyncTree: boolean;
+    expected: boolean;
+  };
+
+  const cases: Case[] = [
+    {
+      name: 'GC runs when all gates are open',
+      pruneAfterSnapshot: true,
+      gcAfterPrune: true,
+      prunedCount: 5,
+      haveSyncTree: true,
+      expected: true,
+    },
+    {
+      name: 'GC skipped when pruneAfterSnapshot is false',
+      pruneAfterSnapshot: false,
+      gcAfterPrune: true,
+      prunedCount: 5,
+      haveSyncTree: true,
+      expected: false,
+    },
+    {
+      name: 'GC skipped when gcAfterPrune is false (default)',
+      pruneAfterSnapshot: true,
+      gcAfterPrune: false,
+      prunedCount: 5,
+      haveSyncTree: true,
+      expected: false,
+    },
+    {
+      name: 'GC skipped when nothing was pruned',
+      pruneAfterSnapshot: true,
+      gcAfterPrune: true,
+      prunedCount: 0,
+      haveSyncTree: true,
+      expected: false,
+    },
+    {
+      name: 'GC skipped when no sync tree exists',
+      pruneAfterSnapshot: true,
+      gcAfterPrune: true,
+      prunedCount: 5,
+      haveSyncTree: false,
+      expected: false,
+    },
+  ];
+
+  for (const c of cases) {
+    test(c.name, () => {
+      expect(
+        shouldGC(c.pruneAfterSnapshot, c.gcAfterPrune, c.prunedCount, c.haveSyncTree),
+      ).toBe(c.expected);
+    });
+  }
 });
