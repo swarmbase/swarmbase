@@ -565,6 +565,29 @@ describe('YjsJSONSerializer', () => {
     expect(deserialized.welcomeEpochId).toBeUndefined();
   });
 
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeRecipient', () => {
+    const serializer = new YjsJSONSerializer();
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeRecipient: 'recipient-serialized-pubkey-base64',
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.welcomeRecipient).toBe(
+      'recipient-serialized-pubkey-base64',
+    );
+  });
+
+  test('deserializeSyncMessage omits welcomeRecipient when absent on wire', () => {
+    const serializer = new YjsJSONSerializer();
+    const message = {
+      documentId: 'no-welcome-doc',
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.welcomeRecipient).toBeUndefined();
+  });
+
   test('serializeChangeBlock/deserializeChangeBlock round-trip with keyID', () => {
     const serializer = new YjsJSONSerializer();
     const block = {

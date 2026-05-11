@@ -54,6 +54,20 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   welcomeEpochId?: Uint8Array;
 
   /**
+   * Optional recipient binding for BeeKEM Welcome messages. The inviter
+   * cannot identify the new reader's libp2p connection directly, so
+   * Welcomes are broadcast to all peers; without a binding, any connected
+   * non-member would learn the document key by processing a writer-signed
+   * Welcome. This field is the serialized public key of the intended
+   * recipient (same encoding as the readers ACL). The receiver MUST drop
+   * a Welcome whose `welcomeRecipient` does not match its own local user
+   * public key. The field is included in the signed payload, so a
+   * legitimate writer attests to the recipient. JSON-safe (a string)
+   * because the serialized public key is already a string.
+   */
+  welcomeRecipient?: string;
+
+  /**
    * Signature of the sync message.
    */
   signature?: string;

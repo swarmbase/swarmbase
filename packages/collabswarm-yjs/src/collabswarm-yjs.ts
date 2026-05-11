@@ -90,6 +90,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         welcomeEpochId:
           message.welcomeEpochId &&
           Base64.fromUint8Array(message.welcomeEpochId),
+        // `welcomeRecipient` is already a string (the serialized recipient
+        // public key); pass through verbatim.
+        welcomeRecipient: message.welcomeRecipient,
         snapshot: snapshotForWire,
       }),
     );
@@ -113,6 +116,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changes?: unknown;
       keychainChanges?: unknown;
       welcomeEpochId?: unknown;
+      welcomeRecipient?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -190,6 +194,17 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       welcomeEpochId = Base64.toUint8Array(raw.welcomeEpochId);
     }
+    let welcomeRecipient: string | undefined;
+    if (raw.welcomeRecipient !== undefined) {
+      if (typeof raw.welcomeRecipient !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeRecipient' must be a string when present (got ${describeValue(
+            raw.welcomeRecipient,
+          )})`,
+        );
+      }
+      welcomeRecipient = raw.welcomeRecipient;
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -211,6 +226,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     }
     if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
     if (welcomeEpochId !== undefined) result.welcomeEpochId = welcomeEpochId;
+    if (welcomeRecipient !== undefined) result.welcomeRecipient = welcomeRecipient;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }

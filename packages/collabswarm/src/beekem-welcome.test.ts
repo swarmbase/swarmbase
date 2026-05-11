@@ -90,16 +90,55 @@ function keychainChangesForVisibility(
 }
 
 /**
+ * Mirrors `CollabswarmDocument._keychainChangesForWelcome`. Visibility is
+ * evaluated from the **recipient's** perspective: under `since_invited`
+ * the recipient's invitation epoch is the welcome's current key, so the
+ * Welcome should carry only the current key.
+ *
+ * If you change the Welcome visibility semantics in the production code,
+ * mirror the change here.
+ */
+function keychainChangesForWelcome(
+  kc: InMemoryKeychain,
+  visibility: Visibility,
+): { id: string; key: string }[] {
+  switch (visibility) {
+    case 'full_history':
+      return kc.history();
+    case 'since_invited':
+    case 'current_only':
+    default:
+      return kc.currentKeyChange();
+  }
+}
+
+/**
  * Mirrors the receive-side state mutations from
  * `CollabswarmDocument.handleBeeKEMWelcomeRequestData`:
+ *  - drop if `welcomeEpochId` is missing
+ *  - drop if `welcomeRecipient` is missing or does not match the local
+ *    serialized public key
  *  - merge keychain changes from the welcome
  *  - record `welcomeEpochId` as `_invitationEpoch`
+ *
+ * The signature and readers-ACL checks are not modeled here (they
+ * require crypto primitives); they are exercised end-to-end against
+ * `CollabswarmDocument`.
  */
 function applyWelcomeStateChanges(
-  state: { invitationEpoch: Uint8Array | undefined; keychain: InMemoryKeychain },
+  state: {
+    invitationEpoch: Uint8Array | undefined;
+    keychain: InMemoryKeychain;
+    /** Serialized form of the local user's public key. */
+    localSerializedKey?: string;
+  },
   message: CRDTSyncMessage<{ id: string; key: string }[], unknown>,
 ): void {
   if (!message.welcomeEpochId) return;
+  if (state.localSerializedKey !== undefined) {
+    if (!message.welcomeRecipient) return;
+    if (message.welcomeRecipient !== state.localSerializedKey) return;
+  }
   if (message.keychainChanges) state.keychain.merge(message.keychainChanges);
   state.invitationEpoch = message.welcomeEpochId;
 }
@@ -131,6 +170,76 @@ describe('BeeKEM Welcome receive flow (Issue #178)', () => {
     // decrypt the current state.
     expect(receiver.keychain.history()).toHaveLength(1);
     expect(receiver.keychain.history()[0].id).toBe(InMemoryKeychain.toHex(id2));
+  });
+
+  test('handler drops Welcomes addressed to a different recipient', () => {
+    const senderKc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    senderKc.add(id1, 'k1');
+
+    const welcomeMessage: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id1,
+      welcomeRecipient: 'someone-elses-pubkey',
+      keychainChanges: senderKc.history(),
+    };
+
+    const receiver = {
+      invitationEpoch: undefined as Uint8Array | undefined,
+      keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
+    };
+    applyWelcomeStateChanges(receiver, welcomeMessage);
+
+    // Welcome was for someone else -- our state is untouched.
+    expect(receiver.invitationEpoch).toBeUndefined();
+    expect(receiver.keychain.history()).toHaveLength(0);
+  });
+
+  test('handler drops Welcomes with no welcomeRecipient when binding is required', () => {
+    const senderKc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    senderKc.add(id1, 'k1');
+
+    const malformed: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id1,
+      // welcomeRecipient omitted
+      keychainChanges: senderKc.history(),
+    };
+
+    const receiver = {
+      invitationEpoch: undefined as Uint8Array | undefined,
+      keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
+    };
+    applyWelcomeStateChanges(receiver, malformed);
+
+    expect(receiver.invitationEpoch).toBeUndefined();
+    expect(receiver.keychain.history()).toHaveLength(0);
+  });
+
+  test('handler accepts Welcomes whose welcomeRecipient matches the local key', () => {
+    const senderKc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    senderKc.add(id1, 'k1');
+
+    const welcomeMessage: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id1,
+      welcomeRecipient: 'my-pubkey',
+      keychainChanges: senderKc.history(),
+    };
+
+    const receiver = {
+      invitationEpoch: undefined as Uint8Array | undefined,
+      keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
+    };
+    applyWelcomeStateChanges(receiver, welcomeMessage);
+
+    expect(Array.from(receiver.invitationEpoch!)).toEqual(Array.from(id1));
+    expect(receiver.keychain.history()).toHaveLength(1);
   });
 
   test('handler drops Welcomes without a welcomeEpochId', () => {
@@ -210,6 +319,43 @@ describe('Epoch-based keychain visibility filtering (Issue #179)', () => {
     const slice = keychainChangesForVisibility(kc, 'current_only', undefined);
     expect(slice).toHaveLength(1);
     expect(slice[0].key).toBe('k2');
+  });
+});
+
+describe('Welcome-side keychain filtering (recipient perspective)', () => {
+  // Regression: under `since_invited`, the inviter's own
+  // `_invitationEpoch` was being used to filter the keychain in the
+  // Welcome, which leaks the inviter's post-invite slice to a newly-
+  // added reader whose invitation epoch is the *current* key. The
+  // recipient-perspective filter should send only the current key.
+  test('since_invited sends only the current key (not the inviter slice)', () => {
+    const kc = new InMemoryKeychain();
+    const epochs = [1, 2, 3, 4].map((i) => new Uint8Array(32).fill(i));
+    for (let i = 0; i < epochs.length; i++) {
+      kc.add(epochs[i], `k${i + 1}`);
+    }
+
+    const slice = keychainChangesForWelcome(kc, 'since_invited');
+    expect(slice).toHaveLength(1);
+    expect(slice[0].key).toBe('k4');
+  });
+
+  test('current_only sends only the current key', () => {
+    const kc = new InMemoryKeychain();
+    kc.add(new Uint8Array(32).fill(1), 'k1');
+    kc.add(new Uint8Array(32).fill(2), 'k2');
+    const slice = keychainChangesForWelcome(kc, 'current_only');
+    expect(slice).toHaveLength(1);
+    expect(slice[0].key).toBe('k2');
+  });
+
+  test('full_history sends the full keychain', () => {
+    const kc = new InMemoryKeychain();
+    kc.add(new Uint8Array(32).fill(1), 'k1');
+    kc.add(new Uint8Array(32).fill(2), 'k2');
+    kc.add(new Uint8Array(32).fill(3), 'k3');
+    const slice = keychainChangesForWelcome(kc, 'full_history');
+    expect(slice).toHaveLength(3);
   });
 });
 

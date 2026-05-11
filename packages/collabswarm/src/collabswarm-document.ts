@@ -1021,6 +1021,38 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Returns the keychain changes to include in a BeeKEM Welcome to a
+   * newly-added reader.
+   *
+   * The visibility computation here is from the **recipient's**
+   * perspective, not the inviter's:
+   *
+   * - `current_only`: send only the current key. Identical to the load
+   *   response path.
+   * - `since_invited`: send only the current key. From the recipient's
+   *   perspective, "since I was invited" is the current epoch
+   *   (`welcomeEpochId`) onward, so the Welcome itself should carry
+   *   exactly the current key (subsequent rotations arrive via the
+   *   key-update protocol). Using `_keychainChangesForVisibility()` here
+   *   would instead leak the *inviter's* post-invite slice (or, for
+   *   founders, the full history), violating the recipient's intended
+   *   join boundary.
+   * - `full_history`: send the full keychain so the recipient can audit
+   *   or replay all prior blocks (matches the inviter-side visibility
+   *   semantics).
+   */
+  private async _keychainChangesForWelcome(): Promise<ChangesType> {
+    switch (this._historyVisibility) {
+      case 'full_history':
+        return this._keychain.history();
+      case 'since_invited':
+      case 'current_only':
+      default:
+        return await this._keychain.currentKeyChange();
+    }
+  }
+
+  /**
    * Check if automatic compaction should be triggered based on the config.
    */
   private async _maybeCompact() {
@@ -2718,19 +2750,25 @@ export class CollabswarmDocument<
    * - `welcomeEpochId`: the current keychain key ID, which the recipient
    *   records as their `_invitationEpoch` for later `since_invited` history
    *   filtering.
+   * - `welcomeRecipient`: serialized public key of the intended recipient.
+   *   The inviter cannot identify which connected peer is the new reader,
+   *   so Welcomes are broadcast to every peer; the recipient binding
+   *   ensures any non-target peer drops the Welcome rather than installing
+   *   the document key. The binding is covered by the writer signature, so
+   *   a non-writer cannot redirect a Welcome to a different recipient.
    * - `keychainChanges`: keychain CRDT changes filtered per the document's
-   *   `historyVisibility` so the recipient can decrypt the current (and,
-   *   per visibility, prior) document state.
+   *   `historyVisibility` **from the recipient's perspective** (see
+   *   `_keychainChangesForWelcome()`) so the recipient can decrypt
+   *   the current state (and, under `full_history`, prior state).
    * - `signature`: writer signature over the message so the receiver can
    *   confirm a legitimate writer is the inviter (and ignore forgeries).
    *
-   * The payload is encrypted with the current document key. The new reader
-   * receives that key inside the welcome's keychainChanges, so the receiver
-   * decrypts the welcome by applying its keychain delta first, then
-   * decrypting via the recovered key. This is implemented here in two
-   * stages: keychain changes are sent unencrypted (the protocol exchange
-   * itself rides libp2p's secure transport) so a fresh reader with no
-   * prior key can still onboard.
+   * Confidentiality note: the Welcome payload itself is **not** encrypted
+   * at the application layer. The exchange rides libp2p's secure
+   * transport (Noise/TLS), so on-wire confidentiality is provided by the
+   * transport. The new reader cannot decrypt application-layer ciphertext
+   * before installing the keychain delta the Welcome carries, which would
+   * otherwise create a chicken-and-egg bootstrap problem.
    *
    * Wire format (mirrors `documentKeyUpdateV2`):
    *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
@@ -2749,9 +2787,21 @@ export class CollabswarmDocument<
     const [currentKeyID] = await this._keychain.current();
     welcomeMessage.welcomeEpochId = currentKeyID;
 
+    // Recipient binding: serialize the new reader's public key so
+    // recipients that aren't this reader can drop the broadcast Welcome.
+    // The signed payload covers this field, so only an authorized writer
+    // can claim a specific recipient.
+    welcomeMessage.welcomeRecipient =
+      await this._authProvider.serializePublicKey(reader);
+
     // Visibility-filtered keychain so the new reader can decrypt the
-    // appropriate window of document history.
-    welcomeMessage.keychainChanges = await this._keychainChangesForVisibility();
+    // appropriate window of document history. Note: this uses
+    // `_keychainChangesForWelcome()` (recipient's perspective), NOT
+    // `_keychainChangesForVisibility()` (sender's perspective) -- the
+    // latter would, in `since_invited` mode, leak the inviter's
+    // post-invite slice (or, for founders, the full history) to a
+    // reader whose invitation epoch starts at this moment.
+    welcomeMessage.keychainChanges = await this._keychainChangesForWelcome();
 
     // Sign so the receiver can verify the inviter is an authorized writer.
     welcomeMessage.signature = await this._signAsWriter(welcomeMessage);
@@ -2804,12 +2854,6 @@ export class CollabswarmDocument<
         failedPeers,
       );
     }
-
-    // Mark `reader` as parameter-used (no behavioral use beyond logging --
-    // recipients self-identify against the local readers ACL when handling
-    // the Welcome, so the inviter does not need to know which connection
-    // belongs to the invitee).
-    void reader;
   }
 
   /**
@@ -2852,9 +2896,50 @@ export class CollabswarmDocument<
         return;
       }
 
+      // Recipient binding check: Welcomes are broadcast to all connected
+      // peers because the inviter cannot tell which peer is the new
+      // reader from the connection alone. Without this check, any
+      // connected non-member who receives a writer-signed Welcome would
+      // install the document key and start decrypting traffic.
+      //
+      // Drop if the recipient binding is missing or does not match this
+      // node's serialized public key. The binding is covered by the
+      // writer signature (verified below), so a non-writer cannot forge
+      // a recipient claim.
+      if (!message.welcomeRecipient) {
+        console.warn(
+          `Received BeeKEM Welcome for ${this.documentPath} without welcomeRecipient; dropping`,
+        );
+        return;
+      }
+      const localSerializedKey =
+        await this._authProvider.serializePublicKey(this._userPublicKey);
+      if (message.welcomeRecipient !== localSerializedKey) {
+        // Not addressed to us. Not necessarily an attack -- a legitimate
+        // Welcome to another peer flows past our connection too.
+        return;
+      }
+
+      // Defense in depth: the local user must already be in the readers
+      // ACL by the time the Welcome arrives (the inviter sends the ACL
+      // add ahead of the Welcome). If we are *not* a reader, we should
+      // not install the key -- this catches a misordered or replayed
+      // Welcome where we have not been added (or have been removed
+      // since).
+      if (!(await this._readers.check(this._userPublicKey))) {
+        console.warn(
+          `Received BeeKEM Welcome for ${this.documentPath} addressed to us, ` +
+            `but the local user is not in the readers ACL; dropping`,
+        );
+        return;
+      }
+
       // Verify the writer signature, when signing is on. The Welcome's
       // signing convention matches `_signAsWriter`: signature is computed
       // over the serialized message with the `signature` field stripped.
+      // Because the recipient binding (`welcomeRecipient`) is included in
+      // the signed payload, only an authorized writer can claim a
+      // particular recipient.
       if (this._isSigningEnabled()) {
         if (!message.signature) {
           console.warn(
