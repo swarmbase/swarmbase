@@ -526,6 +526,37 @@ describe('AutomergeJSONSerializer', () => {
     );
   });
 
+  // Regression: a truthy guard (`if (raw.snapshot)`) silently dropped
+  // defined-but-falsy snapshot values rather than rejecting the malformed
+  // payload. The fix routes any non-`undefined` value through the validator
+  // so peers can't bypass it by sending `snapshot: null/0/""`.
+  test('deserializeSyncMessage rejects "snapshot: null" (validation bypass regression)', () => {
+    const wire = buildWire({ documentId: 'doc', snapshot: null });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "snapshot: 0"', () => {
+    const wire = buildWire({ documentId: 'doc', snapshot: 0 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "snapshot: \\"\\"" (empty string)', () => {
+    const wire = buildWire({ documentId: 'doc', snapshot: '' });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got string/,
+    );
+  });
+
+  test('deserializeSyncMessage accepts omitted "snapshot" field', () => {
+    const wire = buildWire({ documentId: 'doc' });
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.snapshot).toBeUndefined();
+  });
+
   // Regression: prior to building the returned object explicitly, the
   // deserializer spread `...raw` straight onto the result. A malicious peer
   // could append junk keys (or attempt prototype-pollution-style keys) and

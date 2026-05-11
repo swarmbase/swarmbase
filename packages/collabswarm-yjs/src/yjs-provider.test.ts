@@ -587,6 +587,41 @@ describe('YjsJSONSerializer', () => {
     );
   });
 
+  // Regression: a truthy guard (`if (raw.snapshot)`) silently dropped
+  // defined-but-falsy snapshot values rather than rejecting the malformed
+  // payload. The fix routes any non-`undefined` value through the validator
+  // so peers can't bypass it by sending `snapshot: null/0/""`.
+  test('deserializeSyncMessage rejects "snapshot: null" (validation bypass regression)', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', snapshot: null });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "snapshot: 0"', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', snapshot: 0 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "snapshot: \\"\\"" (empty string)', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', snapshot: '' });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got string/,
+    );
+  });
+
+  test('deserializeSyncMessage accepts omitted "snapshot" field', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc' });
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.snapshot).toBeUndefined();
+  });
+
   // Regression: prior to the upfront object guard, top-level non-object
   // payloads (null/array/primitive) threw a bare `TypeError: Cannot read
   // properties of null` instead of a descriptive error. Mirrors the

@@ -506,14 +506,27 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       );
     }
     let snapshot: any;
-    if (raw.snapshot) {
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.snapshot && ...` would let a malformed peer message bypass the
+    // object/array shape check by sending e.g. `snapshot: null`, with the
+    // falsy value flowing through and silently being dropped.
+    if (raw.snapshot !== undefined) {
       // `raw.snapshot` is untrusted; reject anything that isn't a plain object
-      // before spreading it (a peer-supplied array or primitive would otherwise
-      // be silently coerced via spread).
-      if (typeof raw.snapshot !== 'object' || Array.isArray(raw.snapshot)) {
+      // before spreading it (a peer-supplied array, null, or primitive would
+      // otherwise be silently coerced via spread or dropped on the floor).
+      if (
+        raw.snapshot === null ||
+        typeof raw.snapshot !== 'object' ||
+        Array.isArray(raw.snapshot)
+      ) {
         throw new Error(
           `Invalid sync message: 'snapshot' must be an object when present (got ${
-            Array.isArray(raw.snapshot) ? 'array' : typeof raw.snapshot
+            raw.snapshot === null
+              ? 'null'
+              : Array.isArray(raw.snapshot)
+                ? 'array'
+                : typeof raw.snapshot
           })`,
         );
       }

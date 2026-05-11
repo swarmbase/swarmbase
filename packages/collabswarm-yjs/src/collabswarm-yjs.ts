@@ -137,12 +137,25 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       );
     }
     // Decode snapshot base64 fields back to Uint8Array.
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.snapshot && ...` would let a malformed peer message bypass the
+    // object/array shape check by sending e.g. `snapshot: null`, with the
+    // falsy value flowing through and silently being dropped.
     let snapshot: any;
-    if (raw.snapshot) {
-      if (typeof raw.snapshot !== 'object' || Array.isArray(raw.snapshot)) {
+    if (raw.snapshot !== undefined) {
+      if (
+        raw.snapshot === null ||
+        typeof raw.snapshot !== 'object' ||
+        Array.isArray(raw.snapshot)
+      ) {
         throw new Error(
           `Invalid sync message: 'snapshot' must be an object when present (got ${
-            Array.isArray(raw.snapshot) ? 'array' : typeof raw.snapshot
+            raw.snapshot === null
+              ? 'null'
+              : Array.isArray(raw.snapshot)
+                ? 'array'
+                : typeof raw.snapshot
           })`,
         );
       }
