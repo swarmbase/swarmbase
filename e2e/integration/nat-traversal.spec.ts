@@ -15,95 +15,16 @@
  * test-app-a and test-app-c are on the same network (same "LAN").
  * All traffic between nat-a and nat-b must route through the relay.
  */
-import { test, expect, type Browser, type Page, type ConsoleMessage } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import {
+  initPage,
+  waitForMesh,
+  waitForPeerConnection,
+} from './helpers/nat-helpers';
 
 const APP_A_URL = 'http://localhost:3001';
 const APP_B_URL = 'http://localhost:3002';
 const APP_C_URL = 'http://localhost:3003';
-
-function trackConsole(page: Page) {
-  const messages: string[] = [];
-  page.on('console', (msg) => messages.push(msg.text()));
-
-  return {
-    messages,
-    waitFor(prefix: string, timeout = 60_000): Promise<string> {
-      const existing = messages.find(m => m.startsWith(prefix));
-      if (existing) return Promise.resolve(existing);
-
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          page.off('console', handler);
-          reject(new Error(
-            `Timeout (${timeout}ms) waiting for console: "${prefix}"\n` +
-            `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
-          ));
-        }, timeout);
-        const handler = (msg: ConsoleMessage) => {
-          if (msg.text().startsWith(prefix)) {
-            clearTimeout(timer);
-            page.off('console', handler);
-            resolve(msg.text());
-          }
-        };
-        page.on('console', handler);
-      });
-    },
-    /** Wait for at least `count` messages with the given prefix. */
-    waitForCount(prefix: string, count: number, timeout = 60_000): Promise<string[]> {
-      const matched = () => messages.filter(m => m.startsWith(prefix));
-      if (matched().length >= count) return Promise.resolve(matched().slice(0, count));
-
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          page.off('console', handler);
-          const found = matched();
-          reject(new Error(
-            `Timeout (${timeout}ms) waiting for ${count} "${prefix}" messages (got ${found.length})\n` +
-            `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
-          ));
-        }, timeout);
-        const handler = (msg: ConsoleMessage) => {
-          const found = matched();
-          if (found.length >= count) {
-            clearTimeout(timer);
-            page.off('console', handler);
-            resolve(found.slice(0, count));
-          }
-        };
-        page.on('console', handler);
-      });
-    },
-  };
-}
-
-async function initPage(browser: Browser, url: string) {
-  const context = await browser.newContext();
-  try {
-    const page = await context.newPage();
-    const track = trackConsole(page);
-    await page.goto(url);
-    await track.waitFor('INIT_COMPLETE');
-    const peerIdMsg = await track.waitFor('PEER_ID:');
-    const peerId = peerIdMsg.replace('PEER_ID:', '').trim();
-    return { page, track, context, peerId };
-  } catch (err) {
-    await context.close();
-    throw err;
-  }
-}
-
-/**
- * Wait for at least 1 PEER_CONNECTED message.
- * In CI's Docker environment only one connection event fires reliably.
- */
-async function waitForPeerConnection(track: ReturnType<typeof trackConsole>, timeout = 90_000) {
-  await track.waitFor('PEER_CONNECTED:', timeout);
-}
-
-async function waitForMesh(page: Page, ms = 10_000) {
-  await page.waitForTimeout(ms);
-}
 
 test.describe('Cross-NAT Document Sync', () => {
   test.setTimeout(180_000);

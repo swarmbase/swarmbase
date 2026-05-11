@@ -21,96 +21,23 @@
  * libp2p's discovery cadence. We use generous timeouts and, where useful,
  * a minimum-success-rate threshold instead of strict equality so the suite
  * stays meaningful without becoming noise.
+ *
+ * Shared helpers (`initPage`, `trackConsole`, etc.) live in
+ * `./helpers/nat-helpers.ts` and are also used by `nat-traversal.spec.ts`.
  */
 import { execSync } from 'node:child_process';
-import { test, expect, type Browser, type Page, type BrowserContext, type ConsoleMessage } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import {
+  initPage,
+  rebindTracker,
+  waitForMesh,
+  waitForPeerConnection,
+} from './helpers/nat-helpers';
 
 const APP_A_URL = 'http://localhost:3001';
 const APP_B_URL = 'http://localhost:3002';
 
 const COMPOSE_FILE = 'docker-compose.nat-test.yaml';
-
-/** Track console messages from a page; supports awaiting on prefixes. */
-function trackConsole(page: Page) {
-  const messages: string[] = [];
-  const collector = (msg: ConsoleMessage) => messages.push(msg.text());
-  page.on('console', collector);
-
-  return {
-    messages,
-    has(prefix: string): boolean {
-      return messages.some(m => m.startsWith(prefix));
-    },
-    waitFor(prefix: string, timeout = 60_000): Promise<string> {
-      const existing = messages.find(m => m.startsWith(prefix));
-      if (existing) return Promise.resolve(existing);
-
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          page.off('console', handler);
-          reject(new Error(
-            `Timeout (${timeout}ms) waiting for console: "${prefix}"\n` +
-            `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
-          ));
-        }, timeout);
-        const handler = (msg: ConsoleMessage) => {
-          if (msg.text().startsWith(prefix)) {
-            clearTimeout(timer);
-            page.off('console', handler);
-            resolve(msg.text());
-          }
-        };
-        page.on('console', handler);
-      });
-    },
-    /** Detach the console listener and clear the buffer. Safe to call more than once. */
-    dispose() {
-      page.off('console', collector);
-      messages.length = 0;
-    },
-  };
-}
-
-interface PageHandle {
-  page: Page;
-  track: ReturnType<typeof trackConsole>;
-  context: BrowserContext;
-  peerId: string;
-}
-
-async function initPage(browser: Browser, url: string): Promise<PageHandle> {
-  const context = await browser.newContext();
-  try {
-    const page = await context.newPage();
-    const track = trackConsole(page);
-    await page.goto(url);
-    await track.waitFor('INIT_COMPLETE', 90_000);
-    const peerIdMsg = await track.waitFor('PEER_ID:', 5_000);
-    const peerId = peerIdMsg.replace('PEER_ID:', '').trim();
-    return { page, track, context, peerId };
-  } catch (err) {
-    await context.close();
-    throw err;
-  }
-}
-
-/**
- * Replace the in-page console tracker after a reload. Disposes the previous
- * tracker (removes its `page.on('console', ...)` listener and clears its
- * buffer) so listeners don't accumulate across multiple reloads.
- */
-function rebindTracker(handle: PageHandle): PageHandle {
-  handle.track.dispose();
-  return { ...handle, track: trackConsole(handle.page) };
-}
-
-async function waitForPeerConnection(track: ReturnType<typeof trackConsole>, timeout = 90_000) {
-  await track.waitFor('PEER_CONNECTED:', timeout);
-}
-
-async function waitForMesh(page: Page, ms = 10_000) {
-  await page.waitForTimeout(ms);
-}
 
 /**
  * Run a docker compose subcommand against the NAT-test compose file.
@@ -204,7 +131,13 @@ test.describe('NAT Relay Failure Recovery', () => {
   // in via their entrypoint script. We therefore restart relay + both
   // test-app containers and reload browser pages so they pick up the new
   // relay info. The end-state assertion is that cross-NAT sync resumes.
-  test.skip(!!process.env.CI && !process.env.RUN_NAT_RESTART, 'Relay restart cycle is too slow / flaky for default CI runs (set RUN_NAT_RESTART=1 to enable)');
+  //
+  // Opt-in only when `RUN_NAT_RESTART=1` is explicitly set, so values like
+  // "0" or "false" don't accidentally enable this slow/flaky scenario.
+  test.skip(
+    !!process.env.CI && process.env.RUN_NAT_RESTART !== '1',
+    'Relay restart cycle is too slow / flaky for default CI runs (set RUN_NAT_RESTART=1 to enable)',
+  );
 
   test('cross-NAT sync resumes after relay container restart', async ({ browser }) => {
     let a = await initPage(browser, APP_A_URL);
