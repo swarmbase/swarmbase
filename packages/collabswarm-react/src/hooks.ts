@@ -94,7 +94,6 @@ export function useCollabswarm<
 
   useEffect(() => {
     (async () => {
-      console.log(`Calling useCollabswarm(...) init effect`);
       if (privateKey && publicKey) {
         const collabswarm = new Collabswarm(
           privateKey,

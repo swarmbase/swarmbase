@@ -136,3 +136,6 @@ client-config.env
 dist-bench/
 paper/results/
 
+# macOS metadata
+.DS_Store
+
