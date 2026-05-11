@@ -1177,6 +1177,57 @@ describe('oversized change rejection', () => {
     }
   });
 
+  test('Uint8Array change is rejected before serializeChange is even called', async () => {
+    // Thread A (Copilot follow-up): when `entry.change` is itself a
+    // `Uint8Array` (the common case for byte-oriented CRDTs like Yjs),
+    // the chain must size-gate it *before* `_serializeChange` runs --
+    // otherwise the (potentially identity) serializer has already
+    // allocated/copied a multi-megabyte buffer by the time the
+    // post-serialize check fires.
+    const OVERSIZED = (1 << 20) + 1; // MAX_CHANGE_BYTES + 1
+    let calls = 0;
+    const spy = (c: Uint8Array): Uint8Array => {
+      calls += 1;
+      return c;
+    };
+    const chain = new ACLChain<Uint8Array, CryptoKey, CryptoKey>(
+      {
+        auth,
+        serializeKey: serializePublicKey,
+        // The chain is generic in `ChangesType` and the chain ops only
+        // touch `applyChange`/`isWriter`; we never feed an oversized
+        // entry past the size gate so the ops are not exercised here.
+        ops: {
+          emptyState: () => new TestAclState() as unknown as ACLState<Uint8Array, CryptoKey>,
+          applyChange: async (s) => s,
+          isWriter: async () => true,
+        } as ACLChainOps<Uint8Array, CryptoKey>,
+        genesisAuthorizedKeys: [alice.publicKey],
+      },
+      spy,
+    );
+
+    const entry: ACLEntry<Uint8Array> = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      // The Uint8Array is itself oversized; the pre-serialize gate must
+      // reject this before `spy` is ever invoked.
+      change: new Uint8Array(OVERSIZED),
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    };
+
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/change exceeds maximum size/);
+    }
+    // The pre-serialize gate fired -- `_serializeChange` was never called.
+    expect(calls).toBe(0);
+  });
+
   test('serializeChange returning a non-Uint8Array is rejected', async () => {
     // Defensive: if a custom adapter returns garbage we surface
     // malformed-entry rather than crashing later when assembling the

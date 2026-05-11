@@ -643,7 +643,11 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       };
     }
 
-    // 1. Caller-supplied key must match the hash in the entry.
+    // 1. Caller-supplied key must match the canonical key bytes in the entry.
+    //    `entry.signerKeyId` holds the canonical serialized public key
+    //    (produced by `serializeKey`); it is *not* a hash. The genuine
+    //    SHA-256 hash field on entries is `parentHash`. Don't confuse the
+    //    two.
     const declared = entry.signerKeyId;
     let actual: Uint8Array;
     try {
@@ -708,21 +712,52 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
 
     // 4. Canonical-encode and hash the payload. Bound the size up front so
     //    a hostile peer cannot force a large allocation via an oversized
-    //    `change`. `serializeChange` runs over the (still opaque) change
-    //    here; if it throws on hostile input we surface it as a structured
-    //    error rather than letting the exception escape.
+    //    `change`.
     //
-    //    We serialize the `change` first and size-gate the result *before*
-    //    assembling the full header+payload buffer. Otherwise an oversized
-    //    network `change` would force the larger allocation in
-    //    `canonicalEntryPayloadFromBytes` (header + parent + signer +
-    //    changeBytes) on the hot path before the size check could run.
+    //    Defense-in-depth, in order:
+    //
+    //    (a) **Pre-serialize gate.** If `entry.change` is itself a
+    //        `Uint8Array` -- which is the common case (e.g. Yjs encodes
+    //        changes as raw bytes and uses an identity serializer) -- we
+    //        check its `byteLength` *before* calling `_serializeChange`.
+    //        This catches the hostile-peer DoS case where an attacker
+    //        delivers a multi-megabyte buffer: we reject without copying
+    //        or re-encoding it. We do NOT inspect non-`Uint8Array` shapes
+    //        here because that would require walking caller-supplied
+    //        structures of unknown cost.
+    //
+    //    (b) **Post-serialize gate.** For opaque `ChangesType` values
+    //        (e.g. Automerge `BinaryChange[]`, or arbitrary JSON payloads
+    //        for the test serializer) we cannot meaningfully size them
+    //        until they have been serialized. The post-serialize check on
+    //        `changeBytes.byteLength` is the second line of defense for
+    //        those shapes: the allocation has already happened, but the
+    //        chain still refuses to assemble the full header+payload
+    //        buffer (~2x the size) and refuses to verify a signature or
+    //        append the entry. This bounds the worst-case allocation at
+    //        roughly one `MAX_CHANGE_BYTES` buffer per ingestion attempt
+    //        rather than two.
+    //
+    //    `serializeChange` runs over the (still opaque) change here; if
+    //    it throws on hostile input we surface it as a structured error
+    //    rather than letting the exception escape.
     //
     //    We do not separately deduplicate by hash: any two entries with the
     //    same canonical payload would necessarily share a `sequenceNumber`,
     //    and the sequence check in step 2 already requires
     //    `entry.sequenceNumber === this._entries.length`. A re-ingested
     //    entry therefore can never reach this point with a matching hash.
+    if (
+      entry.change instanceof Uint8Array &&
+      entry.change.byteLength > MAX_CHANGE_BYTES
+    ) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `change exceeds maximum size (${entry.change.byteLength} > ${MAX_CHANGE_BYTES} bytes)`,
+        index,
+      };
+    }
     let entryHash: Uint8Array;
     let changeBytes: Uint8Array;
     try {
