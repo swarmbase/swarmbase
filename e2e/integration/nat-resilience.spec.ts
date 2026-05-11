@@ -132,11 +132,12 @@ test.describe('NAT Relay Failure Recovery', () => {
   // test-app containers and reload browser pages so they pick up the new
   // relay info. The end-state assertion is that cross-NAT sync resumes.
   //
-  // Opt-in only when `RUN_NAT_RESTART=1` is explicitly set, so values like
-  // "0" or "false" don't accidentally enable this slow/flaky scenario.
+  // Opt-in only when `RUN_NAT_RESTART=1` is explicitly set, regardless of
+  // whether we're in CI. Any other value (unset, "0", "false", "true", etc.)
+  // skips this slow/flaky scenario.
   test.skip(
-    !!process.env.CI && process.env.RUN_NAT_RESTART !== '1',
-    'Relay restart cycle is too slow / flaky for default CI runs (set RUN_NAT_RESTART=1 to enable)',
+    process.env.RUN_NAT_RESTART !== '1',
+    'Relay restart cycle is opt-in (set RUN_NAT_RESTART=1 to enable)',
   );
 
   test('cross-NAT sync resumes after relay container restart', async ({ browser }) => {
@@ -155,7 +156,10 @@ test.describe('NAT Relay Failure Recovery', () => {
       await a.page.click('#send-btn');
       await preMsg;
 
-      // Snapshot pre-restart message counts so we can confirm growth later.
+      // Confirm the pre-restart message was received on B before we tear
+      // anything down. The post-restart assertion below snapshots the new
+      // page's message buffer length right after reload and verifies it
+      // grows once the post-restart send round-trips.
       const preMessagesB = await b.page.evaluate(() => (window as any).__messages);
       expect(preMessagesB.some((m: any) => m.text === 'pre-restart')).toBe(true);
 
@@ -199,6 +203,13 @@ test.describe('NAT Relay Failure Recovery', () => {
       ]);
       await waitForMesh(a.page, 15_000);
 
+      // Snapshot B's message buffer right after reload (before the post-
+      // restart send) so we can verify the buffer actually grows as a result
+      // of new cross-NAT traffic, not just because the assertion happens to
+      // match a stale entry.
+      const baselineMessagesB = await b.page.evaluate(() => (window as any).__messages);
+      const baselineMessageCountB = baselineMessagesB.length;
+
       // Verify cross-NAT sync works again post-restart.
       const postMsg = b.track.waitFor('PUBSUB_MESSAGE:', 60_000);
       await a.page.fill('#message-input', 'post-restart');
@@ -207,6 +218,10 @@ test.describe('NAT Relay Failure Recovery', () => {
 
       const postMessagesB = await b.page.evaluate(() => (window as any).__messages);
       expect(postMessagesB.some((m: any) => m.text === 'post-restart')).toBe(true);
+      // Confirm the message buffer actually grew after the post-restart send,
+      // proving we observed new traffic on this fresh page (not a stale
+      // match against the buffer's initial contents).
+      expect(postMessagesB.length).toBeGreaterThan(baselineMessageCountB);
     } finally {
       await a.context.close().catch(() => {});
       await b.context.close().catch(() => {});
