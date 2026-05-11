@@ -741,6 +741,42 @@ describe('replay() snapshot loading', () => {
       expect(result.index).toBe(0);
     }
   });
+
+  test('replay validates full entry shape before invoking resolveKey', async () => {
+    // Regression: a hostile snapshot must not be able to force `resolveKey`
+    // to do expensive work (e.g. a directory lookup keyed by the supplied
+    // bytestring) by supplying an absurdly large `signerKeyId`. The full
+    // `validateEntryShape` check -- which enforces MAX_SIGNER_KEY_BYTES --
+    // must run *before* resolveKey is called.
+    const hostile = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      // 1 MiB key id -- well above MAX_SIGNER_KEY_BYTES (256).
+      signerKeyId: new Uint8Array(1 << 20),
+      signature: new Uint8Array(64),
+    } as ACLEntry<AclChange>;
+
+    let resolveCalls = 0;
+    const fresh = makeChain([alice.publicKey]);
+    const result = await fresh.replay([hostile], async (id) => {
+      resolveCalls += 1;
+      // Touch the supplied bytes so a real implementation's cost would
+      // scale with `id.byteLength`. We must never get here.
+      void id.byteLength;
+      return undefined;
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.index).toBe(0);
+      expect(result.message).toMatch(/signerKeyId has an implausible length/);
+    }
+    expect(resolveCalls).toBe(0);
+    expect(fresh.length).toBe(0);
+  });
 });
 
 describe('headHash behavior', () => {
@@ -1064,12 +1100,12 @@ describe('oversized change rejection', () => {
   test('change larger than 1 MiB is rejected as malformed-entry', async () => {
     const chain = makeChain([alice.publicKey]);
     // Build a change whose serialized JSON exceeds MAX_CHANGE_BYTES (1 MiB).
-    // The keys array is included in the JSON encoding, so 1.1M single-char
-    // entries comfortably overshoots the limit while keeping the
-    // in-memory representation reasonable.
+    // A single ~1.1 MiB key string is cheap to construct (one allocation),
+    // serializes to JSON ~1 MiB without allocating millions of array elements,
+    // and comfortably overshoots the 1 MiB limit.
     const huge: AclChange = {
       op: 'add',
-      keys: Array.from({ length: 1_100_000 }, () => 'a'),
+      keys: ['a'.repeat(1_100_000)],
     };
     const payload = {
       sequenceNumber: 0,

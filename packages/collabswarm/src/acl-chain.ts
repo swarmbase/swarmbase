@@ -320,9 +320,15 @@ function canonicalEntryPayloadFromBytes<ChangesType>(
 }
 
 /**
- * Constant-time byte equality. Falls back to a fixed-length loop so we don't
- * leak timing information about which byte differs -- relevant since hashes
- * and signatures are compared on the hot path.
+ * Constant-time byte equality for equal-length inputs.
+ *
+ * Returns `false` immediately when the lengths differ -- timing then
+ * reveals only that the lengths differ, which is not secret here:
+ * every call site compares values with publicly-known structural lengths
+ * (canonical serialized public keys, SHA-256 hash digests). When the
+ * lengths *do* match, the comparison runs a fixed-length XOR loop so we
+ * don't leak which byte differs -- relevant since hashes and signature
+ * key ids are compared on the hot path.
  */
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.byteLength !== b.byteLength) return false;
@@ -980,14 +986,17 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
 
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
-        // Pre-validate shape so resolveKey isn't called with garbage and
-        // a hostile entry can't crash the loop with a TypeError.
-        const shapeError =
-          entry === null || typeof entry !== 'object'
-            ? 'entry is not an object'
-            : !(entry.signerKeyId instanceof Uint8Array)
-              ? 'signerKeyId is not a Uint8Array'
-              : null;
+        // Pre-validate the full entry shape *before* calling resolveKey.
+        // A hostile snapshot could otherwise supply an arbitrarily large
+        // `signerKeyId` and force `resolveKey` (often a lookup keyed by
+        // that bytestring) to perform expensive work or allocate large
+        // amounts of memory. `validateEntryShape` enforces the
+        // `MAX_SIGNER_KEY_BYTES` bound (along with all other field
+        // bounds), so resolveKey only ever sees a key id of plausible
+        // size. `_ingestEntryInternal` re-runs the same check below; the
+        // redundancy is intentional so this entry point is safe even if
+        // resolveKey misbehaves on hostile input.
+        const shapeError = validateEntryShape(entry);
         if (shapeError !== null) {
           return {
             ok: false,
