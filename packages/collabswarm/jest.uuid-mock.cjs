@@ -22,17 +22,34 @@ function parse(uuid) {
     throw new TypeError('Invalid UUID');
   }
   const hex = uuid.replace(/-/g, '');
-  if (hex.length !== 32) {
+  if (hex.length !== 32 || !/^[0-9a-fA-F]{32}$/.test(hex)) {
     throw new TypeError(`Invalid UUID: ${uuid}`);
   }
   const bytes = new Uint8Array(16);
   for (let i = 0; i < 16; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    const byte = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(byte)) {
+      // Defensive: the regex above should already prevent this.
+      throw new TypeError(`Invalid UUID: ${uuid}`);
+    }
+    bytes[i] = byte;
   }
   return bytes;
 }
 
 function stringify(bytes) {
+  if (
+    !bytes ||
+    typeof bytes.length !== 'number' ||
+    typeof bytes[0] === 'undefined'
+  ) {
+    throw new TypeError('Invalid byte array passed to stringify');
+  }
+  if (bytes.length < 16) {
+    throw new RangeError(
+      `stringify expects at least 16 bytes, got ${bytes.length}`,
+    );
+  }
   const hex = [];
   for (let i = 0; i < 16; i++) {
     hex.push(bytes[i].toString(16).padStart(2, '0'));
