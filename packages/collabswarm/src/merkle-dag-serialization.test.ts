@@ -317,6 +317,83 @@ describe('serializeChangeNodeForJSON / deserializeChangeNodeFromJSON', () => {
     ).toBeNull();
   });
 
+  describe('deserialize input validation (untrusted wire shapes)', () => {
+    test('throws when "kind" is missing', () => {
+      // Simulate a peer message that omits `kind` entirely. Cast through
+      // unknown because the field is required by the type, but malformed
+      // JSON has no such guarantee at runtime.
+      const malformed = { change: '01' } as unknown as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"kind" must be one of/,
+      );
+    });
+
+    test('throws when "kind" is an unknown string', () => {
+      const malformed: CRDTChangeNodeWire<string> = {
+        kind: 'evil' as unknown as 'document',
+        change: '01',
+      };
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"kind" must be one of.*got "evil"/,
+      );
+    });
+
+    test('throws when "kind" is the wrong type (e.g. a number)', () => {
+      const malformed = {
+        kind: 7,
+        change: '01',
+      } as unknown as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"kind" must be one of/,
+      );
+    });
+
+    test('accepts all three documented kinds: document, writer, reader', () => {
+      for (const kind of ['document', 'writer', 'reader'] as const) {
+        const node: CRDTChangeNodeWire<string> = { kind, change: '01' };
+        const restored = deserializeChangeNodeFromJSON(node, decodeBytes);
+        expect(restored.kind).toBe(kind);
+      }
+    });
+
+    test('throws when a child node is null', () => {
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","children":{"h1":null}}',
+      ) as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /child at key "h1" must be a plain object.*got null/,
+      );
+    });
+
+    test('throws when a child node is an array', () => {
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","children":{"h1":[1,2]}}',
+      ) as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /child at key "h1" must be a plain object.*got array/,
+      );
+    });
+
+    test('throws when a child node is a primitive (string)', () => {
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","children":{"h1":"not-an-object"}}',
+      ) as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /child at key "h1" must be a plain object.*got string/,
+      );
+    });
+
+    test('throws when a nested child has an invalid "kind"', () => {
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","children":' +
+          '{"h1":{"kind":"hacker","change":"02"}}}',
+      ) as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"kind" must be one of.*got "hacker"/,
+      );
+    });
+  });
+
   test('encoder is not invoked for nodes whose change is undefined', () => {
     const original: CRDTChangeNode<Uint8Array> = {
       kind: 'document',

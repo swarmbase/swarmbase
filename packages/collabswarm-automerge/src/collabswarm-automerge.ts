@@ -449,7 +449,14 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
   }
 
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[], CryptoKey> {
-    const raw = this.deserialize(this.decode(message)) as any;
+    const raw = this.deserialize(this.decode(message)) as {
+      documentId?: string;
+      changeId?: string;
+      changes?: iCRDTChangeNode;
+      keychainChanges?: string[];
+      snapshot?: any;
+      signature?: string;
+    };
     let snapshot: any;
     if (raw.snapshot) {
       snapshot = { ...raw.snapshot };
