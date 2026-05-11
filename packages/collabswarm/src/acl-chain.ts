@@ -241,10 +241,7 @@ export async function computeEntryHash<ChangesType>(
   serializeChange: (change: ChangesType) => Uint8Array,
 ): Promise<Uint8Array> {
   const payload = canonicalEntryPayload(entry, serializeChange);
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) as ArrayBuffer,
-  );
+  const hash = await crypto.subtle.digest('SHA-256', payload as BufferSource);
   return new Uint8Array(hash);
 }
 
@@ -815,13 +812,7 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       };
     }
     try {
-      const digest = await crypto.subtle.digest(
-        'SHA-256',
-        payloadBytes.buffer.slice(
-          payloadBytes.byteOffset,
-          payloadBytes.byteOffset + payloadBytes.byteLength,
-        ) as ArrayBuffer,
-      );
+      const digest = await crypto.subtle.digest('SHA-256', payloadBytes as BufferSource);
       entryHash = new Uint8Array(digest);
     } catch (err) {
       return {
