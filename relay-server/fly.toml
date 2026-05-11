@@ -1,0 +1,67 @@
+# Fly.io deployment configuration for the SwarmDB relay server.
+#
+# Usage:
+#   cd relay-server
+#   fly launch --no-deploy   # imports this file; set your app name when prompted
+#   fly deploy
+#
+# Change the app name and primary_region below before deploying.
+# Run `fly platform regions` to see all available regions; pick the one
+# closest to your users.
+
+app = "swarmdb-relay"            # TODO: change to a unique name, e.g. "myapp-relay"
+primary_region = "iad"           # US East (Virginia); change to your nearest region
+
+[build]
+  dockerfile = "Dockerfile"      # relay-server/Dockerfile (build context = relay-server/)
+
+[deploy]
+  strategy = "rolling"           # safe for a single-instance relay
+
+# Fly.io injects PORT for the Fly proxy, but the relay uses its own fixed
+# ports for libp2p. We expose them directly via [services] below instead
+# of going through the HTTP proxy.
+
+# WebSocket port — browser peers connect here (libp2p WebSocket transport).
+[[services]]
+  protocol = "tcp"
+  internal_port = 9001
+
+  [[services.ports]]
+    port = 9001
+    handlers = []                # raw TCP — TLS termination handled by Fly's anycast
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 500
+    soft_limit = 400
+
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout  = "5s"
+    grace_period = "30s"
+
+# TCP port — node-to-node connections (optional for browser-only deployments).
+[[services]]
+  protocol = "tcp"
+  internal_port = 9002
+
+  [[services.ports]]
+    port = 9002
+    handlers = []
+
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout  = "5s"
+    grace_period = "30s"
+
+[env]
+  # Override the defaults set in relay-server/src/index.ts if needed.
+  # WS_PORT  = "9001"
+  # TCP_PORT = "9002"
+  # TOPIC_ALLOWLIST = "/document/,/documents"
+  # MAX_AUTO_TOPICS = "1000"
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "256mb"
