@@ -53,6 +53,9 @@
       "optional": true
     }
   },
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },

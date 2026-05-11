@@ -41,6 +41,9 @@
     "yjs": "^13.6.30"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },

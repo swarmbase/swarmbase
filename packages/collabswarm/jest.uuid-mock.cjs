@@ -39,17 +39,16 @@ function parse(uuid) {
 }
 
 function stringify(bytes) {
-  if (
-    !bytes ||
-    typeof bytes.length !== 'number' ||
-    typeof bytes[0] === 'undefined'
-  ) {
+  if (!bytes || typeof bytes.length !== 'number') {
     throw new TypeError('Invalid byte array passed to stringify');
   }
   if (bytes.length < 16) {
     throw new RangeError(
       `stringify expects at least 16 bytes, got ${bytes.length}`,
     );
+  }
+  if (typeof bytes[0] === 'undefined') {
+    throw new TypeError('Invalid byte array passed to stringify');
   }
   const hex = [];
   for (let i = 0; i < 16; i++) {
