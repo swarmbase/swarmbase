@@ -29,13 +29,17 @@ import {
   documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
 } from './wire-protocols';
 import { readUint8Iterable } from './utils';
+import { wrapStream } from './stream-adapter';
 import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
 import { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { multiaddr } from '@multiformats/multiaddr';
-import { PubSubBaseProtocol } from '@libp2p/pubsub';
+// libp2p v3 retired `@libp2p/pubsub` (the abstract base used by old
+// GossipSub). Use the concrete `GossipSub` service type instead --
+// that is what `helia` actually exposes on `services.pubsub`.
+import type { GossipSub } from '@libp2p/gossipsub';
 import type { Uint8ArrayList } from 'uint8arraylist';
 
 /** Maximum allowed document path length in key-update V2 wire format. */
@@ -120,7 +124,7 @@ export class Collabswarm<
   protected _config: CollabswarmConfig | null = null;
   private _heliaNode:
     | Helia<
-        Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+        Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
       >
     | undefined;
   private _peerId: PeerId | undefined;
@@ -169,7 +173,7 @@ export class Collabswarm<
    * Only works after `.initialize()` has been called.
    */
   public get heliaNode(): Helia<
-    Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+    Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
   > {
     if (this._heliaNode) {
       return this._heliaNode;
@@ -244,12 +248,12 @@ export class Collabswarm<
     this._heliaNode = await (heliaInit
       ? (createHelia(heliaInit) as Promise<
           Helia<
-            Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+            Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
           >
         >)
       : (createHelia() as Promise<
           Helia<
-            Libp2p<DefaultLibp2pServices & { pubsub: PubSubBaseProtocol }>
+            Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
           >
         >));
 
@@ -349,7 +353,14 @@ export class Collabswarm<
     this._sharedHandlersRegistered = true;
 
     // Handler implementation for doc-load requests.
-    const docLoadHandler = ({ stream }: { stream: ProtocolStream }) => {
+    //
+    // libp2p v3 changed the `StreamHandler` signature from
+    // `({ stream, connection }) => void` to `(stream, connection) => void`.
+    // The raw stream is also now event-driven instead of `{ source, sink }`,
+    // so we wrap it with the stream-adapter shim before passing it to the
+    // legacy pipe-based protocol logic below.
+    const docLoadHandler = (rawStream: import('@libp2p/interface').Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -390,7 +401,9 @@ export class Collabswarm<
     };
 
     // Handler implementation for snapshot-load requests.
-    const snapshotLoadHandler = ({ stream }: { stream: ProtocolStream }) => {
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    const snapshotLoadHandler = (rawStream: import('@libp2p/interface').Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -434,7 +447,9 @@ export class Collabswarm<
     // is prefixed with a 4-byte big-endian length followed by the
     // UTF-8 document path. The remaining bytes are the encrypted
     // key-update payload.
-    const keyUpdateHandler = ({ stream }: { stream: ProtocolStream }) => {
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    const keyUpdateHandler = (rawStream: import('@libp2p/interface').Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {

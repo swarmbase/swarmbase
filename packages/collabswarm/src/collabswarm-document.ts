@@ -14,6 +14,7 @@ import {
   readUint8Iterable,
   shuffleArray,
 } from './utils';
+import { wrapStream } from './stream-adapter';
 import { CRDTProvider } from './crdt-provider';
 import { AuthProvider } from './auth-provider';
 import {
@@ -55,8 +56,13 @@ import BufferList from 'bl';
 import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
 import { UnixFS, unixfs } from '@helia/unixfs';
-import { PubSubBaseProtocol } from '@libp2p/pubsub';
-import { EventHandler, Message, PeerId } from '@libp2p/interface';
+// libp2p v3 moved the `PubSubBaseProtocol` shim out of `@libp2p/pubsub` (the
+// package has been removed). Use the concrete `GossipSub` service interface
+// from `@libp2p/gossipsub` instead -- it is what `helia` actually wires up via
+// `services.pubsub` and exposes the same publish/subscribe/event surface we
+// rely on. `Message` (the pubsub message shape) likewise moved here.
+import type { GossipSub, Message } from '@libp2p/gossipsub';
+import { EventHandler, PeerId } from '@libp2p/interface';
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -420,7 +426,11 @@ export class CollabswarmDocument<
   }
 
   private async _getBlock(hash: CID): Promise<ChangesType> {
-    const block = await this.swarm.heliaNode.blockstore.get(hash);
+    // Helia v6 / interface-blockstore v6 changed `Blockstore#get(cid)` to
+    // return an `AwaitGenerator<Uint8Array>` (a generator of byte chunks)
+    // rather than a single `Uint8Array`. Consume the generator into a
+    // contiguous buffer here before slicing the encryption header off.
+    const block = await readUint8Iterable(this.swarm.heliaNode.blockstore.get(hash));
     const blockKeyID = block.slice(0, this._keychainProvider.keyIDLength);
     const blockNonce = block.slice(
       this._keychainProvider.keyIDLength,
@@ -1665,7 +1675,13 @@ export class CollabswarmDocument<
         // Falling back to p.toString() would compare against the full
         // multiaddr string (e.g. "/ip4/.../p2p/<id>") which will never
         // match a plain PeerId string.
-        const peerId = p.getPeerId?.();
+        //
+        // `@multiformats/multiaddr` v13 (bundled by libp2p v3) dropped the
+        // `getPeerId()` helper; extract the `/p2p/<id>` component from
+        // `getComponents()` instead.
+        const components = p.getComponents?.() ?? [];
+        const p2p = components.find((c: { name: string; value?: string }) => c.name === 'p2p');
+        const peerId = p2p?.value ?? null;
         return peerId != null && peerId === preferredId;
       });
       if (preferredIdx > 0) {
@@ -1694,9 +1710,13 @@ export class CollabswarmDocument<
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
-        const snapshotStream = await this.libp2p.dialProtocol(peer, [
+        // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
+        // `send()`/iterator pair). Wrap it into the v2 `{ source, sink }`
+        // duplex shape that `_sendLoadRequestAndSync` (and the legacy
+        // `it-pipe` calls inside it) still expects.
+        const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
           snapshotLoadV2,
-        ]);
+        ]));
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
         if (loaded) return true;
         // Empty response -- peer has no snapshot, try doc-load below.
@@ -1706,9 +1726,10 @@ export class CollabswarmDocument<
 
       try {
         console.log('Trying doc-load from peer:', peer.toString());
-        const docStream = await this.libp2p.dialProtocol(peer, [
+        // See snapshot-load above for why we wrap the v3 Stream here.
+        const docStream = wrapStream(await this.libp2p.dialProtocol(peer, [
           documentLoadV2,
-        ]);
+        ]));
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
         if (loaded) return true;
       } catch (err) {
@@ -1832,7 +1853,7 @@ export class CollabswarmDocument<
     // All registration and subscription steps are inside try/catch so that
     // close() cleans up any partially-registered state on failure.
     const pubsub = this.swarm.heliaNode.libp2p.services
-      .pubsub as PubSubBaseProtocol;
+      .pubsub as GossipSub;
 
     try {
       // Register this document with the swarm BEFORE subscribing to pubsub.
@@ -1945,7 +1966,7 @@ export class CollabswarmDocument<
 
     if (this._pubsubHandler) {
       const pubsub = this.swarm.heliaNode.libp2p.services
-        .pubsub as PubSubBaseProtocol;
+        .pubsub as GossipSub;
 
       // Only unsubscribe if this instance actually subscribed. If open()
       // failed before pubsub.subscribe() completed, unsubscribing here
@@ -2741,9 +2762,11 @@ export class CollabswarmDocument<
     const failedPeers: string[] = [];
     for (const peer of peers) {
       try {
-        const stream = await this.libp2p.dialProtocol(peer, [
+        // Wrap the v3 stream so we can keep using the legacy `pipe(..., sink)`
+        // pattern below; see snapshot-load above for the rationale.
+        const stream = wrapStream(await this.libp2p.dialProtocol(peer, [
           documentKeyUpdateV2,
-        ]);
+        ]));
         await pipe(
           [v2Payload],
           stream.sink,

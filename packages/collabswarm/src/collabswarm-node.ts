@@ -30,7 +30,10 @@ import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
 import { CID } from 'multiformats';
-import { EventHandler, Message } from '@libp2p/interface';
+import { EventHandler } from '@libp2p/interface';
+// libp2p v3 moved the GossipSub-specific `Message` type out of `@libp2p/interface`.
+// Import it directly from the gossipsub package instead.
+import type { Message } from '@libp2p/gossipsub';
 import { gossipsub } from '@libp2p/gossipsub';
 import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
@@ -44,7 +47,9 @@ import { mdns } from '@libp2p/mdns';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
 import { webSockets } from '@libp2p/websockets';
-import { all } from '@libp2p/websockets/filters';
+// Note: `@libp2p/websockets` v3 removed the `/filters` subpath and the
+// `filter` option from `WebSocketsInit`. WebSocket dial filtering is now
+// internal to the transport.
 import { webTransport } from '@libp2p/webtransport';
 import { IDBBlockstore } from 'blockstore-idb';
 import { IDBDatastore } from 'datastore-idb';
@@ -95,7 +100,7 @@ export const defaultNodeConfig = (
           circuitRelayTransport({
             reservationConcurrency: 1,
           }),
-          webSockets({ filter: all }),
+          webSockets(),
           // Pass STUN servers so RTCPeerConnection can gather server-reflexive
           // candidates and attempt direct connections without relay forwarding.
           // Each transport gets its own fresh mutable copy (with each server

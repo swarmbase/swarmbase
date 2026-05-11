@@ -36,7 +36,9 @@ export function isBufferList(input: Uint8Array | Uint8ArrayList | BufferList): i
 }
 
 export async function readUint8Iterable(
-  iterable: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,
+  iterable:
+    | AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>
+    | Iterable<Uint8Array | Uint8ArrayList | BufferList>,
   maxSize?: number,
 ): Promise<Uint8Array> {
   let length = 0;
