@@ -1,6 +1,7 @@
 // CJS shim for the `uuid` package so Jest (which still loads test deps as
-// CJS) can resolve `import * as uuid from 'uuid'` even after uuid went
-// ESM-only in v14. Implements just the surface collabswarm uses:
+// CJS) can resolve `import * as uuid from 'uuid'` even after uuid dropped
+// CommonJS support in v12 (still ESM-only through v14). Implements just the
+// surface collabswarm uses:
 //   - `v4()` — random UUID string
 //   - `parse(uuid)` — UUID string -> Uint8Array(16)
 //   - `stringify(bytes)` — Uint8Array(16) -> UUID string
