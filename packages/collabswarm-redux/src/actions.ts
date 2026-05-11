@@ -1,6 +1,7 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import { CollabswarmState } from './reducers';
+import { defaultStateSelector } from './default-state-selector';
 import {
   Collabswarm,
   CollabswarmDocument,
@@ -46,15 +47,7 @@ export function initializeAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) =>
-    s as unknown as CollabswarmState<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
+  > = defaultStateSelector,
 ): ThunkAction<
   Promise<
     Collabswarm<
@@ -169,15 +162,7 @@ export function connectAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) =>
-    s as unknown as CollabswarmState<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
+  > = defaultStateSelector,
 ): ThunkAction<Promise<void>, RootStateType, unknown, ConnectAction> {
   return async (dispatch, getState) => {
     const { node } = selectCollabswarmState(getState());
@@ -228,15 +213,7 @@ export function openDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) =>
-    s as unknown as CollabswarmState<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
+  > = defaultStateSelector,
 ): ThunkAction<
   Promise<CollabswarmDocument<
     DocType,
@@ -379,15 +356,7 @@ export function closeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) =>
-    s as unknown as CollabswarmState<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
+  > = defaultStateSelector,
 ): ThunkAction<
   Promise<void>,
   RootStateType,
@@ -459,15 +428,7 @@ export function changeDocumentAsync<
     PrivateKey,
     PublicKey,
     DocumentKey
-  > = (s) =>
-    s as unknown as CollabswarmState<
-      DocType,
-      ChangesType,
-      ChangeFnType,
-      PrivateKey,
-      PublicKey,
-      DocumentKey
-    >,
+  > = defaultStateSelector,
 ): ThunkAction<
   Promise<DocType>,
   RootStateType,
