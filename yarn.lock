@@ -1869,6 +1869,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/browser-test@workspace:examples/browser-test"
   dependencies:
+    "@automerge/automerge": "npm:^3.2.4"
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@collabswarm/collabswarm-redux": "workspace:packages/collabswarm-redux"
@@ -1910,6 +1911,8 @@ __metadata:
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
     uuid: "npm:^14.0.0"
+  peerDependencies:
+    "@automerge/automerge": ^3.2.4
   bin:
     collabswarm-automerge-d: dist/bin/collabswarm-automerge-d.js
   languageName: unknown
@@ -1989,6 +1992,8 @@ __metadata:
     typescript: "npm:^5.9.3"
     uuid: "npm:^14.0.0"
     yjs: "npm:^13.6.30"
+  peerDependencies:
+    yjs: ^13.6.30
   bin:
     collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
   languageName: unknown
@@ -2007,6 +2012,7 @@ __metadata:
     "@libp2p/autonat": "npm:^2.0.38"
     "@libp2p/bootstrap": "npm:^11.0.47"
     "@libp2p/circuit-relay-v2": "npm:^3.2.24"
+    "@libp2p/dcutr": "npm:^2.0.38"
     "@libp2p/identify": "npm:^3.0.39"
     "@libp2p/interface": "npm:^2.11.0"
     "@libp2p/kad-dht": "npm:^15.0.2"
@@ -2070,6 +2076,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     uuid: "npm:^14.0.0"
     web-vitals: "npm:^4.2.3"
+    yjs: "npm:^13.6.30"
   languageName: unknown
   linkType: soft
 
@@ -2077,6 +2084,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@collabswarm/wiki-swarm@workspace:examples/wiki-swarm"
   dependencies:
+    "@automerge/automerge": "npm:^3.2.4"
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge"
     "@collabswarm/collabswarm-redux": "workspace:packages/collabswarm-redux"
@@ -3529,7 +3537,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/dcutr@npm:^2.0.18":
+"@libp2p/dcutr@npm:^2.0.18, @libp2p/dcutr@npm:^2.0.38":
   version: 2.0.38
   resolution: "@libp2p/dcutr@npm:2.0.38"
   dependencies:
