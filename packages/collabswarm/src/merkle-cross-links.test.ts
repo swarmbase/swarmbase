@@ -2,10 +2,12 @@ import { describe, expect, test } from '@jest/globals';
 import {
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
+  mergeRemoteSyncTree,
   selectCrossLinks,
   trackTipInList,
 } from './merkle-cross-links';
 import {
+  CRDTChangeNode,
   CRDTChangeNodeKind,
   crdtDocumentChangeNode,
   crdtWriterChangeNode,
@@ -268,5 +270,156 @@ describe('Merkle CRDT cross-link integration scenario', () => {
     trackTipInList(recentTips, { cid: 't2', kind: docKind });
     const crossLinks = selectCrossLinks(recentTips, 't2', 't3', MAX_CROSS_LINKS);
     expect(crossLinks.map((t) => t.cid)).toEqual(['t1']);
+  });
+});
+
+describe('mergeRemoteSyncTree (per-message cross-link dedup)', () => {
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+  type Node = CRDTChangeNode<string>;
+
+  test('returns empty list for undefined remote root', () => {
+    const root: Node = { kind: docKind };
+    expect(
+      mergeRemoteSyncTree(undefined, root, undefined, new Set()),
+    ).toEqual([]);
+  });
+
+  test('returns empty list when remote root matches local head', () => {
+    const root: Node = { kind: docKind, change: 'payload-A' };
+    expect(mergeRemoteSyncTree('A', root, 'A', new Set())).toEqual([]);
+  });
+
+  test('skips subtrees whose root CID is already in localHashes', () => {
+    // Linear remote tree A -> B (B inline under A). If A is already known
+    // locally we should walk no further: B is reachable through A and the
+    // local hashes guard short-circuits the whole subtree.
+    const root: Node = {
+      kind: docKind,
+      change: 'payload-A',
+      children: { B: { kind: docKind, change: 'payload-B' } },
+    };
+    const out = mergeRemoteSyncTree('A', root, undefined, new Set(['A']));
+    expect(out).toEqual([]);
+  });
+
+  test('flattens a linear inline tree into one entry per CID', () => {
+    // Remote tree: C --(inline)--> B --(inline)--> A. Receiver knows nothing
+    // locally, so all three nodes should be returned with their payloads.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-C',
+      children: {
+        B: {
+          kind: docKind,
+          change: 'payload-B',
+          children: {
+            A: { kind: docKind, change: 'payload-A' },
+          },
+        },
+      },
+    };
+    const out = mergeRemoteSyncTree('C', tree, undefined, new Set());
+    const byCid = new Map(out.map(([cid, , change]) => [cid, change]));
+    expect(byCid.get('A')).toBe('payload-A');
+    expect(byCid.get('B')).toBe('payload-B');
+    expect(byCid.get('C')).toBe('payload-C');
+    expect(out).toHaveLength(3);
+  });
+
+  test('dedupes a cross-link CID that also appears inline in the primary subtree', () => {
+    // Reproduces the bug fixed by per-message dedup: a linear history where
+    // a later change cross-links to an older ancestor that is also present
+    // inline via the primary parent's subtree. Construction mirrors
+    // `_makeChange()` after several linear changes:
+    //
+    //   D = new change
+    //     children:
+    //       C (primary parent, inline)
+    //         children:
+    //           B (inline)
+    //             children:
+    //               A (inline)
+    //       A (deferred cross-link leaf -- duplicate of inline A above)
+    //
+    // Without dedup, the receiver would apply A twice (once via the inline
+    // subtree, once via the deferred leaf which would also trigger a
+    // blockstore fetch). The merged result must contain A exactly once and
+    // must carry the inline payload, not the deferred-leaf undefined.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-D',
+      children: {
+        C: {
+          kind: docKind,
+          change: 'payload-C',
+          children: {
+            B: {
+              kind: docKind,
+              change: 'payload-B',
+              children: {
+                A: { kind: docKind, change: 'payload-A' },
+              },
+            },
+          },
+        },
+        // Deferred cross-link leaf pointing at an inline ancestor (A).
+        A: { kind: docKind },
+      },
+    };
+    const out = mergeRemoteSyncTree('D', tree, undefined, new Set());
+
+    // Exactly one entry per distinct CID.
+    const cids = out.map(([cid]) => cid).sort();
+    expect(cids).toEqual(['A', 'B', 'C', 'D']);
+
+    // A must carry the inline payload, not the deferred-leaf undefined.
+    const aEntry = out.find(([cid]) => cid === 'A')!;
+    expect(aEntry[2]).toBe('payload-A');
+  });
+
+  test('prefers inline payload over deferred leaf regardless of traversal order', () => {
+    // Defensive: even if a remote constructs the message with the deferred
+    // cross-link leaf positioned BEFORE the inline subtree (e.g. a future
+    // serializer changes key ordering), the inline payload should still win.
+    //
+    // We can't directly control Object.entries ordering across engines, but
+    // we can verify the merge respects insertion order of the source object:
+    // inserting the deferred leaf first, then the inline subtree.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-D',
+      children: {},
+    };
+    // Insertion order: A (deferred) first, then C (inline subtree).
+    (tree.children as Record<string, Node>)['A'] = { kind: docKind };
+    (tree.children as Record<string, Node>)['C'] = {
+      kind: docKind,
+      change: 'payload-C',
+      children: { A: { kind: docKind, change: 'payload-A' } },
+    };
+    const out = mergeRemoteSyncTree('D', tree, undefined, new Set());
+    const aEntry = out.find(([cid]) => cid === 'A')!;
+    // Even though the deferred leaf came first, the inline payload wins.
+    expect(aEntry[2]).toBe('payload-A');
+    // Still exactly one A entry.
+    expect(out.filter(([cid]) => cid === 'A')).toHaveLength(1);
+  });
+
+  test('cross-link leaf to a CID not in primary subtree is preserved as deferred', () => {
+    // No duplication: a cross-link to a tip that isn't in the inline subtree
+    // remains a deferred leaf so the receiver can fetch it from the
+    // blockstore. This is the normal cross-link case (paper §VI.B.e).
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-D',
+      children: {
+        C: { kind: docKind, change: 'payload-C' },
+        X: { kind: docKind }, // deferred cross-link to an unknown CID
+      },
+    };
+    const out = mergeRemoteSyncTree('D', tree, undefined, new Set());
+    const xEntry = out.find(([cid]) => cid === 'X')!;
+    expect(xEntry).toBeDefined();
+    expect(xEntry[2]).toBeUndefined();
   });
 });

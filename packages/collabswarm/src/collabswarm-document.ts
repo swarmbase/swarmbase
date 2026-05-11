@@ -27,6 +27,7 @@ import {
 import {
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
+  mergeRemoteSyncTree,
   RecentTip,
   selectCrossLinks,
   trackTipInList,
@@ -449,6 +450,13 @@ export class CollabswarmDocument<
     return newFileResult.toString();
   }
 
+  /**
+   * Walk the remote sync tree and return entries that are new relative to
+   * `localHashes` / `localRootId`. Delegates to the pure `mergeRemoteSyncTree`
+   * helper, which also performs per-message dedup so a cross-link CID that
+   * coincides with an inline ancestor in the same sync tree is not applied
+   * (or fetched + applied) twice -- see paper §VI.B.e.
+   */
   private async _mergeSyncTree(
     remoteRootId: string | undefined,
     remoteRoot: CRDTChangeNode<ChangesType>,
@@ -456,44 +464,12 @@ export class CollabswarmDocument<
     localRootId: string | undefined,
     localHashes: Set<string>,
   ): Promise<[string, CRDTChangeNodeKind, ChangesType | undefined][]> {
-    if (remoteRootId === undefined) {
-      return [];
-    }
-
-    // If remote root CID is the same as the current root CID, do nothing and return.
-    if (remoteRootId === localRootId) {
-      return [];
-    }
-
-    // If remote root CID is already in the set of seen CIDs, do nothing and return.
-    if (localHashes.has(remoteRootId)) {
-      return [];
-    }
-
-    // If this is a leaf node, return the current node pair.
-    const results: Promise<
-      [string, CRDTChangeNodeKind, ChangesType | undefined][]
-    >[] = [
-      Promise.resolve([[remoteRootId, remoteRoot.kind, remoteRoot.change]] as [
-        string,
-        CRDTChangeNodeKind,
-        ChangesType | undefined,
-      ][]),
-    ];
-    if (remoteRoot.children === undefined) {
-      return (await Promise.all(results)).flat(1);
-    }
-
-    if (remoteRoot.children === crdtChangeNodeDeferred) {
-      throw new Error('IPLD dereferencing is not supported yet!');
-    }
-    for (const [hash, currentNode] of Object.entries(remoteRoot.children)) {
-      results.push(
-        this._mergeSyncTree(hash, currentNode, localRootId, localHashes),
-      );
-    }
-
-    return (await Promise.all(results)).flat(1);
+    return mergeRemoteSyncTree<ChangesType>(
+      remoteRootId,
+      remoteRoot,
+      localRootId,
+      localHashes,
+    );
   }
 
   private async _fireRemoteUpdateHandlers(hashes: string[]) {
@@ -2262,11 +2238,13 @@ export class CollabswarmDocument<
    * failure.
    *
    * **Internal metadata rollback:** On failure, `_lastSyncMessage`,
-   * `_documentChangeCount`, and `_changesSinceSnapshot` are restored from
-   * snapshots captured before `_makeChange()`. For `_hashes`, all entries
-   * added to the Set after `hashSizeBefore` are removed. Because the node
-   * remains subscribed to pubsub during the async transaction, this may
-   * include CIDs appended by concurrent remote syncs, not just local ones.
+   * `_documentChangeCount`, `_changesSinceSnapshot`, and `_recentTips`
+   * are restored from snapshots captured before `_makeChange()`.
+   * (`_recentTips` is bounded to `MAX_RECENT_TIPS` entries so the snapshot
+   * is a cheap shallow array copy.) For `_hashes`, all entries added to
+   * the Set after `hashSizeBefore` are removed. Because the node remains
+   * subscribed to pubsub during the async transaction, this may include
+   * CIDs appended by concurrent remote syncs, not just local ones.
    * This is acceptable because CRDT convergence guarantees those remote
    * CIDs will be re-added on the next sync cycle or document load.
    * The approach is O(n) iteration but O(delta) memory -- no full

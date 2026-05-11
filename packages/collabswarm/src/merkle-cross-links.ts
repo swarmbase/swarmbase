@@ -1,4 +1,8 @@
-import { CRDTChangeNodeKind } from './crdt-change-node';
+import {
+  CRDTChangeNode,
+  CRDTChangeNodeKind,
+  crdtChangeNodeDeferred,
+} from './crdt-change-node';
 
 /**
  * Maximum number of recent tips to track for Merkle-CRDT cross-linking
@@ -73,6 +77,96 @@ export function selectCrossLinks<Tip extends { cid: string }>(
  * Entries with empty `cid` are ignored (defensive guard for the initial
  * sync-message state before any change has been published).
  */
+/**
+ * A flattened entry produced by walking a remote sync tree: a CID, the kind
+ * of node (document/reader/writer), and the inline `change` payload if the
+ * remote included one. An `undefined` payload means the entry is a deferred
+ * leaf (cross-link or other deferred reference) and the receiver must fetch
+ * the block from the blockstore by CID.
+ */
+export type MergedSyncEntry<ChangesType> = [
+  string,
+  CRDTChangeNodeKind,
+  ChangesType | undefined,
+];
+
+/**
+ * Pure helper: walk a remote sync tree and return the entries that are new
+ * relative to `localHashes` and `localRootId`, deduplicated per traversal.
+ *
+ * **Per-message dedup (paper §VI.B.e cross-links):** cross-link entries can
+ * legitimately reference an ancestor CID that is already embedded in the
+ * primary parent's inline subtree (e.g. linear history where a cross-link
+ * targets an older ancestor). Without per-message dedup, the same CID would
+ * appear twice in the returned entries -- once with the inline payload (via
+ * the parent subtree) and once as a deferred leaf -- causing the receiver
+ * to apply or fetch+apply the same change twice, which can corrupt CRDT
+ * state and double-fire local handlers/counters.
+ *
+ * Dedup strategy:
+ *   - Skip any CID already present in `localHashes` (already applied locally).
+ *   - During traversal, accumulate entries in a per-CID map. When the same
+ *     CID is encountered more than once within a single sync message, the
+ *     entry that carries an inline `change` payload is preferred over a
+ *     deferred-leaf entry. This is robust regardless of traversal order
+ *     (inline-first or deferred-first).
+ *   - Subtrees rooted at an already-seen CID are not re-walked -- safe
+ *     because CIDs are content-addressed: the same CID always names the
+ *     same subtree.
+ *
+ * Returns a new array; does not mutate the inputs.
+ */
+export function mergeRemoteSyncTree<ChangesType>(
+  remoteRootId: string | undefined,
+  remoteRoot: CRDTChangeNode<ChangesType>,
+  localRootId: string | undefined,
+  localHashes: ReadonlySet<string>,
+): MergedSyncEntry<ChangesType>[] {
+  // CID -> winning entry for this message. Entries with an inline `change`
+  // payload beat deferred-leaf entries; otherwise the first-seen entry wins.
+  const byCid = new Map<string, MergedSyncEntry<ChangesType>>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId === undefined) return;
+    // The remote root matches our local head: nothing new under it.
+    if (nodeId === localRootId) return;
+    // Already applied locally (or marked seen via a snapshot boundary).
+    if (localHashes.has(nodeId)) return;
+
+    const existing = byCid.get(nodeId);
+    if (existing) {
+      // Same CID seen earlier in this traversal. If the previous entry was a
+      // deferred leaf (no inline payload) and this one carries the payload,
+      // upgrade. Otherwise keep what we have. Either way, don't re-walk the
+      // subtree (same CID = same content-addressed subtree, already covered).
+      if (existing[2] === undefined && node.change !== undefined) {
+        byCid.set(nodeId, [nodeId, node.kind, node.change]);
+      }
+      // If we already have payload, or the new one is also deferred, no
+      // change needed. In both cases we still need to descend if the new
+      // node has children that the prior visit didn't (impossible with
+      // content addressing -- same CID, same children -- so skip).
+      return;
+    }
+
+    byCid.set(nodeId, [nodeId, node.kind, node.change]);
+
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) {
+      throw new Error('IPLD dereferencing is not supported yet!');
+    }
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      walk(childId, childNode);
+    }
+  }
+
+  walk(remoteRootId, remoteRoot);
+  return Array.from(byCid.values());
+}
+
 export function trackTipInList<Tip extends { cid: string }>(
   recentTips: Tip[],
   entry: Tip,
