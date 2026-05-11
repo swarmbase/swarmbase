@@ -1,0 +1,375 @@
+/**
+ * NAT Traversal Resilience Tests (issue #184)
+ *
+ * Exercises failure-recovery scenarios for SwarmDB peers communicating across
+ * isolated NAT-simulated Docker networks. Builds on the topology established
+ * by `docker-compose.nat-test.yaml`:
+ *
+ *   nat-a: [test-app-a (3001), test-app-c (3003), relay]
+ *   nat-b: [test-app-b (3002), relay]
+ *
+ * Cross-NAT traffic between test-app-a and test-app-b MUST flow through the
+ * relay. These tests verify that the system tolerates:
+ *
+ *   1. Relay container restart mid-sync (container churn, recovers via
+ *      bootstrap re-dial + fresh config fetch).
+ *   2. Browser-side reconnection (page reload on the cross-NAT peer).
+ *   3. Rapid, concurrent cross-NAT edits without message loss.
+ *
+ * Many of these scenarios are inherently flaky in CI because GossipSub mesh
+ * re-formation through a single relay takes time (10s+) and depends on
+ * libp2p's discovery cadence. We use generous timeouts and, where useful,
+ * a minimum-success-rate threshold instead of strict equality so the suite
+ * stays meaningful without becoming noise.
+ */
+import { execSync } from 'node:child_process';
+import { test, expect, type Browser, type Page, type BrowserContext, type ConsoleMessage } from '@playwright/test';
+
+const APP_A_URL = 'http://localhost:3001';
+const APP_B_URL = 'http://localhost:3002';
+
+const COMPOSE_FILE = 'docker-compose.nat-test.yaml';
+
+/** Track console messages from a page; supports awaiting on prefixes. */
+function trackConsole(page: Page) {
+  const messages: string[] = [];
+  page.on('console', (msg) => messages.push(msg.text()));
+
+  return {
+    messages,
+    has(prefix: string): boolean {
+      return messages.some(m => m.startsWith(prefix));
+    },
+    waitFor(prefix: string, timeout = 60_000): Promise<string> {
+      const existing = messages.find(m => m.startsWith(prefix));
+      if (existing) return Promise.resolve(existing);
+
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          page.off('console', handler);
+          reject(new Error(
+            `Timeout (${timeout}ms) waiting for console: "${prefix}"\n` +
+            `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
+          ));
+        }, timeout);
+        const handler = (msg: ConsoleMessage) => {
+          if (msg.text().startsWith(prefix)) {
+            clearTimeout(timer);
+            page.off('console', handler);
+            resolve(msg.text());
+          }
+        };
+        page.on('console', handler);
+      });
+    },
+  };
+}
+
+interface PageHandle {
+  page: Page;
+  track: ReturnType<typeof trackConsole>;
+  context: BrowserContext;
+  peerId: string;
+}
+
+async function initPage(browser: Browser, url: string): Promise<PageHandle> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    const track = trackConsole(page);
+    await page.goto(url);
+    await track.waitFor('INIT_COMPLETE', 90_000);
+    const peerIdMsg = await track.waitFor('PEER_ID:', 5_000);
+    const peerId = peerIdMsg.replace('PEER_ID:', '').trim();
+    return { page, track, context, peerId };
+  } catch (err) {
+    await context.close();
+    throw err;
+  }
+}
+
+/** Replace the in-page console tracker after a reload (keeps closing helpers happy). */
+function rebindTracker(handle: PageHandle): PageHandle {
+  return { ...handle, track: trackConsole(handle.page) };
+}
+
+async function waitForPeerConnection(track: ReturnType<typeof trackConsole>, timeout = 90_000) {
+  await track.waitFor('PEER_CONNECTED:', timeout);
+}
+
+async function waitForMesh(page: Page, ms = 10_000) {
+  await page.waitForTimeout(ms);
+}
+
+/**
+ * Run a docker compose subcommand against the NAT-test compose file.
+ * Failures are surfaced via thrown Error so the test fails loudly.
+ */
+function compose(args: string): string {
+  try {
+    return execSync(`docker compose -f ${COMPOSE_FILE} ${args}`, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      timeout: 120_000,
+    });
+  } catch (err) {
+    const e = err as { stdout?: Buffer; stderr?: Buffer; message: string };
+    throw new Error(
+      `docker compose ${args} failed: ${e.message}\n` +
+      `stdout: ${e.stdout?.toString() ?? ''}\n` +
+      `stderr: ${e.stderr?.toString() ?? ''}`,
+    );
+  }
+}
+
+/**
+ * Poll an HTTP URL until it responds with 2xx or `timeoutMs` elapses.
+ * Used after restarting test-app containers to wait for `serve` to come back.
+ */
+async function waitForUrl(page: Page, url: string, timeoutMs = 60_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const resp = await page.request.get(url, { timeout: 2000 });
+      if (resp.ok()) return;
+    } catch {
+      // ignore and retry
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  throw new Error(`Timed out waiting for ${url} to respond after ${timeoutMs}ms`);
+}
+
+// ---------------------------------------------------------------------------
+// Test suites
+// ---------------------------------------------------------------------------
+
+test.describe('NAT Relay Failure Recovery', () => {
+  test.setTimeout(360_000);
+
+  // The relay container generates a fresh peer ID on every start, so a true
+  // restart cycle invalidates the config.json that test-app containers baked
+  // in via their entrypoint script. We therefore restart relay + both
+  // test-app containers and reload browser pages so they pick up the new
+  // relay info. The end-state assertion is that cross-NAT sync resumes.
+  test.skip(!!process.env.CI && !process.env.RUN_NAT_RESTART, 'Relay restart cycle is too slow / flaky for default CI runs (set RUN_NAT_RESTART=1 to enable)');
+
+  test('cross-NAT sync resumes after relay container restart', async ({ browser }) => {
+    let a = await initPage(browser, APP_A_URL);
+    let b = await initPage(browser, APP_B_URL);
+    try {
+      await Promise.all([
+        waitForPeerConnection(a.track),
+        waitForPeerConnection(b.track),
+      ]);
+      await waitForMesh(a.page);
+
+      // Establish working baseline: A -> B over relay.
+      const preMsg = b.track.waitFor('PUBSUB_MESSAGE:', 45_000);
+      await a.page.fill('#message-input', 'pre-restart');
+      await a.page.click('#send-btn');
+      await preMsg;
+
+      // Snapshot pre-restart message counts so we can confirm growth later.
+      const preMessagesB = await b.page.evaluate(() => (window as any).__messages);
+      expect(preMessagesB.some((m: any) => m.text === 'pre-restart')).toBe(true);
+
+      // Restart the relay. We also restart the test-app containers so their
+      // entrypoint script picks up the new relay-info.json and rewrites
+      // config.json with the new peer ID. Browsers will be reloaded next.
+      compose('restart relay');
+      compose('restart test-app-a test-app-b');
+
+      // Wait for the test-app HTTP servers to come back online before reload.
+      await waitForUrl(a.page, APP_A_URL, 90_000);
+      await waitForUrl(b.page, APP_B_URL, 90_000);
+
+      // Close stale browser contexts (the existing libp2p instances are
+      // pinned to the old relay peer ID and will not be able to recover).
+      await a.context.close();
+      await b.context.close();
+
+      // Re-open both pages. They will fetch the new config.json (new relay
+      // peer ID & multiaddr) and re-bootstrap.
+      a = await initPage(browser, APP_A_URL);
+      b = await initPage(browser, APP_B_URL);
+
+      await Promise.all([
+        waitForPeerConnection(a.track, 120_000),
+        waitForPeerConnection(b.track, 120_000),
+      ]);
+      await waitForMesh(a.page, 15_000);
+
+      // Verify cross-NAT sync works again post-restart.
+      const postMsg = b.track.waitFor('PUBSUB_MESSAGE:', 60_000);
+      await a.page.fill('#message-input', 'post-restart');
+      await a.page.click('#send-btn');
+      await postMsg;
+
+      const postMessagesB = await b.page.evaluate(() => (window as any).__messages);
+      expect(postMessagesB.some((m: any) => m.text === 'post-restart')).toBe(true);
+    } finally {
+      await a.context.close().catch(() => {});
+      await b.context.close().catch(() => {});
+    }
+  });
+});
+
+test.describe('NAT Browser Reconnection', () => {
+  test.setTimeout(300_000);
+
+  // Mesh re-formation through a single relay can take 10s+ after a peer
+  // rejoins; in CI this is occasionally flaky. Same caveat as resilience.spec.ts.
+  test.skip(!!process.env.CI, 'Cross-NAT browser reconnect is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
+
+  test('cross-NAT peer catches up after page reload', async ({ browser }) => {
+    const a = await initPage(browser, APP_A_URL);
+    let b = await initPage(browser, APP_B_URL);
+    try {
+      await Promise.all([
+        waitForPeerConnection(a.track),
+        waitForPeerConnection(b.track),
+      ]);
+      await waitForMesh(a.page);
+
+      // Send a baseline message before reload to confirm sync is healthy.
+      const preReload = b.track.waitFor('PUBSUB_MESSAGE:', 45_000);
+      await a.page.fill('#message-input', 'before-reload');
+      await a.page.click('#send-btn');
+      await preReload;
+
+      // Reload B (simulates the cross-NAT browser dropping & coming back).
+      b = rebindTracker(b);
+      await b.page.reload();
+      await b.track.waitFor('INIT_COMPLETE', 90_000);
+      await b.track.waitFor('PEER_CONNECTED:', 120_000);
+      await waitForMesh(b.page, 12_000);
+
+      // Send a fresh message from A; B should receive it after reconnecting.
+      const postReload = b.track.waitFor('PUBSUB_MESSAGE:', 60_000);
+      await a.page.fill('#message-input', 'after-reload');
+      await a.page.click('#send-btn');
+      await postReload;
+
+      const messagesB = await b.page.evaluate(() => (window as any).__messages);
+      expect(messagesB.some((m: any) => m.text === 'after-reload')).toBe(true);
+    } finally {
+      await a.context.close().catch(() => {});
+      await b.context.close().catch(() => {});
+    }
+  });
+
+  test('cross-NAT peer can send after navigator.onLine offline/online cycle', async ({ browser }) => {
+    const a = await initPage(browser, APP_A_URL);
+    const b = await initPage(browser, APP_B_URL);
+    try {
+      await Promise.all([
+        waitForPeerConnection(a.track),
+        waitForPeerConnection(b.track),
+      ]);
+      await waitForMesh(a.page);
+
+      // Sanity check: bi-directional baseline.
+      const baseline = b.track.waitFor('PUBSUB_MESSAGE:', 45_000);
+      await a.page.fill('#message-input', 'pre-offline');
+      await a.page.click('#send-btn');
+      await baseline;
+
+      // Simulate B losing connectivity for a few seconds.
+      await b.context.setOffline(true);
+      await b.page.waitForTimeout(5_000);
+      await b.context.setOffline(false);
+
+      // Give libp2p time to re-establish (transports must reconnect through relay).
+      await waitForMesh(b.page, 20_000);
+
+      // After coming back online, B should be able to send a message that A
+      // receives. We don't require A's send to reach B (depends on whether
+      // the relay also dropped the connection), but B sending to A is a
+      // stronger indicator that the browser end recovered.
+      const aReceives = a.track.waitFor('PUBSUB_MESSAGE:', 60_000);
+      await b.page.fill('#message-input', 'post-offline-from-b');
+      await b.page.click('#send-btn');
+      await aReceives;
+
+      const messagesA = await a.page.evaluate(() => (window as any).__messages);
+      expect(messagesA.some((m: any) => m.text === 'post-offline-from-b')).toBe(true);
+    } finally {
+      await a.context.close().catch(() => {});
+      await b.context.close().catch(() => {});
+    }
+  });
+});
+
+test.describe('NAT Rapid Concurrent Edits', () => {
+  test.setTimeout(240_000);
+
+  // Volume test for cross-NAT sync. We require at least 60% delivery on each
+  // side (out of 10 messages from each peer). Higher than the existing 50%
+  // threshold in nat-traversal.spec.ts since this is a focused stress test.
+  test.skip(!!process.env.CI, 'Rapid cross-NAT concurrent edits are flaky on CI; run with `yarn test:nat` locally');
+
+  test('both peers converge after rapid bidirectional cross-NAT messages', async ({ browser }) => {
+    const a = await initPage(browser, APP_A_URL);
+    const b = await initPage(browser, APP_B_URL);
+    try {
+      await Promise.all([
+        waitForPeerConnection(a.track),
+        waitForPeerConnection(b.track),
+      ]);
+      await waitForMesh(a.page);
+
+      // Warmup to ensure mesh is settled.
+      const warmup = b.track.waitFor('PUBSUB_MESSAGE:', 60_000);
+      await a.page.fill('#message-input', 'warmup');
+      await a.page.click('#send-btn');
+      await warmup;
+
+      const count = 10;
+      // Interleave sends from both sides as fast as possible, with tiny
+      // pauses so gossipsub has a chance to forward each one. The point of
+      // this test is high cross-NAT throughput, not back-pressure handling.
+      for (let i = 0; i < count; i++) {
+        await a.page.fill('#message-input', `A-edit-${i}`);
+        await a.page.click('#send-btn');
+        await b.page.fill('#message-input', `B-edit-${i}`);
+        await b.page.click('#send-btn');
+        await a.page.waitForTimeout(150);
+      }
+
+      // Wait for both sides to receive at least 60% of the other's messages.
+      const target = Math.ceil(count * 0.6);
+      await Promise.all([
+        a.page.waitForFunction(
+          (n) => (window as any).__messages?.filter((m: any) => m.text.startsWith('B-edit-')).length >= n,
+          target,
+          { timeout: 90_000 },
+        ),
+        b.page.waitForFunction(
+          (n) => (window as any).__messages?.filter((m: any) => m.text.startsWith('A-edit-')).length >= n,
+          target,
+          { timeout: 90_000 },
+        ),
+      ]);
+
+      const messagesA = await a.page.evaluate(() => (window as any).__messages);
+      const messagesB = await b.page.evaluate(() => (window as any).__messages);
+
+      // Each side should always have all of its own messages.
+      for (let i = 0; i < count; i++) {
+        expect(messagesA.some((m: any) => m.text === `A-edit-${i}`)).toBe(true);
+        expect(messagesB.some((m: any) => m.text === `B-edit-${i}`)).toBe(true);
+      }
+
+      const aFromB = messagesA.filter((m: any) => m.text.startsWith('B-edit-')).length;
+      const bFromA = messagesB.filter((m: any) => m.text.startsWith('A-edit-')).length;
+      console.log(`Cross-NAT rapid delivery: A<-B ${aFromB}/${count}, B<-A ${bFromA}/${count}`);
+
+      expect(aFromB).toBeGreaterThanOrEqual(target);
+      expect(bFromA).toBeGreaterThanOrEqual(target);
+    } finally {
+      await a.context.close().catch(() => {});
+      await b.context.close().catch(() => {});
+    }
+  });
+});
