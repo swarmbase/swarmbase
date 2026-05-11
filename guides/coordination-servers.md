@@ -560,8 +560,10 @@ The public multiaddr your clients should use is constructed from the Fly hostnam
 > **TLS:** Fly.io terminates TLS for HTTPS/WSS traffic on port 443 by default,
 > but the relay uses raw TCP ports (9001/9002) configured as `[[services]]` in
 > `fly.toml`. Fly does **not** automatically add TLS to raw TCP services.
-> Browsers require `wss://` (TLS) for non-localhost WebSocket connections, so
-> you have two options:
+> Production deployments must serve WebSocket clients over `wss://` because
+> browsers block `ws://` connections from HTTPS-served pages under the
+> mixed-content policy. Connections from HTTP origins or `localhost` may use
+> `ws://`, but production multiaddrs should use `wss://`. You have two options:
 >
 > **Option A — Fly's built-in TLS termination (recommended):**
 > Add `"tls"` to the port handlers in `fly.toml`:

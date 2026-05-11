@@ -25,10 +25,13 @@ primary_region = "iad"           # US East (Virginia); change to your nearest re
 # WebSocket port — browser peers connect here (libp2p WebSocket transport).
 #
 # NOTE: `handlers = []` means Fly forwards raw TCP without terminating TLS,
-# so this exposes plain `ws://` (not `wss://`). Browsers reject non-localhost
-# `ws://` connections, so for production browser deployments you must either
-# add the `"tls"` handler here (Fly terminates TLS and serves `wss://`) or
-# front the relay with another TLS terminator. See
+# so this exposes plain `ws://` (not `wss://`). Production deployments must
+# serve WebSocket clients over `wss://` because browsers block `ws://`
+# connections from HTTPS-served pages under the mixed-content policy.
+# Connections from HTTP origins or `localhost` may use `ws://`, but production
+# multiaddrs should use `wss://`. For production browser deployments you must
+# either add the `"tls"` handler here (Fly terminates TLS and serves `wss://`)
+# or front the relay with another TLS terminator. See
 # `guides/coordination-servers.md` §5.3 for the recommended configuration.
 [[services]]
   protocol = "tcp"
