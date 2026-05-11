@@ -580,17 +580,49 @@ The public multiaddr your clients should use is constructed from the Fly hostnam
 > ```
 >
 > **Option B — Fly proxy on port 443:**
-> Use an `[http_service]` block instead of `[[services]]` for port 9001 and set
-> `protocol = "tcp"`. The Fly proxy handles TLS termination on 443 and forwards
-> plain WebSocket frames to the container. See the Fly.io docs on
-> [TCP services](https://fly.io/docs/networking/services/) for details.
+> Replace the `[[services]]` block with an `[http_service]` block so the Fly
+> proxy terminates TLS on 443 and forwards plain WebSocket frames to the
+> container on port 9001:
+> ```toml
+> [http_service]
+>   internal_port = 9001
+>   force_https = true
+>   auto_stop_machines = "off"
+>   auto_start_machines = true
+>   processes = ["app"]
+> ```
+> Clients then connect on the HTTPS port:
+> ```text
+> /dns4/<APP_NAME>.fly.dev/tcp/443/wss/p2p/<PEER_ID>
+> ```
+> See the Fly.io
+> [`http_service` reference](https://fly.io/docs/reference/configuration/#the-http_service-section)
+> for additional options (concurrency, checks, response headers).
 
 ### 5.4 Client Configuration
 
-Once you have the multiaddr, configure your SwarmDB client:
+Once you have the multiaddr, configure your SwarmDB client.
+
+In a **browser** application, combine `defaultConfig` and
+`defaultBootstrapConfig` (both exported from `@collabswarm/collabswarm`):
 
 ```typescript
-import { defaultNodeConfig } from '@collabswarm/collabswarm';
+import {
+  defaultConfig,
+  defaultBootstrapConfig,
+} from '@collabswarm/collabswarm';
+
+const config = defaultConfig(
+  defaultBootstrapConfig([
+    '/dns4/myapp-relay.fly.dev/tcp/9001/wss/p2p/12D3KooWAbc123...',
+  ]),
+);
+```
+
+In a **Node** process, import the Node-only helper from the `/node` subpath:
+
+```typescript
+import { defaultNodeConfig } from '@collabswarm/collabswarm/node';
 
 const config = defaultNodeConfig({
   list: [
