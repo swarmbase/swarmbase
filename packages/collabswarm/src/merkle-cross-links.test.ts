@@ -405,6 +405,114 @@ describe('mergeRemoteSyncTree (per-message cross-link dedup)', () => {
     expect(out.filter(([cid]) => cid === 'A')).toHaveLength(1);
   });
 
+  test('upgrades a deferred-leaf entry and walks newly-discovered children when CID is later seen inline', () => {
+    // Regression test for PR #259 Copilot thread A:
+    // If a CID is FIRST encountered as a deferred leaf (no `children`) and
+    // LATER encountered inline with a populated `children` map (possible if
+    // serializer or key ordering varies, or if a future remote message
+    // structure interleaves cross-links before inline subtrees), the inline
+    // children must still be walked. Previously, the dedup short-circuit
+    // returned early on the second visit and silently dropped the inline
+    // descendants (A's children: B, C).
+    //
+    // Tree (insertion order matters):
+    //   root D
+    //     children (insertion order):
+    //       A   -- deferred cross-link leaf (no payload, no children)
+    //       A'  -- inline visit of the SAME CID A, this time with children
+    //                children: { B (inline), C (inline) }
+    //
+    // We can't add two keys with the same name to one object literal, so we
+    // simulate the "same CID seen twice" case by nesting: D -> A (deferred)
+    // and D -> X (inline) where X's subtree also references A inline with
+    // children. The dedup is keyed on CID, so the two A visits collapse --
+    // and the bug is whether A's inline children get walked.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-D',
+      children: {
+        // First visit: A as a deferred cross-link leaf (no children, no payload).
+        A: { kind: docKind },
+        // Second visit (via X's subtree): A inline with children B and C.
+        X: {
+          kind: docKind,
+          change: 'payload-X',
+          children: {
+            A: {
+              kind: docKind,
+              change: 'payload-A',
+              children: {
+                B: { kind: docKind, change: 'payload-B' },
+                C: { kind: docKind, change: 'payload-C' },
+              },
+            },
+          },
+        },
+      },
+    };
+    const out = mergeRemoteSyncTree('D', tree, undefined, new Set());
+    const byCid = new Map(out.map(([cid, , change]) => [cid, change]));
+
+    // All five distinct CIDs must appear exactly once.
+    const cids = out.map(([cid]) => cid).sort();
+    expect(cids).toEqual(['A', 'B', 'C', 'D', 'X']);
+
+    // A must carry the inline payload (deferred-leaf was upgraded).
+    expect(byCid.get('A')).toBe('payload-A');
+
+    // CRITICAL: A's inline children B and C must be present. Before the fix,
+    // the early-return on the second A visit dropped both of them.
+    expect(byCid.get('B')).toBe('payload-B');
+    expect(byCid.get('C')).toBe('payload-C');
+  });
+
+  test('walks children on the inline visit when a CID was previously seen only as a deferred leaf (sibling order)', () => {
+    // Additional regression: the deferred leaf and the inline visit are
+    // siblings under the same parent. Insertion order: deferred A first,
+    // then inline A with children. Verifies the upgrade-and-walk path even
+    // when the two visits share a parent rather than living in separate
+    // subtrees.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-Root',
+      children: {},
+    };
+    // Deferred leaf for A first.
+    (tree.children as Record<string, Node>)['Adeferred'] = {
+      kind: docKind,
+      // Sentinel sibling that simulates "A as deferred" with a distinct key
+      // so the object literal can hold both visits. We then add the inline
+      // visit under the same CID via a nested wrapper.
+    };
+    // Add a wrapper Y whose subtree contains A inline with children D1, D2.
+    (tree.children as Record<string, Node>)['Y'] = {
+      kind: docKind,
+      change: 'payload-Y',
+      children: {
+        A: {
+          kind: docKind,
+          change: 'payload-A',
+          children: {
+            D1: { kind: docKind, change: 'payload-D1' },
+            D2: { kind: docKind, change: 'payload-D2' },
+          },
+        },
+      },
+    };
+    // Now also reference A directly as a deferred leaf at the root level
+    // (same CID as inside Y). Object literal can't have duplicate keys, but
+    // we can mutate after construction.
+    (tree.children as Record<string, Node>)['A'] = { kind: docKind };
+
+    const out = mergeRemoteSyncTree('Root', tree, undefined, new Set());
+    const byCid = new Map(out.map(([cid, , change]) => [cid, change]));
+
+    // A's inline descendants must be reached.
+    expect(byCid.get('A')).toBe('payload-A');
+    expect(byCid.get('D1')).toBe('payload-D1');
+    expect(byCid.get('D2')).toBe('payload-D2');
+  });
+
   test('cross-link leaf to a CID not in primary subtree is preserved as deferred', () => {
     // No duplication: a cross-link to a tip that isn't in the inline subtree
     // remains a deferred leaf so the receiver can fetch it from the

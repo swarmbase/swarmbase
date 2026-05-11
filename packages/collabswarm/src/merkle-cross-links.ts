@@ -11,7 +11,8 @@ import {
  * link. This bounds per-message overhead while still giving peers with
  * partial DAG views additional anchor points to discover and fetch missing
  * blocks from. Cross-links are emitted as deferred children (no embedded
- * payload), so each adds only a CID-string of message size.
+ * payload), so each adds only one CID key plus a small `{ kind }` tag in
+ * the `children` map -- bounded and small per cross-link.
  *
  * `MAX_CROSS_LINKS` is chosen as 3 (so up to 3 cross-links plus the primary
  * parent per outgoing message):
@@ -100,9 +101,15 @@ export type MergedSyncEntry<ChangesType> = [
  *     entry that carries an inline `change` payload is preferred over a
  *     deferred-leaf entry. This is robust regardless of traversal order
  *     (inline-first or deferred-first).
- *   - Subtrees rooted at an already-seen CID are not re-walked -- safe
- *     because CIDs are content-addressed: the same CID always names the
- *     same subtree.
+ *   - Track whether a CID's children have been walked. If a CID is first
+ *     encountered as a deferred leaf (no `children`) and later encountered
+ *     inline with a populated `children` map (possible if serializer or key
+ *     ordering varies), upgrade the stored entry AND walk the
+ *     newly-discovered children. Skipping the walk in this case would drop
+ *     the inline descendants entirely.
+ *   - A CID whose children have already been walked is not re-walked --
+ *     safe because CIDs are content-addressed: the same CID always names
+ *     the same subtree.
  *
  * Returns a new array; does not mutate the inputs.
  */
@@ -115,6 +122,11 @@ export function mergeRemoteSyncTree<ChangesType>(
   // CID -> winning entry for this message. Entries with an inline `change`
   // payload beat deferred-leaf entries; otherwise the first-seen entry wins.
   const byCid = new Map<string, MergedSyncEntry<ChangesType>>();
+  // CIDs whose `children` have already been walked. A CID may be in `byCid`
+  // without being in `walked` if it was first seen as a deferred leaf
+  // (no `children`). When the same CID later appears inline with children,
+  // we must descend into those children even though the entry already exists.
+  const walked = new Set<string>();
 
   function walk(
     nodeId: string | undefined,
@@ -128,26 +140,30 @@ export function mergeRemoteSyncTree<ChangesType>(
 
     const existing = byCid.get(nodeId);
     if (existing) {
-      // Same CID seen earlier in this traversal. If the previous entry was a
-      // deferred leaf (no inline payload) and this one carries the payload,
-      // upgrade. Otherwise keep what we have. Either way, don't re-walk the
-      // subtree (same CID = same content-addressed subtree, already covered).
+      // Same CID seen earlier in this traversal. Upgrade a deferred-leaf
+      // entry to an inline-payload entry if this visit carries the payload.
       if (existing[2] === undefined && node.change !== undefined) {
         byCid.set(nodeId, [nodeId, node.kind, node.change]);
       }
-      // If we already have payload, or the new one is also deferred, no
-      // change needed. In both cases we still need to descend if the new
-      // node has children that the prior visit didn't (impossible with
-      // content addressing -- same CID, same children -- so skip).
-      return;
+      // Fall through to the children walk below: if the prior visit was a
+      // deferred leaf (no children) and this visit carries children, we must
+      // still descend so we don't drop the inline descendants.
+    } else {
+      byCid.set(nodeId, [nodeId, node.kind, node.change]);
     }
 
-    byCid.set(nodeId, [nodeId, node.kind, node.change]);
+    // Don't re-walk children we've already walked. Content addressing means
+    // the same CID names the same subtree, so once we've descended through
+    // a CID's children we know its full inline subtree.
+    if (walked.has(nodeId)) return;
 
     if (node.children === undefined) return;
     if (node.children === crdtChangeNodeDeferred) {
       throw new Error('IPLD dereferencing is not supported yet!');
     }
+    // Mark as walked BEFORE descending so cycles (shouldn't happen with
+    // content addressing, but defensively) don't infinitely recurse.
+    walked.add(nodeId);
     for (const [childId, childNode] of Object.entries(node.children)) {
       walk(childId, childNode);
     }

@@ -2231,11 +2231,12 @@ export class CollabswarmDocument<
    *
    * **Known limitation -- partial internal state on failure:** If
    * `_makeChange()` fails partway through (e.g. encryption succeeds but
-   * pubsub publish throws), internal metadata (`_hashes`,
-   * `_lastSyncMessage`) may be left in an inconsistent state because
-   * `_makeChange` mutates them before completing all steps. Compaction
-   * counters (`_documentChangeCount`, `_changesSinceSnapshot`) are also
-   * NOT rolled back. These partial mutations are not reversed.
+   * pubsub publish throws), `_hashes` may retain CIDs for the rolled-back
+   * change (see below). Other counters and bookkeeping fields
+   * (`_lastSyncMessage`, `_documentChangeCount`, `_changesSinceSnapshot`,
+   * `_recentTips`) ARE restored from snapshots captured before
+   * `_makeChange()` -- see the "Internal metadata rollback" section below
+   * for details.
    *
    * **Specifically, `_hashes` may retain CIDs for the rolled-back change.**
    * Because `_hashes` is used to skip already-seen changes during sync,
