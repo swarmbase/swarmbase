@@ -34,6 +34,7 @@ import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
 import { PeerId } from '@libp2p/interface';
+import type { Stream } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { multiaddr } from '@multiformats/multiaddr';
 // libp2p v3 retired `@libp2p/pubsub` (the abstract base used by old
@@ -359,7 +360,7 @@ export class Collabswarm<
     // The raw stream is also now event-driven instead of `{ source, sink }`,
     // so we wrap it with the stream-adapter shim before passing it to the
     // legacy pipe-based protocol logic below.
-    const docLoadHandler = (rawStream: import('@libp2p/interface').Stream) => {
+    const docLoadHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
@@ -402,7 +403,7 @@ export class Collabswarm<
 
     // Handler implementation for snapshot-load requests.
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
-    const snapshotLoadHandler = (rawStream: import('@libp2p/interface').Stream) => {
+    const snapshotLoadHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
@@ -448,7 +449,7 @@ export class Collabswarm<
     // UTF-8 document path. The remaining bytes are the encrypted
     // key-update payload.
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
-    const keyUpdateHandler = (rawStream: import('@libp2p/interface').Stream) => {
+    const keyUpdateHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,

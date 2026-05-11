@@ -53,7 +53,7 @@ export interface DuplexStream {
  *     "Close stream for writing and return a promise that resolves once any
  *      pending data has been passed to the underlying transport. Note that
  *      the stream itself will remain readable until the remote end also
- *      closes it's writable end."
+ *      closes its writable end."
  *
  *   v3 intentionally does not expose a separate `closeWrite()` method --
  *   `close()` *is* the write-side close. Read-side close is `closeRead()`,
