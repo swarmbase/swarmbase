@@ -221,7 +221,9 @@ export class CollabswarmDocument<
   // received remote tip helps third peers that haven't yet received it.
   //
   // Kept small (`MAX_RECENT_TIPS`) to bound per-message overhead. Insertion-
-  // ordered so the oldest entry can be evicted in O(1).
+  // ordered so the oldest entry is at index 0 and the newest at the end;
+  // eviction uses `Array.prototype.shift()` (O(n) on n=`MAX_RECENT_TIPS`,
+  // which is a small constant -- effectively O(1) in practice).
   private _recentTips: RecentTip[] = [];
 
   // Compaction state.
@@ -597,14 +599,18 @@ export class CollabswarmDocument<
       for (const newHash of newDocumentHashes) {
         this._hashes.add(newHash);
       }
+      // Track applied tips for Merkle-CRDT cross-linking (paper §VI.B.e)
+      // *before* firing remote update handlers. Recording remote-applied
+      // CIDs lets this peer cross-link to them on its next outgoing change,
+      // helping other peers that may have missed the original broadcast.
+      // The ordering matters: if a handler synchronously triggers a local
+      // `change()`, `_makeChange()` must see the just-received remote tips
+      // in `_recentTips` to cross-link to them. This matches the ordering
+      // used in the missing-block fetch path below.
+      for (const [cid, kind] of newDocumentTips) {
+        this._trackTip(cid, kind);
+      }
       await this._fireRemoteUpdateHandlers(newDocumentHashes);
-    }
-    // Track applied tips for Merkle-CRDT cross-linking (paper §VI.B.e).
-    // Recording remote-applied CIDs lets this peer cross-link to them on
-    // its next outgoing change, helping other peers that may have missed
-    // the original broadcast.
-    for (const [cid, kind] of newDocumentTips) {
-      this._trackTip(cid, kind);
     }
 
     // Then apply missing hashes by fetching them from the blockstore.

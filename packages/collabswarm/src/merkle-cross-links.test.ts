@@ -191,6 +191,25 @@ describe('Merkle CRDT tip-tracking LRU (paper §VI.B.e)', () => {
     trackTipInList(tips, { cid: '', kind: docKind });
     expect(tips.map((t) => t.cid)).toEqual(['a']);
   });
+
+  test('maxRecentTips of 0 clears the list and skips appending', () => {
+    // Defensive: a misconfigured cap of 0 must not loop forever in the
+    // eviction `while` loop. The existing entries are dropped and the new
+    // entry is also dropped (cap=0 means "track nothing").
+    const tips: Tip[] = [{ cid: 'a', kind: docKind }];
+    trackTipInList(tips, { cid: 'b', kind: docKind }, 0);
+    expect(tips).toEqual([]);
+  });
+
+  test('negative maxRecentTips is clamped (no infinite loop)', () => {
+    // Defensive: a negative cap is invalid configuration but must not hang.
+    // The eviction loop uses `recentTips.length > cap`, which would be
+    // permanently true against an empty array if `cap` were negative. The
+    // implementation clamps `cap` to >= 0 before entering the loop.
+    const tips: Tip[] = [{ cid: 'a', kind: docKind }];
+    trackTipInList(tips, { cid: 'b', kind: docKind }, -5);
+    expect(tips).toEqual([]);
+  });
 });
 
 describe('Merkle CRDT cross-link integration scenario', () => {

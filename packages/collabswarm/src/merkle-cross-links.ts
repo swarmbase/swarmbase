@@ -79,12 +79,21 @@ export function trackTipInList<Tip extends { cid: string }>(
   maxRecentTips: number = MAX_RECENT_TIPS,
 ): Tip[] {
   if (!entry.cid) return recentTips;
+  // Clamp `maxRecentTips` to non-negative so a misconfigured zero or
+  // negative cap clears the list instead of looping forever (the eviction
+  // loop below uses `> cap`, which would never become false against an
+  // empty array if `cap` were negative).
+  const cap = Math.max(0, maxRecentTips);
+  if (cap === 0) {
+    recentTips.length = 0;
+    return recentTips;
+  }
   const existingIdx = recentTips.findIndex((t) => t.cid === entry.cid);
   if (existingIdx !== -1) {
     recentTips.splice(existingIdx, 1);
   }
   recentTips.push(entry);
-  while (recentTips.length > maxRecentTips) {
+  while (recentTips.length > cap) {
     recentTips.shift();
   }
   return recentTips;
