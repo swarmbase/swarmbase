@@ -575,7 +575,7 @@ describe('YjsJSONSerializer', () => {
     const serializer = new YjsJSONSerializer();
     const wire = buildWire({ documentId: 'doc', keychainChanges: [1, 2, 3] });
     expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
-      /Invalid sync message.*'keychainChanges' must be a string when present.*got object/,
+      /Invalid sync message.*'keychainChanges' must be a string when present.*got array/,
     );
   });
 

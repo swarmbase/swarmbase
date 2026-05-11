@@ -20,6 +20,7 @@ import {
   CRDTChangeNodeWire,
   CRDTProvider,
   CRDTSyncMessage,
+  describeValue,
   deserializeChangeNodeFromJSON,
   JSONSerializer,
   Keychain,
@@ -464,13 +465,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     // the equivalent guard in `YjsJSONSerializer.deserializeSyncMessage`.
     if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
       throw new Error(
-        `Invalid sync message: expected a plain object (got ${
-          decoded === null
-            ? 'null'
-            : Array.isArray(decoded)
-              ? 'array'
-              : typeof decoded
-        })`,
+        `Invalid sync message: expected a plain object (got ${describeValue(
+          decoded,
+        )})`,
       );
     }
     const raw = decoded as {
@@ -488,21 +485,25 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     // and attribute the failure back to the peer with a descriptive error.
     if (typeof raw.documentId !== 'string') {
       throw new Error(
-        `Invalid sync message: 'documentId' must be a string (got ${
-          raw.documentId === null ? 'null' : typeof raw.documentId
-        })`,
+        `Invalid sync message: 'documentId' must be a string (got ${describeValue(
+          raw.documentId,
+        )})`,
       );
     }
     // Validate optional scalar fields that have a fixed expected type. Skipped
     // when omitted (`undefined`) so callers can send partial sync messages.
     if (raw.changeId !== undefined && typeof raw.changeId !== 'string') {
       throw new Error(
-        `Invalid sync message: 'changeId' must be a string when present (got ${typeof raw.changeId})`,
+        `Invalid sync message: 'changeId' must be a string when present (got ${describeValue(
+          raw.changeId,
+        )})`,
       );
     }
     if (raw.signature !== undefined && typeof raw.signature !== 'string') {
       throw new Error(
-        `Invalid sync message: 'signature' must be a string when present (got ${typeof raw.signature})`,
+        `Invalid sync message: 'signature' must be a string when present (got ${describeValue(
+          raw.signature,
+        )})`,
       );
     }
     let snapshot: any;
@@ -521,13 +522,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         Array.isArray(raw.snapshot)
       ) {
         throw new Error(
-          `Invalid sync message: 'snapshot' must be an object when present (got ${
-            raw.snapshot === null
-              ? 'null'
-              : Array.isArray(raw.snapshot)
-                ? 'array'
-                : typeof raw.snapshot
-          })`,
+          `Invalid sync message: 'snapshot' must be an object when present (got ${describeValue(
+            raw.snapshot,
+          )})`,
         );
       }
       snapshot = { ...(raw.snapshot as Record<string, unknown>) };
@@ -545,7 +542,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     if (raw.keychainChanges !== undefined) {
       if (!Array.isArray(raw.keychainChanges)) {
         throw new Error(
-          `Invalid sync message: 'keychainChanges' must be an array when present (got ${typeof raw.keychainChanges})`,
+          `Invalid sync message: 'keychainChanges' must be an array when present (got ${describeValue(
+            raw.keychainChanges,
+          )})`,
         );
       }
       keychainChanges = deserializeBinaryChanges(raw.keychainChanges as string[]);

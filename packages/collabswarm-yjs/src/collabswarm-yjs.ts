@@ -6,6 +6,7 @@ import {
   CRDTChangeNodeWire,
   CRDTProvider,
   CRDTSyncMessage,
+  describeValue,
   deserializeChangeNodeFromJSON,
   JSONSerializer,
   Keychain,
@@ -98,13 +99,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     // `AutomergeJSONSerializer.deserializeSyncMessage`.
     if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
       throw new Error(
-        `Invalid sync message: expected a plain object (got ${
-          decoded === null
-            ? 'null'
-            : Array.isArray(decoded)
-              ? 'array'
-              : typeof decoded
-        })`,
+        `Invalid sync message: expected a plain object (got ${describeValue(
+          decoded,
+        )})`,
       );
     }
     const raw = decoded as {
@@ -121,19 +118,23 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     // consumers that key documents by string ID.
     if (typeof raw.documentId !== 'string') {
       throw new Error(
-        `Invalid sync message: 'documentId' must be a string (got ${
-          raw.documentId === null ? 'null' : typeof raw.documentId
-        })`,
+        `Invalid sync message: 'documentId' must be a string (got ${describeValue(
+          raw.documentId,
+        )})`,
       );
     }
     if (raw.changeId !== undefined && typeof raw.changeId !== 'string') {
       throw new Error(
-        `Invalid sync message: 'changeId' must be a string when present (got ${typeof raw.changeId})`,
+        `Invalid sync message: 'changeId' must be a string when present (got ${describeValue(
+          raw.changeId,
+        )})`,
       );
     }
     if (raw.signature !== undefined && typeof raw.signature !== 'string') {
       throw new Error(
-        `Invalid sync message: 'signature' must be a string when present (got ${typeof raw.signature})`,
+        `Invalid sync message: 'signature' must be a string when present (got ${describeValue(
+          raw.signature,
+        )})`,
       );
     }
     // Decode snapshot base64 fields back to Uint8Array.
@@ -150,13 +151,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         Array.isArray(raw.snapshot)
       ) {
         throw new Error(
-          `Invalid sync message: 'snapshot' must be an object when present (got ${
-            raw.snapshot === null
-              ? 'null'
-              : Array.isArray(raw.snapshot)
-                ? 'array'
-                : typeof raw.snapshot
-          })`,
+          `Invalid sync message: 'snapshot' must be an object when present (got ${describeValue(
+            raw.snapshot,
+          )})`,
         );
       }
       snapshot = { ...(raw.snapshot as Record<string, unknown>) };
@@ -171,7 +168,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     if (raw.keychainChanges !== undefined) {
       if (typeof raw.keychainChanges !== 'string') {
         throw new Error(
-          `Invalid sync message: 'keychainChanges' must be a string when present (got ${typeof raw.keychainChanges})`,
+          `Invalid sync message: 'keychainChanges' must be a string when present (got ${describeValue(
+            raw.keychainChanges,
+          )})`,
         );
       }
       keychainChanges = Base64.toUint8Array(raw.keychainChanges);

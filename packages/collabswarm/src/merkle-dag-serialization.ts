@@ -34,6 +34,27 @@ function isValidChangeNodeKind(value: unknown): value is CRDTChangeNodeKind {
 }
 
 /**
+ * Human-readable label for an unknown value's runtime type, used in wire
+ * validation error messages.
+ *
+ * `typeof` alone reports `'object'` for both `null` and arrays, which
+ * obscures common malformed-peer cases. This helper distinguishes those:
+ * - `null`           -> `'null'`
+ * - any array        -> `'array'`
+ * - anything else    -> raw `typeof` result (`'object'`, `'string'`,
+ *                      `'number'`, `'boolean'`, `'undefined'`, etc.)
+ *
+ * Use in validation error strings whenever a field's expected type is not
+ * already enforced to be a primitive, so error attribution back to the peer
+ * is unambiguous.
+ */
+export function describeValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+/**
  * Wire-shape mirror of `CRDTChangeNode<T>` used during JSON serialization.
  *
  * The `kind` / `keyID` / `children` shape is preserved exactly; only the
@@ -130,9 +151,9 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
   // peer crashes the deserializer by supplying `changes: null`.
   if (typeof node !== 'object' || node === null || Array.isArray(node)) {
     throw new Error(
-      `Invalid merkle-dag node: expected a plain object (got ${
-        node === null ? 'null' : Array.isArray(node) ? 'array' : typeof node
-      })`,
+      `Invalid merkle-dag node: expected a plain object (got ${describeValue(
+        node,
+      )})`,
     );
   }
   // Wire input is untrusted: a malformed peer message can omit or supply a
@@ -154,9 +175,9 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
   // violate the `CRDTChangeNode.keyID?: string` contract.
   if (node.keyID !== undefined && typeof node.keyID !== 'string') {
     throw new Error(
-      `Invalid merkle-dag node: "keyID" must be a string when present (got ${
-        node.keyID === null ? 'null' : typeof node.keyID
-      })`,
+      `Invalid merkle-dag node: "keyID" must be a string when present (got ${describeValue(
+        node.keyID,
+      )})`,
     );
   }
   const change = node.change !== undefined ? decodeLeaf(node.change) : undefined;
@@ -191,9 +212,7 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
         throw new Error(
           `Invalid merkle-dag node: child at key ${JSON.stringify(
             hash,
-          )} must be a plain object (got ${
-            child === null ? 'null' : Array.isArray(child) ? 'array' : typeof child
-          })`,
+          )} must be a plain object (got ${describeValue(child)})`,
         );
       }
       children[hash] = deserializeChangeNodeFromJSON(

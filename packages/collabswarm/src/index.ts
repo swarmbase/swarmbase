@@ -37,6 +37,7 @@ import {
 } from './crdt-change-node';
 import {
   CRDTChangeNodeWire,
+  describeValue,
   serializeChangeNodeForJSON,
   deserializeChangeNodeFromJSON,
 } from './merkle-dag-serialization';
@@ -113,6 +114,7 @@ export {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
   CRDTChangeNodeWire,
+  describeValue,
   serializeChangeNodeForJSON,
   deserializeChangeNodeFromJSON,
   CRDTSyncMessage,
