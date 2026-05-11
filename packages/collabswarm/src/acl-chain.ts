@@ -208,8 +208,18 @@ export interface ACLChainConfig<ChangesType, PrivateKey, PublicKey> {
  * Compute the canonical hash of an {@link ACLEntry}.
  *
  * Hashes only the entry's payload fields (everything except the signature),
- * so the hash is stable for use as a {@link ACLEntry.parentHash} and as a
- * dedup key.
+ * so the hash is stable across signers and serialization round-trips. The
+ * resulting digest is used in two places:
+ *
+ * - As the value embedded in the next entry's {@link ACLEntry.parentHash}
+ *   field, forming the chain's hash-linked backbone.
+ * - As an element of {@link ACLChain}'s internal `_entryHashes` array, which
+ *   tracks the most recent entry's hash so the next append can stamp the
+ *   correct `parentHash`.
+ *
+ * Note: this hash is *not* used as a deduplication key. `_ingestEntryInternal`
+ * deliberately does not deduplicate by hash — sequence-number and
+ * parent-hash checks enforce chain integrity instead.
  *
  * The encoding is length-prefixed to avoid ambiguity between adjacent
  * variable-length fields:
@@ -829,6 +839,15 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    * Runs under the mutation queue, so concurrent `ingestEntry` /
    * `authorAndAppend` / `replay` calls observe a consistent chain
    * throughout the replay.
+   *
+   * Partial-success contract: `replay()` first resets `_entries`,
+   * `_entryHashes`, and `_state`, then ingests the supplied entries in
+   * order. If verification fails at entry `i`, the method returns early
+   * with that failure result and the chain is left containing the valid
+   * prefix `entries[0..i-1]` along with the corresponding `_state`. The
+   * prior chain contents are *not* restored. Callers who need transactional
+   * "all-or-nothing" semantics should snapshot the chain before calling
+   * `replay()` and decide what to do based on the returned result.
    *
    * @param entries The full chain to verify. Each entry's signer key must
    *   be resolvable via `resolveKey(signerKeyId)`. If `resolveKey`
