@@ -24,6 +24,13 @@ import {
   crdtReaderChangeNode,
   crdtWriterChangeNode,
 } from './crdt-change-node';
+import {
+  MAX_CROSS_LINKS,
+  MAX_RECENT_TIPS,
+  RecentTip,
+  selectCrossLinks,
+  trackTipInList,
+} from './merkle-cross-links';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
@@ -201,6 +208,21 @@ export class CollabswarmDocument<
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
+
+  // Bounded list of recently-known change CIDs paired with their node kind.
+  // Used by `_makeChange()` to attach Merkle-CRDT cross-links (paper §VI.B.e)
+  // in addition to the primary parent link. Cross-links improve consistency
+  // and availability when peers have partial views of the DAG: a peer that
+  // missed an earlier message can still discover and fetch the corresponding
+  // block via a later change that references it.
+  //
+  // Populated by both local changes (in `_makeChange`) and remote-applied
+  // changes (in `_syncDocumentChanges`), since cross-linking to a freshly-
+  // received remote tip helps third peers that haven't yet received it.
+  //
+  // Kept small (`MAX_RECENT_TIPS`) to bound per-message overhead. Insertion-
+  // ordered so the oldest entry can be evicted in O(1).
+  private _recentTips: RecentTip[] = [];
 
   // Compaction state.
   private _compactionConfig: CompactionConfig;
@@ -502,6 +524,23 @@ export class CollabswarmDocument<
     return message;
   }
 
+  /**
+   * Record a CID as a recently-known tip for Merkle-CRDT cross-linking
+   * (paper §VI.B.e). Called for both locally-generated and remote-applied
+   * change nodes -- a peer A that just received B's change can cross-link
+   * to it on A's next outgoing change, helping a third peer C that missed
+   * B's broadcast discover the missing block. Cross-links to deferred CIDs
+   * are emitted as leaf nodes with only `kind` set; the receiver fetches
+   * the block from Helia when needed (see `_syncDocumentChanges`).
+   *
+   * Bounded to `MAX_RECENT_TIPS` entries (oldest evicted). If the CID is
+   * already tracked, move it to the back so it remains a high-priority
+   * cross-link candidate.
+   */
+  private _trackTip(cid: string, kind: CRDTChangeNodeKind): void {
+    trackTipInList(this._recentTips, { cid, kind }, MAX_RECENT_TIPS);
+  }
+
   private async _syncDocumentChanges(
     changeId: string | undefined,
     changes: CRDTChangeNode<ChangesType>,
@@ -517,6 +556,7 @@ export class CollabswarmDocument<
     // First apply changes that were sent directly.
     let newDocument = this.document;
     const newDocumentHashes: string[] = [];
+    const newDocumentTips: Array<[string, CRDTChangeNodeKind]> = [];
     const missingDocumentHashes: [string, CRDTChangeNodeKind][] = [];
     for (const [sentHash, sentChangeKind, sentChanges] of newChangeEntries) {
       if (sentChanges) {
@@ -528,6 +568,7 @@ export class CollabswarmDocument<
               sentChanges,
             );
             newDocumentHashes.push(sentHash);
+            newDocumentTips.push([sentHash, sentChangeKind]);
             this._documentChangeCount++;
             this._changesSinceSnapshot++;
             break;
@@ -536,12 +577,14 @@ export class CollabswarmDocument<
             // Apply the changes that were sent directly.
             this._readers.merge(sentChanges);
             newDocumentHashes.push(sentHash);
+            newDocumentTips.push([sentHash, sentChangeKind]);
             break;
           }
           case crdtWriterChangeNode: {
             // Apply the changes that were sent directly.
             this._mergeWriters(sentChanges);
             newDocumentHashes.push(sentHash);
+            newDocumentTips.push([sentHash, sentChangeKind]);
             break;
           }
         }
@@ -555,6 +598,13 @@ export class CollabswarmDocument<
         this._hashes.add(newHash);
       }
       await this._fireRemoteUpdateHandlers(newDocumentHashes);
+    }
+    // Track applied tips for Merkle-CRDT cross-linking (paper §VI.B.e).
+    // Recording remote-applied CIDs lets this peer cross-link to them on
+    // its next outgoing change, helping other peers that may have missed
+    // the original broadcast.
+    for (const [cid, kind] of newDocumentTips) {
+      this._trackTip(cid, kind);
     }
 
     // Then apply missing hashes by fetching them from the blockstore.
@@ -576,18 +626,21 @@ export class CollabswarmDocument<
                   this._hashes.add(missingHash);
                   this._documentChangeCount++;
                   this._changesSinceSnapshot++;
+                  this._trackTip(missingHash, missingHashKind);
                   await this._fireRemoteUpdateHandlers([missingHash]);
                   return;
                 }
                 case crdtReaderChangeNode: {
                   this._readers.merge(missingChanges);
                   this._hashes.add(missingHash);
+                  this._trackTip(missingHash, missingHashKind);
                   await this._fireRemoteUpdateHandlers([missingHash]);
                   return;
                 }
                 case crdtWriterChangeNode: {
                   this._mergeWriters(missingChanges);
                   this._hashes.add(missingHash);
+                  this._trackTip(missingHash, missingHashKind);
                   await this._fireRemoteUpdateHandlers([missingHash]);
                   return;
                 }
@@ -854,13 +907,43 @@ export class CollabswarmDocument<
     // Send new message.
     let updateMessage = this._createSyncMessage();
     const changeNode: CRDTChangeNode<ChangesType> = { kind, change: changes };
-    if (updateMessage.changeId && updateMessage.changes) {
-      // TODO: Add links to other part of change tree (See Merkle CRDT paper section VI.B.e).
+    const primaryParentId = updateMessage.changeId;
+    if (primaryParentId && updateMessage.changes) {
+      // Primary back-pointer: include the previous head's subtree inline so
+      // peers can apply our change without an extra round-trip for the parent.
       changeNode.children = {};
-      changeNode.children[updateMessage.changeId] = updateMessage.changes;
+      changeNode.children[primaryParentId] = updateMessage.changes;
+
+      // Cross-links (Merkle CRDT paper §VI.B.e): additionally reference other
+      // recent tips so a peer who missed an intermediate message can still
+      // discover the missing CID via a later message. Cross-link entries
+      // are emitted as *deferred* nodes (no `change` payload, no `children`)
+      // -- they carry only the CID + kind. Receivers that don't already have
+      // the block trigger a blockstore fetch in `_syncDocumentChanges`.
+      // Receivers that already have the block treat the entry as a no-op
+      // (deduplicated via `_hashes`).
+      const crossLinkTips = selectCrossLinks(
+        this._recentTips,
+        primaryParentId,
+        hash,
+        MAX_CROSS_LINKS,
+      );
+      for (const tip of crossLinkTips) {
+        // Skip if the primary parent's subtree already contains this CID.
+        if (changeNode.children[tip.cid]) continue;
+        // Deferred leaf: no `change` payload, no `children`. Receivers fetch
+        // the block from Helia if they don't already have it.
+        changeNode.children[tip.cid] = { kind: tip.kind };
+      }
     }
     updateMessage.changeId = hash;
     updateMessage.changes = changeNode;
+
+    // Track this new tip for future cross-linking. The primary parent is
+    // also retained -- it's the immediate predecessor of *this* tip and may
+    // still be useful as a cross-link target for the *next* change if a
+    // later remote sync arrives in between.
+    this._trackTip(hash, kind);
 
     // Sign new message.
     updateMessage.signature = await this._signAsWriter(updateMessage);
@@ -2213,6 +2296,8 @@ export class CollabswarmDocument<
     const lastSyncSnapshot = this._lastSyncMessage;
     const changeCountSnapshot = this._documentChangeCount;
     const compactionCountSnapshot = this._changesSinceSnapshot;
+    // Bounded copy (max MAX_RECENT_TIPS entries) -- cheap to snapshot.
+    const recentTipsSnapshot = [...this._recentTips];
 
     this._committing = true;
     try {
@@ -2270,6 +2355,7 @@ export class CollabswarmDocument<
       this._lastSyncMessage = lastSyncSnapshot;
       this._documentChangeCount = changeCountSnapshot;
       this._changesSinceSnapshot = compactionCountSnapshot;
+      this._recentTips = recentTipsSnapshot;
       this._inTransaction = false;
       this._pendingChangeFns = [];
       throw err;
