@@ -259,7 +259,19 @@ export function canonicalEntryPayload<ChangesType>(
   entry: Omit<ACLEntry<ChangesType>, 'signature'>,
   serializeChange: (change: ChangesType) => Uint8Array,
 ): Uint8Array {
-  const changeBytes = serializeChange(entry.change);
+  return canonicalEntryPayloadFromBytes(entry, serializeChange(entry.change));
+}
+
+/**
+ * Internal helper: build the canonical payload from a pre-serialized `change`
+ * byte buffer. Callers on the network ingestion path serialize and size-gate
+ * the change *before* invoking this so an oversized `change` cannot force a
+ * large header+payload allocation on the hot path.
+ */
+function canonicalEntryPayloadFromBytes<ChangesType>(
+  entry: Omit<ACLEntry<ChangesType>, 'signature' | 'change'>,
+  changeBytes: Uint8Array,
+): Uint8Array {
   const parent = entry.parentHash ?? new Uint8Array(0);
   const signerKey = entry.signerKeyId;
 
@@ -496,8 +508,15 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
   /**
    * Snapshot of the chain's entries. Returns a shallow copy so callers
    * can iterate without risk of seeing live mutations from concurrent
-   * appends. The entries themselves are not deeply copied; do not mutate
-   * the returned objects.
+   * appends.
+   *
+   * The entries themselves are the chain's *internal snapshots* of the
+   * originally-ingested entries (see `_ingestEntryInternal`); their byte
+   * fields are private copies that do not alias caller-owned buffers.
+   * They are still not frozen, so do not mutate the returned objects —
+   * doing so would corrupt subsequent reads through `entries()` and
+   * could desynchronize a serialized chain on the wire from this
+   * instance's view.
    */
   entries(): ReadonlyArray<ACLEntry<ChangesType>> {
     return this._entries.slice();
@@ -693,15 +712,48 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     //    here; if it throws on hostile input we surface it as a structured
     //    error rather than letting the exception escape.
     //
+    //    We serialize the `change` first and size-gate the result *before*
+    //    assembling the full header+payload buffer. Otherwise an oversized
+    //    network `change` would force the larger allocation in
+    //    `canonicalEntryPayloadFromBytes` (header + parent + signer +
+    //    changeBytes) on the hot path before the size check could run.
+    //
     //    We do not separately deduplicate by hash: any two entries with the
     //    same canonical payload would necessarily share a `sequenceNumber`,
     //    and the sequence check in step 2 already requires
     //    `entry.sequenceNumber === this._entries.length`. A re-ingested
     //    entry therefore can never reach this point with a matching hash.
     let entryHash: Uint8Array;
+    let changeBytes: Uint8Array;
+    try {
+      changeBytes = this._serializeChange(entry.change);
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `failed to serialize change: ${(err as Error).message}`,
+        index,
+      };
+    }
+    if (!(changeBytes instanceof Uint8Array)) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: 'serializeChange did not return a Uint8Array',
+        index,
+      };
+    }
+    if (changeBytes.byteLength > MAX_CHANGE_BYTES) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `serialized change exceeds maximum size (${changeBytes.byteLength} > ${MAX_CHANGE_BYTES} bytes)`,
+        index,
+      };
+    }
     let payloadBytes: Uint8Array;
     try {
-      payloadBytes = canonicalEntryPayload(entry, this._serializeChange);
+      payloadBytes = canonicalEntryPayloadFromBytes(entry, changeBytes);
     } catch (err) {
       return {
         ok: false,
@@ -711,7 +763,9 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       };
     }
     if (payloadBytes.byteLength > MAX_CHANGE_BYTES + 1024) {
-      // 1 KiB slack for the fixed header + parent/signer fields.
+      // 1 KiB slack for the fixed header + parent/signer fields. The
+      // `change` byte length was already gated above; this catches a
+      // pathological `parentHash` / `signerKeyId` combination.
       return {
         ok: false,
         reason: 'malformed-entry',
@@ -822,7 +876,31 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       };
     }
     this._state = newState;
-    this._entries.push(entry);
+    // Store an immutable snapshot rather than the caller-owned entry
+    // reference. `authorAndAppend` returns the entry it just built, and
+    // `ingestEntry` callers also still hold the same object. Mutating it
+    // afterwards -- e.g. flipping a byte in `signature` or `parentHash` --
+    // would otherwise corrupt the chain's recorded state. Deep-copy the
+    // byte fields we own; `change` is opaque (its concrete type belongs
+    // to the CRDT adapter) so we clone it only when it is itself a
+    // `Uint8Array`, otherwise we rely on the spread to at least isolate
+    // the property slot on our entry object from the caller's.
+    const snapshot: ACLEntry<ChangesType> = {
+      ...entry,
+      parentHash:
+        entry.parentHash === undefined
+          ? undefined
+          : new Uint8Array(entry.parentHash),
+      signerKeyId: new Uint8Array(entry.signerKeyId),
+      signature: new Uint8Array(entry.signature),
+      change:
+        entry.change instanceof Uint8Array
+          ? (new Uint8Array(entry.change) as unknown as ChangesType)
+          : entry.change,
+    };
+    this._entries.push(snapshot);
+    // `entryHash` is freshly allocated locally above (from `crypto.subtle`
+    // output), so no defensive copy is needed.
     this._entryHashes.push(entryHash);
 
     return { ok: true };

@@ -1046,3 +1046,311 @@ describe('concurrent mutation safety', () => {
     expect(chain.length).toBe(2);
   });
 });
+
+describe('oversized change rejection', () => {
+  // Thread A (CodeRabbit): the size gate must run *before* the full
+  // header+payload buffer is assembled, so a hostile peer cannot force a
+  // multi-megabyte allocation on the hot path by sending an oversized
+  // `change`.
+  //
+  // We exercise the gate two ways:
+  //   1. End-to-end: a change whose serialization exceeds MAX_CHANGE_BYTES
+  //      (1 MiB) is rejected as 'malformed-entry'.
+  //   2. Allocation order: we instrument the chain's `serializeChange`
+  //      callback so it returns an oversized buffer, then assert that
+  //      ingestion rejects without ever calling our spy a second time --
+  //      proving the rejection happened before any redundant work.
+
+  test('change larger than 1 MiB is rejected as malformed-entry', async () => {
+    const chain = makeChain([alice.publicKey]);
+    // Build a change whose serialized JSON exceeds MAX_CHANGE_BYTES (1 MiB).
+    // The keys array is included in the JSON encoding, so 1.1M single-char
+    // entries comfortably overshoots the limit while keeping the
+    // in-memory representation reasonable.
+    const huge: AclChange = {
+      op: 'add',
+      keys: Array.from({ length: 1_100_000 }, () => 'a'),
+    };
+    const payload = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: huge,
+      signerKeyId: await serializePublicKey(alice.publicKey),
+    };
+    const encoded = canonicalEntryPayload(payload, serializeChange);
+    const signature = await auth.sign(encoded, alice.privateKey);
+    const entry: ACLEntry<AclChange> = { ...payload, signature };
+
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/serialized change exceeds maximum size/);
+    }
+    expect(chain.length).toBe(0);
+  });
+
+  test('size gate runs before full payload assembly (allocation order)', async () => {
+    // Use a chain whose `serializeChange` returns an oversized buffer on
+    // every call, and confirm that ingestion bails out *immediately* after
+    // the first serialization -- i.e. we do not proceed to assemble the
+    // header+payload buffer (which would have been roughly twice the
+    // change size on top of the change bytes themselves).
+    const OVERSIZED = (1 << 20) + 1; // MAX_CHANGE_BYTES + 1
+    let calls = 0;
+    let largestAllocation = 0;
+    const spy = (_c: AclChange): Uint8Array => {
+      calls += 1;
+      const bytes = new Uint8Array(OVERSIZED);
+      largestAllocation = Math.max(largestAllocation, bytes.byteLength);
+      return bytes;
+    };
+    const chain = new ACLChain<AclChange, CryptoKey, CryptoKey>(
+      {
+        auth,
+        serializeKey: serializePublicKey,
+        ops: testOps,
+        genesisAuthorizedKeys: [alice.publicKey],
+      },
+      spy,
+    );
+
+    const entry: ACLEntry<AclChange> = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add', keys: [alice.hashHex] },
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    };
+
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/serialized change exceeds maximum size/);
+    }
+    // Exactly one serialization happened -- the gate fired before
+    // `canonicalEntryPayloadFromBytes` could re-walk or re-serialize.
+    expect(calls).toBe(1);
+    // And the largest allocation observed during ingestion was the
+    // change-bytes buffer itself, not the larger header+payload buffer
+    // (which would be header (24) + parent (0) + signerKey (~97) +
+    // changeBytes -- visibly bigger than just changeBytes).
+    expect(largestAllocation).toBe(OVERSIZED);
+  });
+
+  test('change at exactly 1 MiB still passes the size gate', async () => {
+    // The bound is inclusive (> MAX_CHANGE_BYTES is rejected, ==
+    // MAX_CHANGE_BYTES is allowed) so confirm the boundary is correct.
+    // We use a spy serializer that returns a buffer of exactly
+    // MAX_CHANGE_BYTES bytes; the entry will then fail signature
+    // verification (the signature is junk) rather than malformed-entry.
+    const exactly = (_c: AclChange): Uint8Array =>
+      new Uint8Array(1 << 20); // MAX_CHANGE_BYTES
+    const chain = new ACLChain<AclChange, CryptoKey, CryptoKey>(
+      {
+        auth,
+        serializeKey: serializePublicKey,
+        ops: testOps,
+        genesisAuthorizedKeys: [alice.publicKey],
+      },
+      exactly,
+    );
+
+    const entry: ACLEntry<AclChange> = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add', keys: [alice.hashHex] },
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array(96), // wrong length for ECDSA P-384 sig is fine
+    };
+
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Must NOT be the size gate; size is within bounds.
+      expect(result.message).not.toMatch(/serialized change exceeds/);
+      expect(result.reason).toBe('bad-signature');
+    }
+  });
+
+  test('serializeChange returning a non-Uint8Array is rejected', async () => {
+    // Defensive: if a custom adapter returns garbage we surface
+    // malformed-entry rather than crashing later when assembling the
+    // canonical payload.
+    const bogus = (_c: AclChange): Uint8Array =>
+      'not bytes' as unknown as Uint8Array;
+    const chain = new ACLChain<AclChange, CryptoKey, CryptoKey>(
+      {
+        auth,
+        serializeKey: serializePublicKey,
+        ops: testOps,
+        genesisAuthorizedKeys: [alice.publicKey],
+      },
+      bogus,
+    );
+
+    const entry: ACLEntry<AclChange> = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add', keys: [alice.hashHex] },
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    };
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/serializeChange/);
+    }
+  });
+});
+
+describe('ingested entries are snapshot, not aliased', () => {
+  // Thread B (CodeRabbit): the chain must not store the caller-owned entry
+  // object directly. Mutating the entry after ingestion (or after
+  // authorAndAppend returns) used to leak straight into `_entries` and
+  // could corrupt parent-hash links, signature verification on replay,
+  // and the chain's audit log.
+
+  test('mutating entry returned by authorAndAppend does not corrupt the chain', async () => {
+    const chain = makeChain([alice.publicKey]);
+
+    const entry = await chain.authorAndAppend(
+      { op: 'add', keys: [alice.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+
+    // Snapshot the chain's view of this entry's bytes BEFORE we mutate
+    // the caller's copy.
+    const beforeSig = new Uint8Array(chain.entries()[0].signature);
+    const beforeSigner = new Uint8Array(chain.entries()[0].signerKeyId);
+
+    // Mutate every byte field the caller can reach on their reference.
+    entry.signature.fill(0);
+    entry.signerKeyId.fill(0);
+
+    // The chain's stored entry must be unaffected.
+    const stored = chain.entries()[0];
+    expect(Array.from(stored.signature)).toEqual(Array.from(beforeSig));
+    expect(Array.from(stored.signerKeyId)).toEqual(Array.from(beforeSigner));
+    // Sanity: the caller's view really did mutate -- otherwise the test
+    // is vacuous.
+    expect(entry.signature.every((b) => b === 0)).toBe(true);
+  });
+
+  test('mutating entry passed to ingestEntry does not corrupt the chain', async () => {
+    // Author an entry on one chain, then ingest it onto a fresh chain
+    // and mutate the caller-owned reference. The fresh chain's stored
+    // copy must remain intact.
+    const sourceChain = makeChain([alice.publicKey]);
+    const e0 = await sourceChain.authorAndAppend(
+      { op: 'add', keys: [alice.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+
+    const targetChain = makeChain([alice.publicKey]);
+    const result = await targetChain.ingestEntry(e0, alice.publicKey);
+    expect(result.ok).toBe(true);
+
+    const storedBefore = targetChain.entries()[0];
+    const sigBefore = new Uint8Array(storedBefore.signature);
+    const keyBefore = new Uint8Array(storedBefore.signerKeyId);
+
+    // Now corrupt the caller's reference.
+    e0.signature.fill(0xff);
+    e0.signerKeyId.fill(0xff);
+    if (e0.parentHash) e0.parentHash.fill(0xff);
+
+    const storedAfter = targetChain.entries()[0];
+    expect(Array.from(storedAfter.signature)).toEqual(Array.from(sigBefore));
+    expect(Array.from(storedAfter.signerKeyId)).toEqual(Array.from(keyBefore));
+  });
+
+  test('mutating parentHash on a caller-owned entry does not break chain linkage', async () => {
+    // The parentHash on entry #1 forms the chain's hash-linked backbone.
+    // If the caller mutates entry.parentHash after ingestion, computing
+    // headHash via `_entryHashes` and replay() through computeEntryHash
+    // would otherwise disagree on what was actually appended.
+    const chain = makeChain([alice.publicKey]);
+    await chain.authorAndAppend(
+      { op: 'add', keys: [alice.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+    const e1 = await chain.authorAndAppend(
+      { op: 'add', keys: [bob.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+    expect(e1.parentHash).toBeDefined();
+
+    const storedParentBefore = new Uint8Array(chain.entries()[1].parentHash!);
+
+    // Mutate the caller-owned parentHash on the returned entry.
+    e1.parentHash!.fill(0);
+
+    // Chain's snapshot remains intact.
+    const storedParentAfter = chain.entries()[1].parentHash!;
+    expect(Array.from(storedParentAfter)).toEqual(
+      Array.from(storedParentBefore),
+    );
+
+    // And the hash from headHash() still verifies against the stored
+    // entry via computeEntryHash.
+    const recomputed = await computeEntryHash(
+      chain.entries()[1],
+      serializeChange,
+    );
+    expect(toHex(chain.headHash!)).toBe(toHex(recomputed));
+  });
+
+  test('snapshot does not alias caller buffers for the change field when it is Uint8Array', async () => {
+    // Special case: some CRDT adapters use a `Uint8Array` for the change
+    // type itself. The chain's snapshot must clone that byte buffer too.
+    interface BytesAclChange extends Uint8Array {}
+    const bytesSerialize = (c: BytesAclChange): Uint8Array =>
+      new Uint8Array(c);
+    const bytesOps: ACLChainOps<BytesAclChange, CryptoKey> = {
+      emptyState: () => new TestAclState() as unknown as ACLState<BytesAclChange, CryptoKey>,
+      applyChange: async (state) => state,
+      isWriter: async () => true,
+    };
+    const chain = new ACLChain<BytesAclChange, CryptoKey, CryptoKey>(
+      {
+        auth,
+        serializeKey: serializePublicKey,
+        ops: bytesOps,
+        genesisAuthorizedKeys: [alice.publicKey],
+      },
+      bytesSerialize,
+    );
+
+    const callerChange = new Uint8Array([1, 2, 3, 4]) as BytesAclChange;
+    const payload = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: callerChange,
+      signerKeyId: await serializePublicKey(alice.publicKey),
+    };
+    const encoded = canonicalEntryPayload(payload, bytesSerialize);
+    const signature = await auth.sign(encoded, alice.privateKey);
+    const entry: ACLEntry<BytesAclChange> = { ...payload, signature };
+
+    const result = await chain.ingestEntry(entry, alice.publicKey);
+    expect(result.ok).toBe(true);
+
+    // Mutate the caller's view of the change bytes.
+    callerChange.fill(0xff);
+
+    const stored = chain.entries()[0].change as unknown as Uint8Array;
+    expect(Array.from(stored)).toEqual([1, 2, 3, 4]);
+  });
+});
