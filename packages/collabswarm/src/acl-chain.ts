@@ -558,6 +558,10 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    *   error and indicates a misuse of the API, not a network attack.
    *   Network-supplied entries should be passed through {@link ingestEntry}
    *   instead, which returns a structured error rather than throwing.
+   *   Errors from {@link ACLChainConfig.serializeKey} (e.g. unsupported key
+   *   types) and from {@link ACLChainConfig.auth}'s `sign` method (e.g.
+   *   WebCrypto failures, key/algorithm incompatibility, hardware backend
+   *   errors) also propagate as a rejected promise.
    */
   async authorAndAppend(
     change: ChangesType,
