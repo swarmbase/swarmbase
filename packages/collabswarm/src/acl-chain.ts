@@ -324,9 +324,12 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * SHA-256 byte length, used to bound the size of `parentHash` and
- * `signerKeyId` fields. Network-supplied entries with unreasonably large
- * byte arrays here would otherwise force large allocations during hashing.
+ * Upper bound on byte length accepted for hash- or key-bytes fields
+ * (`parentHash`, `signerKeyId`). Sized generously above SHA-256's 32-byte
+ * digest and the canonical ECDSA P-384 public-key serialization so the
+ * cap rejects only obviously malformed peer input. Network-supplied
+ * entries with unreasonably large byte arrays here would otherwise force
+ * large allocations during hashing.
  */
 const MAX_HASH_BYTES = 64;
 

@@ -18,8 +18,9 @@ const auth = new SubtleCrypto();
 
 /**
  * Generate an ECDSA P-384 keypair using the same algorithm as the SubtleCrypto
- * auth provider's default. Each test gets fresh keys so identities don't
- * leak across tests.
+ * auth provider's default. The suite-level identities (`alice`, `bob`, etc.)
+ * are generated once in `beforeAll`; tests that need additional isolated
+ * identities (e.g., to model an unknown peer) call this helper inline.
  */
 async function genKeyPair(): Promise<{
   publicKey: CryptoKey;
