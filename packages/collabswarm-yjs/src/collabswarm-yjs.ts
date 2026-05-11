@@ -3,77 +3,25 @@ import {
   ACLProvider,
   CollabswarmDocumentChangeHandler,
   CRDTChangeBlock,
-  CRDTChangeNode,
-  CRDTChangeNodeDeferred,
-  crdtChangeNodeDeferred,
-  CRDTChangeNodeKind,
+  CRDTChangeNodeWire,
   CRDTProvider,
   CRDTSyncMessage,
+  deserializeChangeNodeFromJSON,
   JSONSerializer,
   Keychain,
   KeychainProvider,
   LRUCache,
+  serializeChangeNodeForJSON,
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
-type iCRDTChangeNode = {
-  kind: CRDTChangeNodeKind;
-  keyID?: string;
-  // Binary data is stored as a base64 string for JSON serialization.
-  // Base64 has only ~33% payload expansion and is the standard encoding for
-  // binary data in JSON, so this is an acceptable trade-off.
-  change?: string;
-  children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
-};
-
-function serializeUint8ArrayInMerkleDAG(
-  node: CRDTChangeNode<Uint8Array>,
-): iCRDTChangeNode {
-  const change = node.change ? Base64.fromUint8Array(node.change) : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: iCRDTChangeNode } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = serializeUint8ArrayInMerkleDAG(child);
-    }
-    return {
-      ...node,
-      change,
-      children,
-    };
-  } else {
-    return {
-      ...node,
-      change,
-      children: node.children,
-    };
-  }
-}
-
-function deserializeUint8ArrayInMerkleDAG(
-  node: iCRDTChangeNode,
-): CRDTChangeNode<Uint8Array> {
-  const change = node.change ? Base64.toUint8Array(node.change) : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: CRDTChangeNode<Uint8Array> } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = deserializeUint8ArrayInMerkleDAG(child);
-    }
-    return {
-      ...node,
-      change,
-      children,
-    };
-  } else {
-    return {
-      ...node,
-      change,
-      children: node.children,
-    };
-  }
-}
+// Binary data is stored as a base64 string for JSON serialization.
+// Base64 has only ~33% payload expansion and is the standard encoding for
+// binary data in JSON, so this is an acceptable trade-off.
+type iCRDTChangeNode = CRDTChangeNodeWire<string>;
 
 export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
   serializeChanges(changes: Uint8Array): Uint8Array {
@@ -128,7 +76,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       this.serialize({
         ...message,
         changes:
-          message.changes && serializeUint8ArrayInMerkleDAG(message.changes),
+          message.changes &&
+          serializeChangeNodeForJSON(message.changes, Base64.fromUint8Array),
         keychainChanges:
           message.keychainChanges &&
           Base64.fromUint8Array(message.keychainChanges),
@@ -164,7 +113,10 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       ...deserialized,
       changes:
         deserialized.changes &&
-        deserializeUint8ArrayInMerkleDAG(deserialized.changes),
+        deserializeChangeNodeFromJSON(
+          deserialized.changes,
+          Base64.toUint8Array,
+        ),
       keychainChanges: deserialized.keychainChanges
         ? Base64.toUint8Array(deserialized.keychainChanges)
         : undefined,

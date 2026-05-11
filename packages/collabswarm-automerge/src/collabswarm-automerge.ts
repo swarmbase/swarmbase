@@ -17,16 +17,15 @@ import {
   ACLProvider,
   CollabswarmDocumentChangeHandler,
   CRDTChangeBlock,
-  CRDTChangeNode,
-  CRDTChangeNodeDeferred,
-  crdtChangeNodeDeferred,
-  CRDTChangeNodeKind,
+  CRDTChangeNodeWire,
   CRDTProvider,
   CRDTSyncMessage,
+  deserializeChangeNodeFromJSON,
   JSONSerializer,
   Keychain,
   KeychainProvider,
   LRUCache,
+  serializeChangeNodeForJSON,
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
@@ -367,44 +366,7 @@ export class AutomergeKeychainProvider
  * Intermediate wire type for Automerge Merkle-DAG nodes where each
  * BinaryChange[] is represented as base64-encoded strings.
  */
-type iCRDTChangeNode = {
-  kind: CRDTChangeNodeKind;
-  keyID?: string;
-  change?: string[];
-  children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
-};
-
-function serializeBinaryChangesInMerkleDAG(
-  node: CRDTChangeNode<BinaryChange[]>,
-): iCRDTChangeNode {
-  const change = node.change
-    ? node.change.map((c: Uint8Array) => Base64.fromUint8Array(c))
-    : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: iCRDTChangeNode } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = serializeBinaryChangesInMerkleDAG(child);
-    }
-    return { ...node, change, children };
-  }
-  return { ...node, change, children: node.children };
-}
-
-function deserializeBinaryChangesInMerkleDAG(
-  node: iCRDTChangeNode,
-): CRDTChangeNode<BinaryChange[]> {
-  const change = node.change
-    ? (node.change.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[])
-    : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: CRDTChangeNode<BinaryChange[]> } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = deserializeBinaryChangesInMerkleDAG(child);
-    }
-    return { ...node, change, children };
-  }
-  return { ...node, change, children: node.children };
-}
+type iCRDTChangeNode = CRDTChangeNodeWire<string[]>;
 
 function serializeBinaryChanges(changes: BinaryChange[]): string[] {
   return changes.map((c: Uint8Array) => Base64.fromUint8Array(c));
@@ -476,7 +438,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       this.serialize({
         ...message,
         changes:
-          message.changes && serializeBinaryChangesInMerkleDAG(message.changes),
+          message.changes &&
+          serializeChangeNodeForJSON(message.changes, serializeBinaryChanges),
         keychainChanges:
           message.keychainChanges &&
           serializeBinaryChanges(message.keychainChanges),
@@ -503,7 +466,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     return {
       ...raw,
       changes:
-        raw.changes && deserializeBinaryChangesInMerkleDAG(raw.changes),
+        raw.changes &&
+        deserializeChangeNodeFromJSON(raw.changes, deserializeBinaryChanges),
       keychainChanges:
         raw.keychainChanges
           ? deserializeBinaryChanges(raw.keychainChanges)
