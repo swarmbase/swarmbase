@@ -2007,6 +2007,7 @@ __metadata:
     "@libp2p/autonat": "npm:^2.0.38"
     "@libp2p/bootstrap": "npm:^11.0.47"
     "@libp2p/circuit-relay-v2": "npm:^3.2.24"
+    "@libp2p/dcutr": "npm:^2.0.38"
     "@libp2p/identify": "npm:^3.0.39"
     "@libp2p/interface": "npm:^2.11.0"
     "@libp2p/kad-dht": "npm:^15.0.2"
@@ -3530,7 +3531,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/dcutr@npm:^2.0.18":
+"@libp2p/dcutr@npm:^2.0.18, @libp2p/dcutr@npm:^2.0.38":
   version: 2.0.38
   resolution: "@libp2p/dcutr@npm:2.0.38"
   dependencies:

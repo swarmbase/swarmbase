@@ -32,6 +32,7 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
+import { dcutr } from '@libp2p/dcutr';
 import { kadDHT } from '@libp2p/kad-dht';
 // mDNS is Node-only: it depends on the `dgram` built-in for UDP multicast,
 // which is unavailable in browsers. The browser-compatible default config in
@@ -85,6 +86,7 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
         peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
         services: {
           identify: identify(),
+          dcutr: dcutr(),
           autoNAT: autoNAT(),
           pubsub: gossipsub({
             allowPublishToZeroTopicPeers: true,

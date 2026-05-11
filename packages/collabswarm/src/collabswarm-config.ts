@@ -8,6 +8,7 @@ import { webTransport } from '@libp2p/webtransport';
 import { webSockets } from '@libp2p/websockets';
 import { all } from '@libp2p/websockets/filters';
 import { identify } from '@libp2p/identify';
+import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
@@ -52,6 +53,7 @@ export const defaultConfig = (bootstrapConfig: BootstrapInit) =>
         peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
         services: {
           identify: identify(),
+          dcutr: dcutr(),
           autoNAT: autoNAT(),
           pubsub: gossipsub({
             allowPublishToZeroTopicPeers: true,
