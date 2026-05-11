@@ -367,12 +367,12 @@ describe('rejection: unauthorized signer', () => {
     expect(chain.length).toBe(4); // unchanged
   });
 
-  test('replay of a removed writer\'s *historical* entry against a fresh chain fails', async () => {
-    // Different threat: a former writer captured an entry they previously
-    // authored (signature was valid at the time) and tries to feed it back
-    // into a new node that is bootstrapping from a snapshot in which they
-    // are no longer a writer. The chain must reject based on the current
-    // state, not the historical state.
+  test('out-of-order injection of a historical entry into a fresh chain fails', async () => {
+    // Threat model: a former writer (or any attacker who has observed past
+    // entries) tries to inject a previously-valid entry into a fresh chain
+    // at the wrong position. Even though the signature was valid at the
+    // time, the chain must reject it because either the parent hash or
+    // the sequence number no longer line up.
     const chain = makeChain([alice.publicKey]);
 
     await chain.authorAndAppend(
@@ -757,5 +757,134 @@ describe('headHash behavior', () => {
 
     // The chain's internal head should not have been affected.
     expect(toHex(head1)).not.toBe(toHex(head2));
+  });
+});
+
+describe('malformed entry rejection', () => {
+  // These tests cover entries that may arrive over the network with
+  // entirely wrong shapes. The chain must surface them as structured
+  // 'malformed-entry' results rather than throwing, since a hostile peer
+  // could otherwise DoS the local node with a single forged entry.
+  test('non-Uint8Array signature is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const broken = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signature: 'not bytes' as unknown as Uint8Array,
+    } as ACLEntry<AclChange>;
+    const result = await chain.ingestEntry(broken, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('malformed-entry');
+  });
+
+  test('non-integer sequenceNumber is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const broken = {
+      sequenceNumber: 1.5 as unknown as number,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      signerKeyHash: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    } as ACLEntry<AclChange>;
+    const result = await chain.ingestEntry(broken, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('malformed-entry');
+  });
+
+  test('non-Uint8Array signerKeyHash is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const broken = {
+      sequenceNumber: 0,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      signerKeyHash: 'not bytes' as unknown as Uint8Array,
+      signature: new Uint8Array([1, 2, 3]),
+    } as ACLEntry<AclChange>;
+    const result = await chain.ingestEntry(broken, alice.publicKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('malformed-entry');
+  });
+
+  test('null entry is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      null as unknown as ACLEntry<AclChange>,
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('malformed-entry');
+  });
+});
+
+describe('concurrent mutation safety', () => {
+  // The chain serializes mutating calls via an internal queue so two
+  // overlapping appends cannot both capture the same `_entries.length`
+  // and corrupt sequence numbers / parent links.
+  test('two concurrent authorAndAppend calls produce a well-formed chain', async () => {
+    const chain = makeChain([alice.publicKey]);
+    await chain.authorAndAppend(
+      { op: 'add', keys: [alice.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+
+    // Fire two appends without awaiting in between -- they would race if
+    // the chain didn't serialize internally.
+    const [a, b] = await Promise.all([
+      chain.authorAndAppend(
+        { op: 'add', keys: [bob.hashHex] },
+        alice.publicKey,
+        alice.privateKey,
+      ),
+      chain.authorAndAppend(
+        { op: 'add', keys: [carol.hashHex] },
+        alice.publicKey,
+        alice.privateKey,
+      ),
+    ]);
+
+    expect(chain.length).toBe(3);
+    // Sequence numbers must be contiguous and parent hashes must link.
+    expect(a.sequenceNumber).not.toBe(b.sequenceNumber);
+    const seqs = [a.sequenceNumber, b.sequenceNumber].sort();
+    expect(seqs).toEqual([1, 2]);
+    // The later entry must point at the earlier entry's hash, not at the
+    // pre-mutation head.
+    const entries = chain.entries();
+    expect(entries[2].parentHash).toBeDefined();
+    expect(entries[2].sequenceNumber).toBe(2);
+    expect(entries[1].sequenceNumber).toBe(1);
+  });
+
+  test('failure in one queued mutation does not poison subsequent ones', async () => {
+    const chain = makeChain([alice.publicKey]);
+    await chain.authorAndAppend(
+      { op: 'add', keys: [alice.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+
+    // Eve is not authorized, so this authorAndAppend rejects.
+    const failing = chain.authorAndAppend(
+      { op: 'add', keys: [eve.hashHex] },
+      eve.publicKey,
+      eve.privateKey,
+    );
+    // Fire a legitimate append immediately so it enqueues behind the
+    // failing one.
+    const succeeding = chain.authorAndAppend(
+      { op: 'add', keys: [bob.hashHex] },
+      alice.publicKey,
+      alice.privateKey,
+    );
+
+    await expect(failing).rejects.toThrow();
+    await expect(succeeding).resolves.toBeDefined();
+    expect(chain.length).toBe(2);
   });
 });

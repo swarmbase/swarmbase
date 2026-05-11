@@ -132,7 +132,8 @@ export interface ACLEntry<ChangesType> {
    * Stable canonical serialization of the signer's public key
    * (see {@link SerializePublicKey}). The chain uses this for fast
    * identity comparisons; the actual public key for signature verification
-   * is supplied separately at {@link ACLChain.append} time.
+   * is supplied separately at {@link ACLChain.authorAndAppend} /
+   * {@link ACLChain.ingestEntry} time.
    */
   signerKeyHash: Uint8Array;
 
@@ -237,7 +238,9 @@ export async function computeEntryHash<ChangesType>(
 /**
  * Canonical byte encoding of an {@link ACLEntry}'s payload (everything
  * the signature covers). Exported for tests; callers should usually go
- * through {@link ACLChain.append}.
+ * through {@link ACLChain.authorAndAppend} (when authoring new entries)
+ * or {@link ACLChain.ingestEntry} (when verifying entries received from
+ * peers), both of which handle canonical encoding internally.
  */
 export function canonicalEntryPayload<ChangesType>(
   entry: Omit<ACLEntry<ChangesType>, 'signature'>,
@@ -313,6 +316,83 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
+ * SHA-256 byte length, used to bound the size of `parentHash` and
+ * `signerKeyHash` fields. Network-supplied entries with unreasonably large
+ * byte arrays here would otherwise force large allocations during hashing.
+ */
+const MAX_HASH_BYTES = 64;
+
+/**
+ * Upper bound on the serialized change payload accepted from the network.
+ * 1 MiB is well above any realistic ACL diff but small enough that a
+ * hostile peer cannot exhaust memory with a single forged entry.
+ */
+const MAX_CHANGE_BYTES = 1 << 20;
+
+/**
+ * Structural runtime check for a network-supplied {@link ACLEntry}.
+ *
+ * Returns `null` if the entry is well-formed enough to attempt signature
+ * verification, or a human-readable reason string otherwise. Callers
+ * should treat any non-null result as a `malformed-entry` rejection --
+ * do not throw, since the entry may have been delivered by a hostile peer.
+ */
+function validateEntryShape<ChangesType>(
+  entry: ACLEntry<ChangesType>,
+): string | null {
+  if (entry === null || typeof entry !== 'object') {
+    return 'entry is not an object';
+  }
+  if (
+    typeof entry.sequenceNumber !== 'number' ||
+    !Number.isInteger(entry.sequenceNumber) ||
+    entry.sequenceNumber < 0 ||
+    entry.sequenceNumber > Number.MAX_SAFE_INTEGER
+  ) {
+    return 'sequenceNumber is not a non-negative safe integer';
+  }
+  if (
+    typeof entry.timestamp !== 'number' ||
+    !Number.isFinite(entry.timestamp)
+  ) {
+    return 'timestamp is not a finite number';
+  }
+  if (!(entry.signerKeyHash instanceof Uint8Array)) {
+    return 'signerKeyHash is not a Uint8Array';
+  }
+  if (
+    entry.signerKeyHash.byteLength === 0 ||
+    entry.signerKeyHash.byteLength > MAX_HASH_BYTES * 4
+  ) {
+    // Public key encodings are a couple hundred bytes at most; reject
+    // anything wildly out of range.
+    return 'signerKeyHash has an implausible length';
+  }
+  if (!(entry.signature instanceof Uint8Array)) {
+    return 'signature is not a Uint8Array';
+  }
+  if (entry.signature.byteLength === 0 || entry.signature.byteLength > 1024) {
+    return 'signature has an implausible length';
+  }
+  if (entry.parentHash !== undefined) {
+    if (!(entry.parentHash instanceof Uint8Array)) {
+      return 'parentHash is not a Uint8Array';
+    }
+    if (
+      entry.parentHash.byteLength === 0 ||
+      entry.parentHash.byteLength > MAX_HASH_BYTES
+    ) {
+      return 'parentHash has an implausible length';
+    }
+  }
+  // `change` is opaque to the chain; we cannot validate its internal
+  // structure here. The caller-supplied `serializeChange` is responsible
+  // for producing a byte buffer or throwing, and we bound the resulting
+  // size below in ingestEntry().
+  return null;
+}
+
+/**
  * An append-only, hash-linked log of signed ACL changes.
  *
  * Each entry is verified before being applied:
@@ -348,6 +428,16 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
 
   /** Serializer used both for the change payload and for the AuthProvider. */
   private readonly _serializeChange: (change: ChangesType) => Uint8Array;
+
+  /**
+   * Tail of the mutation queue. Mutating methods (`ingestEntry`,
+   * `authorAndAppend`, `replay`) chain onto this promise so they run
+   * serially even if invoked concurrently. Without this, two overlapping
+   * `ingestEntry` calls could both capture the same `_entries.length`,
+   * pass their checks against the same prior state, and then both append --
+   * silently corrupting sequence numbers and parent-hash links.
+   */
+  private _mutationQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly _config: ACLChainConfig<ChangesType, PrivateKey, PublicKey>,
@@ -390,12 +480,33 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
   }
 
   /**
+   * Serialize the given task against the mutation queue.
+   *
+   * Returns a promise that resolves with the task's result once all prior
+   * queued tasks have settled. The queue catches and discards errors so
+   * one failing task does not poison the queue for subsequent ones.
+   */
+  private _runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const next = this._mutationQueue.then(task, task);
+    // Swallow the result so the next task isn't poisoned by a rejection.
+    this._mutationQueue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  /**
    * Build, sign, and append a new entry authored by `signerKey`.
    *
    * The signer must currently be authorized (a writer in the chain's
    * current state, or in `genesisAuthorizedKeys` for the genesis entry).
    * On success the entry is verified, applied to the chain's internal
    * state, and returned for transmission to peers.
+   *
+   * Concurrent `authorAndAppend` / {@link ingestEntry} calls are
+   * serialized via an internal queue, so each call sees a consistent
+   * `_entries.length`, head hash, and ACL state during its checks.
    *
    * @throws Error if the signer is not authorized -- this is a programmer
    *   error and indicates a misuse of the API, not a network attack.
@@ -408,30 +519,32 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     signerPrivateKey: PrivateKey,
     timestamp: number = Date.now(),
   ): Promise<ACLEntry<ChangesType>> {
-    const signerKeyHash = await this._config.serializeKey(signerPublicKey);
+    return this._runExclusive(async () => {
+      const signerKeyHash = await this._config.serializeKey(signerPublicKey);
 
-    const payload: Omit<ACLEntry<ChangesType>, 'signature'> = {
-      sequenceNumber: this._entries.length,
-      timestamp,
-      parentHash: this.headHash,
-      change,
-      signerKeyHash,
-    };
+      const payload: Omit<ACLEntry<ChangesType>, 'signature'> = {
+        sequenceNumber: this._entries.length,
+        timestamp,
+        parentHash: this.headHash,
+        change,
+        signerKeyHash,
+      };
 
-    const encoded = canonicalEntryPayload(payload, this._serializeChange);
-    const signature = await this._config.auth.sign(encoded, signerPrivateKey);
+      const encoded = canonicalEntryPayload(payload, this._serializeChange);
+      const signature = await this._config.auth.sign(encoded, signerPrivateKey);
 
-    const entry: ACLEntry<ChangesType> = { ...payload, signature };
+      const entry: ACLEntry<ChangesType> = { ...payload, signature };
 
-    const result = await this.ingestEntry(entry, signerPublicKey);
-    if (!result.ok) {
-      // Author tried to append an entry they're not allowed to author.
-      // This is a programmer error, not a hostile-input case.
-      throw new Error(
-        `ACLChain.authorAndAppend: refusing to append entry: ${result.reason}: ${result.message}`,
-      );
-    }
-    return entry;
+      const result = await this._ingestEntryInternal(entry, signerPublicKey);
+      if (!result.ok) {
+        // Author tried to append an entry they're not allowed to author.
+        // This is a programmer error, not a hostile-input case.
+        throw new Error(
+          `ACLChain.authorAndAppend: refusing to append entry: ${result.reason}: ${result.message}`,
+        );
+      }
+      return entry;
+    });
   }
 
   /**
@@ -439,7 +552,13 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    *
    * Returns a structured result rather than throwing so callers can log
    * and discard malicious or stale entries without unwinding their own
-   * control flow.
+   * control flow. Malformed runtime data (wrong field types, oversized
+   * byte buffers, exceptions thrown by `serializeKey`/`serializeChange`)
+   * is surfaced as a `'malformed-entry'` result rather than propagating
+   * as an exception, so a single hostile entry cannot DoS the caller.
+   *
+   * Concurrent invocations are serialized via an internal queue so each
+   * call observes a consistent prior chain state.
    *
    * @param entry The signed entry to apply.
    * @param signerPublicKey The public key that the caller claims signed
@@ -451,11 +570,49 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     entry: ACLEntry<ChangesType>,
     signerPublicKey: PublicKey,
   ): Promise<ACLChainVerifyResult> {
+    return this._runExclusive(() =>
+      this._ingestEntryInternal(entry, signerPublicKey),
+    );
+  }
+
+  /**
+   * Implementation of {@link ingestEntry} that assumes the caller already
+   * holds the mutation queue. Do not call this directly from outside the
+   * class.
+   */
+  private async _ingestEntryInternal(
+    entry: ACLEntry<ChangesType>,
+    signerPublicKey: PublicKey,
+  ): Promise<ACLChainVerifyResult> {
     const index = this._entries.length;
+
+    // 0. Structural validation. Network-supplied entries may have entirely
+    //    wrong shapes (missing fields, wrong types, oversized buffers);
+    //    catch these up front so subsequent steps can rely on field types
+    //    and we never throw on hostile input.
+    const shapeError = validateEntryShape(entry);
+    if (shapeError !== null) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: shapeError,
+        index,
+      };
+    }
 
     // 1. Caller-supplied key must match the hash in the entry.
     const declared = entry.signerKeyHash;
-    const actual = await this._config.serializeKey(signerPublicKey);
+    let actual: Uint8Array;
+    try {
+      actual = await this._config.serializeKey(signerPublicKey);
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `serializeKey threw on supplied public key: ${(err as Error).message}`,
+        index,
+      };
+    }
     if (!bytesEqual(declared, actual)) {
       return {
         ok: false,
@@ -507,7 +664,47 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     }
 
     // 4. Reject exact duplicates before doing expensive signature work.
-    const entryHash = await computeEntryHash(entry, this._serializeChange);
+    //    `serializeChange` runs over the (still opaque) change here; if it
+    //    throws on hostile input we surface it as a structured error
+    //    rather than letting the exception escape.
+    let entryHash: Uint8Array;
+    let payloadBytes: Uint8Array;
+    try {
+      payloadBytes = canonicalEntryPayload(entry, this._serializeChange);
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `failed to canonically encode entry: ${(err as Error).message}`,
+        index,
+      };
+    }
+    if (payloadBytes.byteLength > MAX_CHANGE_BYTES + 1024) {
+      // 1 KiB slack for the fixed header + parent/signer fields.
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `encoded entry payload exceeds maximum size (${payloadBytes.byteLength} > ${MAX_CHANGE_BYTES + 1024} bytes)`,
+        index,
+      };
+    }
+    try {
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        payloadBytes.buffer.slice(
+          payloadBytes.byteOffset,
+          payloadBytes.byteOffset + payloadBytes.byteLength,
+        ) as ArrayBuffer,
+      );
+      entryHash = new Uint8Array(digest);
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `failed to hash entry payload: ${(err as Error).message}`,
+        index,
+      };
+    }
     const entryHashHex = toHex(entryHash);
     if (this._seenHashes.has(entryHashHex)) {
       return {
@@ -519,7 +716,6 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     }
 
     // 5. Signature must verify against the canonical payload.
-    const payloadBytes = canonicalEntryPayload(entry, this._serializeChange);
     let signatureOk: boolean;
     try {
       signatureOk = await this._config.auth.verify(
@@ -547,12 +743,34 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     // 6. Authorization: signer must be a writer in the state *before* this
     //    entry. For the genesis entry, the bootstrap set defines who can
     //    sign.
-    const priorState = this._state ?? this._config.ops.emptyState();
+    let priorState: ACLState<ChangesType, PublicKey>;
+    try {
+      priorState = this._state ?? this._config.ops.emptyState();
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `ops.emptyState threw: ${(err as Error).message}`,
+        index,
+      };
+    }
     let authorized: boolean;
-    if (this._entries.length === 0) {
-      authorized = await this._isInBootstrapSet(signerPublicKey);
-    } else {
-      authorized = await this._config.ops.isWriter(priorState, signerPublicKey);
+    try {
+      if (this._entries.length === 0) {
+        authorized = await this._isInBootstrapSet(signerPublicKey);
+      } else {
+        authorized = await this._config.ops.isWriter(
+          priorState,
+          signerPublicKey,
+        );
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `authorization check threw: ${(err as Error).message}`,
+        index,
+      };
     }
     if (!authorized) {
       return {
@@ -566,8 +784,21 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       };
     }
 
-    // 7. All checks passed -- apply the change and commit.
-    const newState = await this._config.ops.applyChange(priorState, entry.change);
+    // 7. All checks passed -- apply the change and commit. If applyChange
+    //    throws (e.g. malformed change semantics that slipped past the
+    //    signature check because the signer happened to also be malicious),
+    //    surface as malformed-entry so chain state is not partially updated.
+    let newState: ACLState<ChangesType, PublicKey>;
+    try {
+      newState = await this._config.ops.applyChange(priorState, entry.change);
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'malformed-entry',
+        message: `ops.applyChange threw: ${(err as Error).message}`,
+        index,
+      };
+    }
     this._state = newState;
     this._entries.push(entry);
     this._entryHashes.push(entryHash);
@@ -584,6 +815,10 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    * the chain has the same `state` as if every entry had been ingested
    * individually.
    *
+   * Runs under the mutation queue, so concurrent `ingestEntry` /
+   * `authorAndAppend` / `replay` calls observe a consistent chain
+   * throughout the replay.
+   *
    * @param entries The full chain to verify. Each entry's signer key must
    *   be resolvable via `resolveKey(signerKeyHash)`. If `resolveKey`
    *   returns `undefined`, the entry is rejected with
@@ -593,30 +828,58 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     entries: ReadonlyArray<ACLEntry<ChangesType>>,
     resolveKey: (signerKeyHash: Uint8Array) => Promise<PublicKey | undefined>,
   ): Promise<ACLChainVerifyResult> {
-    // Reset internal state so callers can use replay() as a "load from
-    // scratch" primitive without constructing a new chain.
-    this._entries.length = 0;
-    this._entryHashes.length = 0;
-    this._seenHashes.clear();
-    this._state = null;
+    return this._runExclusive(async () => {
+      // Reset internal state so callers can use replay() as a "load from
+      // scratch" primitive without constructing a new chain.
+      this._entries.length = 0;
+      this._entryHashes.length = 0;
+      this._seenHashes.clear();
+      this._state = null;
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-      const signerKey = await resolveKey(entry.signerKeyHash);
-      if (!signerKey) {
-        return {
-          ok: false,
-          reason: 'unknown-signer-key',
-          message: `no public key available for signerKeyHash at entry ${i}`,
-          index: i,
-        };
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        // Pre-validate shape so resolveKey isn't called with garbage and
+        // a hostile entry can't crash the loop with a TypeError.
+        const shapeError =
+          entry === null || typeof entry !== 'object'
+            ? 'entry is not an object'
+            : !(entry.signerKeyHash instanceof Uint8Array)
+              ? 'signerKeyHash is not a Uint8Array'
+              : null;
+        if (shapeError !== null) {
+          return {
+            ok: false,
+            reason: 'malformed-entry',
+            message: shapeError,
+            index: i,
+          };
+        }
+        let signerKey: PublicKey | undefined;
+        try {
+          signerKey = await resolveKey(entry.signerKeyHash);
+        } catch (err) {
+          return {
+            ok: false,
+            reason: 'unknown-signer-key',
+            message: `resolveKey threw at entry ${i}: ${(err as Error).message}`,
+            index: i,
+          };
+        }
+        if (!signerKey) {
+          return {
+            ok: false,
+            reason: 'unknown-signer-key',
+            message: `no public key available for signerKeyHash at entry ${i}`,
+            index: i,
+          };
+        }
+        const result = await this._ingestEntryInternal(entry, signerKey);
+        if (!result.ok) {
+          return result;
+        }
       }
-      const result = await this.ingestEntry(entry, signerKey);
-      if (!result.ok) {
-        return result;
-      }
-    }
-    return { ok: true };
+      return { ok: true };
+    });
   }
 
   /**
