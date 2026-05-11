@@ -31,10 +31,13 @@
     "jest": "^29.2.5",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.1.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "yjs": "^13.6.30"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm",
+    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+  },
+  "peerDependencies": {
     "yjs": "^13.6.30"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
