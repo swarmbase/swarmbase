@@ -583,7 +583,17 @@ export class CollabswarmDocument<
       // `change()`, `_makeChange()` must see the just-received remote tips
       // in `_recentTips` to cross-link to them. This matches the ordering
       // used in the missing-block fetch path below.
-      for (const [cid, kind] of newDocumentTips) {
+      //
+      // `newDocumentTips` is populated in `mergeRemoteSyncTree`'s traversal
+      // order, which is root-first (the remote head is the first entry, its
+      // ancestors follow). `_trackTip` appends to the back of `_recentTips`
+      // with LRU semantics, so pushing in root-first order would make the
+      // head the *oldest* entry -- and when more than MAX_RECENT_TIPS new
+      // entries arrive in one sync, the head would be evicted first. Walk
+      // in reverse so the remote head ends up at the back (most-recent),
+      // matching the intent of LRU tracking.
+      for (let i = newDocumentTips.length - 1; i >= 0; i--) {
+        const [cid, kind] = newDocumentTips[i]!;
         this._trackTip(cid, kind);
       }
       await this._fireRemoteUpdateHandlers(newDocumentHashes);

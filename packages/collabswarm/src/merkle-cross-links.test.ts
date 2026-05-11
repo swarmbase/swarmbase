@@ -423,3 +423,72 @@ describe('mergeRemoteSyncTree (per-message cross-link dedup)', () => {
     expect(xEntry[2]).toBeUndefined();
   });
 });
+
+describe('Merkle CRDT recent-tip tracking from a remote sync tree', () => {
+  type Tip = { cid: string; kind: CRDTChangeNodeKind };
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+  type Node = CRDTChangeNode<string>;
+
+  /**
+   * Regression test for the ordering bug noted on PR #259:
+   * `mergeRemoteSyncTree` emits entries in root-first traversal order (the
+   * remote head first, then its ancestors). `_syncDocumentChanges` tracks
+   * each entry as a recent tip via the LRU `trackTipInList` helper, which
+   * appends to the BACK of the list (most-recent-last).
+   *
+   * If we naively iterate the merged entries front-to-back, the remote head
+   * (the truly most-recent tip) is the FIRST thing pushed and ends up at the
+   * FRONT of `_recentTips` -- the oldest position. When more than
+   * `MAX_RECENT_TIPS` new entries arrive in a single sync (e.g. a long chain
+   * with cross-links that brings in many ancestors at once), the eviction
+   * loop drops the head first, defeating the whole point of cross-linking.
+   *
+   * The fix iterates the merged entries in reverse before pushing them into
+   * `_recentTips`, so the remote head ends up at the back (most-recent) and
+   * older ancestors are evicted first when the cap is exceeded.
+   */
+  test('reverse-iterating mergeRemoteSyncTree output keeps the remote head as the most-recent tip', () => {
+    // Build a long linear remote tree H -> A1 -> A2 -> ... -> An, with H as
+    // the remote head and An as the deepest ancestor. Use a chain length of
+    // MAX_RECENT_TIPS + 3 so the front-to-back order would evict the head.
+    const chainLen = MAX_RECENT_TIPS + 3;
+    const cids = ['H', ...Array.from({ length: chainLen - 1 }, (_, i) => `A${i + 1}`)];
+    // Construct nested children: H.children = { A1: { children: { A2: ... }}}
+    let inner: Node | undefined;
+    for (let i = cids.length - 1; i >= 0; i--) {
+      const node: Node = { kind: docKind, change: `payload-${cids[i]}` };
+      if (inner) {
+        node.children = { [cids[i + 1]!]: inner };
+      }
+      inner = node;
+    }
+    const tree = inner!;
+
+    const merged = mergeRemoteSyncTree('H', tree, undefined, new Set());
+
+    // Sanity: traversal is root-first (head H is the first entry).
+    expect(merged[0]![0]).toBe('H');
+    expect(merged.length).toBe(chainLen);
+
+    // Simulate _syncDocumentChanges: track each entry as a recent tip,
+    // iterating in REVERSE so the head ends up most-recent. This mirrors the
+    // production code path.
+    const recentTips: Tip[] = [];
+    for (let i = merged.length - 1; i >= 0; i--) {
+      const [cid, kind] = merged[i]!;
+      trackTipInList(recentTips, { cid, kind });
+    }
+
+    // The recent-tips list is capped at MAX_RECENT_TIPS, and the remote head
+    // 'H' must be preserved at the back (most-recent slot).
+    expect(recentTips.length).toBe(MAX_RECENT_TIPS);
+    expect(recentTips[recentTips.length - 1]!.cid).toBe('H');
+
+    // Sanity counter-check: the naive front-to-back order would have lost H.
+    const naive: Tip[] = [];
+    for (const [cid, kind] of merged) {
+      trackTipInList(naive, { cid, kind });
+    }
+    expect(naive.map((t) => t.cid)).not.toContain('H');
+  });
+});

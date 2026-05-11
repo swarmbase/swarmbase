@@ -68,16 +68,6 @@ export function selectCrossLinks<Tip extends { cid: string }>(
 }
 
 /**
- * Pure helper: append `entry` to `recentTips` with LRU semantics
- * (most-recently-used to the back), evicting the oldest entries when the
- * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is
- * moved to the back without growing the list. Mutates `recentTips` in
- * place and returns it for convenience.
- *
- * Entries with empty `cid` are ignored (defensive guard for the initial
- * sync-message state before any change has been published).
- */
-/**
  * A flattened entry produced by walking a remote sync tree: a CID, the kind
  * of node (document/reader/writer), and the inline `change` payload if the
  * remote included one. An `undefined` payload means the entry is a deferred
@@ -167,6 +157,16 @@ export function mergeRemoteSyncTree<ChangesType>(
   return Array.from(byCid.values());
 }
 
+/**
+ * Pure helper: append `entry` to `recentTips` with LRU semantics
+ * (most-recently-used to the back), evicting the oldest entries when the
+ * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is
+ * moved to the back without growing the list. Mutates `recentTips` in
+ * place and returns it for convenience.
+ *
+ * Entries with empty `cid` are ignored (defensive guard for the initial
+ * sync-message state before any change has been published).
+ */
 export function trackTipInList<Tip extends { cid: string }>(
   recentTips: Tip[],
   entry: Tip,
