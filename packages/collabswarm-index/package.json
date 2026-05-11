@@ -97,6 +97,7 @@
       "^@libp2p/websockets$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/websockets/filters$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/identify$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/dcutr$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/autonat$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/kad-dht$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/interface$": "<rootDir>/src/__mocks__/empty-module.cjs",
