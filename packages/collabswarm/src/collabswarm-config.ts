@@ -92,7 +92,7 @@ export const DEFAULT_WEBRTC_ICE_SERVERS: ReadonlyArray<Readonly<IceServer>> =
  * Exported so {@link defaultNodeConfig} (and any future config helpers) can
  * share the same defensive-copy behavior.
  */
-export const cloneIceServer = (server: IceServer): IceServer => {
+export const cloneIceServer = (server: Readonly<IceServer>): IceServer => {
   const clone: IceServer = { ...server };
   if (Array.isArray(server.urls)) {
     clone.urls = [...server.urls];
