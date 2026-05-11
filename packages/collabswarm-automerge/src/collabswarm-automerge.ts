@@ -437,9 +437,14 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     return this.encode(
       this.serialize({
         ...message,
+        // Mirror the deserializer: only `undefined` skips the
+        // serialization path. Any defined value flows through
+        // `serializeChangeNodeForJSON` so the wire shape matches what
+        // the deserializer will validate on the receiving end.
         changes:
-          message.changes &&
-          serializeChangeNodeForJSON(message.changes, serializeBinaryChanges),
+          message.changes === undefined
+            ? undefined
+            : serializeChangeNodeForJSON(message.changes, serializeBinaryChanges),
         keychainChanges:
           message.keychainChanges &&
           serializeBinaryChanges(message.keychainChanges),
@@ -472,9 +477,16 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     }
     return {
       ...raw,
+      // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+      // must be routed through the validator -- using a truthy guard like
+      // `raw.changes && ...` would let a malformed peer message bypass
+      // `deserializeChangeNodeFromJSON`'s shape checks by sending e.g.
+      // `changes: null`, with the falsy value flowing through to
+      // downstream consumers via the spread above.
       changes:
-        raw.changes &&
-        deserializeChangeNodeFromJSON(raw.changes, deserializeBinaryChanges),
+        raw.changes === undefined
+          ? undefined
+          : deserializeChangeNodeFromJSON(raw.changes, deserializeBinaryChanges),
       keychainChanges:
         raw.keychainChanges
           ? deserializeBinaryChanges(raw.keychainChanges)

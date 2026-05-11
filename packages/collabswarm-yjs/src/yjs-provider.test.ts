@@ -478,4 +478,43 @@ describe('YjsJSONSerializer', () => {
     expect(deserialized.changes).toBeUndefined();
     expect(deserialized.keychainChanges).toBeUndefined();
   });
+
+  // Build a sync-message Uint8Array wire payload directly from a JS object,
+  // bypassing `serializeSyncMessage`'s type-safety so we can test that
+  // `deserializeSyncMessage` rejects every defined-but-malformed shape of
+  // `changes` rather than silently passing the falsy value through.
+  function buildWire(obj: unknown): Uint8Array {
+    return new TextEncoder().encode(JSON.stringify(obj));
+  }
+
+  test('deserializeSyncMessage rejects "changes: null" (validation bypass regression)', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', changes: null });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /expected a plain object.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "changes: 0"', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', changes: 0 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /expected a plain object.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects "changes: \\"\\"" (empty string)', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', changes: '' });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /expected a plain object.*got string/,
+    );
+  });
+
+  test('deserializeSyncMessage accepts omitted "changes" field', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc' });
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.changes).toBeUndefined();
+  });
 });

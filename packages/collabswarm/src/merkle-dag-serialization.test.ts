@@ -318,6 +318,48 @@ describe('serializeChangeNodeForJSON / deserializeChangeNodeFromJSON', () => {
   });
 
   describe('deserialize input validation (untrusted wire shapes)', () => {
+    test('throws with a descriptive Error (not TypeError) when node is null', () => {
+      // Regression: prior to the upfront guard this read `node.kind` first
+      // and threw `TypeError: Cannot read properties of null`, which is a
+      // trivial DoS vector if a peer puts `null` in a `changes` field.
+      const malformed = null as unknown as CRDTChangeNodeWire<string>;
+      const call = () => deserializeChangeNodeFromJSON(malformed, decodeBytes);
+      expect(call).toThrow(Error);
+      expect(call).not.toThrow(TypeError);
+      expect(call).toThrow(/expected a plain object.*got null/);
+    });
+
+    test('throws a descriptive Error when node is the number 0', () => {
+      const malformed = 0 as unknown as CRDTChangeNodeWire<string>;
+      const call = () => deserializeChangeNodeFromJSON(malformed, decodeBytes);
+      expect(call).toThrow(Error);
+      expect(call).not.toThrow(TypeError);
+      expect(call).toThrow(/expected a plain object.*got number/);
+    });
+
+    test('throws a descriptive Error when node is an empty string', () => {
+      const malformed = '' as unknown as CRDTChangeNodeWire<string>;
+      const call = () => deserializeChangeNodeFromJSON(malformed, decodeBytes);
+      expect(call).toThrow(Error);
+      expect(call).not.toThrow(TypeError);
+      expect(call).toThrow(/expected a plain object.*got string/);
+    });
+
+    test('throws a descriptive Error when node is an array', () => {
+      const malformed = [1, 2, 3] as unknown as CRDTChangeNodeWire<string>;
+      expect(() =>
+        deserializeChangeNodeFromJSON(malformed, decodeBytes),
+      ).toThrow(/expected a plain object.*got array/);
+    });
+
+    test('throws a descriptive Error when node is undefined', () => {
+      const malformed = undefined as unknown as CRDTChangeNodeWire<string>;
+      const call = () => deserializeChangeNodeFromJSON(malformed, decodeBytes);
+      expect(call).toThrow(Error);
+      expect(call).not.toThrow(TypeError);
+      expect(call).toThrow(/expected a plain object.*got undefined/);
+    });
+
     test('throws when "kind" is missing', () => {
       // Simulate a peer message that omits `kind` entirely. Cast through
       // unknown because the field is required by the type, but malformed

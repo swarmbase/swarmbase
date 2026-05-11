@@ -9,14 +9,22 @@ import {
 } from './crdt-change-node';
 
 // Allow-list of `kind` discriminants accepted from peer wire messages.
-// Kept in sync with `CRDTChangeNodeKind` via the type assertion below so a
-// new kind added to the union will fail to compile here until the set is
-// updated.
-const VALID_CHANGE_NODE_KINDS: ReadonlySet<CRDTChangeNodeKind> = new Set([
-  crdtDocumentChangeNode,
-  crdtWriterChangeNode,
-  crdtReaderChangeNode,
-]);
+//
+// The allow-list is derived from an exhaustive `Record<CRDTChangeNodeKind,
+// true>` so that adding a new variant to the `CRDTChangeNodeKind` union will
+// be a compile-time error here until the corresponding entry is added: TS
+// requires every key of the union to be present in the record literal.
+// Using a `ReadonlySet` alone would not give that guarantee -- a strict
+// subset of the union is assignable to `ReadonlySet<CRDTChangeNodeKind>`
+// without error.
+const VALID_CHANGE_NODE_KIND_RECORD: Record<CRDTChangeNodeKind, true> = {
+  [crdtDocumentChangeNode]: true,
+  [crdtWriterChangeNode]: true,
+  [crdtReaderChangeNode]: true,
+};
+const VALID_CHANGE_NODE_KINDS: ReadonlySet<CRDTChangeNodeKind> = new Set(
+  Object.keys(VALID_CHANGE_NODE_KIND_RECORD) as CRDTChangeNodeKind[],
+);
 
 function isValidChangeNodeKind(value: unknown): value is CRDTChangeNodeKind {
   return (
@@ -96,11 +104,12 @@ export function serializeChangeNodeForJSON<TIn, TOut>(
  * Wire input is treated as untrusted: the reconstructed `children` map uses a
  * null prototype so peer-supplied hash keys (e.g. `__proto__`,
  * `constructor`) cannot pollute `Object.prototype` or shadow inherited
- * members. The shape of the node itself is also validated: `kind` must be a
- * known {@link CRDTChangeNodeKind} discriminant, and each entry in
- * `children` must be a plain object. A malformed peer message throws a
- * descriptive `Error` rather than silently passing the bad value through
- * via spread.
+ * members. The shape of the node itself is also validated up front: `node`
+ * must be a non-null, non-array object; `kind` must be a known
+ * {@link CRDTChangeNodeKind} discriminant; and each entry in `children`
+ * must be a plain object. A malformed peer message throws a descriptive
+ * `Error` rather than a bare `TypeError` from property access on `null` /
+ * non-object input, which would otherwise be a trivial DoS vector.
  *
  * @typeParam TIn  Wire leaf payload type (e.g. `string` or `string[]`).
  * @typeParam TOut Decoded leaf payload type (e.g. `Uint8Array` or
@@ -113,6 +122,19 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
   node: CRDTChangeNodeWire<TIn>,
   decodeLeaf: (leaf: TIn) => TOut,
 ): CRDTChangeNode<TOut> {
+  // Wire input is untrusted: a malformed peer can send `null`, an array, or
+  // a primitive in place of a node object. Reading `node.kind` on those
+  // values would throw a bare `TypeError` (`Cannot read properties of null`)
+  // that is hard to attribute back to the peer; reject up front with a
+  // descriptive error instead. This also denies a trivial DoS path where a
+  // peer crashes the deserializer by supplying `changes: null`.
+  if (typeof node !== 'object' || node === null || Array.isArray(node)) {
+    throw new Error(
+      `Invalid merkle-dag node: expected a plain object (got ${
+        node === null ? 'null' : Array.isArray(node) ? 'array' : typeof node
+      })`,
+    );
+  }
   // Wire input is untrusted: a malformed peer message can omit or supply a
   // non-string `kind`. Reject up front so downstream consumers can rely on
   // the discriminant being one of the documented `CRDTChangeNodeKind`s

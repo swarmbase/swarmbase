@@ -75,9 +75,14 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     return this.encode(
       this.serialize({
         ...message,
+        // Mirror the deserializer: only `undefined` skips the
+        // serialization path. Any defined value flows through
+        // `serializeChangeNodeForJSON` so the wire shape matches what
+        // the deserializer will validate on the receiving end.
         changes:
-          message.changes &&
-          serializeChangeNodeForJSON(message.changes, Base64.fromUint8Array),
+          message.changes === undefined
+            ? undefined
+            : serializeChangeNodeForJSON(message.changes, Base64.fromUint8Array),
         keychainChanges:
           message.keychainChanges &&
           Base64.fromUint8Array(message.keychainChanges),
@@ -111,12 +116,19 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     }
     return {
       ...deserialized,
+      // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+      // must be routed through the validator -- using a truthy guard like
+      // `deserialized.changes && ...` would let a malformed peer message
+      // bypass `deserializeChangeNodeFromJSON`'s shape checks by sending
+      // e.g. `changes: null`, with the falsy value flowing through to
+      // downstream consumers via the spread above.
       changes:
-        deserialized.changes &&
-        deserializeChangeNodeFromJSON(
-          deserialized.changes,
-          Base64.toUint8Array,
-        ),
+        deserialized.changes === undefined
+          ? undefined
+          : deserializeChangeNodeFromJSON(
+              deserialized.changes,
+              Base64.toUint8Array,
+            ),
       keychainChanges: deserialized.keychainChanges
         ? Base64.toUint8Array(deserialized.keychainChanges)
         : undefined,
