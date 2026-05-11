@@ -2,6 +2,11 @@
   "name": "@collabswarm/collabswarm-react",
   "description": "React hooks for collabswarm documents",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swarmbase/swarmbase.git",
+    "directory": "packages/collabswarm-react"
+  },
   "scripts": {
     "clean": "tsc -b --clean",
     "tsc": "tsc -b --clean && tsc -b",
@@ -12,7 +17,10 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
-    ".": "./dist/src/index.js"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
   },
   "files": [
     "dist"
