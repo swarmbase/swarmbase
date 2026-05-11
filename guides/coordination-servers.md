@@ -8,8 +8,9 @@ This document describes the server infrastructure required to run SwarmDB in pro
 2. [Minimal Single-Server Setup](#2-minimal-single-server-setup)
 3. [Production Multi-Server Deployment](#3-production-multi-server-deployment)
 4. [Public Alternatives](#4-public-alternatives)
-5. [Docker Deployment Configs](#5-docker-deployment-configs)
-6. [Troubleshooting](#6-troubleshooting)
+5. [Fly.io Deployment](#5-flyio-deployment)
+6. [Docker Deployment Configs](#6-docker-deployment-configs)
+7. [Troubleshooting](#7-troubleshooting)
 
 ---
 
@@ -206,7 +207,7 @@ For browser apps, you can also serve the relay info as a config file:
 
 **For development:** Plain WebSocket (`ws://`) works on localhost or private networks.
 
-**For production:** Browsers require Secure WebSocket (`wss://`) for connections to non-localhost addresses. You need:
+**For production:** When the client is served over HTTPS, browsers' mixed-content policy blocks plain `ws://`, so the relay multiaddr must use `wss://`. (Plain `ws://` is fine from `localhost` or HTTP origins, but production deployments are almost always HTTPS.) You need:
 
 1. A domain name pointing to your server
 2. A TLS certificate (Let's Encrypt is free and automated)
@@ -456,22 +457,246 @@ For persistent data storage without running your own pinning node:
 
 ### 4.4 Cost Considerations
 
-| Component | Self-Hosted Cost | Hosted/Public Cost |
-|-----------|-----------------|-------------------|
-| Bootstrap/Relay | $5-20/month (small VPS) | N/A (must self-host) |
+| Component | Self-Hosted Cost | Hosted/Managed Cost |
+|-----------|-----------------|---------------------|
+| Bootstrap/Relay | $5-20/month (small VPS) | ~$2/month (Fly.io `shared-cpu-1x`) |
 | STUN | Free (use public) | Free |
 | TURN | $10-50/month (VPS + bandwidth) | $0.40-1.00 per GB relayed |
 | Pinning | $5-20/month (storage VPS) | Free tier usually sufficient for dev |
 
-**Key takeaway:** The minimum cost for a production SwarmDB deployment is a single VPS ($5-10/month) running the relay server, plus free public STUN servers. Costs scale primarily with bandwidth (relay traffic) and storage (pinned data).
+**Key takeaway:** The minimum cost for a production SwarmDB deployment is roughly **$2-5/month**: a Fly.io `shared-cpu-1x` VM (≈$2/month) running the relay server, plus free public STUN servers. See [Section 5](#5-flyio-deployment) for a step-by-step Fly.io guide.
 
 ---
 
-## 5. Docker Deployment Configs
+## 5. Fly.io Deployment
+
+[Fly.io](https://fly.io/) is a managed container platform with data-centers in 30+ regions. It is a convenient low-cost deployment target for the relay server: the smallest shared-CPU VM costs roughly **$2/month** and can handle dozens of concurrent peers.
+
+> **Pricing note (verified May 2026):** Fly.io operates on a pay-as-you-go model.
+> There is no permanent free tier for new organizations — all compute is billed
+> when running. The figures quoted here are for a `shared-cpu-1x` VM with 256 MB
+> RAM at the US-East (`iad`) rate. Prices vary slightly by region.
+> Always check [fly.io/docs/about/pricing/](https://fly.io/docs/about/pricing/) for
+> current rates before committing.
+
+### 5.1 Prerequisites
+
+1. **Install `flyctl`** — the Fly.io CLI:
+   ```bash
+   # macOS
+   brew install flyctl
+
+   # Linux / WSL
+   curl -L https://fly.io/install.sh | sh
+
+   # Windows (PowerShell)
+   iwr https://fly.io/install.ps1 -useb | iex
+   ```
+   See [fly.io/docs/flyctl/install/](https://fly.io/docs/flyctl/install/) for all options.
+
+2. **Create a Fly.io account** at [fly.io](https://fly.io/) and add a payment method.
+   Billing only starts when you deploy a machine.
+
+3. **Authenticate:**
+   ```bash
+   fly auth login
+   ```
+
+### 5.2 Deploy
+
+The relay server ships with a `fly.toml` in `relay-server/`. All Fly commands
+must be run from inside the `relay-server/` directory (where `fly.toml` lives).
+
+```bash
+cd relay-server
+```
+
+#### First-time setup
+
+```bash
+# Import fly.toml without deploying yet.
+# When prompted, enter a unique app name (e.g. "myapp-relay") and
+# confirm the primary region. Do NOT let fly launch override fly.toml.
+fly launch --no-deploy
+
+# Deploy the image built from relay-server/Dockerfile
+fly deploy
+```
+
+`fly deploy` builds the Docker image on Fly's remote builder and deploys it.
+No local Docker installation is required.
+
+#### Subsequent deploys
+
+```bash
+fly deploy
+```
+
+### 5.3 Find the Relay's Multiaddr
+
+After deploying, retrieve the public hostname and peer ID:
+
+```bash
+# Show the app hostname and IP
+fly info
+
+# Stream live logs to find the peer ID printed at startup
+fly logs
+```
+
+The startup log includes a line like:
+
+```text
+PeerId: 12D3KooWAbc123...
+Multiaddrs: [ '/ip4/0.0.0.0/tcp/9001/ws/p2p/12D3KooWAbc123...' ]
+```
+
+The public multiaddr your clients should use is constructed from the Fly hostname:
+
+```text
+/dns4/<APP_NAME>.fly.dev/tcp/9001/wss/p2p/<PEER_ID>
+```
+
+> **TLS:** Fly.io terminates TLS for HTTPS/WSS traffic on port 443 by default,
+> but the relay uses raw TCP ports (9001/9002) configured as `[[services]]` in
+> `fly.toml`. Fly does **not** automatically add TLS to raw TCP services.
+> Production deployments must serve WebSocket clients over `wss://` because
+> browsers block `ws://` connections from HTTPS-served pages under the
+> mixed-content policy. Connections from HTTP origins or `localhost` may use
+> `ws://`, but production multiaddrs should use `wss://`. You have two options:
+>
+> **Option A — Fly's built-in TLS termination (recommended):**
+> Add `"tls"` to the port handlers in `fly.toml`:
+> ```toml
+> [[services.ports]]
+>   port = 9001
+>   handlers = ["tls"]
+> ```
+> Leave ALPN at the Fly defaults so the TLS handshake advertises the standard
+> HTTP values (`http/1.1`, optionally `h2`) that browsers require for the
+> WebSocket upgrade. Do **not** set `tls_options.alpn = ["libp2p"]` — that
+> value is for raw libp2p TLS streams and will prevent browsers from
+> completing the WSS handshake. Redeploy, then clients connect with:
+> ```text
+> /dns4/<APP_NAME>.fly.dev/tcp/9001/wss/p2p/<PEER_ID>
+> ```
+>
+> **Option B — Fly proxy on port 443:**
+> Replace the `[[services]]` block with an `[http_service]` block so the Fly
+> proxy terminates TLS on 443 and forwards plain WebSocket frames to the
+> container on port 9001:
+> ```toml
+> [http_service]
+>   internal_port = 9001
+>   force_https = true
+>   auto_stop_machines = "off"
+>   auto_start_machines = true
+>   processes = ["app"]
+> ```
+> Clients then connect on the HTTPS port:
+> ```text
+> /dns4/<APP_NAME>.fly.dev/tcp/443/wss/p2p/<PEER_ID>
+> ```
+> See the Fly.io
+> [`http_service` reference](https://fly.io/docs/reference/configuration/#the-http_service-section)
+> for additional options (concurrency, checks, response headers).
+
+### 5.4 Client Configuration
+
+Once you have the multiaddr, configure your SwarmDB client.
+
+In a **browser** application, combine `defaultConfig` and
+`defaultBootstrapConfig` (both exported from `@collabswarm/collabswarm`):
+
+```typescript
+import {
+  defaultConfig,
+  defaultBootstrapConfig,
+} from '@collabswarm/collabswarm';
+
+const config = defaultConfig(
+  defaultBootstrapConfig([
+    '/dns4/myapp-relay.fly.dev/tcp/9001/wss/p2p/12D3KooWAbc123...',
+  ]),
+);
+```
+
+In a **Node** process, import the Node-only helper from the `/node` subpath:
+
+```typescript
+import { defaultNodeConfig } from '@collabswarm/collabswarm/node';
+
+const config = defaultNodeConfig({
+  list: [
+    '/dns4/myapp-relay.fly.dev/tcp/9001/wss/p2p/12D3KooWAbc123...',
+  ],
+});
+```
+
+Replace `myapp-relay` with your app name and `12D3KooWAbc123...` with the peer ID
+from `fly logs`.
+
+### 5.5 Environment Variables
+
+Override relay defaults by adding entries to `[env]` in `fly.toml`:
+
+```toml
+[env]
+  TOPIC_ALLOWLIST  = "/document/,/documents"
+  MAX_AUTO_TOPICS  = "500"
+  EXTRA_TOPICS     = "/documents"
+```
+
+For secrets (e.g. future auth tokens), use `fly secrets set` instead:
+
+```bash
+fly secrets set MY_SECRET=value
+```
+
+### 5.6 Scaling and Cost Management
+
+The `fly.toml` defaults to one VM. To scale up or down:
+
+```bash
+# Scale to 2 instances (costs double)
+fly scale count 2
+
+# Scale back to 1
+fly scale count 1
+
+# Check current machine status
+fly status
+```
+
+**Stopping the VM entirely** to avoid charges:
+
+```bash
+fly scale count 0   # stops all machines; app stays registered but costs nothing
+fly scale count 1   # restart when needed
+```
+
+Each relay has a distinct libp2p peer ID that is **regenerated on every restart**.
+If you scale to 0 and back, clients configured with the old peer ID will fail to
+dial until they are updated. For stable peer IDs across restarts, persist the
+libp2p private key in a Fly volume and restore it at startup.
+
+### 5.7 Caveats
+
+| Topic | Details |
+|-------|---------|
+| **Cost** | ~$2/month for `shared-cpu-1x 256mb`. Bandwidth is billed above regional thresholds (see [pricing page](https://fly.io/docs/about/pricing/)). |
+| **Scale-to-zero** | Fly.io can suspend machines on inactivity if configured, but this is opt-in (`auto_stop_machines = true` in `fly.toml`). The provided `fly.toml` does not enable it, so the relay runs continuously. |
+| **Single-instance** | The default config runs one VM. A single `shared-cpu-1x` VM handles dozens of concurrent peers comfortably. For higher availability, scale to 2+ VMs in different regions and add all multiaddrs to your client config. |
+| **Peer ID stability** | The relay generates a new peer ID on each container start. Clients must be updated with the new peer ID after redeploys. |
+| **Port 9002 (TCP)** | Fly.io exposes raw TCP ports, so node-to-node connections on port 9002 work. If you only use browser clients, you can remove the `[[services]]` block for port 9002 from `fly.toml`. |
+
+---
+
+## 6. Docker Deployment Configs
 
 Ready-to-use Docker configurations are provided in `guides/docker/`.
 
-### 5.1 Files
+### 6.1 Files
 
 | File | Purpose |
 |------|---------|
@@ -480,7 +705,7 @@ Ready-to-use Docker configurations are provided in `guides/docker/`.
 | `Dockerfile.relay` | Circuit relay / bootstrap node |
 | `Dockerfile.bootstrap` | DHT bootstrap node (for large deployments) |
 
-### 5.2 Single-Server Deployment
+### 6.2 Single-Server Deployment
 
 ```bash
 # Start the relay server
@@ -496,7 +721,7 @@ docker compose -f guides/docker/docker-compose.single.yaml logs -f relay
 docker compose -f guides/docker/docker-compose.single.yaml down
 ```
 
-### 5.3 Production Deployment
+### 6.3 Production Deployment
 
 ```bash
 # Start all services
@@ -516,9 +741,9 @@ See individual Dockerfile documentation in `guides/docker/` for build instructio
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
-### 6.1 Common Connectivity Issues
+### 7.1 Common Connectivity Issues
 
 #### "Cannot connect to relay"
 
@@ -528,7 +753,7 @@ See individual Dockerfile documentation in `guides/docker/` for build instructio
 1. **Relay not running:** Check `docker compose ps` and `docker compose logs relay`
 2. **Wrong multiaddress:** Verify the peer ID and IP in the client config match the relay's output
 3. **Port blocked:** Ensure port 9001 is open in firewall/security group
-4. **TLS required:** Browsers require `wss://` for non-localhost connections. Set up a reverse proxy with TLS (see Section 2.6)
+4. **TLS required:** When serving the client over HTTPS, browsers' mixed-content policy blocks plain `ws://`, so the relay multiaddr must use `wss://`. (Plain `ws://` is fine from `localhost` or HTTP origins.) Set up a reverse proxy with TLS (see Section 2.6).
 5. **CORS issues:** Not applicable to WebSocket connections, but if serving config.json, ensure CORS headers are set
 
 #### "Peers connect but messages don't sync"
@@ -550,7 +775,7 @@ See individual Dockerfile documentation in `guides/docker/` for build instructio
 2. **STUN failure:** Check browser console for ICE candidate errors. Try a different STUN server
 3. **Firewall blocking UDP:** WebRTC uses UDP. Corporate firewalls may block it. Circuit relay (TCP-based) is the fallback
 
-### 6.2 Debugging Peer Discovery
+### 7.2 Debugging Peer Discovery
 
 Enable verbose logging to trace peer discovery:
 
@@ -567,7 +792,7 @@ localStorage.setItem('debug', 'libp2p:*')
 2. `libp2p:gossipsub` — Check that peers join the mesh and exchange messages
 3. `libp2p:circuit-relay-v2` — Verify relay reservations are established
 
-### 6.3 Verifying the Relay is Working
+### 7.3 Verifying the Relay is Working
 
 1. **Check relay startup output:**
    ```text
@@ -595,7 +820,7 @@ localStorage.setItem('debug', 'libp2p:*')
    # Both should show "connected-to-relay" status and discover each other
    ```
 
-### 6.4 Firewall and NAT Configuration
+### 7.4 Firewall and NAT Configuration
 
 **Minimum ports to open on the relay server:**
 
@@ -615,7 +840,7 @@ localStorage.setItem('debug', 'libp2p:*')
 - Azure: Add NSG rules for TCP 9001 and 9002
 - DigitalOcean: Configure cloud firewall for TCP 9001 and 9002
 
-### 6.5 Performance Tuning
+### 7.5 Performance Tuning
 
 **Relay server:**
 - Increase `ulimit -n` (file descriptor limit) for many concurrent connections: `ulimit -n 65535`
