@@ -434,6 +434,88 @@ describe('serializeChangeNodeForJSON / deserializeChangeNodeFromJSON', () => {
         /"kind" must be one of.*got "hacker"/,
       );
     });
+
+    test('throws when "keyID" is a number', () => {
+      // Regression: prior to keyID validation a peer could send
+      // `keyID: 123` and the value would flow through `...node` into the
+      // typed `CRDTChangeNode`, silently violating the `keyID?: string`
+      // contract.
+      const malformed = {
+        kind: 'writer',
+        keyID: 123,
+        change: '01',
+      } as unknown as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"keyID" must be a string when present.*got number/,
+      );
+    });
+
+    test('throws when "keyID" is null', () => {
+      const malformed = {
+        kind: 'writer',
+        keyID: null,
+        change: '01',
+      } as unknown as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"keyID" must be a string when present.*got null/,
+      );
+    });
+
+    test('throws when "keyID" is an object', () => {
+      const malformed = {
+        kind: 'writer',
+        keyID: { evil: true },
+        change: '01',
+      } as unknown as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"keyID" must be a string when present.*got object/,
+      );
+    });
+
+    test('throws when a nested child has an invalid "keyID"', () => {
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","children":' +
+          '{"h1":{"kind":"writer","keyID":42,"change":"02"}}}',
+      ) as CRDTChangeNodeWire<string>;
+      expect(() => deserializeChangeNodeFromJSON(malformed, decodeBytes)).toThrow(
+        /"keyID" must be a string when present.*got number/,
+      );
+    });
+
+    test('accepts omitted "keyID" (optional field)', () => {
+      const node: CRDTChangeNodeWire<string> = { kind: 'document', change: '01' };
+      const restored = deserializeChangeNodeFromJSON(node, decodeBytes);
+      expect(restored.keyID).toBeUndefined();
+      // Explicit construction must not set `keyID` as an own property when
+      // omitted; consumers iterating own keys should not see it.
+      expect(Object.prototype.hasOwnProperty.call(restored, 'keyID')).toBe(false);
+    });
+
+    test('accepts a string "keyID"', () => {
+      const node: CRDTChangeNodeWire<string> = {
+        kind: 'writer',
+        keyID: 'k-1',
+        change: '01',
+      };
+      const restored = deserializeChangeNodeFromJSON(node, decodeBytes);
+      expect(restored.keyID).toBe('k-1');
+    });
+
+    test('strips unknown extra wire properties via explicit construction', () => {
+      // Regression: `...node` spread would silently propagate peer-supplied
+      // extras (e.g. a forged `signature` field) into our typed
+      // `CRDTChangeNode`. Explicit construction keeps the in-memory shape
+      // tight to the documented type.
+      const malformed = JSON.parse(
+        '{"kind":"document","change":"01","attackerField":"surprise",' +
+          '"__proto__":{"hijack":true}}',
+      ) as CRDTChangeNodeWire<string>;
+      const restored = deserializeChangeNodeFromJSON(malformed, decodeBytes);
+      expect(Object.keys(restored).sort()).toEqual(['change', 'kind']);
+      expect(
+        (restored as unknown as { attackerField?: unknown }).attackerField,
+      ).toBeUndefined();
+    });
   });
 
   test('encoder is not invoked for nodes whose change is undefined', () => {

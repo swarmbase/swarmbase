@@ -454,7 +454,26 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
   }
 
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<BinaryChange[], CryptoKey> {
-    const raw = this.deserialize(this.decode(message)) as {
+    const decoded = this.deserialize(this.decode(message));
+    // Wire input is untrusted: a malformed peer can send `null`, an array, or
+    // a primitive in place of a sync-message object. Reading properties on
+    // those values would throw a bare `TypeError` (`Cannot read properties of
+    // null`) that is hard to attribute back to the peer; reject up front with
+    // a descriptive error instead. This also denies a trivial DoS path where
+    // a peer crashes the deserializer by sending e.g. JSON `null`. Mirrors
+    // the equivalent guard in `YjsJSONSerializer.deserializeSyncMessage`.
+    if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+      throw new Error(
+        `Invalid sync message: expected a plain object (got ${
+          decoded === null
+            ? 'null'
+            : Array.isArray(decoded)
+              ? 'array'
+              : typeof decoded
+        })`,
+      );
+    }
+    const raw = decoded as {
       documentId?: string;
       changeId?: string;
       changes?: iCRDTChangeNode;

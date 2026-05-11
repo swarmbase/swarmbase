@@ -426,4 +426,42 @@ describe('AutomergeJSONSerializer', () => {
     const deserialized = serializer.deserializeSyncMessage(wire);
     expect(deserialized.changes).toBeUndefined();
   });
+
+  // Regression: prior to the upfront object guard, a malformed peer payload
+  // like JSON `null` flowed straight to `raw.snapshot` access and threw a
+  // bare `TypeError: Cannot read properties of null`. The guard mirrors
+  // `YjsJSONSerializer.deserializeSyncMessage` and produces a descriptive
+  // `Error` so the malformed payload can be attributed back to the peer
+  // instead of crashing the deserializer (a trivial DoS vector).
+  test('deserializeSyncMessage rejects a top-level JSON null payload', () => {
+    const wire = buildWire(null);
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(Error);
+    expect(() => serializer.deserializeSyncMessage(wire)).not.toThrow(
+      TypeError,
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects a top-level JSON array payload', () => {
+    const wire = buildWire([1, 2, 3]);
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got array/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects a top-level JSON number payload', () => {
+    const wire = buildWire(42);
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects a top-level JSON string payload', () => {
+    const wire = buildWire('not-an-object');
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got string/,
+    );
+  });
 });

@@ -148,6 +148,17 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
         .join(', ')} (got ${JSON.stringify(node.kind)})`,
     );
   }
+  // Wire input is untrusted: a peer can send `keyID: 123` / object / null
+  // in place of the documented `keyID?: string`. Reject any non-string value
+  // (when present) so we don't silently propagate it via `...node` and
+  // violate the `CRDTChangeNode.keyID?: string` contract.
+  if (node.keyID !== undefined && typeof node.keyID !== 'string') {
+    throw new Error(
+      `Invalid merkle-dag node: "keyID" must be a string when present (got ${
+        node.keyID === null ? 'null' : typeof node.keyID
+      })`,
+    );
+  }
   const change = node.change !== undefined ? decodeLeaf(node.change) : undefined;
   if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
     // Wire input is untrusted: validate the children shape before iterating,
@@ -190,15 +201,32 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
         decodeLeaf,
       );
     }
-    return {
-      ...node,
-      change,
-      children,
-    };
+    // Construct the output node explicitly rather than spreading `...node`.
+    // The wire input is untrusted, so spreading would silently propagate any
+    // extra peer-supplied properties into our typed `CRDTChangeNode<TOut>`,
+    // including under field names we may add in the future. Listing each
+    // field by name keeps the in-memory shape tight to the documented type.
+    const result: CRDTChangeNode<TOut> = { kind: node.kind, children };
+    if (node.keyID !== undefined) {
+      result.keyID = node.keyID;
+    }
+    if (change !== undefined) {
+      result.change = change;
+    }
+    return result;
   }
-  return {
-    ...node,
-    change,
-    children: node.children,
-  };
+  // Same explicit-construction rationale as above; here `children` is either
+  // `undefined` or the `crdtChangeNodeDeferred` sentinel, both of which are
+  // preserved verbatim.
+  const result: CRDTChangeNode<TOut> = { kind: node.kind };
+  if (node.keyID !== undefined) {
+    result.keyID = node.keyID;
+  }
+  if (change !== undefined) {
+    result.change = change;
+  }
+  if (node.children !== undefined) {
+    result.children = node.children;
+  }
+  return result;
 }
