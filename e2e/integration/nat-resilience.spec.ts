@@ -14,7 +14,8 @@
  *   1. Relay container restart mid-sync (container churn, recovers via
  *      bootstrap re-dial + fresh config fetch).
  *   2. Browser-side reconnection (page reload on the cross-NAT peer).
- *   3. Browser-side network toggle (navigator.onLine offline/online cycle).
+ *   3. Browser-side network toggle (Playwright `context.setOffline(true)`
+ *      then `setOffline(false)` to simulate a transient network drop).
  *   4. Rapid, concurrent cross-NAT edits without message loss.
  *
  * Many of these scenarios are inherently flaky in CI because GossipSub mesh
@@ -33,7 +34,7 @@
  *   2. Page reload     — RUNS IN CI. Single-peer reload + cross-NAT message
  *      round-trip; the most stable resilience scenario and the one CI
  *      assertion this suite contributes.
- *   3. Network toggle  — CI-skip. `navigator.onLine` cycling depends on
+ *   3. Network toggle  — CI-skip. `context.setOffline()` cycling depends on
  *      transport-level reconnection timing through the relay, which has
  *      historically been flaky on shared CI runners.
  *   4. Rapid concurrent — CI-skip. 10-message bidirectional burst with a 60%
@@ -300,12 +301,12 @@ test.describe('NAT Browser Page Reload', () => {
 test.describe('NAT Browser Network Toggle', () => {
   test.setTimeout(300_000);
 
-  // navigator.onLine cycling depends on transport-level reconnection timing
-  // through the relay, which has historically been flaky on shared CI
+  // `context.setOffline()` cycling depends on transport-level reconnection
+  // timing through the relay, which has historically been flaky on shared CI
   // runners. Keep CI-skip; run with `yarn test:nat` locally.
-  test.skip(!!process.env.CI, 'Cross-NAT navigator.onLine toggle is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
+  test.skip(!!process.env.CI, 'Cross-NAT setOffline toggle is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
 
-  test('cross-NAT peer can send after navigator.onLine offline/online cycle', async ({ browser }) => {
+  test('cross-NAT peer can send after context.setOffline offline/online cycle', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
     const b = await initPage(browser, APP_B_URL);
     try {

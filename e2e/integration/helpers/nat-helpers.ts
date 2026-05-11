@@ -11,10 +11,13 @@ import type { Browser, BrowserContext, ConsoleMessage, Page } from '@playwright/
 /**
  * Default timeout for `track.waitFor('PEER_ID:', ...)` inside `initPage`.
  *
- * `INIT_COMPLETE` is emitted immediately before `PEER_ID:` in the test app's
- * bootstrap (see `e2e/test-app/src/main.ts`), so under normal conditions this
- * resolves synchronously from the buffered messages. We still want a real
- * timeout in case the buffer is racing with a slow page on a loaded CI box.
+ * In the test app's bootstrap (see `e2e/test-app/app.js`), `PEER_ID:` is
+ * logged immediately after the libp2p node is created, while `INIT_COMPLETE`
+ * is logged later — after pubsub subscribe, message handlers, and UI wiring
+ * have all completed. So callers that `waitFor('INIT_COMPLETE')` will, by
+ * definition, see `PEER_ID:` already in the buffer. We still keep a real
+ * timeout here for direct `PEER_ID:` callers, in case the buffer is racing
+ * with a slow page on a loaded CI box.
  */
 export const PEER_ID_WAIT_MS = 30_000;
 
