@@ -903,6 +903,80 @@ describe('malformed entry rejection', () => {
       expect(result.message).toMatch(/timestamp/);
     }
   });
+
+  // `canonicalEntryPayload` encodes `sequenceNumber` as an unsigned 32-bit
+  // integer. Values >0xFFFFFFFF would silently wrap via `>>> 0`, letting a
+  // hostile peer manufacture two *different* sequence numbers that share
+  // identical canonical bytes (and therefore identical signatures and
+  // hashes). Anything outside [0, 0xFFFFFFFF] must be rejected up front.
+  async function brokenSequenceEntry(
+    sequenceNumber: number,
+  ): Promise<ACLEntry<AclChange>> {
+    return {
+      sequenceNumber,
+      timestamp: 0,
+      parentHash: undefined,
+      change: { op: 'add' as const, keys: [alice.hashHex] },
+      signerKeyId: await serializePublicKey(alice.publicKey),
+      signature: new Uint8Array([1, 2, 3]),
+    } as ACLEntry<AclChange>;
+  }
+
+  test('sequenceNumber > 0xFFFFFFFF is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenSequenceEntry(0x100000000),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/sequenceNumber/);
+    }
+  });
+
+  test('sequenceNumber up to 0xFFFFFFFF passes shape validation', async () => {
+    // The shape check itself must accept the maximum permissible value.
+    // The chain's own sequence check will then reject it because the
+    // chain is empty (expects sequenceNumber=0), but with
+    // sequence-out-of-order rather than malformed-entry. This confirms
+    // we draw the bound at exactly 2^32-1.
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenSequenceEntry(0xffffffff),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).not.toBe('malformed-entry');
+    }
+  });
+
+  test('negative sequenceNumber is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenSequenceEntry(-1),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/sequenceNumber/);
+    }
+  });
+
+  test('sequenceNumber beyond MAX_SAFE_INTEGER is rejected without throwing', async () => {
+    const chain = makeChain([alice.publicKey]);
+    const result = await chain.ingestEntry(
+      await brokenSequenceEntry(Number.MAX_SAFE_INTEGER + 1),
+      alice.publicKey,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('malformed-entry');
+      expect(result.message).toMatch(/sequenceNumber/);
+    }
+  });
 });
 
 describe('concurrent mutation safety', () => {

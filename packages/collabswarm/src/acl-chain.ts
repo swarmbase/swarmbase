@@ -158,13 +158,12 @@ export type ACLChainVerifyError =
   | 'parent-hash-mismatch'
   | 'sequence-out-of-order'
   | 'unknown-signer-key'
-  | 'duplicate-entry'
   | 'malformed-entry';
 
 /**
- * Result returned by {@link ACLChain.verifyChain} and the various append
- * paths. `ok: false` results carry both a structured reason and a human
- * readable message for logging.
+ * Result returned by {@link ACLChain.replay}, {@link ACLChain.ingestEntry},
+ * and {@link ACLChain.authorAndAppend}. `ok: false` results carry both a
+ * structured reason and a human readable message for logging.
  */
 export type ACLChainVerifyResult =
   | { ok: true }
@@ -313,25 +312,22 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
- * Hex-encode a Uint8Array. Used for set keys when comparing identifiers.
+ * Upper bound on byte length accepted for `parentHash`. Sized generously
+ * above SHA-256's 32-byte digest so the cap rejects only obviously
+ * malformed peer input. Network-supplied entries with unreasonably large
+ * `parentHash` buffers would otherwise force large allocations during
+ * hashing.
  */
-function toHex(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    s += bytes[i].toString(16).padStart(2, '0');
-  }
-  return s;
-}
+const MAX_PARENT_HASH_BYTES = 64;
 
 /**
- * Upper bound on byte length accepted for hash- or key-bytes fields
- * (`parentHash`, `signerKeyId`). Sized generously above SHA-256's 32-byte
- * digest and the canonical ECDSA P-384 public-key serialization so the
- * cap rejects only obviously malformed peer input. Network-supplied
- * entries with unreasonably large byte arrays here would otherwise force
- * large allocations during hashing.
+ * Upper bound on byte length accepted for `signerKeyId`. Sized above the
+ * canonical ECDSA P-384 raw public-key serialization (~97 bytes) and SPKI
+ * encoding (~120 bytes) with headroom for alternate algorithms a future
+ * `AuthProvider` might use. Anything substantially larger than a couple
+ * hundred bytes is hostile input.
  */
-const MAX_HASH_BYTES = 64;
+const MAX_SIGNER_KEY_BYTES = 256;
 
 /**
  * Upper bound on the serialized change payload accepted from the network.
@@ -354,13 +350,18 @@ function validateEntryShape<ChangesType>(
   if (entry === null || typeof entry !== 'object') {
     return 'entry is not an object';
   }
+  // `sequenceNumber` is encoded as an unsigned 32-bit integer in
+  // `canonicalEntryPayload`. Values >2^32-1 would silently wrap via the
+  // `>>> 0` cast and let a hostile peer manufacture two *different*
+  // sequence numbers that produce identical canonical bytes (and
+  // therefore identical signatures and hashes). Cap at 0xFFFFFFFF.
   if (
     typeof entry.sequenceNumber !== 'number' ||
     !Number.isInteger(entry.sequenceNumber) ||
     entry.sequenceNumber < 0 ||
-    entry.sequenceNumber > Number.MAX_SAFE_INTEGER
+    entry.sequenceNumber > 0xffffffff
   ) {
-    return 'sequenceNumber is not a non-negative safe integer';
+    return 'sequenceNumber is not an unsigned 32-bit integer';
   }
   // `timestamp` is encoded as two unsigned 32-bit halves in
   // `canonicalEntryPayload`. Fractional values would be silently truncated
@@ -381,7 +382,7 @@ function validateEntryShape<ChangesType>(
   }
   if (
     entry.signerKeyId.byteLength === 0 ||
-    entry.signerKeyId.byteLength > MAX_HASH_BYTES * 4
+    entry.signerKeyId.byteLength > MAX_SIGNER_KEY_BYTES
   ) {
     // Public key encodings are a couple hundred bytes at most; reject
     // anything wildly out of range.
@@ -399,7 +400,7 @@ function validateEntryShape<ChangesType>(
     }
     if (
       entry.parentHash.byteLength === 0 ||
-      entry.parentHash.byteLength > MAX_HASH_BYTES
+      entry.parentHash.byteLength > MAX_PARENT_HASH_BYTES
     ) {
       return 'parentHash has an implausible length';
     }
@@ -438,12 +439,6 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
    * `null` while the chain is still empty.
    */
   private _state: ACLState<ChangesType, PublicKey> | null = null;
-
-  /**
-   * Set of entry hashes (hex) seen so far. Used to reject exact duplicates
-   * up front, before doing the more expensive signature work.
-   */
-  private readonly _seenHashes = new Set<string>();
 
   /** Serializer used both for the change payload and for the AuthProvider. */
   private readonly _serializeChange: (change: ChangesType) => Uint8Array;
@@ -682,10 +677,17 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       }
     }
 
-    // 4. Reject exact duplicates before doing expensive signature work.
-    //    `serializeChange` runs over the (still opaque) change here; if it
-    //    throws on hostile input we surface it as a structured error
-    //    rather than letting the exception escape.
+    // 4. Canonical-encode and hash the payload. Bound the size up front so
+    //    a hostile peer cannot force a large allocation via an oversized
+    //    `change`. `serializeChange` runs over the (still opaque) change
+    //    here; if it throws on hostile input we surface it as a structured
+    //    error rather than letting the exception escape.
+    //
+    //    We do not separately deduplicate by hash: any two entries with the
+    //    same canonical payload would necessarily share a `sequenceNumber`,
+    //    and the sequence check in step 2 already requires
+    //    `entry.sequenceNumber === this._entries.length`. A re-ingested
+    //    entry therefore can never reach this point with a matching hash.
     let entryHash: Uint8Array;
     let payloadBytes: Uint8Array;
     try {
@@ -721,15 +723,6 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
         ok: false,
         reason: 'malformed-entry',
         message: `failed to hash entry payload: ${(err as Error).message}`,
-        index,
-      };
-    }
-    const entryHashHex = toHex(entryHash);
-    if (this._seenHashes.has(entryHashHex)) {
-      return {
-        ok: false,
-        reason: 'duplicate-entry',
-        message: 'entry with this hash has already been ingested',
         index,
       };
     }
@@ -821,7 +814,6 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
     this._state = newState;
     this._entries.push(entry);
     this._entryHashes.push(entryHash);
-    this._seenHashes.add(entryHashHex);
 
     return { ok: true };
   }
@@ -852,7 +844,6 @@ export class ACLChain<ChangesType, PrivateKey, PublicKey> {
       // scratch" primitive without constructing a new chain.
       this._entries.length = 0;
       this._entryHashes.length = 0;
-      this._seenHashes.clear();
       this._state = null;
 
       for (let i = 0; i < entries.length; i++) {
