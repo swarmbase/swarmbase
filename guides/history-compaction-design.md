@@ -74,8 +74,20 @@ export interface CRDTSnapshotNode<ChangesType, PublicKey> {
 After a snapshot is created, the change nodes prior to `lastChangeNodeCID` can be pruned from the in-memory sync tree:
 
 - **Sync tree pruning**: `_pruneChanges(keepCount)` traverses the existing change tree and removes children beyond the most recent `keepCount` document change nodes. ACL nodes (reader/writer changes) are preserved as leaf nodes (children stripped) regardless of depth. The snapshot is stored separately in `_latestSnapshot` and included only in load/snapshot-load responses.
-- **Blockstore retention**: Blocks remain in the Helia blockstore after pruning. `_pruneChanges` only removes nodes from the in-memory sync message tree (`_lastSyncMessage.changes`); it does **not** remove or unpin blocks from the Helia blockstore. Blockstore-level garbage collection of old blocks is not yet implemented (TODO: add optional blockstore GC pass after pruning).
-- **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync
+- **Blockstore retention**: By default, blocks remain in the Helia blockstore after pruning. `_pruneChanges` only removes nodes from the in-memory sync message tree (`_lastSyncMessage.changes`). When `gcAfterPrune: true` is set in `CompactionConfig`, `_gcPrunedBlocks` runs after every successful prune to unpin and delete the pruned blocks from the blockstore. A safety filter (`filterDeletableCIDs`) excludes any CID that is still reachable from the post-prune sync tree (e.g. ACL nodes that were re-attached as leaves) as well as the snapshot boundary CID, so accidentally-re-referenced blocks are never deleted. The GC pass is fire-and-forget and its errors are logged rather than fatal.
+- **Hash set retention**: The `_hashes` set retains all known CIDs to prevent re-processing, but the actual change data is no longer transmitted during sync. After GC, `_hashes` still contains the deleted CIDs so duplicate inbound sync messages continue to deduplicate; callers that want to fetch the underlying data must do so via the lazy-load API or accept that the block is unavailable locally.
+
+### 2.4.1 Lazy Loading
+
+Once a change has been pruned from `_lastSyncMessage.changes`, its `ChangesType` payload is no longer kept in memory. The public method `CollabswarmDocument.loadChangeBlock(cid)` resolves an old CID on demand by calling `blockstore.get()` and decrypting via the document keychain.
+
+Semantics:
+
+- CIDs not in `_hashes` are rejected with `undefined` (refusing to load arbitrary blocks).
+- CIDs whose underlying block is missing locally (e.g. it was GC'd and no peer has re-served it) return `undefined`. Callers can decide whether to surface the failure or dial peers via the existing sync protocols.
+- Malformed CIDs throw.
+
+`CollabswarmDocument.hasChange(cid)` is a cheap synchronous check that callers can use before attempting a lazy load.
 
 The key insight: **CRDTs are designed to converge from any state**. A Yjs `encodeStateAsUpdateV2` produces a snapshot directly applicable via `remoteChange()`. Automerge `save()` produces a compact binary blob that requires `CRDTProvider.applySnapshot()` (which uses `Automerge.load()` + `merge()`) since the save format differs from incremental changes. Either way, the peer arrives at the same state without needing individual change history.
 
@@ -156,6 +168,9 @@ export interface CompactionConfig {
   /** Whether to prune old DAG nodes from sync messages after snapshot */
   pruneAfterSnapshot: boolean;
 
+  /** Whether to also delete pruned blocks from the Helia blockstore */
+  gcAfterPrune: boolean;
+
   /** Keep at least N most recent change nodes even after pruning */
   keepRecentNodes: number;
 }
@@ -166,6 +181,7 @@ Default values:
 - `snapshotInterval: 500`
 - `minChangesBeforeSnapshot: 100`
 - `pruneAfterSnapshot: true`
+- `gcAfterPrune: false` (opt-in -- destructive; opt-in lets operators reason about retention separately from the cheap in-memory prune)
 - `keepRecentNodes: 50`
 
 ## 3. Wire Protocol Changes

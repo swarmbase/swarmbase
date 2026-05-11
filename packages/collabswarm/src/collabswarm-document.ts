@@ -40,6 +40,10 @@ import {
 } from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
+import {
+  filterDeletableCIDs,
+  loadChangeBlock as lazyLoadChangeBlock,
+} from './blockstore-gc';
 import { documentTopic } from './document-topic';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
@@ -2400,6 +2404,58 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Lazy-load a historical change block by CID.
+   *
+   * Used to fetch change data on demand for history-visibility consumers (e.g.
+   * audit UI, diff viewers) when the change has been pruned from the in-memory
+   * sync tree but the block is still present in the Helia blockstore. The
+   * returned `ChangesType` is the deserialized, decrypted payload.
+   *
+   * Returns `undefined` when:
+   * - The CID is not in `_hashes` (we have never seen this change).
+   * - The block is missing from the blockstore (e.g. it was GC'd locally and
+   *   no peer has re-served it yet). Callers that need stronger guarantees can
+   *   fall back to dialing peers via the existing sync protocols.
+   *
+   * Throws when:
+   * - The CID is malformed.
+   * - The block is present locally but decryption fails (wrong/missing
+   *   keychain entry) or the payload fails to deserialize (corrupted data).
+   *   These are treated as hard errors so callers can distinguish a recoverable
+   *   "missing block" condition from a stronger data-integrity issue.
+   *
+   * @param cid CID string of the change block to load.
+   * @returns The deserialized change payload, or `undefined` if unavailable.
+   */
+  public async loadChangeBlock(cid: string): Promise<ChangesType | undefined> {
+    return lazyLoadChangeBlock<CID, ChangesType>(
+      cid,
+      this._hashes,
+      (c) => CID.parse(c),
+      (parsedCID) => this._getBlock(parsedCID),
+      // Intentionally no-op onMissing: missing-after-GC is an expected outcome
+      // for the lazy-load path (audit UIs, diff viewers) and should not spam
+      // logs. Callers that want visibility can detect `undefined` themselves.
+    );
+  }
+
+  /**
+   * Check whether a CID is known to this document (i.e. present in the
+   * in-memory `_hashes` set). Useful for callers that want to confirm a
+   * change exists before attempting a lazy load.
+   *
+   * Note: returning `true` only proves the CID has been observed (it is
+   * tracked in `_hashes` for sync-message dedup). It does NOT guarantee the
+   * underlying block is locally available -- after `gcAfterPrune` runs, the
+   * CID remains in `_hashes` even though the block has been removed from the
+   * blockstore. Callers should therefore still handle `loadChangeBlock(cid)`
+   * resolving to `undefined` (and may need to fall back to dialing peers).
+   */
+  public hasChange(cid: string): boolean {
+    return this._hashes.has(cid);
+  }
+
+  /**
    * Creates a snapshot of the current document state.
    *
    * The snapshot compacts all current change nodes into a single state representation.
@@ -2458,12 +2514,31 @@ export class CollabswarmDocument<
     if (this._lastSyncMessage && this._compactionConfig.pruneAfterSnapshot) {
       const prunedCIDs = this._pruneChanges(this._compactionConfig.keepRecentNodes);
 
-      // Delete pruned blocks from the Helia blockstore asynchronously.
+      // Delete pruned blocks from the Helia blockstore asynchronously, but only
+      // when explicitly opted-in via `gcAfterPrune`. Filter out any CIDs that
+      // remain reachable from the post-prune sync tree (e.g. ACL nodes that
+      // were re-attached as leaves) and the snapshot boundary CID itself.
       // Fire-and-forget: GC errors are logged but don't block snapshot creation.
-      if (prunedCIDs.size > 0) {
-        this._gcPrunedBlocks(prunedCIDs).catch((err) => {
-          console.error(`Blockstore GC failed for ${this.documentPath}:`, err);
-        });
+      if (
+        this._compactionConfig.gcAfterPrune &&
+        prunedCIDs.size > 0 &&
+        this._lastSyncMessage?.changes &&
+        this._lastSyncMessage.changeId
+      ) {
+        const protectedCIDs = lastChangeNodeCID
+          ? [lastChangeNodeCID]
+          : [];
+        const deletable = filterDeletableCIDs(
+          prunedCIDs,
+          this._lastSyncMessage.changeId,
+          this._lastSyncMessage.changes,
+          protectedCIDs,
+        );
+        if (deletable.size > 0) {
+          this._gcPrunedBlocks(deletable).catch((err) => {
+            console.error(`Blockstore GC failed for ${this.documentPath}:`, err);
+          });
+        }
       }
     }
 

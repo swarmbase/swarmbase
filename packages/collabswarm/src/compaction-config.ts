@@ -14,8 +14,23 @@ export interface CompactionConfig {
   /** Minimum document changes before the first snapshot, to avoid premature snapshots. */
   minChangesBeforeSnapshot: number;
 
-  /** Prune old nodes from the sync tree and delete their blocks from the Helia blockstore after a snapshot. ACL blocks are always preserved. */
+  /** Prune old nodes from the in-memory sync tree after a snapshot. ACL nodes are always preserved. */
   pruneAfterSnapshot: boolean;
+
+  /**
+   * After pruning the in-memory sync tree, delete the orphaned blocks from the
+   * Helia blockstore. Opt-in because deletion is destructive: once a block is
+   * gone, peers that lazy-load it via {@link CollabswarmDocument.loadChangeBlock}
+   * or that re-broadcast the change will not be able to fetch the data locally.
+   *
+   * Only blocks that are no longer reachable from the in-memory sync tree (and
+   * are not the snapshot boundary CID) are deleted, so accidentally re-attached
+   * ACL nodes are safe. CIDs remain in the in-memory `_hashes` set so duplicate
+   * incoming sync messages are still deduplicated.
+   *
+   * Has no effect when `pruneAfterSnapshot` is false.
+   */
+  gcAfterPrune: boolean;
 
   /** Keep at least N recent change nodes after pruning so slightly-behind peers can catch up. */
   keepRecentNodes: number;
@@ -30,5 +45,6 @@ export const defaultCompactionConfig: CompactionConfig = {
   snapshotInterval: 500,
   minChangesBeforeSnapshot: 100,
   pruneAfterSnapshot: true,
+  gcAfterPrune: false,
   keepRecentNodes: 50,
 };
