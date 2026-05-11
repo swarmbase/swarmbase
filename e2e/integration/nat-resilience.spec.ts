@@ -14,13 +14,34 @@
  *   1. Relay container restart mid-sync (container churn, recovers via
  *      bootstrap re-dial + fresh config fetch).
  *   2. Browser-side reconnection (page reload on the cross-NAT peer).
- *   3. Rapid, concurrent cross-NAT edits without message loss.
+ *   3. Browser-side network toggle (navigator.onLine offline/online cycle).
+ *   4. Rapid, concurrent cross-NAT edits without message loss.
  *
  * Many of these scenarios are inherently flaky in CI because GossipSub mesh
  * re-formation through a single relay takes time (10s+) and depends on
  * libp2p's discovery cadence. We use generous timeouts and, where useful,
  * a minimum-success-rate threshold instead of strict equality so the suite
  * stays meaningful without becoming noise.
+ *
+ * CI gating strategy
+ * ------------------
+ * To balance signal vs. noise the four scenarios above are gated as follows:
+ *
+ *   1. Relay restart   — opt-in via `RUN_NAT_RESTART=1`. Restarts docker
+ *      services and rebuilds the gossipsub mesh from scratch; the slowest
+ *      and most volatile scenario, so it does not run in CI by default.
+ *   2. Page reload     — RUNS IN CI. Single-peer reload + cross-NAT message
+ *      round-trip; the most stable resilience scenario and the one CI
+ *      assertion this suite contributes.
+ *   3. Network toggle  — CI-skip. `navigator.onLine` cycling depends on
+ *      transport-level reconnection timing through the relay, which has
+ *      historically been flaky on shared CI runners.
+ *   4. Rapid concurrent — CI-skip. 10-message bidirectional burst with a 60%
+ *      delivery threshold; deliberately stress-shaped, expected to be flaky
+ *      on shared CI runners.
+ *
+ * Skipped scenarios run locally with `yarn test:nat` (and `RUN_NAT_RESTART=1
+ * yarn test:nat` for the relay restart).
  *
  * Shared helpers (`initPage`, `trackConsole`, etc.) live in
  * `./helpers/nat-helpers.ts` and are also used by `nat-traversal.spec.ts`.
@@ -229,12 +250,14 @@ test.describe('NAT Relay Failure Recovery', () => {
   });
 });
 
-test.describe('NAT Browser Reconnection', () => {
+// This describe block is intentionally kept enabled on CI. It is the most
+// stable resilience scenario in this suite (no docker churn, no stress
+// thresholds — just a single page reload plus a cross-NAT round-trip) and
+// provides the CI assertion that this PR contributes to the nat-traversal
+// job. If this scenario starts flaking on CI, prefer fixing the underlying
+// instability over re-adding a CI-skip — opt out only as a last resort.
+test.describe('NAT Browser Page Reload', () => {
   test.setTimeout(300_000);
-
-  // Mesh re-formation through a single relay can take 10s+ after a peer
-  // rejoins; in CI this is occasionally flaky. Same caveat as resilience.spec.ts.
-  test.skip(!!process.env.CI, 'Cross-NAT browser reconnect is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
 
   test('cross-NAT peer catches up after page reload', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
@@ -272,6 +295,15 @@ test.describe('NAT Browser Reconnection', () => {
       await b.context.close().catch(() => {});
     }
   });
+});
+
+test.describe('NAT Browser Network Toggle', () => {
+  test.setTimeout(300_000);
+
+  // navigator.onLine cycling depends on transport-level reconnection timing
+  // through the relay, which has historically been flaky on shared CI
+  // runners. Keep CI-skip; run with `yarn test:nat` locally.
+  test.skip(!!process.env.CI, 'Cross-NAT navigator.onLine toggle is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
 
   test('cross-NAT peer can send after navigator.onLine offline/online cycle', async ({ browser }) => {
     const a = await initPage(browser, APP_A_URL);
