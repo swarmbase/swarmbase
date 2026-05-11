@@ -3,77 +3,26 @@ import {
   ACLProvider,
   CollabswarmDocumentChangeHandler,
   CRDTChangeBlock,
-  CRDTChangeNode,
-  CRDTChangeNodeDeferred,
-  crdtChangeNodeDeferred,
-  CRDTChangeNodeKind,
+  CRDTChangeNodeWire,
   CRDTProvider,
   CRDTSyncMessage,
+  describeValue,
+  deserializeChangeNodeFromJSON,
   JSONSerializer,
   Keychain,
   KeychainProvider,
   LRUCache,
+  serializeChangeNodeForJSON,
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
 import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
-type iCRDTChangeNode = {
-  kind: CRDTChangeNodeKind;
-  keyID?: string;
-  // Binary data is stored as a base64 string for JSON serialization.
-  // Base64 has only ~33% payload expansion and is the standard encoding for
-  // binary data in JSON, so this is an acceptable trade-off.
-  change?: string;
-  children?: { [hash: string]: iCRDTChangeNode } | CRDTChangeNodeDeferred;
-};
-
-function serializeUint8ArrayInMerkleDAG(
-  node: CRDTChangeNode<Uint8Array>,
-): iCRDTChangeNode {
-  const change = node.change ? Base64.fromUint8Array(node.change) : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: iCRDTChangeNode } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = serializeUint8ArrayInMerkleDAG(child);
-    }
-    return {
-      ...node,
-      change,
-      children,
-    };
-  } else {
-    return {
-      ...node,
-      change,
-      children: node.children,
-    };
-  }
-}
-
-function deserializeUint8ArrayInMerkleDAG(
-  node: iCRDTChangeNode,
-): CRDTChangeNode<Uint8Array> {
-  const change = node.change ? Base64.toUint8Array(node.change) : undefined;
-  if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: CRDTChangeNode<Uint8Array> } = {};
-    for (const [hash, child] of Object.entries(node.children)) {
-      children[hash] = deserializeUint8ArrayInMerkleDAG(child);
-    }
-    return {
-      ...node,
-      change,
-      children,
-    };
-  } else {
-    return {
-      ...node,
-      change,
-      children: node.children,
-    };
-  }
-}
+// Binary data is stored as a base64 string for JSON serialization.
+// Base64 has only ~33% payload expansion and is the standard encoding for
+// binary data in JSON, so this is an acceptable trade-off.
+type iCRDTChangeNode = CRDTChangeNodeWire<string>;
 
 export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
   serializeChanges(changes: Uint8Array): Uint8Array {
@@ -127,8 +76,14 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     return this.encode(
       this.serialize({
         ...message,
+        // Mirror the deserializer: only `undefined` skips the
+        // serialization path. Any defined value flows through
+        // `serializeChangeNodeForJSON` so the wire shape matches what
+        // the deserializer will validate on the receiving end.
         changes:
-          message.changes && serializeUint8ArrayInMerkleDAG(message.changes),
+          message.changes === undefined
+            ? undefined
+            : serializeChangeNodeForJSON(message.changes, Base64.fromUint8Array),
         keychainChanges:
           message.keychainChanges &&
           Base64.fromUint8Array(message.keychainChanges),
@@ -137,22 +92,71 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     );
   }
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
-    const raw = this.deserialize(this.decode(message));
-    if (typeof raw !== 'object' || raw === null || typeof (raw as Record<string, unknown>).documentId !== 'string') {
-      throw new Error('Invalid sync message: expected object with documentId string');
+    const decoded = this.deserialize(this.decode(message));
+    // Wire input is untrusted: reject non-object payloads up front with a
+    // descriptive error so the malformed payload can be attributed back to
+    // the peer instead of throwing a bare `TypeError`. Mirrors the guard in
+    // `AutomergeJSONSerializer.deserializeSyncMessage`.
+    if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+      throw new Error(
+        `Invalid sync message: expected a plain object (got ${describeValue(
+          decoded,
+        )})`,
+      );
     }
-    const deserialized = raw as {
-      documentId: string;
-      changeId?: string;
-      changes?: iCRDTChangeNode;
-      keychainChanges?: string;
-      snapshot?: any;
-      signature?: string;
+    const raw = decoded as {
+      documentId?: unknown;
+      changeId?: unknown;
+      changes?: unknown;
+      keychainChanges?: unknown;
+      snapshot?: unknown;
+      signature?: unknown;
     };
+    // `documentId` is a required field on the wire contract. A malformed peer
+    // could omit it or send a non-string value, which would otherwise
+    // propagate as `documentId: undefined`/non-string into downstream
+    // consumers that key documents by string ID.
+    if (typeof raw.documentId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'documentId' must be a string (got ${describeValue(
+          raw.documentId,
+        )})`,
+      );
+    }
+    if (raw.changeId !== undefined && typeof raw.changeId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'changeId' must be a string when present (got ${describeValue(
+          raw.changeId,
+        )})`,
+      );
+    }
+    if (raw.signature !== undefined && typeof raw.signature !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'signature' must be a string when present (got ${describeValue(
+          raw.signature,
+        )})`,
+      );
+    }
     // Decode snapshot base64 fields back to Uint8Array.
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.snapshot && ...` would let a malformed peer message bypass the
+    // object/array shape check by sending e.g. `snapshot: null`, with the
+    // falsy value flowing through and silently being dropped.
     let snapshot: any;
-    if (deserialized.snapshot) {
-      snapshot = { ...deserialized.snapshot };
+    if (raw.snapshot !== undefined) {
+      if (
+        raw.snapshot === null ||
+        typeof raw.snapshot !== 'object' ||
+        Array.isArray(raw.snapshot)
+      ) {
+        throw new Error(
+          `Invalid sync message: 'snapshot' must be an object when present (got ${describeValue(
+            raw.snapshot,
+          )})`,
+        );
+      }
+      snapshot = { ...(raw.snapshot as Record<string, unknown>) };
       if (typeof snapshot.state === 'string') {
         snapshot.state = Base64.toUint8Array(snapshot.state);
       }
@@ -160,16 +164,39 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         snapshot.signature = Base64.toUint8Array(snapshot.signature);
       }
     }
-    return {
-      ...deserialized,
-      changes:
-        deserialized.changes &&
-        deserializeUint8ArrayInMerkleDAG(deserialized.changes),
-      keychainChanges: deserialized.keychainChanges
-        ? Base64.toUint8Array(deserialized.keychainChanges)
-        : undefined,
-      snapshot,
+    let keychainChanges: Uint8Array | undefined;
+    if (raw.keychainChanges !== undefined) {
+      if (typeof raw.keychainChanges !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'keychainChanges' must be a string when present (got ${describeValue(
+            raw.keychainChanges,
+          )})`,
+        );
+      }
+      keychainChanges = Base64.toUint8Array(raw.keychainChanges);
+    }
+    // Build the returned object explicitly rather than spreading `...raw` so
+    // that peer-supplied junk keys don't leak into the deserialized sync
+    // message. Only fields declared on `CRDTSyncMessage` are propagated.
+    const result: CRDTSyncMessage<Uint8Array> = {
+      documentId: raw.documentId,
     };
+    if (raw.changeId !== undefined) result.changeId = raw.changeId as string;
+    if (raw.signature !== undefined) result.signature = raw.signature as string;
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.changes && ...` would let a malformed peer message bypass
+    // `deserializeChangeNodeFromJSON`'s shape checks by sending e.g.
+    // `changes: null`, with the falsy value flowing through.
+    if (raw.changes !== undefined) {
+      result.changes = deserializeChangeNodeFromJSON(
+        raw.changes as iCRDTChangeNode,
+        Base64.toUint8Array,
+      );
+    }
+    if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (snapshot !== undefined) result.snapshot = snapshot;
+    return result;
   }
 }
 

@@ -36,6 +36,12 @@ import {
   crdtChangeNodeDeferred,
 } from './crdt-change-node';
 import {
+  CRDTChangeNodeWire,
+  describeValue,
+  serializeChangeNodeForJSON,
+  deserializeChangeNodeFromJSON,
+} from './merkle-dag-serialization';
+import {
   EPOCH_ID_LENGTH,
   GCM_NONCE_LENGTH,
   EPOCH_SECRET_INFO,
@@ -107,6 +113,10 @@ export {
   CRDTChangeNodeDeferred,
   CRDTChangeNode,
   crdtChangeNodeDeferred,
+  CRDTChangeNodeWire,
+  describeValue,
+  serializeChangeNodeForJSON,
+  deserializeChangeNodeFromJSON,
   CRDTSyncMessage,
   CRDTProvider,
   ChangesSerializer,
