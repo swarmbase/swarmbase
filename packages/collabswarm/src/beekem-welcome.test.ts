@@ -81,7 +81,12 @@ function keychainChangesForVisibility(
     case 'full_history':
       return kc.history();
     case 'since_invited':
-      if (invitationEpoch === undefined) return kc.history();
+      // When the local boundary is unknown (e.g. founding member),
+      // default to `current_only` rather than full history. Mirrors the
+      // production fallback in
+      // `CollabswarmDocument._keychainChangesForVisibility`; if you
+      // change the production fallback, change it here too.
+      if (invitationEpoch === undefined) return kc.currentKeyChange();
       return kc.historySince(invitationEpoch);
     case 'current_only':
     default:
@@ -121,14 +126,12 @@ function keychainChangesForWelcome(
  *  - merge keychain changes from the welcome
  *  - record `welcomeEpochId` as `_invitationEpoch`
  *
- * The signature and readers-ACL checks are not modeled here (they
- * require crypto primitives and live keychain/auth providers); the
- * production handler enforces both before installing key material.
- * Adding an integration-style test that drives
- * `CollabswarmDocument.handleBeeKEMWelcomeRequestData` end-to-end (with
- * a real keychain + auth provider + readers ACL) is tracked as future
- * work alongside the larger BeeKEM integration test in
- * `e2e/integration/`.
+ * The signature and readers-ACL checks are not modeled in this helper;
+ * direct unit-test coverage of those security-critical gates lives in
+ * `beekem-welcome-handler.test.ts`, which drives the extracted
+ * `evaluateBeeKEMWelcome` function with mock providers. Full
+ * end-to-end coverage that stands up a real `CollabswarmDocument` over
+ * libp2p/Helia lives in `e2e/integration/`.
  *
  * The helper requires `welcomeRecipient` on every message to mirror
  * production behavior, which unconditionally drops Welcomes missing the
@@ -289,18 +292,22 @@ describe('Epoch-based keychain visibility filtering (Issue #179)', () => {
     ]);
   });
 
-  test('since_invited with no _invitationEpoch falls back to full history (founding member)', () => {
+  test('since_invited with no _invitationEpoch falls back to current_only (founding member)', () => {
     const kc = new InMemoryKeychain();
     const id1 = new Uint8Array(32).fill(1);
     const id2 = new Uint8Array(32).fill(2);
     kc.add(id1, 'k1');
     kc.add(id2, 'k2');
 
+    // No recorded invitation epoch (e.g. founding member) defaults to
+    // current_only, not full history. Returning the full keychain in
+    // this case would silently leak every prior epoch to a peer the
+    // founder responds to. Documents that truly need full-history
+    // sharing should configure `historyVisibility: 'full_history'`
+    // explicitly.
     const slice = keychainChangesForVisibility(kc, 'since_invited', undefined);
-    expect(slice.map((k) => k.id)).toEqual([
-      InMemoryKeychain.toHex(id1),
-      InMemoryKeychain.toHex(id2),
-    ]);
+    expect(slice).toHaveLength(1);
+    expect(slice[0].id).toBe(InMemoryKeychain.toHex(id2));
   });
 
   test('since_invited with an unknown epoch falls back to full history', () => {
@@ -312,8 +319,11 @@ describe('Epoch-based keychain visibility filtering (Issue #179)', () => {
 
     const unknown = new Uint8Array(32).fill(0xff);
     const slice = keychainChangesForVisibility(kc, 'since_invited', unknown);
-    // Boundary key not found -- fall back to full history rather than
-    // returning an empty slice (which would wedge the recipient).
+    // Boundary key not found -- the underlying historySince() falls
+    // back to full history rather than returning an empty slice (which
+    // would wedge the recipient). Note this is `historySince`'s
+    // recovery path for malformed input, not the
+    // founder/unset-invitationEpoch path covered above.
     expect(slice).toHaveLength(2);
   });
 

@@ -56,14 +56,24 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   /**
    * Optional recipient binding for BeeKEM Welcome messages. The inviter
    * cannot identify the new reader's libp2p connection directly, so
-   * Welcomes are broadcast to all peers; without a binding, any connected
-   * non-member would learn the document key by processing a writer-signed
-   * Welcome. This field is the serialized public key of the intended
-   * recipient (same encoding as the readers ACL). The receiver MUST drop
-   * a Welcome whose `welcomeRecipient` does not match its own local user
-   * public key. The field is included in the signed payload, so a
-   * legitimate writer attests to the recipient. JSON-safe (a string)
-   * because the serialized public key is already a string.
+   * Welcomes are broadcast to all peers; without a binding, a
+   * well-behaved non-member peer would still process a writer-signed
+   * Welcome and install the document key. The receiver MUST drop a
+   * Welcome whose `welcomeRecipient` does not match its own local user
+   * public key. The field is the serialized public key of the intended
+   * recipient (same encoding as the readers ACL) and is included in the
+   * signed payload, so a legitimate writer attests to the recipient.
+   * JSON-safe (a string) because the serialized public key is already a
+   * string.
+   *
+   * IMPORTANT: this is a routing / authorization binding, **not** a
+   * confidentiality control. The Welcome payload is sent in plaintext at
+   * the application layer; a malicious connected peer can still read or
+   * exfiltrate `keychainChanges` regardless of whether the recipient
+   * binding addresses it. Stronger confidentiality (recipient-encrypted
+   * key delivery, or sending the Welcome only over a connection
+   * authenticated to the recipient) is tracked as follow-up hardening
+   * work.
    */
   welcomeRecipient?: string;
 

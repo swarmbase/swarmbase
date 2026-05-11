@@ -398,7 +398,11 @@ describe('YjsKeychain', () => {
       case 'full_history':
         return kc.history();
       case 'since_invited':
-        if (!invitationEpoch) return kc.history();
+        // When the local boundary is unknown (founding member),
+        // default to `current_only` rather than full history. Mirrors
+        // the production fallback in
+        // `CollabswarmDocument._keychainChangesForVisibility`.
+        if (!invitationEpoch) return await kc.currentKeyChange();
         return await kc.historySince(invitationEpoch);
       case 'current_only':
       default:
@@ -428,10 +432,11 @@ describe('YjsKeychain', () => {
     expect(ids).not.toContainEqual(Array.from(id1));
   });
 
-  test('since_invited visibility falls back to full history when invitation epoch unset', async () => {
+  test('since_invited visibility falls back to current_only when invitation epoch unset', async () => {
     const sender = new YjsKeychain();
     const [id1] = await sender.add();
     const [id2] = await sender.add();
+    void id1;
     const changes = await keychainChangesForVisibility(
       sender,
       'since_invited',
@@ -440,8 +445,7 @@ describe('YjsKeychain', () => {
     const receiver = new YjsKeychain();
     receiver.merge(changes);
     const ids = (await receiver.keys()).map(([id]) => Array.from(id));
-    expect(ids).toHaveLength(2);
-    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toHaveLength(1);
     expect(ids).toContainEqual(Array.from(id2));
   });
 

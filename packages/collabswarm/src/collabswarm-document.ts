@@ -36,6 +36,7 @@ import {
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
+import { evaluateBeeKEMWelcome } from './beekem-welcome-handler';
 import {
   beekemWelcomeV1,
   documentKeyUpdateV2,
@@ -997,9 +998,14 @@ export class CollabswarmDocument<
    *
    * `since_invited` requires `_invitationEpoch` to be set (typically by the
    * BeeKEM Welcome flow when the local node joined). When it is unset --
-   * e.g. for the original group creator -- the call degrades to
-   * `full_history`, since "since I was invited" is functionally "from the
-   * very beginning" for the founder.
+   * e.g. for the original group creator that never received a Welcome --
+   * the call falls back to `current_only` semantics rather than full
+   * history. The intent of `since_invited` is to bound what *new joiners*
+   * receive; emitting the full keychain whenever the local boundary is
+   * unknown undermines that goal (and leaks every prior epoch to any
+   * peer the local node responds to). Operators that genuinely want
+   * founders to share full history should configure the document with
+   * `historyVisibility: 'full_history'` explicitly.
    */
   private async _keychainChangesForVisibility(): Promise<ChangesType> {
     switch (this._historyVisibility) {
@@ -1008,9 +1014,12 @@ export class CollabswarmDocument<
         return this._keychain.history();
       case 'since_invited':
         if (this._invitationEpoch === undefined) {
-          // No recorded invitation epoch -- e.g. the founding member. Fall
-          // back to full history; the founder was "invited" at genesis.
-          return this._keychain.history();
+          // No recorded invitation epoch (founding member, or a node
+          // that joined before Welcome wiring landed). Default to the
+          // most-private interpretation -- the current key only -- so a
+          // missing boundary cannot silently widen the disclosure
+          // window. Future rotations propagate via key-update.
+          return await this._keychain.currentKeyChange();
         }
         return await this._keychain.historySince(this._invitationEpoch);
       case 'current_only':
@@ -2753,9 +2762,20 @@ export class CollabswarmDocument<
    * - `welcomeRecipient`: serialized public key of the intended recipient.
    *   The inviter cannot identify which connected peer is the new reader,
    *   so Welcomes are broadcast to every peer; the recipient binding
-   *   ensures any non-target peer drops the Welcome rather than installing
-   *   the document key. The binding is covered by the writer signature, so
-   *   a non-writer cannot redirect a Welcome to a different recipient.
+   *   ensures a *well-behaved* non-target peer drops the Welcome rather
+   *   than installing the document key. The binding is covered by the
+   *   writer signature, so a non-writer cannot redirect a Welcome to a
+   *   different recipient.
+   *
+   *   IMPORTANT: this binding is **not** a confidentiality control. The
+   *   Welcome payload is sent in plaintext at the application layer (see
+   *   the Confidentiality note below), so a malicious peer that receives
+   *   the broadcast can read or exfiltrate `keychainChanges` regardless
+   *   of whether it would "drop" the message. Closing that gap requires
+   *   recipient-encrypted key delivery (e.g. wrapping the keychain delta
+   *   under the recipient's identity key) or sending the Welcome only
+   *   over a connection authenticated to the recipient; both are
+   *   tracked as follow-up hardening work.
    * - `keychainChanges`: keychain CRDT changes filtered per the document's
    *   `historyVisibility` **from the recipient's perspective** (see
    *   `_keychainChangesForWelcome()`) so the recipient can decrypt
@@ -2878,87 +2898,37 @@ export class CollabswarmDocument<
     try {
       const message = this._syncMessageSerializer.deserializeSyncMessage(payload);
 
-      // Defense in depth -- the shared handler routes by path, but a
-      // misrouted or hand-crafted message could carry a mismatched
-      // documentId. Drop those without further processing.
-      if (message.documentId && message.documentId !== this.documentPath) {
-        console.warn(
-          `Ignoring BeeKEM Welcome for wrong document ` +
-            `(${message.documentId} !== ${this.documentPath})`,
-        );
-        return;
-      }
+      // Run the pure validation gates (extracted to
+      // `beekem-welcome-handler.ts` so they can be unit-tested without
+      // a full libp2p/Helia stack). On `accept` we apply the keychain
+      // merge + invitation-epoch assignment below.
+      const decision = await evaluateBeeKEMWelcome(message, {
+        documentPath: this.documentPath,
+        localUserPublicKey: this._userPublicKey,
+        isSigningEnabled: () => this._isSigningEnabled(),
+        serializePublicKey: (pk) => this._authProvider.serializePublicKey(pk),
+        isReader: (pk) => this._readers.check(pk),
+        verifyWriterSignature: (raw, signature) =>
+          this._verifyWriterSignature(raw, signature),
+        syncMessageSerializer: this._syncMessageSerializer,
+      });
 
-      // The Welcome MUST carry an invitation epoch ID; otherwise it is
-      // ill-formed and we cannot record the recipient's join boundary.
-      if (!message.welcomeEpochId) {
-        console.warn(
-          `Received BeeKEM Welcome for ${this.documentPath} without welcomeEpochId; dropping`,
-        );
-        return;
-      }
-
-      // Recipient binding check: Welcomes are broadcast to all connected
-      // peers because the inviter cannot tell which peer is the new
-      // reader from the connection alone. Without this check, any
-      // connected non-member who receives a writer-signed Welcome would
-      // install the document key and start decrypting traffic.
-      //
-      // Drop if the recipient binding is missing or does not match this
-      // node's serialized public key. The binding is covered by the
-      // writer signature (verified below), so a non-writer cannot forge
-      // a recipient claim.
-      if (!message.welcomeRecipient) {
-        console.warn(
-          `Received BeeKEM Welcome for ${this.documentPath} without welcomeRecipient; dropping`,
-        );
-        return;
-      }
-      const localSerializedKey =
-        await this._authProvider.serializePublicKey(this._userPublicKey);
-      if (message.welcomeRecipient !== localSerializedKey) {
-        // Not addressed to us. Not necessarily an attack -- a legitimate
-        // Welcome to another peer flows past our connection too.
-        return;
-      }
-
-      // Defense in depth: the local user must already be in the readers
-      // ACL by the time the Welcome arrives (the inviter sends the ACL
-      // add ahead of the Welcome). If we are *not* a reader, we should
-      // not install the key -- this catches a misordered or replayed
-      // Welcome where we have not been added (or have been removed
-      // since).
-      if (!(await this._readers.check(this._userPublicKey))) {
-        console.warn(
-          `Received BeeKEM Welcome for ${this.documentPath} addressed to us, ` +
-            `but the local user is not in the readers ACL; dropping`,
-        );
-        return;
-      }
-
-      // Verify the writer signature, when signing is on. The Welcome's
-      // signing convention matches `_signAsWriter`: signature is computed
-      // over the serialized message with the `signature` field stripped.
-      // Because the recipient binding (`welcomeRecipient`) is included in
-      // the signed payload, only an authorized writer can claim a
-      // particular recipient.
-      if (this._isSigningEnabled()) {
-        if (!message.signature) {
-          console.warn(
-            `Received unsigned BeeKEM Welcome for ${this.documentPath}; dropping`,
-          );
-          return;
-        }
-        const { signature, ...messageWithoutSignature } = message;
-        const raw =
-          this._syncMessageSerializer.serializeSyncMessage(
-            messageWithoutSignature,
-          );
-        if (!(await this._verifyWriterSignature(raw, signature))) {
-          console.warn(
-            `Received BeeKEM Welcome with invalid writer signature for ${this.documentPath}; dropping`,
-          );
-          return;
+      if (decision.kind !== 'accept') {
+        switch (decision.kind) {
+          case 'drop-not-for-us':
+            // Legitimate Welcome to another peer flowing past our
+            // connection -- silently ignore.
+            return;
+          case 'drop-malformed':
+            console.warn(
+              `Dropping malformed BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
+            );
+            return;
+          case 'drop-unauthorized':
+            console.warn(
+              `Dropping unauthorized BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
+            );
+            return;
         }
       }
 
@@ -2979,6 +2949,8 @@ export class CollabswarmDocument<
 
       // Record the invitation epoch -- this gates `since_invited` history
       // filtering on subsequent doc-load / snapshot-load responses we send.
+      // `evaluateBeeKEMWelcome` guarantees `welcomeEpochId` is set when
+      // it returns `accept`.
       this._invitationEpoch = message.welcomeEpochId;
       console.log(
         `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
