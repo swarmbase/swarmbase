@@ -1,7 +1,7 @@
 import { CRDTChangeNodeKind } from './crdt-change-node';
 
 /**
- * Maximum number of recent local tips to track for Merkle-CRDT cross-linking
+ * Maximum number of recent tips to track for Merkle-CRDT cross-linking
  * (paper §VI.B.e). When a new change is published, up to `MAX_CROSS_LINKS`
  * cross-links to other recent tips are attached alongside the primary parent
  * link. This bounds per-message overhead while still giving peers with

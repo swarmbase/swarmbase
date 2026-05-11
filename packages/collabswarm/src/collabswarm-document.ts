@@ -935,7 +935,7 @@ export class CollabswarmDocument<
         MAX_CROSS_LINKS,
       );
       for (const tip of crossLinkTips) {
-        // Skip if the primary parent's subtree already contains this CID.
+        // Skip if the tip is already a direct child of the new change node.
         if (changeNode.children[tip.cid]) continue;
         // Deferred leaf: no `change` payload, no `children`. Receivers fetch
         // the block from Helia if they don't already have it.
