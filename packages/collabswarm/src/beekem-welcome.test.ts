@@ -122,23 +122,33 @@ function keychainChangesForWelcome(
  *  - record `welcomeEpochId` as `_invitationEpoch`
  *
  * The signature and readers-ACL checks are not modeled here (they
- * require crypto primitives); they are exercised end-to-end against
- * `CollabswarmDocument`.
+ * require crypto primitives and live keychain/auth providers); the
+ * production handler enforces both before installing key material.
+ * Adding an integration-style test that drives
+ * `CollabswarmDocument.handleBeeKEMWelcomeRequestData` end-to-end (with
+ * a real keychain + auth provider + readers ACL) is tracked as future
+ * work alongside the larger BeeKEM integration test in
+ * `e2e/integration/`.
+ *
+ * The helper requires `welcomeRecipient` on every message to mirror
+ * production behavior, which unconditionally drops Welcomes missing the
+ * recipient binding. Tests that exercise the "missing recipient binding"
+ * case set `localSerializedKey` to a non-undefined value.
  */
 function applyWelcomeStateChanges(
   state: {
     invitationEpoch: Uint8Array | undefined;
     keychain: InMemoryKeychain;
     /** Serialized form of the local user's public key. */
-    localSerializedKey?: string;
+    localSerializedKey: string;
   },
   message: CRDTSyncMessage<{ id: string; key: string }[], unknown>,
 ): void {
   if (!message.welcomeEpochId) return;
-  if (state.localSerializedKey !== undefined) {
-    if (!message.welcomeRecipient) return;
-    if (message.welcomeRecipient !== state.localSerializedKey) return;
-  }
+  // Match production: Welcomes without a recipient binding are dropped
+  // unconditionally.
+  if (!message.welcomeRecipient) return;
+  if (message.welcomeRecipient !== state.localSerializedKey) return;
   if (message.keychainChanges) state.keychain.merge(message.keychainChanges);
   state.invitationEpoch = message.welcomeEpochId;
 }
@@ -154,12 +164,14 @@ describe('BeeKEM Welcome receive flow (Issue #178)', () => {
     const welcomeMessage: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
       documentId: '/doc/welcome',
       welcomeEpochId: id2,
+      welcomeRecipient: 'my-pubkey',
       keychainChanges: keychainChangesForVisibility(senderKc, 'current_only', undefined),
     };
 
     const receiver = {
       invitationEpoch: undefined as Uint8Array | undefined,
       keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
     };
     applyWelcomeStateChanges(receiver, welcomeMessage);
 
@@ -245,12 +257,14 @@ describe('BeeKEM Welcome receive flow (Issue #178)', () => {
   test('handler drops Welcomes without a welcomeEpochId', () => {
     const malformedWelcome: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
       documentId: '/doc/welcome',
+      welcomeRecipient: 'my-pubkey',
       // welcomeEpochId intentionally omitted -- mirrors the
       // handler's "drop if missing" guard.
     };
     const receiver = {
       invitationEpoch: undefined as Uint8Array | undefined,
       keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
     };
     applyWelcomeStateChanges(receiver, malformedWelcome);
     expect(receiver.invitationEpoch).toBeUndefined();
@@ -373,6 +387,7 @@ describe('End-to-end Welcome -> since_invited filtering (Issues #178 + #179)', (
     const welcome: CRDTSyncMessage<{ id: string; key: string }[], unknown> = {
       documentId: '/doc/welcome',
       welcomeEpochId: invitationEpoch,
+      welcomeRecipient: 'my-pubkey',
       // For Welcome we send what the new reader needs to decrypt going forward
       // under `current_only` semantics: the current key + future ones via
       // subsequent updates. For an end-to-end since_invited test we use
@@ -384,6 +399,7 @@ describe('End-to-end Welcome -> since_invited filtering (Issues #178 + #179)', (
     const receiver = {
       invitationEpoch: undefined as Uint8Array | undefined,
       keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
     };
     applyWelcomeStateChanges(receiver, welcome);
 

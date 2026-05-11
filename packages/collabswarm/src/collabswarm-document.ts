@@ -2781,9 +2781,11 @@ export class CollabswarmDocument<
 
     // The invitation epoch is the *current* keychain key ID at the time
     // of invitation -- the boundary between "before I joined" and "from
-    // when I joined". Falls back to history if the keychain hasn't been
-    // seeded yet (should not happen in practice because the writer is in
-    // the group and has at least one key).
+    // when I joined". `_keychain.current()` throws on an empty keychain;
+    // in practice that cannot happen here because the inviter is in the
+    // group (and so has at least one key), but if it ever does we surface
+    // the error to the caller of `addReader` rather than silently sending
+    // a Welcome with no epoch ID.
     const [currentKeyID] = await this._keychain.current();
     welcomeMessage.welcomeEpochId = currentKeyID;
 
