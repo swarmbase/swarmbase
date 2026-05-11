@@ -90,7 +90,7 @@ import {
 } from './acl-chain';
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
-import { bloomFilterUpdateV1 } from './wire-protocols';
+import { beekemWelcomeV1, bloomFilterUpdateV1 } from './wire-protocols';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -172,6 +172,7 @@ export {
   computeEntryHash,
   // Wire protocols
   bloomFilterUpdateV1,
+  beekemWelcomeV1,
   // Compaction
   defaultCompactionConfig,
   // Network statistics

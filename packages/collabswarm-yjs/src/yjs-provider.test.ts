@@ -333,6 +333,153 @@ describe('YjsKeychain', () => {
     expect(keychain).toBeInstanceOf(YjsKeychain);
     expect(provider.keyIDLength).toBe(16);
   });
+
+  test('historySince() returns only keys from the given key ID onward', async () => {
+    const source = new YjsKeychain();
+    const [id1] = await source.add();
+    const [id2] = await source.add();
+    const [id3] = await source.add();
+
+    // Slice from the second key: receiver should observe ids 2 and 3 only.
+    const slice = await source.historySince(id2);
+
+    const receiver = new YjsKeychain();
+    receiver.merge(slice);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(2);
+    const ids = keys.map(([id]) => Array.from(id));
+    expect(ids).toContainEqual(Array.from(id2));
+    expect(ids).toContainEqual(Array.from(id3));
+    expect(ids).not.toContainEqual(Array.from(id1));
+  });
+
+  test('historySince() falls back to full history when the boundary key is unknown', async () => {
+    const source = new YjsKeychain();
+    const [id1] = await source.add();
+    const [id2] = await source.add();
+
+    const unknownID = new Uint8Array(16).fill(0xff);
+    const slice = await source.historySince(unknownID);
+
+    const receiver = new YjsKeychain();
+    receiver.merge(slice);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(2);
+    const ids = keys.map(([id]) => Array.from(id));
+    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toContainEqual(Array.from(id2));
+  });
+
+  test('historySince() with the current key returns only the current key', async () => {
+    const source = new YjsKeychain();
+    await source.add();
+    await source.add();
+    const [currentID] = await source.current();
+    const slice = await source.historySince(currentID);
+
+    const receiver = new YjsKeychain();
+    receiver.merge(slice);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(1);
+    expect(Array.from(keys[0][0])).toEqual(Array.from(currentID));
+  });
+
+  // Replicates CollabswarmDocument._keychainChangesForVisibility so the
+  // per-visibility-mode behaviour can be exercised without standing up a
+  // full document + libp2p stack. Production code lives in
+  // CollabswarmDocument (collabswarm-document.ts) -- if you change the
+  // visibility semantics there, mirror the change here.
+  async function keychainChangesForVisibility(
+    kc: YjsKeychain,
+    visibility: 'full_history' | 'since_invited' | 'current_only',
+    invitationEpoch: Uint8Array | undefined,
+  ): Promise<Uint8Array> {
+    switch (visibility) {
+      case 'full_history':
+        return kc.history();
+      case 'since_invited':
+        if (!invitationEpoch) return kc.history();
+        return await kc.historySince(invitationEpoch);
+      case 'current_only':
+      default:
+        return await kc.currentKeyChange();
+    }
+  }
+
+  test('since_invited visibility returns only keys from _invitationEpoch onward', async () => {
+    const sender = new YjsKeychain();
+    const [id1] = await sender.add();
+    const [id2] = await sender.add();
+    const [id3] = await sender.add();
+
+    // Simulate the receiver having been invited at id2.
+    const invitationEpoch = id2;
+    const changes = await keychainChangesForVisibility(
+      sender,
+      'since_invited',
+      invitationEpoch,
+    );
+    const receiver = new YjsKeychain();
+    receiver.merge(changes);
+    const ids = (await receiver.keys()).map(([id]) => Array.from(id));
+    expect(ids).toHaveLength(2);
+    expect(ids).toContainEqual(Array.from(id2));
+    expect(ids).toContainEqual(Array.from(id3));
+    expect(ids).not.toContainEqual(Array.from(id1));
+  });
+
+  test('since_invited visibility falls back to full history when invitation epoch unset', async () => {
+    const sender = new YjsKeychain();
+    const [id1] = await sender.add();
+    const [id2] = await sender.add();
+    const changes = await keychainChangesForVisibility(
+      sender,
+      'since_invited',
+      undefined,
+    );
+    const receiver = new YjsKeychain();
+    receiver.merge(changes);
+    const ids = (await receiver.keys()).map(([id]) => Array.from(id));
+    expect(ids).toHaveLength(2);
+    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toContainEqual(Array.from(id2));
+  });
+
+  test('current_only visibility returns only the most recent key', async () => {
+    const sender = new YjsKeychain();
+    await sender.add();
+    await sender.add();
+    const [currentID] = await sender.current();
+    const changes = await keychainChangesForVisibility(
+      sender,
+      'current_only',
+      undefined,
+    );
+    const receiver = new YjsKeychain();
+    receiver.merge(changes);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(1);
+    expect(Array.from(keys[0][0])).toEqual(Array.from(currentID));
+  });
+
+  test('full_history visibility returns all keys', async () => {
+    const sender = new YjsKeychain();
+    const [id1] = await sender.add();
+    const [id2] = await sender.add();
+    const [id3] = await sender.add();
+    const changes = await keychainChangesForVisibility(
+      sender,
+      'full_history',
+      undefined,
+    );
+    const receiver = new YjsKeychain();
+    receiver.merge(changes);
+    const ids = (await receiver.keys()).map(([id]) => Array.from(id));
+    expect(ids).toHaveLength(3);
+    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toContainEqual(Array.from(id2));
+    expect(ids).toContainEqual(Array.from(id3));
+  });
 });
 
 describe('YjsJSONSerializer', () => {
@@ -391,6 +538,31 @@ describe('YjsJSONSerializer', () => {
     expect(children['child-hash-1'].kind).toBe('writer');
     expect(children['child-hash-1'].change).toEqual(new Uint8Array([200, 201]));
     expect(deserialized.keychainChanges).toEqual(new Uint8Array([50, 51, 52]));
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeEpochId for BeeKEM Welcome', () => {
+    const serializer = new YjsJSONSerializer();
+    const epochId = new Uint8Array(32);
+    for (let i = 0; i < epochId.length; i++) epochId[i] = i * 7;
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeEpochId: epochId,
+      keychainChanges: new Uint8Array([1, 2, 3]),
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.welcomeEpochId).toEqual(epochId);
+    expect(deserialized.keychainChanges).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test('deserializeSyncMessage omits welcomeEpochId when absent on wire', () => {
+    const serializer = new YjsJSONSerializer();
+    const message = {
+      documentId: 'no-welcome-doc',
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.welcomeEpochId).toBeUndefined();
   });
 
   test('serializeChangeBlock/deserializeChangeBlock round-trip with keyID', () => {

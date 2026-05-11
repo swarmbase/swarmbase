@@ -45,6 +45,15 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   keychainChanges?: ChangesType;
 
   /**
+   * Optional invitation epoch ID for BeeKEM Welcome messages. When the
+   * recipient processes a Welcome, this is the key ID the recipient should
+   * record as their `_invitationEpoch`, gating subsequent `since_invited`
+   * history filtering. The field is base64-encoded for JSON-safe transport
+   * by the sync-message serializers.
+   */
+  welcomeEpochId?: Uint8Array;
+
+  /**
    * Signature of the sync message.
    */
   signature?: string;

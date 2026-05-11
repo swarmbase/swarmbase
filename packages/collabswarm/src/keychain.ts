@@ -68,4 +68,19 @@ export interface Keychain<KeychainChange, DocumentKey> {
    * @return A block of change(s) describing the keychain addition.
    */
   addEpochKey(epochId: Uint8Array, key: DocumentKey): Promise<KeychainChange>;
+
+  /**
+   * Gets a block of change(s) describing only the keys at or after the given
+   * key ID (an epoch ID or legacy UUID). Used for the `since_invited` history
+   * visibility mode where a new member should receive every key from the
+   * moment they were invited onward, but no earlier history.
+   *
+   * If the supplied `keyID` is not present in the keychain, the keychain is
+   * not yet aware of that epoch -- the method returns the full history so the
+   * recipient can still decrypt; this errs on the side of availability.
+   *
+   * @param keyID The key ID marking the start of the visible window.
+   * @return A block of change(s) containing only keys at or after `keyID`.
+   */
+  historySince(keyID: Uint8Array): Promise<KeychainChange>;
 }

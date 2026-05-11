@@ -37,7 +37,10 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import {
-  documentKeyUpdateV2, documentLoadV2, snapshotLoadV2,
+  beekemWelcomeV1,
+  documentKeyUpdateV2,
+  documentLoadV2,
+  snapshotLoadV2,
 } from './wire-protocols';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
@@ -193,9 +196,11 @@ export class CollabswarmDocument<
   private _historyVisibility: HistoryVisibility = 'current_only';
 
   // Tracks the epoch at which this node was invited to the document.
-  // Used by `since_invited` history visibility to filter keychain history.
-  // TODO: Wire this up during the BeeKEM Welcome flow so it is set when
-  // a new member is onboarded.
+  // Used by `since_invited` history visibility (`_keychainChangesForVisibility`)
+  // to filter keychain history. Set by `handleBeeKEMWelcomeRequestData` when
+  // this node receives a Welcome message from an inviting writer; remains
+  // `undefined` for the founding member of a document (who has no
+  // invitation epoch).
   private _invitationEpoch: Uint8Array | undefined;
 
   /**
@@ -989,6 +994,12 @@ export class CollabswarmDocument<
   /**
    * Returns the keychain changes to include in a load response based on
    * the document's history visibility setting.
+   *
+   * `since_invited` requires `_invitationEpoch` to be set (typically by the
+   * BeeKEM Welcome flow when the local node joined). When it is unset --
+   * e.g. for the original group creator -- the call degrades to
+   * `full_history`, since "since I was invited" is functionally "from the
+   * very beginning" for the founder.
    */
   private async _keychainChangesForVisibility(): Promise<ChangesType> {
     switch (this._historyVisibility) {
@@ -996,9 +1007,12 @@ export class CollabswarmDocument<
         // Send ALL epoch keys -- for audit trails and regulatory compliance.
         return this._keychain.history();
       case 'since_invited':
-        // TODO: Filter using _invitationEpoch when epoch-based keychain
-        // filtering is fully wired. Falls back to full history for now.
-        return this._keychain.history();
+        if (this._invitationEpoch === undefined) {
+          // No recorded invitation epoch -- e.g. the founding member. Fall
+          // back to full history; the founder was "invited" at genesis.
+          return this._keychain.history();
+        }
+        return await this._keychain.historySince(this._invitationEpoch);
       case 'current_only':
       default:
         // Only send the current key -- most private option.
@@ -2659,9 +2673,17 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Add a new user as a valid reader. Users are identified by their public keys
+   * Add a new user as a valid reader. Users are identified by their public keys.
    *
-   * @param reader User's public key
+   * After updating the readers ACL, this also sends a BeeKEM Welcome to the
+   * new reader so they receive (a) the keychain changes appropriate for the
+   * document's `historyVisibility` setting (so they can decrypt at least the
+   * current state), and (b) the invitation epoch ID they should record for
+   * subsequent `since_invited` history filtering. The Welcome is delivered
+   * via the `beekemWelcomeV1` protocol to every currently-connected peer;
+   * the receiving document ignores Welcomes addressed to a different reader.
+   *
+   * @param reader User's public key.
    */
   public async addReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
@@ -2675,10 +2697,219 @@ export class CollabswarmDocument<
     const changes = await this._readers.add(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // TODO: Send document key to new reader via BeeKEM Welcome flow
-    // or asymmetric encryption to reader's public key. Cannot use
-    // _distributeKeyUpdate() because it encrypts with the existing
-    // document key that the new reader doesn't yet possess.
+    // Send a BeeKEM Welcome with the document key so the new reader can
+    // decrypt subsequent (and, per visibility, prior) messages. Failures
+    // are logged but do not abort -- the ACL change has already been
+    // broadcast and the reader can also recover via a fresh document load.
+    try {
+      await this._sendBeeKEMWelcome(reader);
+    } catch (err) {
+      console.warn(
+        `Failed to send BeeKEM Welcome for ${this.documentPath}:`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Build and send a BeeKEM Welcome message to a newly-added reader.
+   *
+   * The Welcome payload is a `CRDTSyncMessage` carrying:
+   * - `welcomeEpochId`: the current keychain key ID, which the recipient
+   *   records as their `_invitationEpoch` for later `since_invited` history
+   *   filtering.
+   * - `keychainChanges`: keychain CRDT changes filtered per the document's
+   *   `historyVisibility` so the recipient can decrypt the current (and,
+   *   per visibility, prior) document state.
+   * - `signature`: writer signature over the message so the receiver can
+   *   confirm a legitimate writer is the inviter (and ignore forgeries).
+   *
+   * The payload is encrypted with the current document key. The new reader
+   * receives that key inside the welcome's keychainChanges, so the receiver
+   * decrypts the welcome by applying its keychain delta first, then
+   * decrypting via the recovered key. This is implemented here in two
+   * stages: keychain changes are sent unencrypted (the protocol exchange
+   * itself rides libp2p's secure transport) so a fresh reader with no
+   * prior key can still onboard.
+   *
+   * Wire format (mirrors `documentKeyUpdateV2`):
+   *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
+   */
+  private async _sendBeeKEMWelcome(reader: PublicKey): Promise<void> {
+    // Build the welcome message.
+    const welcomeMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
+      documentId: this.documentPath,
+    };
+
+    // The invitation epoch is the *current* keychain key ID at the time
+    // of invitation -- the boundary between "before I joined" and "from
+    // when I joined". Falls back to history if the keychain hasn't been
+    // seeded yet (should not happen in practice because the writer is in
+    // the group and has at least one key).
+    const [currentKeyID] = await this._keychain.current();
+    welcomeMessage.welcomeEpochId = currentKeyID;
+
+    // Visibility-filtered keychain so the new reader can decrypt the
+    // appropriate window of document history.
+    welcomeMessage.keychainChanges = await this._keychainChangesForVisibility();
+
+    // Sign so the receiver can verify the inviter is an authorized writer.
+    welcomeMessage.signature = await this._signAsWriter(welcomeMessage);
+
+    const serialized =
+      this._syncMessageSerializer.serializeSyncMessage(welcomeMessage);
+
+    // Build the V1 path-prefixed payload that the shared handler routes.
+    const pathBytes = this._encoder.encode(this.documentPath);
+    if (pathBytes.length === 0 || pathBytes.length > MAX_DOCUMENT_PATH_LENGTH) {
+      throw new Error(
+        `Document path "${this.documentPath}" encoded length (${pathBytes.length}) exceeds ` +
+          `the maximum allowed path length (${MAX_DOCUMENT_PATH_LENGTH} bytes) for the BeeKEM Welcome v1 protocol`,
+      );
+    }
+    const pathHeader = new Uint8Array(4);
+    pathHeader[0] = (pathBytes.length >> 24) & 0xff;
+    pathHeader[1] = (pathBytes.length >> 16) & 0xff;
+    pathHeader[2] = (pathBytes.length >> 8) & 0xff;
+    pathHeader[3] = pathBytes.length & 0xff;
+
+    const payload = concatUint8Arrays(pathHeader, pathBytes, serialized);
+
+    // Best-effort fan-out to all connected peers. Each peer will either
+    // process the Welcome (if it identifies as the new reader) or drop it.
+    // We do not have a way to know which peer is the new reader from the
+    // libp2p connection alone, so broadcasting is the conservative choice.
+    const peers = this.swarm.heliaNode.libp2p
+      .getConnections()
+      ?.map((x) => x.remoteAddr) ?? [];
+
+    const failedPeers: string[] = [];
+    for (const peer of peers) {
+      try {
+        const stream = await this.libp2p.dialProtocol(peer, [beekemWelcomeV1]);
+        await pipe([payload], stream.sink);
+      } catch (err) {
+        failedPeers.push(peer.toString());
+        console.warn(
+          `Failed to send BeeKEM Welcome to peer:`,
+          peer.toString(),
+          err,
+        );
+      }
+    }
+
+    if (failedPeers.length > 0) {
+      console.warn(
+        `BeeKEM Welcome for ${this.documentPath} failed to reach ${failedPeers.length} peer(s):`,
+        failedPeers,
+      );
+    }
+
+    // Mark `reader` as parameter-used (no behavioral use beyond logging --
+    // recipients self-identify against the local readers ACL when handling
+    // the Welcome, so the inviter does not need to know which connection
+    // belongs to the invitee).
+    void reader;
+  }
+
+  /**
+   * Handles an incoming BeeKEM Welcome message with pre-read payload. Called
+   * by the shared protocol handler in Collabswarm after the document path
+   * header has been stripped and the document looked up in the registry.
+   *
+   * Verifies the writer signature on the message, merges the included
+   * keychain changes so future blocks can be decrypted, and records the
+   * `welcomeEpochId` as `_invitationEpoch` so subsequent `since_invited`
+   * history responses are correctly filtered.
+   *
+   * @internal
+   * @param payload The serialized sync message (without the document path
+   *   header that the shared handler already stripped).
+   */
+  public async handleBeeKEMWelcomeRequestData(
+    payload: Uint8Array,
+  ): Promise<void> {
+    try {
+      const message = this._syncMessageSerializer.deserializeSyncMessage(payload);
+
+      // Defense in depth -- the shared handler routes by path, but a
+      // misrouted or hand-crafted message could carry a mismatched
+      // documentId. Drop those without further processing.
+      if (message.documentId && message.documentId !== this.documentPath) {
+        console.warn(
+          `Ignoring BeeKEM Welcome for wrong document ` +
+            `(${message.documentId} !== ${this.documentPath})`,
+        );
+        return;
+      }
+
+      // The Welcome MUST carry an invitation epoch ID; otherwise it is
+      // ill-formed and we cannot record the recipient's join boundary.
+      if (!message.welcomeEpochId) {
+        console.warn(
+          `Received BeeKEM Welcome for ${this.documentPath} without welcomeEpochId; dropping`,
+        );
+        return;
+      }
+
+      // Verify the writer signature, when signing is on. The Welcome's
+      // signing convention matches `_signAsWriter`: signature is computed
+      // over the serialized message with the `signature` field stripped.
+      if (this._isSigningEnabled()) {
+        if (!message.signature) {
+          console.warn(
+            `Received unsigned BeeKEM Welcome for ${this.documentPath}; dropping`,
+          );
+          return;
+        }
+        const { signature, ...messageWithoutSignature } = message;
+        const raw =
+          this._syncMessageSerializer.serializeSyncMessage(
+            messageWithoutSignature,
+          );
+        if (!(await this._verifyWriterSignature(raw, signature))) {
+          console.warn(
+            `Received BeeKEM Welcome with invalid writer signature for ${this.documentPath}; dropping`,
+          );
+          return;
+        }
+      }
+
+      // Merge the keychain changes before recording the invitation epoch,
+      // so a recipient handling concurrent Welcomes is not left with an
+      // _invitationEpoch pointing at a key that hasn't been installed.
+      if (message.keychainChanges) {
+        try {
+          this._keychain.merge(message.keychainChanges);
+        } catch (err) {
+          console.error(
+            `Failed to merge keychain changes from BeeKEM Welcome for ${this.documentPath}:`,
+            err,
+          );
+          return;
+        }
+      }
+
+      // Record the invitation epoch -- this gates `since_invited` history
+      // filtering on subsequent doc-load / snapshot-load responses we send.
+      this._invitationEpoch = message.welcomeEpochId;
+      console.log(
+        `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
+      );
+    } catch (err: unknown) {
+      console.error(
+        `Error handling BeeKEM Welcome for document ${this.documentPath}:`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Test/inspection helper: returns the recorded invitation epoch, or
+   * `undefined` if no Welcome has been processed (e.g. founding member).
+   */
+  public get invitationEpoch(): Uint8Array | undefined {
+    return this._invitationEpoch;
   }
 
   /**

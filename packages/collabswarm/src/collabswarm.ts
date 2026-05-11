@@ -26,7 +26,10 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
-  documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
+  beekemWelcomeV1,
+  documentLoadV2,
+  documentKeyUpdateV2,
+  snapshotLoadV2,
 } from './wire-protocols';
 import { readUint8Iterable } from './utils';
 import { wrapStream } from './stream-adapter';
@@ -513,12 +516,76 @@ export class Collabswarm<
       });
     };
 
+    // Handler for BeeKEM Welcome v1. Wire format mirrors key-update v2:
+    // 4-byte big-endian path length, then UTF-8 path, then the serialized
+    // welcome sync-message body. After routing by path, the per-document
+    // handler verifies the writer signature, merges the keychain delta,
+    // and records the invitation epoch.
+    const beekemWelcomeHandler = ({ stream }: { stream: ProtocolStream }) => {
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          try {
+            let assembled: Uint8Array;
+            try {
+              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            } catch (err) {
+              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+              console.warn(`Shared beekem-welcome handler: ${reason}, dropping`);
+              return [];
+            }
+            if (assembled.length < 4) {
+              console.warn('Shared beekem-welcome handler: message too short');
+              return [];
+            }
+            const pathLength =
+              ((assembled[0] << 24) |
+              (assembled[1] << 16) |
+              (assembled[2] << 8) |
+              assembled[3]) >>> 0;
+            if (
+              pathLength === 0 ||
+              pathLength > MAX_DOCUMENT_PATH_LENGTH ||
+              pathLength + 4 > assembled.length
+            ) {
+              console.warn(
+                'Shared beekem-welcome handler: invalid path header (pathLength=' +
+                pathLength + '), dropping message',
+              );
+              return [];
+            }
+            const documentPath = new TextDecoder().decode(
+              assembled.slice(4, 4 + pathLength),
+            );
+            const payload = assembled.slice(4 + pathLength);
+            const doc = this._documentRegistry.get(documentPath);
+            if (!doc) {
+              console.warn(
+                `Shared beekem-welcome handler: no document registered for "${documentPath}"`,
+              );
+              return [];
+            }
+            await doc.handleBeeKEMWelcomeRequestData(payload);
+            return [];
+          } finally {
+            // Welcome is fire-and-forget (no response over stream.sink),
+            // but the inbound stream still needs to be closed to release
+            // resources.
+            stream.close?.();
+          }
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared beekem-welcome handler:', err);
+      });
+    };
+
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
+    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
   }
 
   /**

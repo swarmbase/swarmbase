@@ -344,6 +344,34 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     });
     return getAllChanges(minimalDoc);
   }
+
+  /**
+   * Build a keychain change list containing only the keys at or after the
+   * specified key ID. The keys array preserves insertion order, so we
+   * locate the boundary by ID and copy the suffix into a fresh doc.
+   *
+   * If the boundary key is not found in this keychain, the full history
+   * is returned so the recipient can still decrypt past blocks rather
+   * than be wedged at the load step.
+   */
+  async historySince(keyID: Uint8Array): Promise<BinaryChange[]> {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
+      throw new Error("Can't get history-since from an empty keychain");
+    }
+    const cacheKey = keyIdToCacheKey(keyID);
+    const startIdx = this._keychain.keys.findIndex(([id]) => id === cacheKey);
+    if (startIdx === -1) {
+      // Fall back to full history when the boundary key is unknown.
+      return getAllChanges(this._keychain);
+    }
+    const tail = this._keychain.keys.slice(startIdx);
+    const minimalDoc = change(from({ keys: [] as [string, string][] }), (doc) => {
+      for (const [id, serialized] of tail) {
+        doc.keys.push([id, serialized]);
+      }
+    });
+    return getAllChanges(minimalDoc);
+  }
   getKey(keyIDBytes: Uint8Array): CryptoKey | undefined {
     const cacheKey = keyIdToCacheKey(keyIDBytes);
     return this._keyCache.get(cacheKey);
@@ -449,6 +477,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         keychainChanges:
           message.keychainChanges &&
           serializeBinaryChanges(message.keychainChanges),
+        welcomeEpochId:
+          message.welcomeEpochId &&
+          Base64.fromUint8Array(message.welcomeEpochId),
         snapshot: snapshotForWire,
       }),
     );
@@ -475,6 +506,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       changeId?: unknown;
       changes?: unknown;
       keychainChanges?: unknown;
+      welcomeEpochId?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -549,6 +581,17 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       keychainChanges = deserializeBinaryChanges(raw.keychainChanges as string[]);
     }
+    let welcomeEpochId: Uint8Array | undefined;
+    if (raw.welcomeEpochId !== undefined) {
+      if (typeof raw.welcomeEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeEpochId' must be a string when present (got ${describeValue(
+            raw.welcomeEpochId,
+          )})`,
+        );
+      }
+      welcomeEpochId = Base64.toUint8Array(raw.welcomeEpochId);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -571,6 +614,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       );
     }
     if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (welcomeEpochId !== undefined) result.welcomeEpochId = welcomeEpochId;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
