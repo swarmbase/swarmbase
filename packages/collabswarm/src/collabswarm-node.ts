@@ -13,8 +13,11 @@
 import * as fs from 'fs';
 import {
   CollabswarmConfig,
+  IceServer,
+  cloneIceServer,
   defaultBootstrapConfig,
   defaultConfig,
+  resolveIceServers,
 } from './collabswarm-config';
 import { Collabswarm } from './collabswarm';
 import { CollabswarmDocument } from './collabswarm-document';
@@ -61,9 +64,24 @@ import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
  * local network, privacy-sensitive deployments should disable it by building a
  * custom config (copy this one and omit `mdns()` from `peerDiscovery`) rather
  * than using `defaultNodeConfig` directly.
+ *
+ * @param bootstrapConfig Bootstrap peer list to seed peer discovery.
+ * @param webrtcIceServers Optional override for the WebRTC ICE server list.
+ *   When undefined, the package-level `DEFAULT_WEBRTC_ICE_SERVERS` list is
+ *   used (see `./collabswarm-config`) so peers can discover their public
+ *   address mappings via STUN without relying on relay infrastructure for
+ *   data plane forwarding (issue #236 phase 3).
  */
-export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
-  ({
+export const defaultNodeConfig = (
+  bootstrapConfig: BootstrapInit,
+  webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>,
+) => {
+  // Resolve the source list and a deeply-frozen exposed view in one place so
+  // the browser and Node defaults stay in sync. Each transport below still
+  // gets its own fresh `cloneIceServer`-deep-cloned copy of `sourceIceServers`
+  // so mutations never leak between transport state and `config.webrtcIceServers`.
+  const { sourceIceServers, exposedIceServers } = resolveIceServers(webrtcIceServers);
+  return ({
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
@@ -78,8 +96,15 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
             reservationConcurrency: 1,
           }),
           webSockets({ filter: all }),
-          webRTC(),
-          webRTCDirect(),
+          // Pass STUN servers so RTCPeerConnection can gather server-reflexive
+          // candidates and attempt direct connections without relay forwarding.
+          // Each transport gets its own fresh mutable copy (with each server
+          // object also deep-enough-cloned via `cloneIceServer`) to avoid
+          // aliasing with the array exposed on `config.webrtcIceServers` below.
+          // Cast to `RTCIceServer[]` only at the libp2p call site so the
+          // public collabswarm API stays free of DOM lib types.
+          webRTC({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
+          webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
           webTransport(),
         ],
         streamMuxers: [yamux()],
@@ -106,8 +131,10 @@ export const defaultNodeConfig = (bootstrapConfig: BootstrapInit) =>
     },
     pubsubDocumentPrefix: '/document/',
     pubsubDocumentPublishPath: '/documents',
+    webrtcIceServers: exposedIceServers,
   // Cast required: libp2p sub-dependency types have version mismatches that prevent structural compatibility
   } as unknown as CollabswarmConfig);
+};
 
 export class CollabswarmNode<
   DocType,
@@ -256,10 +283,54 @@ export class CollabswarmNode<
   }
 
   // Start
-  public async start(boostrapAddresses?: string[]) {
+  public async start(bootstrapAddresses?: string[]) {
     await this.swarm.initialize(this.config);
+    // Thread the Node-side ICE override (resolved and exposed on
+    // `this.config.webrtcIceServers` by `defaultNodeConfig`) into the
+    // browser-side client config so a deployment that customizes STUN/TURN
+    // (or disables it via `[]`) ends up with the same list on both sides.
+    //
+    // Edge case: if a hand-rolled config skips `defaultNodeConfig` and
+    // leaves `webrtcIceServers` unset, `browserSafeIceServers` is left
+    // undefined and `defaultConfig` falls back to its own
+    // `DEFAULT_WEBRTC_ICE_SERVERS`. Configs built via `defaultNodeConfig`
+    // never hit that path.
+    //
+    // Strip `username`/`credential` before passing the list across: TURN
+    // credentials are server-side secrets and the resulting `clientConfig`
+    // is written to a file that can be bundled into browser builds. Browsers
+    // that need authenticated TURN should obtain ephemeral credentials at
+    // runtime instead of receiving long-lived secrets via this file.
+    //
+    // Warn loudly when stripping a non-empty credential: a TURN entry without
+    // its credential will not authenticate, so the browser silently degrades
+    // to STUN-only / host candidates and may fail to connect through
+    // symmetric NATs. Operators should either provide STUN-only entries or
+    // wire up an ephemeral-TURN-credential flow in their app code.
+    const strippedTurnEntries = new Set<string>();
+    const browserSafeIceServers = this.config.webrtcIceServers?.map(
+      ({ username, credential, ...rest }) => {
+        if (username !== undefined || credential !== undefined) {
+          const urlsLabel = Array.isArray(rest.urls)
+            ? rest.urls.join(',')
+            : rest.urls;
+          strippedTurnEntries.add(urlsLabel);
+        }
+        return rest;
+      },
+    );
+    if (strippedTurnEntries.size > 0) {
+      console.warn(
+        `[collabswarm] Stripped TURN credentials from clientConfig for: ${Array.from(
+          strippedTurnEntries,
+        ).join('; ')}. Browsers will not authenticate against these TURN servers; ` +
+          'supply ephemeral credentials at runtime instead of long-lived ' +
+          'secrets in clientConfig.',
+      );
+    }
     const clientConfig = defaultConfig(
-      defaultBootstrapConfig(boostrapAddresses ?? []),
+      defaultBootstrapConfig(bootstrapAddresses ?? []),
+      browserSafeIceServers,
     );
     const clientConfigFile =
       process.env.REACT_APP_CLIENT_CONFIG_FILE || 'client-config.env';
