@@ -33,7 +33,8 @@ const COMPOSE_FILE = 'docker-compose.nat-test.yaml';
 /** Track console messages from a page; supports awaiting on prefixes. */
 function trackConsole(page: Page) {
   const messages: string[] = [];
-  page.on('console', (msg) => messages.push(msg.text()));
+  const collector = (msg: ConsoleMessage) => messages.push(msg.text());
+  page.on('console', collector);
 
   return {
     messages,
@@ -62,6 +63,11 @@ function trackConsole(page: Page) {
         page.on('console', handler);
       });
     },
+    /** Detach the console listener and clear the buffer. Safe to call more than once. */
+    dispose() {
+      page.off('console', collector);
+      messages.length = 0;
+    },
   };
 }
 
@@ -88,8 +94,13 @@ async function initPage(browser: Browser, url: string): Promise<PageHandle> {
   }
 }
 
-/** Replace the in-page console tracker after a reload (keeps closing helpers happy). */
+/**
+ * Replace the in-page console tracker after a reload. Disposes the previous
+ * tracker (removes its `page.on('console', ...)` listener and clears its
+ * buffer) so listeners don't accumulate across multiple reloads.
+ */
 function rebindTracker(handle: PageHandle): PageHandle {
+  handle.track.dispose();
   return { ...handle, track: trackConsole(handle.page) };
 }
 
@@ -140,6 +151,47 @@ async function waitForUrl(page: Page, url: string, timeoutMs = 60_000): Promise<
   throw new Error(`Timed out waiting for ${url} to respond after ${timeoutMs}ms`);
 }
 
+/**
+ * Read the relay's `/shared/relay-info.json` from inside the relay container.
+ * Returns null while the file is missing or unparseable (e.g., mid-write).
+ */
+function readRelayInfo(): { peerId: string } | null {
+  try {
+    const raw = execSync(`docker compose -f ${COMPOSE_FILE} exec -T relay cat /shared/relay-info.json`, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.peerId === 'string' && parsed.peerId.length > 0) {
+      return { peerId: parsed.peerId };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After restarting the relay, the relay container rewrites
+ * `/shared/relay-info.json` with a fresh peer ID. The `test-app-*` entrypoint
+ * only waits for the file to *exist*, so if we restart `test-app-*` before
+ * the relay has written the new info, they will re-publish `config.json`
+ * with the *old* peer ID. Poll until the file's `peerId` differs from
+ * `previousPeerId` so callers can sequence the restart deterministically.
+ */
+async function waitForRelayInfoChange(previousPeerId: string, timeoutMs = 60_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const info = readRelayInfo();
+    if (info && info.peerId !== previousPeerId) return info.peerId;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(
+    `Timed out (${timeoutMs}ms) waiting for relay-info.json peerId to change from ${previousPeerId}`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Test suites
 // ---------------------------------------------------------------------------
@@ -174,10 +226,24 @@ test.describe('NAT Relay Failure Recovery', () => {
       const preMessagesB = await b.page.evaluate(() => (window as any).__messages);
       expect(preMessagesB.some((m: any) => m.text === 'pre-restart')).toBe(true);
 
+      // Capture the pre-restart relay peer ID so we can detect when the
+      // restarted relay has rewritten /shared/relay-info.json.
+      const preRestartInfo = readRelayInfo();
+      if (!preRestartInfo) {
+        throw new Error('Could not read pre-restart relay-info.json from the relay container');
+      }
+
       // Restart the relay. We also restart the test-app containers so their
       // entrypoint script picks up the new relay-info.json and rewrites
       // config.json with the new peer ID. Browsers will be reloaded next.
       compose('restart relay');
+
+      // The test-app entrypoint only waits for the file to *exist*, not for
+      // it to change, so we must explicitly wait for the new peer ID to land
+      // in /shared/relay-info.json before restarting the test-apps —
+      // otherwise they may rewrite config.json with the stale peer ID.
+      await waitForRelayInfoChange(preRestartInfo.peerId, 90_000);
+
       compose('restart test-app-a test-app-b');
 
       // Wait for the test-app HTTP servers to come back online before reload.
