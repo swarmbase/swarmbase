@@ -474,16 +474,50 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       );
     }
     const raw = decoded as {
-      documentId?: string;
-      changeId?: string;
-      changes?: iCRDTChangeNode;
-      keychainChanges?: string[];
-      snapshot?: any;
-      signature?: string;
+      documentId?: unknown;
+      changeId?: unknown;
+      changes?: unknown;
+      keychainChanges?: unknown;
+      snapshot?: unknown;
+      signature?: unknown;
     };
+    // `documentId` is a required field on the wire contract. A malformed peer
+    // could omit it or send a non-string value (number, object, null), which
+    // would otherwise propagate as `documentId: undefined`/non-string into
+    // downstream consumers that key documents by string ID. Validate up front
+    // and attribute the failure back to the peer with a descriptive error.
+    if (typeof raw.documentId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'documentId' must be a string (got ${
+          raw.documentId === null ? 'null' : typeof raw.documentId
+        })`,
+      );
+    }
+    // Validate optional scalar fields that have a fixed expected type. Skipped
+    // when omitted (`undefined`) so callers can send partial sync messages.
+    if (raw.changeId !== undefined && typeof raw.changeId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'changeId' must be a string when present (got ${typeof raw.changeId})`,
+      );
+    }
+    if (raw.signature !== undefined && typeof raw.signature !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'signature' must be a string when present (got ${typeof raw.signature})`,
+      );
+    }
     let snapshot: any;
     if (raw.snapshot) {
-      snapshot = { ...raw.snapshot };
+      // `raw.snapshot` is untrusted; reject anything that isn't a plain object
+      // before spreading it (a peer-supplied array or primitive would otherwise
+      // be silently coerced via spread).
+      if (typeof raw.snapshot !== 'object' || Array.isArray(raw.snapshot)) {
+        throw new Error(
+          `Invalid sync message: 'snapshot' must be an object when present (got ${
+            Array.isArray(raw.snapshot) ? 'array' : typeof raw.snapshot
+          })`,
+        );
+      }
+      snapshot = { ...(raw.snapshot as Record<string, unknown>) };
       // Decode base64-encoded BinaryChange[] back to Uint8Array[].
       if (Array.isArray(snapshot.state)) {
         snapshot.state = snapshot.state.map(
@@ -494,23 +528,38 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         snapshot.signature = Base64.toUint8Array(snapshot.signature);
       }
     }
-    return {
-      ...raw,
-      // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
-      // must be routed through the validator -- using a truthy guard like
-      // `raw.changes && ...` would let a malformed peer message bypass
-      // `deserializeChangeNodeFromJSON`'s shape checks by sending e.g.
-      // `changes: null`, with the falsy value flowing through to
-      // downstream consumers via the spread above.
-      changes:
-        raw.changes === undefined
-          ? undefined
-          : deserializeChangeNodeFromJSON(raw.changes, deserializeBinaryChanges),
-      keychainChanges:
-        raw.keychainChanges
-          ? deserializeBinaryChanges(raw.keychainChanges)
-          : undefined,
-      snapshot,
-    } as CRDTSyncMessage<BinaryChange[], CryptoKey>;
+    let keychainChanges: BinaryChange[] | undefined;
+    if (raw.keychainChanges !== undefined) {
+      if (!Array.isArray(raw.keychainChanges)) {
+        throw new Error(
+          `Invalid sync message: 'keychainChanges' must be an array when present (got ${typeof raw.keychainChanges})`,
+        );
+      }
+      keychainChanges = deserializeBinaryChanges(raw.keychainChanges as string[]);
+    }
+    // Build the returned object explicitly rather than spreading `...raw` so
+    // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
+    // unrecognized field) don't leak into the deserialized sync message. Only
+    // fields declared on `CRDTSyncMessage` are propagated.
+    const result: CRDTSyncMessage<BinaryChange[], CryptoKey> = {
+      documentId: raw.documentId,
+    };
+    if (raw.changeId !== undefined) result.changeId = raw.changeId as string;
+    if (raw.signature !== undefined) result.signature = raw.signature as string;
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.changes && ...` would let a malformed peer message bypass
+    // `deserializeChangeNodeFromJSON`'s shape checks by sending e.g.
+    // `changes: null`, with the falsy value flowing through to
+    // downstream consumers.
+    if (raw.changes !== undefined) {
+      result.changes = deserializeChangeNodeFromJSON(
+        raw.changes as iCRDTChangeNode,
+        deserializeBinaryChanges,
+      );
+    }
+    if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (snapshot !== undefined) result.snapshot = snapshot;
+    return result;
   }
 }

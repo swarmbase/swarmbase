@@ -517,4 +517,118 @@ describe('YjsJSONSerializer', () => {
     const deserialized = serializer.deserializeSyncMessage(wire);
     expect(deserialized.changes).toBeUndefined();
   });
+
+  // Regression: prior to validating `documentId`, a malformed peer payload
+  // missing the field (or sending a non-string value) would propagate
+  // `documentId: undefined`/non-string downstream and violate the required
+  // field contract of `CRDTSyncMessage`. The fix rejects the payload with a
+  // descriptive error attributable back to the peer.
+  test('deserializeSyncMessage rejects payload missing documentId', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ changeId: 'c1' });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'documentId' must be a string.*got undefined/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects payload with non-string documentId (number)', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 42 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'documentId' must be a string.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects payload with null documentId', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: null });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'documentId' must be a string.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects payload with object documentId', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: { id: 'doc' } });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'documentId' must be a string.*got object/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects non-string changeId', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', changeId: 7 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'changeId' must be a string when present.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects non-string signature', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', signature: 7 });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'signature' must be a string when present.*got number/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects non-string keychainChanges', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', keychainChanges: [1, 2, 3] });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'keychainChanges' must be a string when present.*got object/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects array snapshot', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({ documentId: 'doc', snapshot: [1, 2, 3] });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*'snapshot' must be an object when present.*got array/,
+    );
+  });
+
+  // Regression: prior to the upfront object guard, top-level non-object
+  // payloads (null/array/primitive) threw a bare `TypeError: Cannot read
+  // properties of null` instead of a descriptive error. Mirrors the
+  // equivalent automerge guard.
+  test('deserializeSyncMessage rejects a top-level JSON null payload', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire(null);
+    expect(() => serializer.deserializeSyncMessage(wire)).not.toThrow(
+      TypeError,
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got null/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects a top-level JSON array payload', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire([1, 2, 3]);
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /Invalid sync message.*expected a plain object.*got array/,
+    );
+  });
+
+  // Regression: prior to building the returned object explicitly, the
+  // deserializer spread `...deserialized` straight onto the result. A
+  // malicious peer could append junk keys and they would leak through to
+  // downstream consumers. The fix only propagates fields declared on
+  // `CRDTSyncMessage`.
+  test('deserializeSyncMessage strips peer-supplied junk keys', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = buildWire({
+      documentId: 'doc',
+      changeId: 'cid',
+      somethingExtra: 'evil',
+      anotherJunkField: { nested: true },
+      __evilNonProtoKey: 'still-junk',
+    });
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.documentId).toBe('doc');
+    expect(deserialized.changeId).toBe('cid');
+    expect((deserialized as Record<string, unknown>).somethingExtra).toBeUndefined();
+    expect((deserialized as Record<string, unknown>).anotherJunkField).toBeUndefined();
+    expect((deserialized as Record<string, unknown>).__evilNonProtoKey).toBeUndefined();
+  });
 });

@@ -91,22 +91,62 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     );
   }
   deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
-    const raw = this.deserialize(this.decode(message));
-    if (typeof raw !== 'object' || raw === null || typeof (raw as Record<string, unknown>).documentId !== 'string') {
-      throw new Error('Invalid sync message: expected object with documentId string');
+    const decoded = this.deserialize(this.decode(message));
+    // Wire input is untrusted: reject non-object payloads up front with a
+    // descriptive error so the malformed payload can be attributed back to
+    // the peer instead of throwing a bare `TypeError`. Mirrors the guard in
+    // `AutomergeJSONSerializer.deserializeSyncMessage`.
+    if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+      throw new Error(
+        `Invalid sync message: expected a plain object (got ${
+          decoded === null
+            ? 'null'
+            : Array.isArray(decoded)
+              ? 'array'
+              : typeof decoded
+        })`,
+      );
     }
-    const deserialized = raw as {
-      documentId: string;
-      changeId?: string;
-      changes?: iCRDTChangeNode;
-      keychainChanges?: string;
-      snapshot?: any;
-      signature?: string;
+    const raw = decoded as {
+      documentId?: unknown;
+      changeId?: unknown;
+      changes?: unknown;
+      keychainChanges?: unknown;
+      snapshot?: unknown;
+      signature?: unknown;
     };
+    // `documentId` is a required field on the wire contract. A malformed peer
+    // could omit it or send a non-string value, which would otherwise
+    // propagate as `documentId: undefined`/non-string into downstream
+    // consumers that key documents by string ID.
+    if (typeof raw.documentId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'documentId' must be a string (got ${
+          raw.documentId === null ? 'null' : typeof raw.documentId
+        })`,
+      );
+    }
+    if (raw.changeId !== undefined && typeof raw.changeId !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'changeId' must be a string when present (got ${typeof raw.changeId})`,
+      );
+    }
+    if (raw.signature !== undefined && typeof raw.signature !== 'string') {
+      throw new Error(
+        `Invalid sync message: 'signature' must be a string when present (got ${typeof raw.signature})`,
+      );
+    }
     // Decode snapshot base64 fields back to Uint8Array.
     let snapshot: any;
-    if (deserialized.snapshot) {
-      snapshot = { ...deserialized.snapshot };
+    if (raw.snapshot) {
+      if (typeof raw.snapshot !== 'object' || Array.isArray(raw.snapshot)) {
+        throw new Error(
+          `Invalid sync message: 'snapshot' must be an object when present (got ${
+            Array.isArray(raw.snapshot) ? 'array' : typeof raw.snapshot
+          })`,
+        );
+      }
+      snapshot = { ...(raw.snapshot as Record<string, unknown>) };
       if (typeof snapshot.state === 'string') {
         snapshot.state = Base64.toUint8Array(snapshot.state);
       }
@@ -114,26 +154,37 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         snapshot.signature = Base64.toUint8Array(snapshot.signature);
       }
     }
-    return {
-      ...deserialized,
-      // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
-      // must be routed through the validator -- using a truthy guard like
-      // `deserialized.changes && ...` would let a malformed peer message
-      // bypass `deserializeChangeNodeFromJSON`'s shape checks by sending
-      // e.g. `changes: null`, with the falsy value flowing through to
-      // downstream consumers via the spread above.
-      changes:
-        deserialized.changes === undefined
-          ? undefined
-          : deserializeChangeNodeFromJSON(
-              deserialized.changes,
-              Base64.toUint8Array,
-            ),
-      keychainChanges: deserialized.keychainChanges
-        ? Base64.toUint8Array(deserialized.keychainChanges)
-        : undefined,
-      snapshot,
+    let keychainChanges: Uint8Array | undefined;
+    if (raw.keychainChanges !== undefined) {
+      if (typeof raw.keychainChanges !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'keychainChanges' must be a string when present (got ${typeof raw.keychainChanges})`,
+        );
+      }
+      keychainChanges = Base64.toUint8Array(raw.keychainChanges);
+    }
+    // Build the returned object explicitly rather than spreading `...raw` so
+    // that peer-supplied junk keys don't leak into the deserialized sync
+    // message. Only fields declared on `CRDTSyncMessage` are propagated.
+    const result: CRDTSyncMessage<Uint8Array> = {
+      documentId: raw.documentId,
     };
+    if (raw.changeId !== undefined) result.changeId = raw.changeId as string;
+    if (raw.signature !== undefined) result.signature = raw.signature as string;
+    // Any value other than `undefined` (including `null`, `0`, `""`, etc.)
+    // must be routed through the validator -- using a truthy guard like
+    // `raw.changes && ...` would let a malformed peer message bypass
+    // `deserializeChangeNodeFromJSON`'s shape checks by sending e.g.
+    // `changes: null`, with the falsy value flowing through.
+    if (raw.changes !== undefined) {
+      result.changes = deserializeChangeNodeFromJSON(
+        raw.changes as iCRDTChangeNode,
+        Base64.toUint8Array,
+      );
+    }
+    if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (snapshot !== undefined) result.snapshot = snapshot;
+    return result;
   }
 }
 
