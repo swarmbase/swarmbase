@@ -31,7 +31,7 @@ import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
 import { CID } from 'multiformats';
 import { EventHandler, Message } from '@libp2p/interface';
-import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { gossipsub } from '@libp2p/gossipsub';
 import { autoNAT } from '@libp2p/autonat';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';

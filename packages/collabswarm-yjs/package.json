@@ -75,7 +75,7 @@
     ],
     "moduleNameMapper": {
       "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@chainsafe/libp2p-gossipsub$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@libp2p/gossipsub$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/pubsub-peer-discovery$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/circuit-relay-v2$": "<rootDir>/src/__mocks__/empty-module.js",

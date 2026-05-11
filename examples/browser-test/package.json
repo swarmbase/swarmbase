@@ -51,7 +51,8 @@
   },
   "type": "module",
   "devDependencies": {
-    "libp2p": "^2.1.5"
+    "@libp2p/gossipsub": "^15.0.22",
+    "libp2p": "^3.3.0"
   },
   "version": "0.1.0"
 }
