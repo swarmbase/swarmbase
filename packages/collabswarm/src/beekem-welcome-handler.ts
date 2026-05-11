@@ -27,7 +27,8 @@ import { SyncMessageSerializer } from './sync-message-serializer';
  *   and record `welcomeEpochId` as the local invitation epoch.
  * `drop-not-for-us`: legitimate Welcome addressed to another reader;
  *   the caller should silently ignore it (this is not an attack).
- * `drop-malformed`: the Welcome is missing required fields. The
+ * `drop-malformed`: the Welcome is missing required fields (path,
+ *   epoch ID, recipient binding, or keychain key material). The
  *   `reason` is a stable string suitable for log messages and tests.
  * `drop-unauthorized`: the Welcome failed an authorization gate
  *   (not in readers ACL, unsigned when signing is enabled, invalid
@@ -42,7 +43,8 @@ export type WelcomeValidationResult =
 export type WelcomeMalformedReason =
   | 'wrong-document'
   | 'missing-welcome-epoch-id'
-  | 'missing-welcome-recipient';
+  | 'missing-welcome-recipient'
+  | 'missing-keychain-changes';
 
 export type WelcomeUnauthorizedReason =
   | 'not-in-readers-acl'
@@ -119,6 +121,30 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // recipient.
   if (!message.welcomeRecipient) {
     return { kind: 'drop-malformed', reason: 'missing-welcome-recipient' };
+  }
+
+  // A Welcome without `keychainChanges` is useless: the recipient
+  // would record `welcomeEpochId` as their invitation epoch (gating
+  // future `since_invited` history filtering) without installing the
+  // corresponding document key, leaving them unable to decrypt any
+  // pubsub traffic. Worse, recording an epoch the recipient cannot
+  // back up with a key in their keychain can make later visibility
+  // filtering misbehave (the local view believes "I joined at epoch
+  // E" but has no E key). Treat a missing/empty payload as malformed
+  // and refuse to record the epoch.
+  const keychainChanges = message.keychainChanges as
+    | { length?: number; byteLength?: number }
+    | undefined;
+  const keychainChangesLength =
+    keychainChanges == null
+      ? 0
+      : typeof keychainChanges.length === 'number'
+        ? keychainChanges.length
+        : typeof keychainChanges.byteLength === 'number'
+          ? keychainChanges.byteLength
+          : -1;
+  if (keychainChanges == null || keychainChangesLength === 0) {
+    return { kind: 'drop-malformed', reason: 'missing-keychain-changes' };
   }
 
   const localSerializedKey = await deps.serializePublicKey(

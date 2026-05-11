@@ -99,6 +99,36 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     });
   });
 
+  test('drops Welcomes missing keychainChanges (would wedge the recipient)', async () => {
+    // Without keychainChanges the recipient would record
+    // `welcomeEpochId` as their `_invitationEpoch` but have no
+    // corresponding key installed in their keychain, leaving them
+    // unable to decrypt traffic and corrupting later `since_invited`
+    // filtering. The validator must refuse to accept such a Welcome.
+    const msg = baseAcceptableMessage();
+    delete msg.keychainChanges;
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'missing-keychain-changes',
+    });
+  });
+
+  test('drops Welcomes with empty keychainChanges (zero-length payload)', async () => {
+    // An empty Uint8Array carries no key material, so it has the same
+    // wedge potential as a missing field. The validator must reject
+    // it for the same reason.
+    const msg = {
+      ...baseAcceptableMessage(),
+      keychainChanges: new Uint8Array(0),
+    };
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'missing-keychain-changes',
+    });
+  });
+
   test('silently drops Welcomes addressed to someone else', async () => {
     const msg = {
       ...baseAcceptableMessage(),

@@ -2801,6 +2801,38 @@ export class CollabswarmDocument<
    *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
    */
   private async _sendBeeKEMWelcome(reader: PublicKey): Promise<void> {
+    // SECURITY: this method broadcasts a *plaintext* Welcome -- including
+    // the document key material in `keychainChanges` -- to every
+    // currently-connected libp2p peer. The recipient binding
+    // (`welcomeRecipient` + the writer signature covering it) is an
+    // *authorization* control that prevents an honest non-target peer
+    // from installing the document key; it is **not** a confidentiality
+    // control. Any peer with a live connection at broadcast time -- even
+    // an unauthorized or actively malicious one -- can observe the
+    // payload, retain `keychainChanges`, and use it to decrypt
+    // subsequent pubsub traffic for this document. The libp2p
+    // transport's Noise/TLS handshake protects on-wire bytes from
+    // off-path observers but does nothing to limit which connected peers
+    // see the application-layer payload.
+    //
+    // This is a known limitation of the current BeeKEM Welcome design
+    // and a confidentiality gap on untrusted networks. The fix is
+    // recipient-encrypted key delivery (e.g. HPKE / ECIES under the
+    // recipient's identity key, or wrapping under the recipient's BeeKEM
+    // public key once a stable identity-to-encryption-key mapping is in
+    // place), so that only the intended reader can decrypt
+    // `keychainChanges`. Implementing that is non-trivial -- it requires
+    // an agreed identity-encryption key plumbed through `AuthProvider`,
+    // schema changes in `CRDTSyncMessage`, a versioned wire-format bump,
+    // and migration of the receive path -- and is intentionally
+    // out-of-scope for the initial Welcome introduction. Until that
+    // lands, deployments that require confidentiality against connected
+    // peers must restrict the connection set (e.g. authenticated relays,
+    // private swarms).
+    //
+    // TODO(beekem-payload-encryption): wrap the Welcome payload under
+    // the recipient's identity key so `keychainChanges` is opaque to
+    // every other connected peer. Tracked as #BEEKEM-PAYLOAD-ENC.
     // Build the welcome message.
     const welcomeMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: this.documentPath,

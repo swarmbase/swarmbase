@@ -41,6 +41,23 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    *
    * NOTE: Keychain changes should only ever be sent over encrypted libp2p streams (not
    * GossipSub pubsub).
+   *
+   * SECURITY: when this field appears in a BeeKEM Welcome (alongside
+   * `welcomeEpochId` and `welcomeRecipient`), the payload is broadcast in
+   * plaintext at the application layer to *every* currently-connected
+   * peer. libp2p's Noise/TLS transport protects on-wire bytes but does
+   * **not** restrict which connected peers can read the payload, so any
+   * connected peer -- including unauthorized or malicious ones -- can
+   * observe and retain `keychainChanges` and use it to decrypt
+   * subsequent pubsub traffic. The `welcomeRecipient` binding is an
+   * authorization control (an honest non-target peer drops the
+   * Welcome), not a confidentiality control. See `_sendBeeKEMWelcome`
+   * for the rationale and follow-up plan.
+   *
+   * TODO(beekem-payload-encryption): encrypt the Welcome payload to the
+   * recipient (HPKE/ECIES under the recipient's identity or BeeKEM
+   * public key) so `keychainChanges` is opaque to every other connected
+   * peer. Tracked as #BEEKEM-PAYLOAD-ENC.
    */
   keychainChanges?: ChangesType;
 
