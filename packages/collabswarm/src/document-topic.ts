@@ -8,10 +8,7 @@ export const DEFAULT_DOCUMENT_TOPIC_PREFIX = '/document/';
  *
  * The default prefix is `'/document/'`, which namespaces document traffic
  * on the pubsub mesh. Pass an empty string to disable prefixing (the topic
- * will be the bare document path, matching legacy behavior).
- *
- * **Edge case:** An empty string (`''`) prefix returns `documentPath`
- * unchanged. This is intentional for backward compatibility.
+ * will be the bare document path).
  *
  * @param documentPath - The path identifying the document.
  * @param topicPrefix - Prefix to prepend (defaults to `'/document/'`).
@@ -21,8 +18,6 @@ export function documentTopic(
   documentPath: string,
   topicPrefix: string = DEFAULT_DOCUMENT_TOPIC_PREFIX,
 ): string {
-  // When the prefix is empty, return the path unchanged to preserve
-  // backward-compatible topic strings.
   if (topicPrefix === '') {
     return documentPath;
   }

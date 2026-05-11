@@ -1,9 +1,9 @@
 /**
  * A keychain contains a CollabswarmDocument's encryption keys.
  *
- * Keys are identified by a key ID. In the legacy model, key IDs are 16-byte
- * UUID v4 values. In the epoch-based model, key IDs are 32-byte SHA-256
- * hashes (epoch IDs).
+ * Keys are identified by a key ID. Two key-ID schemes coexist: 16-byte UUID v4
+ * values (used by `add()` for keys not tied to a specific epoch) and 32-byte
+ * SHA-256 hashes from `addEpochKey()` for epoch-based key management.
  *
  * @typeParam KeychainChange Type of a block of change(s) describing edits made to the document keychain.
  * @typeParam DocumentKey Type of a document encryption key.
