@@ -90,6 +90,18 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
 ): CRDTChangeNode<TOut> {
   const change = node.change !== undefined ? decodeLeaf(node.change) : undefined;
   if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
+    // Wire input is untrusted: validate the children shape before iterating,
+    // since `Object.entries(null)` / non-object inputs throw a `TypeError`
+    // that's hard to attribute back to a malformed peer message.
+    if (
+      typeof node.children !== 'object' ||
+      node.children === null ||
+      Array.isArray(node.children)
+    ) {
+      throw new Error(
+        'Invalid merkle-dag node: "children" must be an object keyed by hash',
+      );
+    }
     // Null-prototype dictionary: peer-supplied JSON keys like `__proto__`
     // or `constructor` cannot pollute `Object.prototype` or shadow
     // inherited members on the resulting children map.
