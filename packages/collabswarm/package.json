@@ -76,7 +76,8 @@
     "js-base64": "^3.7.8",
     "libp2p": "^2.10.0",
     "multiformats": "^13.4.2",
-    "uint8arraylist": "^2.4.8"
+    "uint8arraylist": "^2.4.8",
+    "uuid": "^10.0.0"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
