@@ -40,8 +40,30 @@ export interface DuplexStream {
  *   extends `AsyncIterable`, so we can forward as-is).
  * - `sink` writes each chunk via the new `send()` method, awaiting
  *   `onDrain()` whenever the underlying transport signals backpressure.
+ *   After all chunks are sent, it half-closes the writable end so the
+ *   remote peer can detect end-of-request in request/response patterns.
  * - `close` defers to the v3 stream's half-close (it flushes any pending
- *   writes and closes the writable end).
+ *   writes and closes the writable end only; the readable end stays open).
+ *
+ * Half-close semantics (important):
+ *
+ *   In libp2p v3, `Stream.close()` is a *write-side* half-close, not a full
+ *   bidirectional close. From the `@libp2p/interface` Stream docs:
+ *
+ *     "Close stream for writing and return a promise that resolves once any
+ *      pending data has been passed to the underlying transport. Note that
+ *      the stream itself will remain readable until the remote end also
+ *      closes it's writable end."
+ *
+ *   v3 intentionally does not expose a separate `closeWrite()` method --
+ *   `close()` *is* the write-side close. Read-side close is `closeRead()`,
+ *   and full teardown is `abort(err)`.
+ *
+ *   This is what makes the sink-then-read request/response pattern in
+ *   `_sendLoadRequestAndSync` work: after `pipe([request], stream.sink)`
+ *   resolves, the writable end is closed (signalling end-of-request to the
+ *   peer) but `stream.source` remains open so we can still read the peer's
+ *   response.
  */
 export function wrapStream(stream: Stream): DuplexStream {
   return {
@@ -55,9 +77,11 @@ export function wrapStream(stream: Stream): DuplexStream {
           await stream.onDrain();
         }
       }
-      // Close the writable end so the remote knows we're done sending.
-      // The readable end remains open so the caller can still consume any
-      // response data the peer sends back before half-closing on their end.
+      // Half-close the writable end so the remote can detect end-of-request.
+      // The readable end remains open; callers can still consume response
+      // data from `stream.source` afterwards (see `_sendLoadRequestAndSync`).
+      // In libp2p v3, `Stream.close()` is the write-side close -- there is
+      // no separate `closeWrite()` method.
       await stream.close();
     },
     close: () => stream.close(),
