@@ -43,7 +43,11 @@ export function serializeChangeNodeForJSON<TIn, TOut>(
 ): CRDTChangeNodeWire<TOut> {
   const change = node.change !== undefined ? encodeLeaf(node.change) : undefined;
   if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: CRDTChangeNodeWire<TOut> } = {};
+    // Use a null-prototype dictionary so that hash keys coming from peer
+    // wire messages (e.g. `__proto__`, `constructor`) cannot mutate the
+    // shared `Object.prototype` or otherwise alter lookup semantics.
+    const children: { [hash: string]: CRDTChangeNodeWire<TOut> } =
+      Object.create(null);
     for (const [hash, child] of Object.entries(node.children)) {
       children[hash] = serializeChangeNodeForJSON(child, encodeLeaf);
     }
@@ -68,6 +72,11 @@ export function serializeChangeNodeForJSON<TIn, TOut>(
  * Preserves `crdtChangeNodeDeferred` children verbatim, matching the
  * serializer.
  *
+ * Wire input is treated as untrusted: the reconstructed `children` map uses a
+ * null prototype so peer-supplied hash keys (e.g. `__proto__`,
+ * `constructor`) cannot pollute `Object.prototype` or shadow inherited
+ * members.
+ *
  * @typeParam TIn  Wire leaf payload type (e.g. `string` or `string[]`).
  * @typeParam TOut Decoded leaf payload type (e.g. `Uint8Array` or
  *                 `Uint8Array[]`).
@@ -81,7 +90,11 @@ export function deserializeChangeNodeFromJSON<TIn, TOut>(
 ): CRDTChangeNode<TOut> {
   const change = node.change !== undefined ? decodeLeaf(node.change) : undefined;
   if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
-    const children: { [hash: string]: CRDTChangeNode<TOut> } = {};
+    // Null-prototype dictionary: peer-supplied JSON keys like `__proto__`
+    // or `constructor` cannot pollute `Object.prototype` or shadow
+    // inherited members on the resulting children map.
+    const children: { [hash: string]: CRDTChangeNode<TOut> } =
+      Object.create(null);
     for (const [hash, child] of Object.entries(node.children)) {
       children[hash] = deserializeChangeNodeFromJSON(child, decodeLeaf);
     }

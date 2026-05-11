@@ -257,6 +257,66 @@ describe('serializeChangeNodeForJSON / deserializeChangeNodeFromJSON', () => {
     expectBytesEqual(restored.change as Uint8Array, new Uint8Array([9]));
   });
 
+  test('children maps use a null prototype to resist prototype pollution', () => {
+    // A peer could send `__proto__` / `constructor` as hash keys. The
+    // resulting `children` dictionaries must not alter `Object.prototype`
+    // and must expose those keys as plain own properties rather than as
+    // inherited members.
+    const polluted: CRDTChangeNodeWire<string> = {
+      kind: 'document',
+      change: '01',
+      children: JSON.parse(
+        '{"__proto__":{"kind":"writer","change":"02"},' +
+          '"constructor":{"kind":"reader","change":"03"}}',
+      ) as { [hash: string]: CRDTChangeNodeWire<string> },
+    };
+
+    const restored = deserializeChangeNodeFromJSON(polluted, decodeBytes);
+
+    // `Object.prototype` must remain pristine.
+    expect(
+      Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted'),
+    ).toBe(false);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+
+    expect(restored.children).toBeDefined();
+    expect(restored.children).not.toBe(crdtChangeNodeDeferred);
+    const children = restored.children as Record<
+      string,
+      CRDTChangeNode<Uint8Array>
+    >;
+    // Null-prototype dictionary: no inherited members.
+    expect(Object.getPrototypeOf(children)).toBeNull();
+    // Special-cased keys round-trip as own properties.
+    expect(Object.keys(children).sort()).toEqual(['__proto__', 'constructor']);
+    expect(children['__proto__'].kind).toBe('writer');
+    expectBytesEqual(
+      children['__proto__'].change as Uint8Array,
+      new Uint8Array([0x02]),
+    );
+    expect(children['constructor'].kind).toBe('reader');
+    expectBytesEqual(
+      children['constructor'].change as Uint8Array,
+      new Uint8Array([0x03]),
+    );
+
+    // The serializer side likewise produces a null-prototype map.
+    const original: CRDTChangeNode<Uint8Array> = {
+      kind: 'document',
+      children: {
+        h1: { kind: 'writer', change: new Uint8Array([1]) },
+      },
+    };
+    const wire = serializeChangeNodeForJSON(original, encodeBytes);
+    expect(wire.children).toBeDefined();
+    expect(wire.children).not.toBe(crdtChangeNodeDeferred);
+    expect(
+      Object.getPrototypeOf(
+        wire.children as Record<string, CRDTChangeNodeWire<string>>,
+      ),
+    ).toBeNull();
+  });
+
   test('encoder is not invoked for nodes whose change is undefined', () => {
     const original: CRDTChangeNode<Uint8Array> = {
       kind: 'document',
