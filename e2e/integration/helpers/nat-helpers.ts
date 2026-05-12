@@ -30,6 +30,14 @@ export function trackConsole(page: Page) {
   const collector = (msg: ConsoleMessage) => messages.push(msg.text());
   page.on('console', collector);
 
+  /**
+   * Detach functions for any in-flight `waitFor` / `waitForCount` listeners.
+   * Each pending wait registers its cleanup here and removes itself on
+   * resolve/reject; `dispose()` drains anything still outstanding so we
+   * don't leak per-call listeners (or their timers) across page reloads.
+   */
+  const pendingDetachers = new Set<() => void>();
+
   return {
     messages,
     has(prefix: string): boolean {
@@ -40,8 +48,9 @@ export function trackConsole(page: Page) {
       if (existing) return Promise.resolve(existing);
 
       return new Promise((resolve, reject) => {
+        let detach: () => void;
         const timer = setTimeout(() => {
-          page.off('console', handler);
+          detach();
           reject(new Error(
             `Timeout (${timeout}ms) waiting for console: "${prefix}"\n` +
             `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
@@ -49,11 +58,16 @@ export function trackConsole(page: Page) {
         }, timeout);
         const handler = (msg: ConsoleMessage) => {
           if (msg.text().startsWith(prefix)) {
-            clearTimeout(timer);
-            page.off('console', handler);
+            detach();
             resolve(msg.text());
           }
         };
+        detach = () => {
+          clearTimeout(timer);
+          page.off('console', handler);
+          pendingDetachers.delete(detach);
+        };
+        pendingDetachers.add(detach);
         page.on('console', handler);
       });
     },
@@ -63,8 +77,9 @@ export function trackConsole(page: Page) {
       if (matched().length >= count) return Promise.resolve(matched().slice(0, count));
 
       return new Promise((resolve, reject) => {
+        let detach: () => void;
         const timer = setTimeout(() => {
-          page.off('console', handler);
+          detach();
           const found = matched();
           reject(new Error(
             `Timeout (${timeout}ms) waiting for ${count} "${prefix}" messages (got ${found.length})\n` +
@@ -74,17 +89,30 @@ export function trackConsole(page: Page) {
         const handler = (_msg: ConsoleMessage) => {
           const found = matched();
           if (found.length >= count) {
-            clearTimeout(timer);
-            page.off('console', handler);
+            detach();
             resolve(found.slice(0, count));
           }
         };
+        detach = () => {
+          clearTimeout(timer);
+          page.off('console', handler);
+          pendingDetachers.delete(detach);
+        };
+        pendingDetachers.add(detach);
         page.on('console', handler);
       });
     },
-    /** Detach the console listener and clear the buffer. Safe to call more than once. */
+    /**
+     * Detach the long-lived collector listener, cancel any pending
+     * `waitFor` / `waitForCount` listeners (clearing their timers and
+     * removing their `page.on('console', ...)` handlers), and clear the
+     * buffer. Safe to call more than once.
+     */
     dispose() {
       page.off('console', collector);
+      // Snapshot first — each detach() mutates pendingDetachers.
+      for (const detach of [...pendingDetachers]) detach();
+      pendingDetachers.clear();
       messages.length = 0;
     },
   };
