@@ -246,6 +246,14 @@ export class SubtleCrypto
    * codebase.
    */
   public async serializePublicKey(publicKey: CryptoKey): Promise<string> {
+    if (!publicKey.extractable) {
+      throw new Error(
+        'BeeKEM Welcome recipient binding requires an extractable public key, ' +
+          'but the provided CryptoKey has extractable=false. When generating ' +
+          'keys via crypto.subtle.generateKey, pass extractable=true (or use a ' +
+          'separately-generated extractable verifying key).',
+      );
+    }
     const raw = await crypto.subtle.exportKey('raw', publicKey);
     return Base64.fromUint8Array(new Uint8Array(raw));
   }
