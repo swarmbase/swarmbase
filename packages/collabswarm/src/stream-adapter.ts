@@ -29,7 +29,7 @@ import type { Uint8ArrayList } from 'uint8arraylist';
 export interface DuplexStream {
   source: AsyncIterable<Uint8Array | Uint8ArrayList>;
   sink: (data: Iterable<Uint8Array> | AsyncIterable<Uint8Array>) => Promise<void>;
-  close?: () => void | Promise<void>;
+  close: () => Promise<void>;
 }
 
 /**

@@ -53,7 +53,7 @@ const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
 interface ProtocolStream {
   source: AsyncIterable<Uint8ArrayList | Uint8Array>;
   sink: (data: Iterable<Uint8Array>) => Promise<void>;
-  close?: () => void | Promise<void>;
+  close: () => Promise<void>;
 }
 
 /**
@@ -505,7 +505,7 @@ export class Collabswarm<
           } finally {
             // Key-update is fire-and-forget (no response via stream.sink),
             // but the inbound stream must still be closed to release resources.
-            stream.close?.();
+            await stream.close();
           }
         },
       ).catch((err: unknown) => {
