@@ -65,9 +65,16 @@ export async function validateAndExportKemKeyPair(
       await crypto.subtle.exportKey('raw', keyPair.publicKey),
     );
   } catch (err) {
+    // Normalize the inner error: `${err}` on a non-Error throwable
+    // (DOMException, plain object, etc.) can produce
+    // "[object Object]". Pulling `.message` when available keeps the
+    // text actionable; the original is preserved via `cause` for
+    // structured introspection.
+    const msg = err instanceof Error ? err.message : String(err);
     throw new Error(
       `setKemKeyPair: failed to export public key as raw bytes ` +
-        `(was the public key created with extractable=true?): ${err}`,
+        `(was the public key created with extractable=true?): ${msg}`,
+      { cause: err },
     );
   }
 }
