@@ -527,6 +527,13 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
           Base64.fromUint8Array(message.welcomeRecipientKemPublicKey),
         eciesSealed:
           message.eciesSealed && Base64.fromUint8Array(message.eciesSealed),
+        // BeeKEM PathUpdate v1 fields. `pathUpdate` is already a
+        // JSON-safe `SerializedPathUpdate`; pass through verbatim.
+        // `pathUpdateEpochId` is a `Uint8Array`; base64-encode it.
+        pathUpdate: message.pathUpdate,
+        pathUpdateEpochId:
+          message.pathUpdateEpochId &&
+          Base64.fromUint8Array(message.pathUpdateEpochId),
         snapshot: snapshotForWire,
       }),
     );
@@ -557,6 +564,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       welcomeRecipient?: unknown;
       welcomeRecipientKemPublicKey?: unknown;
       eciesSealed?: unknown;
+      pathUpdate?: unknown;
+      pathUpdateEpochId?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -677,6 +686,36 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       eciesSealed = Base64.toUint8Array(raw.eciesSealed);
     }
+    // Loose top-level shape check for `pathUpdate`; the
+    // per-field decode happens later in
+    // `deserializePathUpdateFromWire`. Rejecting `null`/array/primitive
+    // here keeps malformed peer payloads from propagating downstream.
+    let pathUpdate: unknown;
+    if (raw.pathUpdate !== undefined) {
+      if (
+        raw.pathUpdate === null ||
+        typeof raw.pathUpdate !== 'object' ||
+        Array.isArray(raw.pathUpdate)
+      ) {
+        throw new Error(
+          `Invalid sync message: 'pathUpdate' must be an object when present (got ${describeValue(
+            raw.pathUpdate,
+          )})`,
+        );
+      }
+      pathUpdate = raw.pathUpdate;
+    }
+    let pathUpdateEpochId: Uint8Array | undefined;
+    if (raw.pathUpdateEpochId !== undefined) {
+      if (typeof raw.pathUpdateEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'pathUpdateEpochId' must be a string when present (got ${describeValue(
+            raw.pathUpdateEpochId,
+          )})`,
+        );
+      }
+      pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -704,6 +743,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     if (welcomeRecipientKemPublicKey !== undefined)
       result.welcomeRecipientKemPublicKey = welcomeRecipientKemPublicKey;
     if (eciesSealed !== undefined) result.eciesSealed = eciesSealed;
+    if (pathUpdate !== undefined)
+      result.pathUpdate = pathUpdate as CRDTSyncMessage<BinaryChange[], CryptoKey>['pathUpdate'];
+    if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }

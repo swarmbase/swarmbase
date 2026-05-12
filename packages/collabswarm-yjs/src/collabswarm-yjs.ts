@@ -98,6 +98,15 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
           Base64.fromUint8Array(message.welcomeRecipientKemPublicKey),
         eciesSealed:
           message.eciesSealed && Base64.fromUint8Array(message.eciesSealed),
+        // BeeKEM PathUpdate v1 fields. `pathUpdate` is already a
+        // JSON-safe `SerializedPathUpdate` (per-field base64) produced
+        // by `serializePathUpdateForWire`, so pass it through verbatim.
+        // `pathUpdateEpochId` is a `Uint8Array`; base64-encode it the
+        // same way as `welcomeEpochId`.
+        pathUpdate: message.pathUpdate,
+        pathUpdateEpochId:
+          message.pathUpdateEpochId &&
+          Base64.fromUint8Array(message.pathUpdateEpochId),
         snapshot: snapshotForWire,
       }),
     );
@@ -124,6 +133,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       welcomeRecipient?: unknown;
       welcomeRecipientKemPublicKey?: unknown;
       eciesSealed?: unknown;
+      pathUpdate?: unknown;
+      pathUpdateEpochId?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -236,6 +247,38 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       welcomeRecipient = raw.welcomeRecipient;
     }
+    // The `pathUpdate` field is a `SerializedPathUpdate` whose internal
+    // shape is validated when the receive handler hands it to
+    // `deserializePathUpdateFromWire`. Reject obviously malformed
+    // top-level values (null / array / primitive) here so a peer who
+    // sends e.g. `pathUpdate: 42` doesn't propagate that through to the
+    // downstream consumer. The strict per-field decode happens later.
+    let pathUpdate: unknown;
+    if (raw.pathUpdate !== undefined) {
+      if (
+        raw.pathUpdate === null ||
+        typeof raw.pathUpdate !== 'object' ||
+        Array.isArray(raw.pathUpdate)
+      ) {
+        throw new Error(
+          `Invalid sync message: 'pathUpdate' must be an object when present (got ${describeValue(
+            raw.pathUpdate,
+          )})`,
+        );
+      }
+      pathUpdate = raw.pathUpdate;
+    }
+    let pathUpdateEpochId: Uint8Array | undefined;
+    if (raw.pathUpdateEpochId !== undefined) {
+      if (typeof raw.pathUpdateEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'pathUpdateEpochId' must be a string when present (got ${describeValue(
+            raw.pathUpdateEpochId,
+          )})`,
+        );
+      }
+      pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -261,6 +304,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     if (welcomeRecipientKemPublicKey !== undefined)
       result.welcomeRecipientKemPublicKey = welcomeRecipientKemPublicKey;
     if (eciesSealed !== undefined) result.eciesSealed = eciesSealed;
+    if (pathUpdate !== undefined)
+      result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array>['pathUpdate'];
+    if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }

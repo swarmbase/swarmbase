@@ -618,6 +618,73 @@ describe('YjsJSONSerializer', () => {
     expect(deserialized.eciesSealed).toEqual(sealed);
   });
 
+  test('serializeSyncMessage/deserializeSyncMessage preserves pathUpdate for BeeKEM revocation', () => {
+    const serializer = new YjsJSONSerializer();
+    const pathUpdate = {
+      senderLeafIndex: 0,
+      senderLeafPublicKey: 'AAAA',
+      nodes: [
+        { nodeIndex: 1, publicKey: 'AQID', encryptedPrivateKey: 'BAUG' },
+        { nodeIndex: 3, publicKey: 'BwgJ', encryptedPrivateKey: 'CgsM' },
+      ],
+    };
+    const message = {
+      documentId: 'pathupdate-doc',
+      pathUpdate,
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.pathUpdate).toEqual(pathUpdate);
+  });
+
+  test('deserializeSyncMessage omits pathUpdate when absent on wire', () => {
+    const serializer = new YjsJSONSerializer();
+    const message = { documentId: 'no-pathupdate-doc' };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.pathUpdate).toBeUndefined();
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves pathUpdateEpochId', () => {
+    const serializer = new YjsJSONSerializer();
+    const epochId = new Uint8Array(32);
+    for (let i = 0; i < epochId.length; i++) epochId[i] = (i * 3) & 0xff;
+    const message = {
+      documentId: 'pathupdate-doc',
+      pathUpdateEpochId: epochId,
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.pathUpdateEpochId).toEqual(epochId);
+  });
+
+  test('deserializeSyncMessage rejects non-object pathUpdate', () => {
+    const serializer = new YjsJSONSerializer();
+    // Construct the wire payload directly so we can violate type safety.
+    const wire = new TextEncoder().encode(
+      JSON.stringify({ documentId: 'doc', pathUpdate: 'oops' }),
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(/pathUpdate/);
+  });
+
+  test('deserializeSyncMessage rejects null pathUpdate', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = new TextEncoder().encode(
+      JSON.stringify({ documentId: 'doc', pathUpdate: null }),
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(/pathUpdate/);
+  });
+
+  test('deserializeSyncMessage rejects non-string pathUpdateEpochId', () => {
+    const serializer = new YjsJSONSerializer();
+    const wire = new TextEncoder().encode(
+      JSON.stringify({ documentId: 'doc', pathUpdateEpochId: 42 }),
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /pathUpdateEpochId/,
+    );
+  });
+
   test('serializeChangeBlock/deserializeChangeBlock round-trip with keyID', () => {
     const serializer = new YjsJSONSerializer();
     const block = {

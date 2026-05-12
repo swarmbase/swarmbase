@@ -66,3 +66,67 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 // piggy-backs on the same wire format is a future extension; until that
 // is wired up the protocol is documented as a reader-only flow.
 export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
+
+// BeeKEM PathUpdate v1: distributes a BeeKEM ratchet-tree path update to
+// every surviving member of a document. Used by
+// `CollabswarmDocument.removeReader` to revoke a reader: the writer
+// blanks the removed leaf, re-keys the path with `BeeKEM.update`, and
+// broadcasts the resulting `PathUpdate`. Each remaining reader applies it
+// with `BeeKEM.processPathUpdate` and re-derives the document key from
+// the fresh root secret (see `derive-doc-key.ts`). The removed reader
+// cannot derive the new key — their leaf is blanked and the new path key
+// material is encrypted to subtrees they no longer occupy — which closes
+// the revocation-latency gap of the previous "encrypt new key under old
+// key" rotation scheme.
+//
+// =============================================================================
+// SAFETY-CRITICAL: writer-only
+// =============================================================================
+// The PathUpdate body is **writer-signed unconditionally**, mirroring the
+// BeeKEM Welcome v1 protocol: peer-reachable signing keys are checked
+// regardless of the `enableSigning` document toggle. A malicious peer that
+// could forge a PathUpdate would force every surviving reader to switch
+// to an attacker-controlled BeeKEM state, making all subsequent
+// document traffic readable to the attacker. Receivers MUST drop any
+// PathUpdate whose signature is missing or invalid.
+//
+// =============================================================================
+// Wire format (mirrors `documentKeyUpdateV2` / `beekemWelcomeV1` framing)
+// =============================================================================
+//   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
+//
+// The sync message carries:
+//   - `pathUpdate`: the `PathUpdate` produced by
+//     `BeeKEM.removeMember(leafIdx)` + `BeeKEM.update()`, serialized via
+//     the `SerializedPathUpdate` wire shape (see `path-update-wire.ts`).
+//   - `pathUpdateEpochId`: the 32-byte epoch identifier the new document
+//     key will be installed under (derived from the new root secret via
+//     `deriveEpochIdFromRootSecret`). Receivers use this to install the
+//     derived key under a known ID, so cross-peer epoch IDs always agree
+//     without an explicit round-trip.
+//   - `signature`: writer signature over the canonical
+//     (signature-stripped) serialization of the sync message.
+//
+// =============================================================================
+// Confidentiality
+// =============================================================================
+// PathUpdates carry only public-key material plus key updates encrypted
+// to specific subtree resolution keys — no plaintext document secrets —
+// so on-wire encryption (Noise/TLS via libp2p) is sufficient. The
+// security guarantee comes from BeeKEM itself: only members on the
+// non-blanked side of each path-update step can decrypt the corresponding
+// encrypted-private-key field. A revoked reader who observes the
+// PathUpdate cannot recover the root secret.
+//
+// =============================================================================
+// Failure modes
+// =============================================================================
+// If some surviving reader fails to receive the PathUpdate (peer
+// disconnected, dial failed, etc.) they will be unable to decrypt
+// document traffic encrypted under the new epoch key. A subsequent
+// fresh document-load against an authorized peer recovers keychain state
+// (the new epoch key is added via `Keychain.addEpochKey`, which is part
+// of the keychain CRDT). The library logs each failed dial but does not
+// attempt retries — `removeReader` is fire-and-forget, matching the
+// best-effort posture of the existing key-update flow.
+export const beekemPathUpdateV1 = '/collabswarm/beekem-pathupdate/1.0.0';

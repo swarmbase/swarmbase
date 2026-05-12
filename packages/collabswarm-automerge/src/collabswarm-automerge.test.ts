@@ -559,6 +559,76 @@ describe('AutomergeJSONSerializer', () => {
     expect(deserialized.eciesSealed).toEqual(sealed);
   });
 
+  test('serializeSyncMessage/deserializeSyncMessage preserves pathUpdate for BeeKEM revocation', () => {
+    // Synthetic `SerializedPathUpdate` shape -- the wire layer
+    // shouldn't care about cryptographic validity, only that the
+    // structure round-trips faithfully.
+    const pathUpdate = {
+      senderLeafIndex: 0,
+      senderLeafPublicKey: 'AAAA',
+      nodes: [
+        { nodeIndex: 1, publicKey: 'AQID', encryptedPrivateKey: 'BAUG' },
+        { nodeIndex: 3, publicKey: 'BwgJ', encryptedPrivateKey: 'CgsM' },
+      ],
+    };
+    const message = {
+      documentId: 'pathupdate-doc',
+      pathUpdate,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.pathUpdate).toEqual(pathUpdate);
+  });
+
+  test('deserializeSyncMessage omits pathUpdate when absent on wire', () => {
+    const message = { documentId: 'no-pathupdate-doc' };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.pathUpdate).toBeUndefined();
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves pathUpdateEpochId', () => {
+    const epochId = new Uint8Array(32);
+    for (let i = 0; i < epochId.length; i++) epochId[i] = (i * 7) & 0xff;
+    const message = {
+      documentId: 'pathupdate-doc',
+      pathUpdateEpochId: epochId,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.pathUpdateEpochId).toEqual(epochId);
+  });
+
+  test('deserializeSyncMessage rejects pathUpdate that is not an object', () => {
+    const wire = buildWire({
+      documentId: 'doc',
+      pathUpdate: 'not-an-object',
+    });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /pathUpdate/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects pathUpdate that is null', () => {
+    const wire = buildWire({
+      documentId: 'doc',
+      pathUpdate: null,
+    });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /pathUpdate/,
+    );
+  });
+
+  test('deserializeSyncMessage rejects non-string pathUpdateEpochId', () => {
+    const wire = buildWire({
+      documentId: 'doc',
+      pathUpdateEpochId: 42,
+    });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /pathUpdateEpochId/,
+    );
+  });
+
   // Regression: prior to the upfront object guard, a malformed peer payload
   // like JSON `null` flowed straight to `raw.snapshot` access and threw a
   // bare `TypeError: Cannot read properties of null`. The guard mirrors
