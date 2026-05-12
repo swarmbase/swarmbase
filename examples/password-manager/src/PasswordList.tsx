@@ -22,6 +22,7 @@ export function PasswordList({
   );
   const [importingPassword, setImportingPassword] = React.useState(false);
   const [importPasswordId, setImportPasswordId] = React.useState('');
+  const [importPasswordName, setImportPasswordName] = React.useState('');
 
   const currentPasswordIdRef = currentPassword && currentPassword.get('id');
   const currentPasswordId =
@@ -91,6 +92,11 @@ export function PasswordList({
                     value={importPasswordId}
                     onChange={(e) => setImportPasswordId(e.target.value)}
                   ></Form.Control>
+                  <Form.Control
+                    placeholder="Enter a name (optional)"
+                    value={importPasswordName}
+                    onChange={(e) => setImportPasswordName(e.target.value)}
+                  ></Form.Control>
                   <Button
                     variant="success"
                     disabled={importButtonDisabled}
@@ -100,12 +106,16 @@ export function PasswordList({
                           new Y.Map<Y.Text>(
                             Object.entries({
                               id: new Y.Text(importPasswordId),
-                              // TODO: Populate name field.
+                              name: new Y.Text(
+                                importPasswordName || importPasswordId,
+                              ),
                             }),
                           ),
                         ]);
                       });
                       setImportingPassword(false);
+                      setImportPasswordId('');
+                      setImportPasswordName('');
                     }}
                   >
                     Import

@@ -130,7 +130,6 @@ export function PermissionsTable({
             <td>
               <Form.Control
                 as="select"
-                // TODO: Is this correct?
                 value={draftPermission}
                 onChange={(e) =>
                   setDraftPermission(e.target.value as 'r' | 'rw')

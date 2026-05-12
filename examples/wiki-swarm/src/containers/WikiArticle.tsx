@@ -1,7 +1,7 @@
 import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
-import { Doc } from 'automerge';
+import { Doc, Text } from 'automerge';
 import type { CollabswarmConfig } from '@collabswarm/collabswarm';
 import {
   defaultConfig,
@@ -135,9 +135,36 @@ class WikiArticle extends React.Component<
           this.props.document,
         );
       }
+      const currentTitle = this.props.document.title
+        ? this.props.document.title.toString()
+        : '';
       return (
         <div className="m-3">
-          <div>TODO: Title goes here</div>
+          <input
+            type="text"
+            className="form-control form-control-lg mb-2"
+            placeholder="Article title"
+            value={currentTitle}
+            onChange={(e) => {
+              const newTitle = e.target.value;
+              this.props.onDocumentChange(
+                this.props.match.params.documentId,
+                (currentDocument) => {
+                  // Replace the title `Text` CRDT with a new one. Simple and
+                  // sufficient for an example app; a production app would
+                  // splice character-level diffs to preserve concurrent edits.
+                  currentDocument.title = new Text(newTitle);
+                  currentDocument.updatedOn = dayjs().format();
+                  if (
+                    !currentDocument.createdOn &&
+                    currentDocument.updatedOn
+                  ) {
+                    currentDocument.createdOn = currentDocument.updatedOn;
+                  }
+                },
+              );
+            }}
+          />
           <div>
             <SlateInput
               value={this.props.document.content || initialValue}
