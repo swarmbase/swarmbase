@@ -2002,7 +2002,7 @@ __metadata:
     dayjs: "npm:^1.11.13"
     react: "npm:^19.2.5"
     react-bootstrap: "npm:^2.10.5"
-    react-bootstrap-icons: "npm:^1.11.4"
+    react-bootstrap-icons: "npm:^1.11.6"
     react-dom: "npm:^19.2.5"
     react-redux: "npm:^9.2.0"
     react-router-bootstrap: "npm:^0.26.3"
@@ -16041,14 +16041,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-bootstrap-icons@npm:^1.11.4":
-  version: 1.11.4
-  resolution: "react-bootstrap-icons@npm:1.11.4"
+"react-bootstrap-icons@npm:^1.11.6":
+  version: 1.11.6
+  resolution: "react-bootstrap-icons@npm:1.11.6"
   dependencies:
     prop-types: "npm:^15.7.2"
   peerDependencies:
     react: ">=16.8.6"
-  checksum: 10/187b175f0d64753a81e6b9aed954ef7be4260fd7c7399b89a6802299d9aea9c37b33ba49a8251355d109f5c611ddc3fd6a1cd42a1e6a14b062cfefd9c339ef61
+  checksum: 10/7dd85a5536dc47a0366b5fe8be9d27ab634d0e21987666bff440d5ba4c1b631e421d7ba126bc2341c61c29a89381e061561aebff3d3cfaed0844a04c4311d11f
   languageName: node
   linkType: hard
 
