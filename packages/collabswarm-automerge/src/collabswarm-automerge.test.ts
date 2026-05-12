@@ -242,25 +242,24 @@ describe('AutomergeKeychain', () => {
     }
   });
 
-  test('history() / merge() - export changes and merge into same keychain', async () => {
+  test('history() / merge() - export changes and merge into a fresh keychain', async () => {
     const kc1 = new AutomergeKeychain();
-    await kc1.add();
-    await kc1.add();
+    const [id1] = await kc1.add();
+    const [id2] = await kc1.add();
 
     const exported = kc1.history();
     expect(exported.length).toBeGreaterThan(0);
 
-    // Verify history round-trips through a fresh keychain.
-    // Note: Automerge from() creates a distinct actor, so merging
-    // getAllChanges into a different from()-initialized doc may produce
-    // conflicts on the initial 'keys' array. Verify we can at least
-    // re-apply our own history without error.
+    // Every AutomergeKeychain seeds its empty `keys: []` array under a
+    // shared deterministic actor (KEYCHAIN_SEED_ACTOR) and then clones to
+    // a per-instance random actor for subsequent writes. That makes the
+    // initial empty-array op identical across instances, so full-history
+    // merge into a fresh keychain is deterministic and preserves entries.
     const kc2 = new AutomergeKeychain();
     kc2.merge(exported);
-    // The merged doc should have entries (may differ due to actor conflicts
-    // between distinct from()-initialized documents).
-    const keys2 = await kc2.keys();
-    expect(Array.isArray(keys2)).toBe(true);
+    const ids = (await kc2.keys()).map(([id]) => Array.from(id));
+    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toContainEqual(Array.from(id2));
   });
 
   test('getKey() retrieves a cached key by ID', async () => {
@@ -278,6 +277,67 @@ describe('AutomergeKeychain', () => {
     unknownID.fill(0xff);
     const result = keychain.getKey(unknownID);
     expect(result).toBeUndefined();
+  });
+
+  // The keychain doc's initial empty `keys: []` op is written under the
+  // shared KEYCHAIN_SEED_ACTOR (see newKeychainDoc()), so slices produced
+  // by historySince()/currentKeyChange() can be merged into any fresh
+  // receiver keychain without a root-array actor conflict.
+  test('historySince() returns only keys from the given key ID onward', async () => {
+    const source = new AutomergeKeychain();
+    const [id1] = await source.add();
+    const [id2] = await source.add();
+    const [id3] = await source.add();
+
+    const slice = await source.historySince(id2);
+
+    const receiver = new AutomergeKeychain();
+    receiver.merge(slice);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(2);
+    const ids = keys.map(([id]) => Array.from(id));
+    expect(ids).toContainEqual(Array.from(id2));
+    expect(ids).toContainEqual(Array.from(id3));
+    expect(ids).not.toContainEqual(Array.from(id1));
+  });
+
+  test('historySince() falls back to full history when the boundary key is unknown', async () => {
+    const source = new AutomergeKeychain();
+    const [id1] = await source.add();
+    const [id2] = await source.add();
+
+    const unknownID = new Uint8Array(16).fill(0xff);
+    const slice = await source.historySince(unknownID);
+
+    // The unknown-boundary path should return the full change list,
+    // and (thanks to the deterministic seed actor) that slice should
+    // merge cleanly into a fresh receiver keychain carrying both keys.
+    const fullHistory = source.history();
+    expect(slice.length).toBe(fullHistory.length);
+
+    const receiver = new AutomergeKeychain();
+    receiver.merge(slice);
+    const ids = (await receiver.keys()).map(([id]) => Array.from(id));
+    expect(ids).toContainEqual(Array.from(id1));
+    expect(ids).toContainEqual(Array.from(id2));
+  });
+
+  test('historySince() with the current key returns only the current key', async () => {
+    const source = new AutomergeKeychain();
+    await source.add();
+    const [id2] = await source.add();
+    const [currentID] = await source.current();
+    expect(Array.from(currentID)).toEqual(Array.from(id2));
+
+    const slice = await source.historySince(currentID);
+    // The slice is built on a doc seeded with KEYCHAIN_SEED_ACTOR, so it
+    // merges cleanly into a fresh receiver keychain (whose empty `keys`
+    // array shares the same seed actor).
+    const receiver = new AutomergeKeychain();
+    receiver.merge(slice);
+    const keys = await receiver.keys();
+    expect(keys).toHaveLength(1);
+    expect(Array.from(keys[0][0])).toEqual(Array.from(currentID));
   });
 });
 
@@ -425,6 +485,54 @@ describe('AutomergeJSONSerializer', () => {
     const wire = buildWire({ documentId: 'doc' });
     const deserialized = serializer.deserializeSyncMessage(wire);
     expect(deserialized.changes).toBeUndefined();
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeEpochId for BeeKEM Welcome', () => {
+    const epochId = new Uint8Array(32);
+    for (let i = 0; i < epochId.length; i++) epochId[i] = (i * 11) & 0xff;
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeEpochId: epochId,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.welcomeEpochId).toEqual(epochId);
+  });
+
+  test('deserializeSyncMessage omits welcomeEpochId when absent on wire', () => {
+    const message = { documentId: 'no-welcome-doc' };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.welcomeEpochId).toBeUndefined();
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeRecipient', () => {
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeRecipient: 'recipient-serialized-pubkey-base64',
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.welcomeRecipient).toBe(
+      'recipient-serialized-pubkey-base64',
+    );
+  });
+
+  test('deserializeSyncMessage omits welcomeRecipient when absent on wire', () => {
+    const message = { documentId: 'no-welcome-doc' };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.welcomeRecipient).toBeUndefined();
+  });
+
+  test('deserializeSyncMessage rejects non-string welcomeRecipient', () => {
+    const wire = buildWire({
+      documentId: 'doc',
+      welcomeRecipient: 42,
+    });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /welcomeRecipient/,
+    );
   });
 
   // Regression: prior to the upfront object guard, a malformed peer payload

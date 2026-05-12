@@ -26,7 +26,8 @@ import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
-import { Keychain } from './keychain';
+import { Keychain, keychainHistorySinceOrFull } from './keychain';
+import { requireSerializePublicKey } from './auth-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
 import {
@@ -90,7 +91,7 @@ import {
 } from './acl-chain';
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
-import { bloomFilterUpdateV1 } from './wire-protocols';
+import { beekemWelcomeV1, bloomFilterUpdateV1 } from './wire-protocols';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -137,7 +138,9 @@ export {
   MembershipProposal,
   GroupKeyProvider,
   Keychain,
+  keychainHistorySinceOrFull,
   KeychainProvider,
+  requireSerializePublicKey,
   SyncMessageSerializer,
   LoadMessageSerializer,
   JSONSerializer,
@@ -172,6 +175,7 @@ export {
   computeEntryHash,
   // Wire protocols
   bloomFilterUpdateV1,
+  beekemWelcomeV1,
   // Compaction
   defaultCompactionConfig,
   // Network statistics

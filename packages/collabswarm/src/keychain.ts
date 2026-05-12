@@ -68,4 +68,45 @@ export interface Keychain<KeychainChange, DocumentKey> {
    * @return A block of change(s) describing the keychain addition.
    */
   addEpochKey(epochId: Uint8Array, key: DocumentKey): Promise<KeychainChange>;
+
+  /**
+   * Gets a block of change(s) describing only the keys at or after the given
+   * key ID (an epoch ID or legacy UUID). Used for the `since_invited` history
+   * visibility mode where a new member should receive every key from the
+   * moment they were invited onward, but no earlier history.
+   *
+   * If the supplied `keyID` is not present in the keychain, the keychain is
+   * not yet aware of that epoch -- the method returns the full history so the
+   * recipient can still decrypt; this errs on the side of availability.
+   *
+   * Optional for backwards compatibility with `Keychain` implementations
+   * written before the `since_invited` history-visibility mode landed. When a
+   * provider does not implement this method, `since_invited` falls back to
+   * `history()` (matching the documented "boundary unknown" recovery path).
+   * Custom keychains that want efficient `since_invited` filtering SHOULD
+   * implement this method directly; the next major version will make it
+   * required.
+   *
+   * @param keyID The key ID marking the start of the visible window.
+   * @return A block of change(s) containing only keys at or after `keyID`.
+   */
+  historySince?(keyID: Uint8Array): Promise<KeychainChange>;
+}
+
+/**
+ * Returns a function that invokes `keychain.historySince` when the
+ * implementation provides it, and falls back to `keychain.history()`
+ * otherwise. Lets callers (notably
+ * `CollabswarmDocument._keychainChangesForVisibility`) compile against
+ * the optional interface method without scattering null checks at
+ * every call site.
+ */
+export function keychainHistorySinceOrFull<KeychainChange, DocumentKey>(
+  keychain: Keychain<KeychainChange, DocumentKey>,
+): (keyID: Uint8Array) => Promise<KeychainChange> {
+  const impl = keychain.historySince;
+  if (impl) {
+    return (keyID) => impl.call(keychain, keyID);
+  }
+  return async () => keychain.history();
 }

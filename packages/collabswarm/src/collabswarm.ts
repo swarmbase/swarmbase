@@ -26,9 +26,12 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
-  documentLoadV2, documentKeyUpdateV2, snapshotLoadV2,
+  beekemWelcomeV1,
+  documentLoadV2,
+  documentKeyUpdateV2,
+  snapshotLoadV2,
 } from './wire-protocols';
-import { readUint8Iterable } from './utils';
+import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils';
 import { wrapStream } from './stream-adapter';
 import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
@@ -449,58 +452,30 @@ export class Collabswarm<
     // UTF-8 document path. The remaining bytes are the encrypted
     // key-update payload.
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    //
+    // The header parse (read assembled bytes, validate the 4-byte
+    // length, decode the UTF-8 path, look up the doc in the registry)
+    // is shared with the BeeKEM Welcome handler below via
+    // `readPathPrefixedProtocolHeader`. Both protocols use the same
+    // wire-format prefix; keeping the validation in one place means a
+    // tightened bound only needs to land once.
     const keyUpdateHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
-            let assembled: Uint8Array;
-            try {
-              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
-            } catch (err) {
-              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
-              console.warn(`Shared key-update handler: ${reason}, dropping`);
-              return [];
-            }
-            if (assembled.length < 4) {
-              console.warn('Shared key-update handler: message too short');
-              return [];
-            }
-            // Use unsigned right shift (>>> 0) to ensure the path length
-            // is interpreted as an unsigned 32-bit integer.
-            const pathLength =
-              ((assembled[0] << 24) |
-              (assembled[1] << 16) |
-              (assembled[2] << 8) |
-              assembled[3]) >>> 0;
-
-            // Validate the path length header. If it looks invalid, treat the
-            // message as malformed, log a warning, and drop it.
-            if (
-              pathLength === 0 ||
-              pathLength > MAX_DOCUMENT_PATH_LENGTH ||
-              pathLength + 4 > assembled.length
-            ) {
-              console.warn(
-                'Shared key-update handler: invalid path header (pathLength=' +
-                pathLength + '), dropping message',
-              );
-              return [];
-            }
-
-            const documentPath = new TextDecoder().decode(
-              assembled.slice(4, 4 + pathLength),
+            const header = await readPathPrefixedProtocolHeader(
+              source,
+              this._documentRegistry,
+              'key-update',
+              MAX_REQUEST_SIZE,
+              MAX_DOCUMENT_PATH_LENGTH,
             );
-            const payload = assembled.slice(4 + pathLength);
-            const doc = this._documentRegistry.get(documentPath);
-            if (!doc) {
-              console.warn(
-                `Shared key-update handler: no document registered for "${documentPath}"`,
-              );
+            if (header.kind !== 'ok') {
               return [];
             }
-            await doc.handleKeyUpdateRequestData(payload);
+            await header.doc.handleKeyUpdateRequestData(header.payload);
             return [];
           } finally {
             // Key-update is fire-and-forget (no response via stream.sink),
@@ -513,12 +488,52 @@ export class Collabswarm<
       });
     };
 
+    // Handler for BeeKEM Welcome v1. Wire format mirrors key-update v2:
+    // 4-byte big-endian path length, then UTF-8 path, then the serialized
+    // welcome sync-message body. After routing by path, the per-document
+    // handler verifies the writer signature, merges the keychain delta,
+    // and records the invitation epoch.
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    //
+    // Header parse shared with the key-update handler above via
+    // `readPathPrefixedProtocolHeader`.
+    const beekemWelcomeHandler = (rawStream: Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          try {
+            const header = await readPathPrefixedProtocolHeader(
+              source,
+              this._documentRegistry,
+              'beekem-welcome',
+              MAX_REQUEST_SIZE,
+              MAX_DOCUMENT_PATH_LENGTH,
+            );
+            if (header.kind !== 'ok') {
+              return [];
+            }
+            await header.doc.handleBeeKEMWelcomeRequestData(header.payload);
+            return [];
+          } finally {
+            // Welcome is fire-and-forget (no response over stream.sink),
+            // but the inbound stream still needs to be closed to release
+            // resources.
+            await stream.close();
+          }
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared beekem-welcome handler:', err);
+      });
+    };
+
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
     this.libp2p.handle(documentLoadV2, docLoadHandler);
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
+    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
   }
 
   /**

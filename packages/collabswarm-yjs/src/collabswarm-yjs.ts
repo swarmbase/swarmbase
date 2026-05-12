@@ -87,6 +87,12 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         keychainChanges:
           message.keychainChanges &&
           Base64.fromUint8Array(message.keychainChanges),
+        welcomeEpochId:
+          message.welcomeEpochId &&
+          Base64.fromUint8Array(message.welcomeEpochId),
+        // `welcomeRecipient` is already a string (the serialized recipient
+        // public key); pass through verbatim.
+        welcomeRecipient: message.welcomeRecipient,
         snapshot: snapshotForWire,
       }),
     );
@@ -109,6 +115,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       changeId?: unknown;
       changes?: unknown;
       keychainChanges?: unknown;
+      welcomeEpochId?: unknown;
+      welcomeRecipient?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -175,6 +183,28 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       keychainChanges = Base64.toUint8Array(raw.keychainChanges);
     }
+    let welcomeEpochId: Uint8Array | undefined;
+    if (raw.welcomeEpochId !== undefined) {
+      if (typeof raw.welcomeEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeEpochId' must be a string when present (got ${describeValue(
+            raw.welcomeEpochId,
+          )})`,
+        );
+      }
+      welcomeEpochId = Base64.toUint8Array(raw.welcomeEpochId);
+    }
+    let welcomeRecipient: string | undefined;
+    if (raw.welcomeRecipient !== undefined) {
+      if (typeof raw.welcomeRecipient !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeRecipient' must be a string when present (got ${describeValue(
+            raw.welcomeRecipient,
+          )})`,
+        );
+      }
+      welcomeRecipient = raw.welcomeRecipient;
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -195,6 +225,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       );
     }
     if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (welcomeEpochId !== undefined) result.welcomeEpochId = welcomeEpochId;
+    if (welcomeRecipient !== undefined) result.welcomeRecipient = welcomeRecipient;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
@@ -482,6 +514,41 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
     const minimalDoc = new Doc();
     const [keyID, serialized] = yarr.get(yarr.length - 1);
     minimalDoc.getArray<[string, string]>('keys').push([[keyID, serialized]]);
+    return encodeStateAsUpdateV2(minimalDoc);
+  }
+
+  /**
+   * Build a keychain update containing only the keys at or after the
+   * specified key ID. The keys array preserves insertion order, so we walk
+   * the array to find the boundary and copy the suffix into a fresh Y.Doc.
+   *
+   * If the boundary key is not found in this keychain, the full keychain
+   * history is returned so the recipient can still decrypt past blocks
+   * rather than be wedged at the load step.
+   */
+  async historySince(keyID: Uint8Array): Promise<Uint8Array> {
+    const yarr = this._keychain.getArray<[string, string]>('keys');
+    if (yarr.length === 0) {
+      throw new Error("Can't get history-since from an empty keychain");
+    }
+    const cacheKey = keyIdToCacheKey(keyID);
+    let startIdx = -1;
+    for (let i = 0; i < yarr.length; i++) {
+      if (yarr.get(i)[0] === cacheKey) {
+        startIdx = i;
+        break;
+      }
+    }
+    if (startIdx === -1) {
+      // Fall back to full history when the boundary key is unknown.
+      return encodeStateAsUpdateV2(this._keychain);
+    }
+    const minimalDoc = new Doc();
+    const minimalArr = minimalDoc.getArray<[string, string]>('keys');
+    for (let i = startIdx; i < yarr.length; i++) {
+      const entry = yarr.get(i);
+      minimalArr.push([[entry[0], entry[1]]]);
+    }
     return encodeStateAsUpdateV2(minimalDoc);
   }
   /**

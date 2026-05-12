@@ -2,6 +2,7 @@ import {
   Doc,
   init,
   change,
+  clone,
   getChanges,
   applyChanges,
   Change as BinaryChange,
@@ -231,11 +232,41 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Deterministic Automerge actor used only for the *seed* change that
+ * initializes the empty `keys: []` array in every keychain document.
+ *
+ * Automerge resolves conflicting writes on a root array by actor ID; if
+ * every keychain instance (source and receiver) seeds the empty array
+ * with the same actor, the seed op is byte-identical and merges cleanly.
+ * Subsequent per-instance writes happen under a fresh random actor (via
+ * `clone()`) so two keychains can independently append keys without
+ * colliding op IDs.
+ *
+ * The value here is arbitrary but must be a valid Automerge actor (hex
+ * string, even length, 1..64 bytes). It is *not* a security boundary —
+ * peers do not trust each other's actor IDs.
+ */
+const KEYCHAIN_SEED_ACTOR = 'ababababababababababababababababababababab';
+
+/**
+ * Build a fresh keychain document. The seed change (creating the empty
+ * `keys` array) is written under {@link KEYCHAIN_SEED_ACTOR} so it is
+ * identical across all keychain instances; the returned document then
+ * uses a random per-instance actor for any subsequent changes. This is
+ * what makes {@link AutomergeKeychain.historySince} and
+ * {@link AutomergeKeychain.currentKeyChange} mergeable into a fresh
+ * receiver keychain without a root-array actor conflict.
+ */
+function newKeychainDoc(): AutomergeKeychainDoc {
+  const seeded = from({ keys: [] as [string, string][] }, KEYCHAIN_SEED_ACTOR);
+  // clone() with no actor argument assigns a random per-instance actor.
+  return clone(seeded);
+}
+
 export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
-  private _keychain: AutomergeKeychainDoc = from({
-    keys: [],
-  });
+  private _keychain: AutomergeKeychainDoc = newKeychainDoc();
 
   async add(): Promise<[Uint8Array, CryptoKey, BinaryChange[]]> {
     const keyID = uuid.v4();
@@ -338,9 +369,45 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     }
 
     // Build a minimal Automerge doc containing only the current (most recent) key.
+    // The fresh doc is seeded with the deterministic keychain seed actor so the
+    // initial empty `keys: []` op is identical to the one in any receiver
+    // keychain, allowing the slice to merge cleanly without root-array
+    // actor conflicts.
     const [keyID, serialized] = this._keychain.keys[this._keychain.keys.length - 1];
-    const minimalDoc = change(from({ keys: [] as [string, string][] }), (doc) => {
+    const minimalDoc = change(newKeychainDoc(), (doc) => {
       doc.keys.push([keyID, serialized]);
+    });
+    return getAllChanges(minimalDoc);
+  }
+
+  /**
+   * Build a keychain change list containing only the keys at or after the
+   * specified key ID. The keys array preserves insertion order, so we
+   * locate the boundary by ID and copy the suffix into a fresh doc.
+   *
+   * If the boundary key is not found in this keychain, the full history
+   * is returned so the recipient can still decrypt past blocks rather
+   * than be wedged at the load step.
+   */
+  async historySince(keyID: Uint8Array): Promise<BinaryChange[]> {
+    if (!this._keychain.keys || this._keychain.keys.length === 0) {
+      throw new Error("Can't get history-since from an empty keychain");
+    }
+    const cacheKey = keyIdToCacheKey(keyID);
+    const startIdx = this._keychain.keys.findIndex(([id]) => id === cacheKey);
+    if (startIdx === -1) {
+      // Fall back to full history when the boundary key is unknown.
+      return getAllChanges(this._keychain);
+    }
+    const tail = this._keychain.keys.slice(startIdx);
+    // Use newKeychainDoc() so the slice's initial empty-array op is
+    // identical to the receiver's, and the slice merges cleanly into a
+    // fresh keychain without losing entries to a root-array actor
+    // conflict on the empty seed.
+    const minimalDoc = change(newKeychainDoc(), (doc) => {
+      for (const [id, serialized] of tail) {
+        doc.keys.push([id, serialized]);
+      }
     });
     return getAllChanges(minimalDoc);
   }
@@ -449,6 +516,12 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         keychainChanges:
           message.keychainChanges &&
           serializeBinaryChanges(message.keychainChanges),
+        welcomeEpochId:
+          message.welcomeEpochId &&
+          Base64.fromUint8Array(message.welcomeEpochId),
+        // `welcomeRecipient` is already a string (the serialized recipient
+        // public key); pass through verbatim.
+        welcomeRecipient: message.welcomeRecipient,
         snapshot: snapshotForWire,
       }),
     );
@@ -475,6 +548,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       changeId?: unknown;
       changes?: unknown;
       keychainChanges?: unknown;
+      welcomeEpochId?: unknown;
+      welcomeRecipient?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -549,6 +624,28 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       keychainChanges = deserializeBinaryChanges(raw.keychainChanges as string[]);
     }
+    let welcomeEpochId: Uint8Array | undefined;
+    if (raw.welcomeEpochId !== undefined) {
+      if (typeof raw.welcomeEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeEpochId' must be a string when present (got ${describeValue(
+            raw.welcomeEpochId,
+          )})`,
+        );
+      }
+      welcomeEpochId = Base64.toUint8Array(raw.welcomeEpochId);
+    }
+    let welcomeRecipient: string | undefined;
+    if (raw.welcomeRecipient !== undefined) {
+      if (typeof raw.welcomeRecipient !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeRecipient' must be a string when present (got ${describeValue(
+            raw.welcomeRecipient,
+          )})`,
+        );
+      }
+      welcomeRecipient = raw.welcomeRecipient;
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -571,6 +668,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       );
     }
     if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
+    if (welcomeEpochId !== undefined) result.welcomeEpochId = welcomeEpochId;
+    if (welcomeRecipient !== undefined) result.welcomeRecipient = welcomeRecipient;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
