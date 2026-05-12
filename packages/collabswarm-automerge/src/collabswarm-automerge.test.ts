@@ -706,6 +706,36 @@ describe('AutomergeJSONSerializer', () => {
     );
   });
 
+  // Round-trip for the initial-load quorum tip-set hash (#189 §5.4.2).
+  test('serializeSyncMessage/deserializeSyncMessage preserves tipsHash (quorum)', () => {
+    const hash = new Uint8Array(32);
+    for (let i = 0; i < hash.length; i++) hash[i] = (i * 7 + 3) & 0xff;
+    const message = {
+      documentId: 'quorum-doc',
+      tipsHash: hash,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.tipsHash).toEqual(hash);
+  });
+
+  test('deserializeSyncMessage omits tipsHash when absent on wire', () => {
+    const message = { documentId: 'no-quorum-doc' };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.tipsHash).toBeUndefined();
+  });
+
+  test('deserializeSyncMessage rejects non-string tipsHash', () => {
+    const wire = buildWire({
+      documentId: 'doc',
+      tipsHash: 42,
+    });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+      /tipsHash/,
+    );
+  });
+
   // Regression: prior to the upfront object guard, a malformed peer payload
   // like JSON `null` flowed straight to `raw.snapshot` access and threw a
   // bare `TypeError: Cannot read properties of null`. The guard mirrors

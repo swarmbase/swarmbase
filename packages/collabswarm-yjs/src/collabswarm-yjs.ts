@@ -106,6 +106,13 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         pathUpdateEpochId:
           message.pathUpdateEpochId &&
           Base64.fromUint8Array(message.pathUpdateEpochId),
+        // Initial-load quorum tip-set hash (#189 §5.4.2). Base64-encoded for
+        // JSON-safe transport, same pattern as `welcomeEpochId`. Only
+        // populated on tip-advertise responses; absent on regular sync
+        // traffic. The deserializer below mirrors this encoding.
+        tipsHash:
+          message.tipsHash &&
+          Base64.fromUint8Array(message.tipsHash),
         snapshot: snapshotForWire,
       }),
     );
@@ -134,6 +141,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       eciesSealed?: unknown;
       pathUpdate?: unknown;
       pathUpdateEpochId?: unknown;
+      tipsHash?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -278,6 +286,20 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
     }
+    // Initial-load quorum tip-set hash (#189 §5.4.2). Decoded base64 on the
+    // way back to Uint8Array; mirrors the encoding in `serializeSyncMessage`
+    // above. Untrusted input -- reject anything that isn't a string.
+    let tipsHash: Uint8Array | undefined;
+    if (raw.tipsHash !== undefined) {
+      if (typeof raw.tipsHash !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'tipsHash' must be a string when present (got ${describeValue(
+            raw.tipsHash,
+          )})`,
+        );
+      }
+      tipsHash = Base64.toUint8Array(raw.tipsHash);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -306,6 +328,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     if (pathUpdate !== undefined)
       result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array>['pathUpdate'];
     if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
+    if (tipsHash !== undefined) result.tipsHash = tipsHash;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }

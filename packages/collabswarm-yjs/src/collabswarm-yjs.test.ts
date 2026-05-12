@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { Doc } from 'yjs';
 import { Base64 } from 'js-base64';
+import { YjsJSONSerializer } from './collabswarm-yjs';
 
 // Test the core Yjs functionality that YjsProvider wraps
 describe('Yjs Core Functionality', () => {
@@ -65,12 +66,47 @@ describe('Yjs Core Functionality', () => {
   test('should handle nested structures', () => {
     const doc = new Doc();
     const map = doc.getMap('root');
-    
+
     map.set('nested', 'value');
     map.set('another', 'data');
-    
+
     expect(map.get('nested')).toBe('value');
     expect(map.get('another')).toBe('data');
+  });
+});
+
+// Initial-load quorum tip-set hash wire-encoding (#189 §5.4.2). Parity with
+// the equivalent tests under collabswarm-automerge so both serializers stay
+// in lockstep on the new optional field.
+describe('YjsJSONSerializer tipsHash round-trip (quorum)', () => {
+  const serializer = new YjsJSONSerializer();
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves tipsHash', () => {
+    const hash = new Uint8Array(32);
+    for (let i = 0; i < hash.length; i++) hash[i] = (i * 7 + 3) & 0xff;
+    const message = {
+      documentId: 'quorum-doc',
+      tipsHash: hash,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.tipsHash).toEqual(hash);
+  });
+
+  test('deserializeSyncMessage omits tipsHash when absent on wire', () => {
+    const message = { documentId: 'no-quorum-doc' };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.tipsHash).toBeUndefined();
+  });
+
+  test('deserializeSyncMessage rejects non-string tipsHash', () => {
+    // Build a malformed wire payload directly; bypasses serializeSyncMessage's
+    // type-safety so we can exercise the deserialize-side validator.
+    const wire = new TextEncoder().encode(
+      JSON.stringify({ documentId: 'doc', tipsHash: 42 }),
+    );
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(/tipsHash/);
   });
 });
 

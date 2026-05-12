@@ -575,6 +575,12 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         pathUpdateEpochId:
           message.pathUpdateEpochId &&
           Base64.fromUint8Array(message.pathUpdateEpochId),
+        // Initial-load quorum tip-set hash (#189 §5.4.2). Base64-encoded
+        // for JSON-safe transport, mirrored on the deserialize path below.
+        // Only populated on tip-advertise responses.
+        tipsHash:
+          message.tipsHash &&
+          Base64.fromUint8Array(message.tipsHash),
         snapshot: snapshotForWire,
       }),
     );
@@ -607,6 +613,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       eciesSealed?: unknown;
       pathUpdate?: unknown;
       pathUpdateEpochId?: unknown;
+      tipsHash?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -757,6 +764,20 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
     }
+    // Initial-load quorum tip-set hash (#189 §5.4.2). Decoded from base64
+    // on the way back to Uint8Array; mirrors the serializer above.
+    // Untrusted input -- reject anything that isn't a string.
+    let tipsHash: Uint8Array | undefined;
+    if (raw.tipsHash !== undefined) {
+      if (typeof raw.tipsHash !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'tipsHash' must be a string when present (got ${describeValue(
+            raw.tipsHash,
+          )})`,
+        );
+      }
+      tipsHash = Base64.toUint8Array(raw.tipsHash);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -787,6 +808,7 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     if (pathUpdate !== undefined)
       result.pathUpdate = pathUpdate as CRDTSyncMessage<BinaryChange[], CryptoKey>['pathUpdate'];
     if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
+    if (tipsHash !== undefined) result.tipsHash = tipsHash;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
