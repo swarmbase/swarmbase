@@ -297,7 +297,7 @@ describe('BeeKEM Welcome receive flow (Issue #178)', () => {
   });
 
   test('handler does NOT regress _invitationEpoch when a later Welcome carries an earlier epoch ID', () => {
-    // Threat model (PR #273 review comment #3): a later writer-signed
+    // Threat model: a later writer-signed
     // Welcome addressed to this node might carry an *earlier*
     // `welcomeEpochId` than the one already recorded -- either
     // through network reordering or as a deliberate attempt to shrink

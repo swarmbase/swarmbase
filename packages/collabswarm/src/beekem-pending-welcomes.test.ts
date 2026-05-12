@@ -8,7 +8,7 @@ import { SyncMessageSerializer } from './sync-message-serializer';
 
 /**
  * Unit-level coverage for the pending-welcomes buffer + drain semantics
- * added in PR #273 review iteration 6 (review comments #1 + #2).
+ * that close the readers-ACL / Welcome reordering race.
  *
  * The buffer itself lives on `CollabswarmDocument` (and depends on a full
  * libp2p/Helia stack to instantiate), so this file mirrors the buffer +
@@ -159,7 +159,7 @@ function welcomeFor(
   };
 }
 
-describe('BeeKEM pending-welcomes buffer (PR #273 comments #1 + #2)', () => {
+describe('BeeKEM pending-welcomes buffer (readers-ACL / Welcome reordering)', () => {
   test('buffers a Welcome dropped only because the local user is not yet a reader', async () => {
     const h = new PendingWelcomesHarness();
     h.isReader = false;

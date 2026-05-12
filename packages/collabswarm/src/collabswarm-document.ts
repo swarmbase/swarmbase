@@ -207,7 +207,7 @@ export class CollabswarmDocument<
 
   // Pending BeeKEM Welcomes parked while the recipient is not yet a reader.
   //
-  // KNOWN RACE (PR #273 review comments #1 + #2): the inviter publishes
+  // KNOWN RACE: the inviter publishes
   // the readers-ACL update over pubsub and sends the Welcome over a
   // direct libp2p stream. The Welcome can arrive before the ACL update
   // has been applied on the recipient; without buffering, the
@@ -758,8 +758,8 @@ export class CollabswarmDocument<
    * All ACL-merge call sites for the readers ACL must go through this
    * helper -- a bare `_readers.merge(...)` would silently skip the
    * drain, leaving a Welcome parked until the next merge (or TTL
-   * eviction) and re-introducing the wedge fixed by PR #273 comments
-   * #1 + #2.
+   * eviction) and re-introducing the readers-ACL / Welcome reordering
+   * wedge that this buffering / drain pair is designed to close.
    *
    * Drain is fire-and-forget because it must not block the synchronous
    * ACL-merge call sites (`_syncDocumentChanges`, `_applyACLFromTree`)
@@ -2865,7 +2865,7 @@ export class CollabswarmDocument<
    * currently-connected peer; the receiving document ignores Welcomes
    * addressed to a different reader.
    *
-   * SAFETY-CRITICAL (PR #273 review comment #3): the BeeKEM Welcome
+   * SAFETY-CRITICAL: the BeeKEM Welcome
    * broadcast leaks `keychainChanges` in plaintext to every connected
    * peer. The dispatch path is therefore gated behind the explicit
    * `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome` flag, which
@@ -2945,7 +2945,7 @@ export class CollabswarmDocument<
    *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
    */
   private async _sendBeeKEMWelcome(reader: PublicKey): Promise<void> {
-    // OPT-IN GATE (PR #273 review comment #3, safe-by-default).
+    // OPT-IN GATE (safe-by-default).
     //
     // This method broadcasts a *plaintext* Welcome -- including the
     // document key material in `keychainChanges` -- to every
@@ -3180,13 +3180,12 @@ export class CollabswarmDocument<
           );
           return false;
         case 'drop-unauthorized':
-          // PR #273 review comments #1 + #2: if the Welcome was
-          // dropped solely because the local user is not yet a reader
-          // (ACL update + Welcome can reorder; `_sendBeeKEMWelcome` is
-          // fire-and-forget), park the Welcome in a small bounded
-          // buffer and replay it after the next readers-ACL merge.
-          // Without this buffer, a transiently-late ACL update would
-          // permanently wedge onboarding.
+          // If the Welcome was dropped solely because the local user is
+          // not yet a reader (ACL update + Welcome can reorder;
+          // `_sendBeeKEMWelcome` is fire-and-forget), park the Welcome
+          // in a small bounded buffer and replay it after the next
+          // readers-ACL merge. Without this buffer, a transiently-late
+          // ACL update would permanently wedge onboarding.
           if (
             decision.reason === 'not-in-readers-acl' &&
             !opts.fromBuffer &&
@@ -3198,10 +3197,10 @@ export class CollabswarmDocument<
             opts.fromBuffer &&
             decision.reason === 'not-in-readers-acl'
           ) {
-            // PR #273 review (iter 7): a buffered Welcome that is still
-            // blocked by `not-in-readers-acl` on a drain cycle is the
-            // expected steady state until the readers-ACL catches up.
-            // The first-arrival case (above) already logged via
+            // A buffered Welcome that is still blocked by
+            // `not-in-readers-acl` on a drain cycle is the expected
+            // steady state until the readers-ACL catches up. The
+            // first-arrival case (above) already logged via
             // `_bufferPendingWelcome`; emitting `console.warn` on every
             // subsequent drain produces noisy spam (and is
             // attacker-triggerable via repeated ACL merges). Use
@@ -3238,7 +3237,7 @@ export class CollabswarmDocument<
     // `evaluateBeeKEMWelcome` guarantees `welcomeEpochId` is set when
     // it returns `accept`.
     //
-    // MONOTONIC UPDATE (PR #273 review): if we already have an
+    // MONOTONIC UPDATE: if we already have an
     // `_invitationEpoch`, only advance it forward in keychain order --
     // never regress to an earlier epoch.
     //

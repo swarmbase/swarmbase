@@ -10,14 +10,14 @@ import {
  * Direct unit-test coverage for the security-critical gates of the
  * BeeKEM Welcome receive path.
  *
- * Comment #3222310800 on PR #273 asked for an integration-style test
- * that drives the receive-side validation against a real/mock
- * `AuthProvider`, ACL, and `Keychain`, since prior coverage only
- * mirrored decision logic in a helper. The validation gates have been
- * extracted from `CollabswarmDocument.handleBeeKEMWelcomeRequestData`
- * into the pure `evaluateBeeKEMWelcome` helper so each gate can be
- * exercised directly here with small mocks, rather than requiring a
- * full libp2p/Helia stack to construct a `CollabswarmDocument`.
+ * The validation gates have been extracted from
+ * `CollabswarmDocument.handleBeeKEMWelcomeRequestData` into the pure
+ * `evaluateBeeKEMWelcome` helper so each gate can be exercised directly
+ * here with small mocks (mock `AuthProvider`, ACL, and `Keychain`),
+ * rather than requiring a full libp2p/Helia stack to construct a
+ * `CollabswarmDocument`. Prior coverage only mirrored the decision
+ * logic in a helper; this file is the integration-style coverage of
+ * the real receive-side validation.
  *
  * The production handler calls this same helper and applies
  * keychain.merge + `_invitationEpoch` assignment when the result is
@@ -58,8 +58,8 @@ function makeDeps(
 }
 
 /**
- * A fully-valid Welcome message. SECURITY (PR #273 review, comment A):
- * Welcomes are now **unconditionally** writer-authenticated -- the
+ * A fully-valid Welcome message. SECURITY: Welcomes are
+ * **unconditionally** writer-authenticated -- the
  * validator no longer has an `isSigningEnabled` toggle -- so the base
  * acceptable message must carry a `signature` for the happy-path
  * assertions to hold.
@@ -174,7 +174,7 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
   });
 
   test('drops unsigned Welcomes unconditionally (writer-auth is mandatory)', async () => {
-    // SECURITY (PR #273 review, comment A): writer-auth on Welcomes is
+    // SECURITY: writer-auth on Welcomes is
     // enforced regardless of the document-key signing toggle. An
     // unsigned Welcome must be dropped even when the swarm-wide
     // `enableSigning` is `false` -- otherwise any connected peer could

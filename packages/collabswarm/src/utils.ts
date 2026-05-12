@@ -55,7 +55,9 @@ export type PathPrefixedHeaderDropReason =
  * @param protocolName Human-readable label for log messages (e.g.
  *   `'beekem-welcome'`).
  * @param maxRequestSize Maximum total inbound payload bytes.
- * @param maxPathLength Maximum decoded UTF-8 path length.
+ * @param maxPathLength Maximum encoded UTF-8 path length in bytes (i.e.
+ *   the value of the 4-byte length prefix), not the decoded character
+ *   count. The path is byte-sliced out of `assembled` using this value.
  */
 export async function readPathPrefixedProtocolHeader<TDocument>(
   source: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,

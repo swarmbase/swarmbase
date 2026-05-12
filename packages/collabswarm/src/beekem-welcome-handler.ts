@@ -196,7 +196,7 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // update has been applied -- in which case `isReader` legitimately
   // returns `false` here even though the Welcome is genuine.
   //
-  // Mitigation (PR #273 review comments #1 + #2): this gate still
+  // Mitigation: this gate still
   // returns `drop-unauthorized` / `not-in-readers-acl` so the
   // validator stays pure, but the production receive path in
   // `CollabswarmDocument._evaluateAndApplyBeeKEMWelcome` treats this
@@ -226,8 +226,8 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // included in the signed payload, only an authorized writer can
   // claim a particular recipient.
   //
-  // SECURITY (PR #273 review, comment A): unlike normal sync-message
-  // signing -- which is gated by the swarm-wide `enableSigning` config
+  // SECURITY: unlike normal sync-message signing -- which is gated by
+  // the swarm-wide `enableSigning` config
   // -- Welcome writer-auth is enforced even when document-key signing
   // is disabled. Welcomes are plaintext broadcasts that carry the
   // keychain delta and bind a recipient's `_invitationEpoch`; without

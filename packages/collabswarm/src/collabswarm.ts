@@ -453,12 +453,12 @@ export class Collabswarm<
     // key-update payload.
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
     //
-    // PR #273 review comment B: the header parse (read assembled bytes,
-    // validate the 4-byte length, decode the UTF-8 path, look up the
-    // doc in the registry) is shared with the BeeKEM Welcome handler
-    // below via `readPathPrefixedProtocolHeader`. Both protocols use
-    // the same wire-format prefix; keeping the validation in one place
-    // means a tightened bound only needs to land once.
+    // The header parse (read assembled bytes, validate the 4-byte
+    // length, decode the UTF-8 path, look up the doc in the registry)
+    // is shared with the BeeKEM Welcome handler below via
+    // `readPathPrefixedProtocolHeader`. Both protocols use the same
+    // wire-format prefix; keeping the validation in one place means a
+    // tightened bound only needs to land once.
     const keyUpdateHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
@@ -495,8 +495,8 @@ export class Collabswarm<
     // and records the invitation epoch.
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
     //
-    // PR #273 review comment B: header parse shared with the key-update
-    // handler above via `readPathPrefixedProtocolHeader`.
+    // Header parse shared with the key-update handler above via
+    // `readPathPrefixedProtocolHeader`.
     const beekemWelcomeHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
       pipe(

@@ -340,7 +340,7 @@ export interface CollabswarmConfig {
    * but they will not receive the inviter-side keychain delta until
    * they perform a fresh document load against an authorized peer.
    *
-   * **CONFIDENTIALITY WARNING (PR #273 review comment #3).** When this
+   * **CONFIDENTIALITY WARNING.** When this
    * flag is `true`, `_sendBeeKEMWelcome` broadcasts a *plaintext*
    * `keychainChanges` payload (including current document key material)
    * over the `/collabswarm/beekem-welcome/1.0.0` protocol to **every**
