@@ -3126,6 +3126,21 @@ export class CollabswarmDocument<
             message.welcomeEpochId.length > 0
           ) {
             this._bufferPendingWelcome(message);
+          } else if (
+            opts.fromBuffer &&
+            decision.reason === 'not-in-readers-acl'
+          ) {
+            // PR #273 review (iter 7): a buffered Welcome that is still
+            // blocked by `not-in-readers-acl` on a drain cycle is the
+            // expected steady state until the readers-ACL catches up.
+            // The first-arrival case (above) already logged via
+            // `_bufferPendingWelcome`; emitting `console.warn` on every
+            // subsequent drain produces noisy spam (and is
+            // attacker-triggerable via repeated ACL merges). Use
+            // `console.debug` so operators can still trace if needed.
+            console.debug(
+              `Buffered BeeKEM Welcome for ${this.documentPath} still blocked: ${decision.reason}`,
+            );
           } else {
             console.warn(
               `Dropping unauthorized BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
