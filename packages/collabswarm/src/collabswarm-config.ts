@@ -6,11 +6,13 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { webRTC, webRTCDirect } from '@libp2p/webrtc';
 import { webTransport } from '@libp2p/webtransport';
 import { webSockets } from '@libp2p/websockets';
-import { all } from '@libp2p/websockets/filters';
+// Note: `@libp2p/websockets` v3 removed the `/filters` subpath and the
+// `filter` option from `WebSocketsInit`. WebSocket dial filtering is now
+// internal to the transport.
 import { identify } from '@libp2p/identify';
 import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
-import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { gossipsub } from '@libp2p/gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
 import { ipnsSelector } from 'ipns/selector';
 import { ipnsValidator } from 'ipns/validator';
@@ -187,7 +189,7 @@ export const defaultConfig = (
           circuitRelayTransport({
             reservationConcurrency: 1,
           }),
-          webSockets({ filter: all }),
+          webSockets(),
           // Pass STUN servers so RTCPeerConnection can gather server-reflexive
           // candidates and attempt direct connections without relay forwarding.
           // Each transport gets its own fresh mutable copy (with each server
