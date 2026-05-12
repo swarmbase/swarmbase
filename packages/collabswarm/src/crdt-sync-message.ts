@@ -42,7 +42,7 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    * NOTE: Keychain changes should only ever be sent over encrypted libp2p streams (not
    * GossipSub pubsub).
    *
-   * SECURITY (PR #273 review comment #3 -- safe-by-default opt-in):
+   * SECURITY (safe-by-default opt-in):
    * when this field appears in a BeeKEM Welcome (alongside
    * `welcomeEpochId` and `welcomeRecipient`), the payload is broadcast in
    * plaintext at the application layer to *every* currently-connected
