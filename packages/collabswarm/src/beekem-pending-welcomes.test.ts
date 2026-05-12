@@ -150,7 +150,13 @@ function welcomeFor(
     documentId: '/doc/welcome',
     welcomeEpochId: new Uint8Array(32).fill(epochByte),
     welcomeRecipient: recipient,
-    keychainChanges: new Uint8Array([1, 2, 3]),
+    // Recipient KEM binding + sealed payload presence are both
+    // structurally required by the validator post-encryption. The
+    // pending-welcomes buffer is concerned with reordering only --
+    // the seal/open round-trip is exercised by
+    // `beekem-welcome-encryption.test.ts`.
+    welcomeRecipientKemPublicKey: new Uint8Array(65).fill(0xaa),
+    eciesSealed: new Uint8Array([1, 2, 3]),
     // Welcomes are unconditionally writer-authenticated; the stub
     // `verifyWriterSignature` in `depsFor` returns `true` for any
     // signed payload, so this string just satisfies the signature
@@ -207,7 +213,8 @@ describe('BeeKEM pending-welcomes buffer (readers-ACL / Welcome reordering)', ()
     const msg: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: '/doc/welcome',
       welcomeRecipient: 'me',
-      keychainChanges: new Uint8Array([1, 2, 3]),
+      welcomeRecipientKemPublicKey: new Uint8Array(65).fill(0xaa),
+      eciesSealed: new Uint8Array([1, 2, 3]),
       // welcomeEpochId omitted
     };
     await h.evaluateAndApply(msg, { fromBuffer: false });

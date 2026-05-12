@@ -18,24 +18,32 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 // the shared handler can route incoming Welcomes to the correct document.
 //
 // =============================================================================
-// SAFETY-CRITICAL: opt-in broadcast
+// CONFIDENTIALITY: payload sealed to the recipient (ECIES, P-256 ECDH +
+// HKDF-SHA-256 + AES-256-GCM)
 // =============================================================================
-// The Welcome payload (including `keychainChanges` -- current document key
-// material) is broadcast in **plaintext** at the application layer over this
-// protocol to **every** currently-connected libp2p peer. libp2p's Noise/TLS
-// transport protects on-wire bytes from off-path observers but does NOT limit
-// which connected peers can see the payload. The `welcomeRecipient` binding
-// is an authorization control (honest non-target peers drop the message), not
-// a confidentiality control: a connected unauthorized or malicious peer can
-// retain `keychainChanges` and use it to decrypt subsequent pubsub traffic.
+// The Welcome's keychain delta is **not** broadcast in the clear. The
+// `CRDTSyncMessage` carrying a Welcome has a dedicated `eciesSealed` field
+// (see `crdt-sync-message.ts` / `ecies.ts`) which is the ECIES sealed-box
+// over the serialized keychain changes, encrypted under the recipient's
+// ECDH public key (`welcomeRecipientKemPublicKey`). Only the recipient
+// holding the matching ECDH private key can recover the plaintext keychain
+// delta -- a non-recipient peer that is connected at broadcast time sees
+// only the opaque ciphertext + ephemeral public key + nonce + tag.
 //
-// Because of this, `CollabswarmDocument._sendBeeKEMWelcome` is gated behind
-// `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome`, which defaults to
-// `false`. Only enable the flag in deployments with a trusted connection set
-// (authenticated private swarms, closed test/lab environments, etc.). For
-// untrusted / public mesh deployments, leave the flag `false` and rely on
-// fresh-document-load onboarding until recipient-encrypted key delivery
-// (HPKE/ECIES; tracked as `#BEEKEM-PAYLOAD-ENC`) lands.
+// The writer signature covers the sealed bytes (not the plaintext), so a
+// connected peer cannot alter the sealed payload without invalidating the
+// signature. The recipient binding (`welcomeRecipient`, also covered by
+// the signature) prevents an authorized writer from re-pointing a sealed
+// payload at a different identity than the one the encryption keypair
+// belongs to.
+//
+// Defense-in-depth retained from earlier versions of this protocol:
+//   - `welcomeRecipient` continues to gate processing: a well-behaved
+//     non-target peer drops the Welcome rather than attempting to install
+//     the keychain delta. Confidentiality is enforced by ECIES; the
+//     recipient binding is the authorization gate.
+//   - libp2p's Noise/TLS transport still protects on-wire bytes from
+//     off-path observers, on top of the application-layer encryption.
 //
 // =============================================================================
 // Race mitigation on the receive side

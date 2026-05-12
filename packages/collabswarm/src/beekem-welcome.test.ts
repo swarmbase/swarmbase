@@ -119,17 +119,25 @@ function keychainChangesForWelcome(
 
 /**
  * Mirrors the receive-side state mutations from
- * `CollabswarmDocument.handleBeeKEMWelcomeRequestData`:
+ * `CollabswarmDocument.handleBeeKEMWelcomeRequestData` AFTER the
+ * ECIES seal has been opened:
  *  - drop if `welcomeEpochId` is missing
  *  - drop if `welcomeRecipient` is missing or does not match the local
  *    serialized public key
- *  - merge keychain changes from the welcome
+ *  - merge keychain changes (decrypted from `eciesSealed`) from the welcome
  *  - record `welcomeEpochId` as `_invitationEpoch`
  *
- * The signature and readers-ACL checks are not modeled in this helper;
- * direct unit-test coverage of those security-critical gates lives in
- * `beekem-welcome-handler.test.ts`, which drives the extracted
- * `evaluateBeeKEMWelcome` function with mock providers. Full
+ * For convenience, this in-memory mirror reads the plaintext keychain
+ * delta directly from `keychainChanges` on the test message rather
+ * than running the full ECIES seal/open round-trip. Direct
+ * unit coverage of the ECIES primitive lives in `ecies.test.ts`; the
+ * wire-level "non-recipient cannot read the seal" property is covered
+ * in `beekem-welcome-encryption.test.ts`.
+ *
+ * The signature, readers-ACL, and seal-presence checks are not modeled
+ * in this helper; direct unit-test coverage of those security-critical
+ * gates lives in `beekem-welcome-handler.test.ts`, which drives the
+ * extracted `evaluateBeeKEMWelcome` function with mock providers. Full
  * end-to-end coverage that stands up a real `CollabswarmDocument` over
  * libp2p/Helia lives in `e2e/integration/`.
  *
@@ -152,6 +160,10 @@ function applyWelcomeStateChanges(
   // unconditionally.
   if (!message.welcomeRecipient) return;
   if (message.welcomeRecipient !== state.localSerializedKey) return;
+  // In the in-memory mirror, `keychainChanges` stands in for the
+  // ECIES-opened plaintext that production code recovers from
+  // `eciesSealed`. The mirror does not run ECIES; the seal/open
+  // round-trip is covered separately in `ecies.test.ts`.
   if (message.keychainChanges) state.keychain.merge(message.keychainChanges);
   // Monotonic-forward update: never regress the invitation-epoch
   // anchor (mirrors `CollabswarmDocument._shouldAdvanceInvitationEpoch`).

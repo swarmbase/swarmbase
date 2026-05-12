@@ -331,42 +331,6 @@ export interface CollabswarmConfig {
   webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>;
 
   /**
-   * Opt-in flag enabling the BeeKEM Welcome broadcast onboarding path.
-   *
-   * **DEFAULT: `false` (safe-by-default).** When `false`, calls to
-   * `addReader()` skip the BeeKEM Welcome dispatch and emit a warning,
-   * and `_sendBeeKEMWelcome()` is a no-op. The new reader will still be
-   * added to the readers ACL (so their pubsub messages are accepted),
-   * but they will not receive the inviter-side keychain delta until
-   * they perform a fresh document load against an authorized peer.
-   *
-   * **CONFIDENTIALITY WARNING.** When this
-   * flag is `true`, `_sendBeeKEMWelcome` broadcasts a *plaintext*
-   * `keychainChanges` payload (including current document key material)
-   * over the `/collabswarm/beekem-welcome/1.0.0` protocol to **every**
-   * currently-connected libp2p peer. The `welcomeRecipient` binding is
-   * an authorization control (honest non-target peers drop the
-   * Welcome), **not** a confidentiality control. Any connected peer at
-   * broadcast time -- including unauthorized or actively malicious ones
-   * -- can observe the payload, retain the keychain delta, and use it
-   * to decrypt subsequent pubsub traffic for this document. libp2p's
-   * Noise/TLS transport protects on-wire bytes from off-path observers
-   * but does nothing to limit which connected peers see the
-   * application-layer payload.
-   *
-   * Only enable this flag in deployments where the connection set is
-   * already trusted (e.g. authenticated private swarms, closed
-   * test/lab environments, or networks fronted by an authenticated
-   * relay that filters which peers can connect). For untrusted /
-   * public mesh deployments, leave this `false` and rely on
-   * fresh-document-load onboarding until recipient-encrypted key
-   * delivery (HPKE/ECIES; tracked as `#BEEKEM-PAYLOAD-ENC`) lands.
-   *
-   * @default false
-   */
-  experimentalBeeKEMBroadcastWelcome?: boolean;
-
-  /**
    * Optional callback to validate document paths before creation.
    *
    * Called when `open()` determines the document is new (i.e., `load()` returned

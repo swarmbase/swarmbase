@@ -592,6 +592,32 @@ describe('YjsJSONSerializer', () => {
     expect(deserialized.welcomeRecipient).toBeUndefined();
   });
 
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeRecipientKemPublicKey', () => {
+    const serializer = new YjsJSONSerializer();
+    const kemPub = new Uint8Array(65);
+    for (let i = 0; i < kemPub.length; i++) kemPub[i] = (i * 11) & 0xff;
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeRecipientKemPublicKey: kemPub,
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.welcomeRecipientKemPublicKey).toEqual(kemPub);
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves eciesSealed', () => {
+    const serializer = new YjsJSONSerializer();
+    const sealed = new Uint8Array(200);
+    for (let i = 0; i < sealed.length; i++) sealed[i] = (i * 13) & 0xff;
+    const message = {
+      documentId: 'welcome-doc',
+      eciesSealed: sealed,
+    };
+    const serialized = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(serialized);
+    expect(deserialized.eciesSealed).toEqual(sealed);
+  });
+
   test('serializeChangeBlock/deserializeChangeBlock round-trip with keyID', () => {
     const serializer = new YjsJSONSerializer();
     const block = {

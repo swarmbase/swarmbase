@@ -8,16 +8,11 @@ import {
   WelcomeNodePublicKey,
 } from './types';
 import * as TreeMath from './tree-math';
+import { eciesSeal, eciesOpen } from '../ecies';
 
 /** ECDH curve used for tree key pairs. */
 const ECDH_CURVE = 'P-256';
 const ECDH_ALGO = { name: 'ECDH', namedCurve: ECDH_CURVE };
-
-/** AES-GCM nonce length in bytes. */
-const AES_NONCE_LENGTH = 12;
-
-/** HKDF salt length in bytes. */
-const HKDF_SALT_LENGTH = 32;
 
 /** Cast Uint8Array to ArrayBuffer for WebCrypto API compatibility. */
 function toBuffer(data: Uint8Array): ArrayBuffer {
@@ -662,159 +657,34 @@ export class BeeKEM {
   }
 
   /**
-   * Encrypt a CryptoKey's PKCS8 representation using ECIES:
-   * ECDH with an ephemeral key + HKDF (random salt) + AES-256-GCM.
-   *
-   * Output format: [32 bytes salt] [65 bytes ephemeral public key] [12 bytes nonce] [ciphertext + tag]
+   * Encrypt a CryptoKey's PKCS8 representation using the shared ECIES
+   * primitive in `ecies.ts` (P-256 ECDH ephemeral + HKDF-SHA-256 +
+   * AES-256-GCM). The output format is documented in `ecies.ts`.
    */
   private async _encryptNodeKey(
     keyToEncrypt: CryptoKey,
     recipientPublicKey: CryptoKey,
   ): Promise<Uint8Array> {
-    // Generate ephemeral ECDH key pair for ECIES
-    const ephemeral = await crypto.subtle.generateKey(ECDH_ALGO, true, [
-      'deriveBits',
-    ]);
-
-    // ECDH to derive shared secret
-    const sharedBits = await crypto.subtle.deriveBits(
-      { name: 'ECDH', public: recipientPublicKey },
-      ephemeral.privateKey,
-      256,
+    const exportedKey = new Uint8Array(
+      await crypto.subtle.exportKey('pkcs8', keyToEncrypt),
     );
-
-    // Random salt for HKDF domain separation
-    const salt = crypto.getRandomValues(new Uint8Array(HKDF_SALT_LENGTH));
-
-    // Derive AES key from shared secret via HKDF
-    const hkdfKey = await crypto.subtle.importKey(
-      'raw',
-      sharedBits,
-      'HKDF',
-      false,
-      ['deriveKey'],
-    );
-    // ECIES key wrapping always uses AES-GCM for its built-in AEAD
-    // authentication, regardless of the document encryption algorithm.
-    const aesKey = await crypto.subtle.deriveKey(
-      {
-        name: 'HKDF',
-        hash: 'SHA-256',
-        salt,
-        info: new TextEncoder().encode('beekem-ecies'),
-      },
-      hkdfKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt'],
-    );
-
-    // Export the key to encrypt
-    const exportedKey = await crypto.subtle.exportKey('pkcs8', keyToEncrypt);
-
-    // Encrypt with AES-GCM
-    const nonce = crypto.getRandomValues(new Uint8Array(AES_NONCE_LENGTH));
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: nonce },
-      aesKey,
-      exportedKey,
-    );
-
-    // Export ephemeral public key (uncompressed point, 65 bytes for P-256)
-    const ephemeralPub = new Uint8Array(
-      await crypto.subtle.exportKey('raw', ephemeral.publicKey),
-    );
-
-    // Concatenate: salt || ephemeralPub || nonce || ciphertext
-    const result = new Uint8Array(
-      salt.byteLength +
-        ephemeralPub.byteLength +
-        nonce.byteLength +
-        ciphertext.byteLength,
-    );
-    let offset = 0;
-    result.set(salt, offset);
-    offset += salt.byteLength;
-    result.set(ephemeralPub, offset);
-    offset += ephemeralPub.byteLength;
-    result.set(nonce, offset);
-    offset += nonce.byteLength;
-    result.set(new Uint8Array(ciphertext), offset);
-
-    return result;
+    return eciesSeal(exportedKey, recipientPublicKey);
   }
 
   /**
-   * Decrypt a node key encrypted via ECIES.
-   * Reverses the _encryptNodeKey operation.
+   * Decrypt a node key encrypted via `_encryptNodeKey` / ECIES, and
+   * re-import the result as a P-256 ECDH private key.
    */
   private async _decryptNodeKey(
     encryptedData: Uint8Array,
     recipientPrivateKey: CryptoKey,
   ): Promise<CryptoKey> {
-    // Parse: salt (32 bytes) || ephemeralPub (65 bytes) || nonce (12 bytes) || ciphertext
-    let pos = 0;
-    const salt = encryptedData.slice(pos, pos + HKDF_SALT_LENGTH);
-    pos += HKDF_SALT_LENGTH;
+    const plaintext = await eciesOpen(encryptedData, recipientPrivateKey);
 
-    const ephPubLen = 65; // Uncompressed P-256 point
-    const ephemeralPubBytes = encryptedData.slice(pos, pos + ephPubLen);
-    pos += ephPubLen;
-
-    const nonce = encryptedData.slice(pos, pos + AES_NONCE_LENGTH);
-    pos += AES_NONCE_LENGTH;
-
-    const ciphertext = encryptedData.slice(pos);
-
-    // Import ephemeral public key
-    const ephemeralPublicKey = await crypto.subtle.importKey(
-      'raw',
-      toBuffer(ephemeralPubBytes),
-      ECDH_ALGO,
-      true,
-      [],
-    );
-
-    // ECDH to derive shared secret
-    const sharedBits = await crypto.subtle.deriveBits(
-      { name: 'ECDH', public: ephemeralPublicKey },
-      recipientPrivateKey,
-      256,
-    );
-
-    // Derive AES key (same params as encrypt, with the extracted salt)
-    const hkdfKey = await crypto.subtle.importKey(
-      'raw',
-      sharedBits,
-      'HKDF',
-      false,
-      ['deriveKey'],
-    );
-    // ECIES key unwrapping always uses AES-GCM (see _encryptNodeKey comment).
-    const aesKey = await crypto.subtle.deriveKey(
-      {
-        name: 'HKDF',
-        hash: 'SHA-256',
-        salt,
-        info: new TextEncoder().encode('beekem-ecies'),
-      },
-      hkdfKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt'],
-    );
-
-    // Decrypt
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: toBuffer(nonce) },
-      aesKey,
-      toBuffer(ciphertext),
-    );
-
-    // Import as ECDH private key
+    // Import as ECDH private key.
     return crypto.subtle.importKey(
       'pkcs8',
-      plaintext,
+      toBuffer(plaintext),
       ECDH_ALGO,
       true,
       ['deriveBits'],

@@ -63,13 +63,20 @@ function makeDeps(
  * validator no longer has an `isSigningEnabled` toggle -- so the base
  * acceptable message must carry a `signature` for the happy-path
  * assertions to hold.
+ *
+ * Note: confidentiality is enforced via the `eciesSealed` field
+ * (encrypted to `welcomeRecipientKemPublicKey`); the validator
+ * checks both fields are present and non-empty but does not attempt
+ * to open the seal (that happens in the production receive path
+ * after validation).
  */
 function baseAcceptableMessage(): CRDTSyncMessage<ChangesType, PublicKey> {
   return {
     documentId: '/doc/welcome',
     welcomeEpochId: new Uint8Array(32).fill(7),
     welcomeRecipient: 'my-pubkey',
-    keychainChanges: new Uint8Array([1, 2, 3]),
+    welcomeRecipientKemPublicKey: new Uint8Array(65).fill(4),
+    eciesSealed: new Uint8Array([1, 2, 3]),
     signature: 'good-sig',
   };
 }
@@ -123,33 +130,55 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     });
   });
 
-  test('drops Welcomes missing keychainChanges (would wedge the recipient)', async () => {
-    // Without keychainChanges the recipient would record
+  test('drops Welcomes missing welcomeRecipientKemPublicKey (recipient KEM binding gate)', async () => {
+    const msg = baseAcceptableMessage();
+    delete msg.welcomeRecipientKemPublicKey;
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'missing-recipient-kem-public-key',
+    });
+  });
+
+  test('drops Welcomes with an empty welcomeRecipientKemPublicKey', async () => {
+    const msg = {
+      ...baseAcceptableMessage(),
+      welcomeRecipientKemPublicKey: new Uint8Array(0),
+    };
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'missing-recipient-kem-public-key',
+    });
+  });
+
+  test('drops Welcomes missing eciesSealed (would wedge the recipient)', async () => {
+    // Without the sealed keychain delta the recipient would record
     // `welcomeEpochId` as their `_invitationEpoch` but have no
     // corresponding key installed in their keychain, leaving them
     // unable to decrypt traffic and corrupting later `since_invited`
     // filtering. The validator must refuse to accept such a Welcome.
     const msg = baseAcceptableMessage();
-    delete msg.keychainChanges;
+    delete msg.eciesSealed;
     const result = await evaluateBeeKEMWelcome(msg, makeDeps());
     expect(result).toEqual({
       kind: 'drop-malformed',
-      reason: 'missing-keychain-changes',
+      reason: 'missing-ecies-sealed',
     });
   });
 
-  test('drops Welcomes with empty keychainChanges (zero-length payload)', async () => {
-    // An empty Uint8Array carries no key material, so it has the same
-    // wedge potential as a missing field. The validator must reject
-    // it for the same reason.
+  test('drops Welcomes with empty eciesSealed (zero-length payload)', async () => {
+    // An empty sealed payload carries no key material, so it has the
+    // same wedge potential as a missing field. The validator must
+    // reject it for the same reason.
     const msg = {
       ...baseAcceptableMessage(),
-      keychainChanges: new Uint8Array(0),
+      eciesSealed: new Uint8Array(0),
     };
     const result = await evaluateBeeKEMWelcome(msg, makeDeps());
     expect(result).toEqual({
       kind: 'drop-malformed',
-      reason: 'missing-keychain-changes',
+      reason: 'missing-ecies-sealed',
     });
   });
 
