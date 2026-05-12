@@ -26,7 +26,8 @@ import { SubtleCrypto } from './auth-subtlecrypto';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { ACL } from './acl';
-import { Keychain } from './keychain';
+import { Keychain, keychainHistorySinceOrFull } from './keychain';
+import { requireSerializePublicKey } from './auth-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTChangeBlock } from './crdt-change-block';
 import {
@@ -137,7 +138,9 @@ export {
   MembershipProposal,
   GroupKeyProvider,
   Keychain,
+  keychainHistorySinceOrFull,
   KeychainProvider,
+  requireSerializePublicKey,
   SyncMessageSerializer,
   LoadMessageSerializer,
   JSONSerializer,
