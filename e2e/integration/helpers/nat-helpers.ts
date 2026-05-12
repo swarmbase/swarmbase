@@ -175,13 +175,19 @@ export async function initPage(
  * previous tracker (removes its `page.on('console', ...)` listener and
  * clears its buffer) so listeners don't accumulate across multiple reloads.
  *
- * The new tracker is attached synchronously so callers can listen for output
- * emitted by the reloaded page. The returned handle's `peerId` is NOT yet
- * refreshed — call `refreshPeerId(handle)` after triggering `page.reload()`
- * to update it, since the test app generates a new libp2p node (and thus a
- * new peerId) on every reload.
+ * Named explicitly: this ONLY rebinds the console tracker. The returned
+ * handle's `peerId` is NOT refreshed and will be stale once the page
+ * reloads — the test app generates a fresh libp2p node (and thus a new
+ * peer ID) on every reload. Call `refreshPeerId(handle)` after triggering
+ * `page.reload()` to update it.
+ *
+ * Folding the peer-ID refresh into this helper isn't viable: this must be
+ * called BEFORE `page.reload()` so the new tracker is attached in time to
+ * observe the post-reload `PEER_ID:` log line, but the refresh itself
+ * must happen AFTER reload. Keeping them as two calls preserves correct
+ * ordering and makes the staleness window explicit at call sites.
  */
-export function rebindTracker(handle: PageHandle): PageHandle {
+export function rebindConsoleTracker(handle: PageHandle): PageHandle {
   handle.track.dispose();
   return { ...handle, track: trackConsole(handle.page) };
 }
@@ -193,8 +199,8 @@ export function rebindTracker(handle: PageHandle): PageHandle {
  * generates a new peerId — the prior value on the handle becomes stale.
  *
  * Expects `handle.track` to be a tracker attached before the reload was
- * triggered (e.g. via `rebindTracker`) so the `PEER_ID:` emission isn't
- * missed.
+ * triggered (e.g. via `rebindConsoleTracker`) so the `PEER_ID:` emission
+ * isn't missed.
  */
 export async function refreshPeerId(
   handle: PageHandle,

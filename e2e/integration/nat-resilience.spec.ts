@@ -51,10 +51,11 @@ import { execSync } from 'node:child_process';
 import { test, expect, type Page } from '@playwright/test';
 import {
   initPage,
-  rebindTracker,
+  rebindConsoleTracker,
   refreshPeerId,
   waitForMesh,
   waitForPeerConnection,
+  type PageHandle,
 } from './helpers/nat-helpers';
 
 const APP_A_URL = 'http://localhost:3001';
@@ -208,9 +209,15 @@ test.describe('NAT Relay Failure Recovery', () => {
   );
 
   test('cross-NAT sync resumes after relay container restart', async ({ browser }) => {
-    let a = await initPage(browser, APP_A_URL);
-    let b = await initPage(browser, APP_B_URL);
+    // Declare with definite-assignment so the `try` body sees a non-nullable
+    // type. Assigning inside `try` ensures that if the second `initPage`
+    // throws, the first context is still closed by the `finally` (which
+    // guards with optional chaining against partial init).
+    let a!: PageHandle;
+    let b!: PageHandle;
     try {
+      a = await initPage(browser, APP_A_URL);
+      b = await initPage(browser, APP_B_URL);
       await Promise.all([
         waitForPeerConnection(a.track),
         waitForPeerConnection(b.track),
@@ -296,8 +303,8 @@ test.describe('NAT Relay Failure Recovery', () => {
       // match against the buffer's initial contents).
       expect(postMessagesB.length).toBeGreaterThan(baselineMessageCountB);
     } finally {
-      await a.context.close().catch(() => {});
-      await b.context.close().catch(() => {});
+      await a?.context.close().catch(() => {});
+      await b?.context.close().catch(() => {});
     }
   });
 });
@@ -312,9 +319,12 @@ test.describe('NAT Browser Page Reload', () => {
   test.setTimeout(300_000);
 
   test('cross-NAT peer catches up after page reload', async ({ browser }) => {
-    const a = await initPage(browser, APP_A_URL);
-    let b = await initPage(browser, APP_B_URL);
+    // See test 1 for the rationale on definite-assignment + assign-in-try.
+    let a!: PageHandle;
+    let b!: PageHandle;
     try {
+      a = await initPage(browser, APP_A_URL);
+      b = await initPage(browser, APP_B_URL);
       await Promise.all([
         waitForPeerConnection(a.track),
         waitForPeerConnection(b.track),
@@ -330,7 +340,7 @@ test.describe('NAT Browser Page Reload', () => {
       // Reload B (simulates the cross-NAT browser dropping & coming back).
       // The test app spins up a fresh libp2p node on reload, so we must
       // refresh `b.peerId` to match — the prior value is stale.
-      b = rebindTracker(b);
+      b = rebindConsoleTracker(b);
       await b.page.reload();
       await b.track.waitFor('INIT_COMPLETE', 90_000);
       b = await refreshPeerId(b);
@@ -348,8 +358,8 @@ test.describe('NAT Browser Page Reload', () => {
       );
       expect(messagesB.some((m) => m.text === 'after-reload')).toBe(true);
     } finally {
-      await a.context.close().catch(() => {});
-      await b.context.close().catch(() => {});
+      await a?.context.close().catch(() => {});
+      await b?.context.close().catch(() => {});
     }
   });
 });
@@ -363,9 +373,12 @@ test.describe('NAT Browser Network Toggle', () => {
   test.skip(!!process.env.CI, 'Cross-NAT setOffline toggle is flaky on CI mesh re-formation; run with `yarn test:nat` locally');
 
   test('cross-NAT peer can send after context.setOffline offline/online cycle', async ({ browser }) => {
-    const a = await initPage(browser, APP_A_URL);
-    const b = await initPage(browser, APP_B_URL);
+    // See test 1 for the rationale on definite-assignment + assign-in-try.
+    let a!: PageHandle;
+    let b!: PageHandle;
     try {
+      a = await initPage(browser, APP_A_URL);
+      b = await initPage(browser, APP_B_URL);
       await Promise.all([
         waitForPeerConnection(a.track),
         waitForPeerConnection(b.track),
@@ -400,8 +413,8 @@ test.describe('NAT Browser Network Toggle', () => {
       );
       expect(messagesA.some((m) => m.text === 'post-offline-from-b')).toBe(true);
     } finally {
-      await a.context.close().catch(() => {});
-      await b.context.close().catch(() => {});
+      await a?.context.close().catch(() => {});
+      await b?.context.close().catch(() => {});
     }
   });
 });
@@ -415,9 +428,12 @@ test.describe('NAT Rapid Concurrent Edits', () => {
   test.skip(!!process.env.CI, 'Rapid cross-NAT concurrent edits are flaky on CI; run with `yarn test:nat` locally');
 
   test('both peers converge after rapid bidirectional cross-NAT messages', async ({ browser }) => {
-    const a = await initPage(browser, APP_A_URL);
-    const b = await initPage(browser, APP_B_URL);
+    // See test 1 for the rationale on definite-assignment + assign-in-try.
+    let a!: PageHandle;
+    let b!: PageHandle;
     try {
+      a = await initPage(browser, APP_A_URL);
+      b = await initPage(browser, APP_B_URL);
       await Promise.all([
         waitForPeerConnection(a.track),
         waitForPeerConnection(b.track),
@@ -481,8 +497,8 @@ test.describe('NAT Rapid Concurrent Edits', () => {
       expect(aFromB).toBeGreaterThanOrEqual(target);
       expect(bFromA).toBeGreaterThanOrEqual(target);
     } finally {
-      await a.context.close().catch(() => {});
-      await b.context.close().catch(() => {});
+      await a?.context.close().catch(() => {});
+      await b?.context.close().catch(() => {});
     }
   });
 });
