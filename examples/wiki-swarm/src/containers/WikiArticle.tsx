@@ -135,9 +135,7 @@ class WikiArticle extends React.Component<
           this.props.document,
         );
       }
-      const currentTitle = this.props.document.title
-        ? this.props.document.title.toString()
-        : '';
+      const currentTitle = this.props.document.title.toString();
       return (
         <div className="m-3">
           <label htmlFor="wiki-article-title" className="visually-hidden">
