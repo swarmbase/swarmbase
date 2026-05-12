@@ -18,6 +18,7 @@
  */
 
 import { CRDTSyncMessage } from './crdt-sync-message';
+import { ECIES_P256_PUBLIC_KEY_LENGTH } from './ecies';
 import { SyncMessageSerializer } from './sync-message-serializer';
 
 /**
@@ -44,7 +45,9 @@ export type WelcomeMalformedReason =
   | 'wrong-document'
   | 'missing-welcome-epoch-id'
   | 'missing-welcome-recipient'
-  | 'missing-keychain-changes';
+  | 'missing-recipient-kem-public-key'
+  | 'invalid-recipient-kem-public-key-length'
+  | 'missing-ecies-sealed';
 
 export type WelcomeUnauthorizedReason =
   | 'not-in-readers-acl'
@@ -146,32 +149,50 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
     return { kind: 'drop-malformed', reason: 'missing-welcome-recipient' };
   }
 
-  // A Welcome without `keychainChanges` is useless: the recipient
-  // would record `welcomeEpochId` as their invitation epoch (gating
-  // future `since_invited` history filtering) without installing the
-  // corresponding document key, leaving them unable to decrypt any
-  // pubsub traffic. Worse, recording an epoch the recipient cannot
-  // back up with a key in their keychain can make later visibility
-  // filtering misbehave (the local view believes "I joined at epoch
-  // E" but has no E key). Treat a missing/empty payload as malformed
-  // and refuse to record the epoch.
-  const keychainChanges = message.keychainChanges as
-    | { length?: number; byteLength?: number }
-    | undefined;
-  // Treat unknown shapes (no `length`, no `byteLength`) as malformed by
-  // computing `0` for the fallback case. Combined with `<= 0` below this
-  // fails closed for any structurally invalid payload rather than
-  // accepting it and exploding later during the keychain merge.
-  const keychainChangesLength =
-    keychainChanges == null
-      ? 0
-      : typeof keychainChanges.length === 'number'
-        ? keychainChanges.length
-        : typeof keychainChanges.byteLength === 'number'
-          ? keychainChanges.byteLength
-          : 0;
-  if (keychainChanges == null || keychainChangesLength <= 0) {
-    return { kind: 'drop-malformed', reason: 'missing-keychain-changes' };
+  // The recipient KEM public key binds the sealed payload to a
+  // specific encryption key. Required so the writer can sign over the
+  // identity-to-encryption-key mapping; without it, an attacker
+  // controlling one of the two keys alone could attempt to substitute
+  // the sealed payload.
+  if (
+    !message.welcomeRecipientKemPublicKey ||
+    message.welcomeRecipientKemPublicKey.byteLength === 0
+  ) {
+    return {
+      kind: 'drop-malformed',
+      reason: 'missing-recipient-kem-public-key',
+    };
+  }
+
+  // The protocol requires the recipient KEM public key to be a fixed
+  // 65-byte SEC1-uncompressed P-256 point (0x04 || X || Y); see
+  // `ECIES_P256_PUBLIC_KEY_LENGTH`. Enforce the length here so the
+  // validator stays the single structural gate: anything else would
+  // otherwise pass this gate and fail later inside the receive path
+  // (e.g. `importEciesPublicKey` rejects on length mismatch) with a
+  // less specific error. Treating it as malformed lets the bounded
+  // pending-Welcome buffer drop it cleanly without retrying.
+  if (
+    message.welcomeRecipientKemPublicKey.byteLength !==
+    ECIES_P256_PUBLIC_KEY_LENGTH
+  ) {
+    return {
+      kind: 'drop-malformed',
+      reason: 'invalid-recipient-kem-public-key-length',
+    };
+  }
+
+  // A Welcome without an `eciesSealed` payload is useless: the
+  // recipient would record `welcomeEpochId` as their invitation epoch
+  // (gating future `since_invited` history filtering) without
+  // installing the corresponding document key, leaving them unable to
+  // decrypt any pubsub traffic. Worse, recording an epoch the
+  // recipient cannot back up with a key in their keychain can make
+  // later visibility filtering misbehave (the local view believes "I
+  // joined at epoch E" but has no E key). Treat a missing/empty
+  // sealed payload as malformed and refuse to record the epoch.
+  if (!message.eciesSealed || message.eciesSealed.byteLength === 0) {
+    return { kind: 'drop-malformed', reason: 'missing-ecies-sealed' };
   }
 
   const localSerializedKey = await deps.serializePublicKey(

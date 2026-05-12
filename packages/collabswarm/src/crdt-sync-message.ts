@@ -36,35 +36,15 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   snapshot?: CRDTSnapshotNode<ChangesType, PublicKey>;
 
   /**
-   * Optional document keys list. Only populated while loading and receiving a document
-   * key update (due to the removal of an ACL reader).
+   * Optional document keys list. Populated by **load responses** (doc-load and
+   * snapshot-load) where the entire sync message is encrypted under the current
+   * document key on a stream to an already-authorized peer. BeeKEM Welcome
+   * messages do **not** populate this field directly -- their keychain delta
+   * is delivered via the recipient-encrypted `eciesSealed` field below so it
+   * is opaque to non-recipient peers.
    *
-   * NOTE: Keychain changes should only ever be sent over encrypted libp2p streams (not
-   * GossipSub pubsub).
-   *
-   * SECURITY (safe-by-default opt-in):
-   * when this field appears in a BeeKEM Welcome (alongside
-   * `welcomeEpochId` and `welcomeRecipient`), the payload is broadcast in
-   * plaintext at the application layer to *every* currently-connected
-   * peer. libp2p's Noise/TLS transport protects on-wire bytes but does
-   * **not** restrict which connected peers can read the payload, so any
-   * connected peer -- including unauthorized or malicious ones -- can
-   * observe and retain `keychainChanges` and use it to decrypt
-   * subsequent pubsub traffic. The `welcomeRecipient` binding is an
-   * authorization control (an honest non-target peer drops the
-   * Welcome), not a confidentiality control.
-   *
-   * Because of this, the BeeKEM Welcome broadcast path is gated behind
-   * the explicit `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome`
-   * opt-in flag, which defaults to `false`. When disabled,
-   * `_sendBeeKEMWelcome` is a no-op (with a warning) and Welcomes
-   * carrying `keychainChanges` are never emitted on the wire by this
-   * peer. See `_sendBeeKEMWelcome` for the rationale and follow-up plan.
-   *
-   * TODO(beekem-payload-encryption): encrypt the Welcome payload to the
-   * recipient (HPKE/ECIES under the recipient's identity or BeeKEM
-   * public key) so `keychainChanges` is opaque to every other connected
-   * peer. Tracked as #BEEKEM-PAYLOAD-ENC.
+   * The keychain delta is decrypted via the CRDT-specific `ChangesSerializer`
+   * (yjs/automerge) and the sync message itself via `SyncMessageSerializer`.
    */
   keychainChanges?: ChangesType;
 
@@ -80,7 +60,7 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   /**
    * Optional recipient binding for BeeKEM Welcome messages. The inviter
    * cannot identify the new reader's libp2p connection directly, so
-   * Welcomes are broadcast to all peers; without a binding, a
+   * Welcomes are broadcast to every connected peer; without a binding, a
    * well-behaved non-member peer would still process a writer-signed
    * Welcome and install the document key. The receiver MUST drop a
    * Welcome whose `welcomeRecipient` does not match its own local user
@@ -90,16 +70,52 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    * JSON-safe (a string) because the serialized public key is already a
    * string.
    *
-   * IMPORTANT: this is a routing / authorization binding, **not** a
-   * confidentiality control. The Welcome payload is sent in plaintext at
-   * the application layer; a malicious connected peer can still read or
-   * exfiltrate `keychainChanges` regardless of whether the recipient
-   * binding addresses it. Stronger confidentiality (recipient-encrypted
-   * key delivery, or sending the Welcome only over a connection
-   * authenticated to the recipient) is tracked as follow-up hardening
-   * work.
+   * NOTE: this is the **authorization** binding (which identity the
+   * Welcome was meant for). Confidentiality is provided separately by
+   * the `eciesSealed` payload, which only the recipient holding the
+   * matching `welcomeRecipientKemPublicKey` private key can decrypt.
    */
   welcomeRecipient?: string;
+
+  /**
+   * Optional recipient ECDH public key for BeeKEM Welcome messages. Raw
+   * SEC1-uncompressed P-256 public key bytes (65 bytes) of the
+   * recipient's encryption key, encoded as base64 on the wire by the
+   * sync-message serializers. The inviter seals `eciesSealed` against
+   * this public key; the recipient opens it with the matching private
+   * key.
+   *
+   * Bound to the recipient identity by the writer signature (covers
+   * both `welcomeRecipient` and `welcomeRecipientKemPublicKey`), so an
+   * authorized writer must commit to a specific KEM public key for a
+   * specific recipient identity. A recipient that holds the matching
+   * KEM private key but observes a different `welcomeRecipient` MUST
+   * drop the Welcome (the writer asserted the Welcome is for a
+   * different identity).
+   */
+  welcomeRecipientKemPublicKey?: Uint8Array;
+
+  /**
+   * Sealed payload for BeeKEM Welcome messages. Output of `eciesSeal`
+   * over the inviter-side serialized keychain delta, encrypted under
+   * the recipient's ECDH public key
+   * (`welcomeRecipientKemPublicKey`). The plaintext is the
+   * provider-specific serialized keychain changes (the same bytes the
+   * CRDT-specific `ChangesSerializer` would emit for those changes);
+   * the recipient opens the sealed payload with their KEM private key
+   * and routes the result through the provider deserializer before
+   * merging into the local keychain.
+   *
+   * The sealed bytes are base64-encoded on the wire for JSON
+   * transport.
+   *
+   * SECURITY: the writer signature covers the sealed bytes, not the
+   * plaintext, so a replayed/altered sealed payload fails signature
+   * verification. AES-GCM authenticates the ciphertext under the
+   * derived per-message key, so a non-recipient cannot read or alter
+   * the plaintext without detection.
+   */
+  eciesSealed?: Uint8Array;
 
   /**
    * Signature of the sync message.

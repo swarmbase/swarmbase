@@ -535,6 +535,30 @@ describe('AutomergeJSONSerializer', () => {
     );
   });
 
+  test('serializeSyncMessage/deserializeSyncMessage preserves welcomeRecipientKemPublicKey', () => {
+    const kemPub = new Uint8Array(65);
+    for (let i = 0; i < kemPub.length; i++) kemPub[i] = (i * 11) & 0xff;
+    const message = {
+      documentId: 'welcome-doc',
+      welcomeRecipientKemPublicKey: kemPub,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.welcomeRecipientKemPublicKey).toEqual(kemPub);
+  });
+
+  test('serializeSyncMessage/deserializeSyncMessage preserves eciesSealed', () => {
+    const sealed = new Uint8Array(160);
+    for (let i = 0; i < sealed.length; i++) sealed[i] = (i * 17) & 0xff;
+    const message = {
+      documentId: 'welcome-doc',
+      eciesSealed: sealed,
+    };
+    const wire = serializer.serializeSyncMessage(message);
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.eciesSealed).toEqual(sealed);
+  });
+
   // Regression: prior to the upfront object guard, a malformed peer payload
   // like JSON `null` flowed straight to `raw.snapshot` access and threw a
   // bare `TypeError: Cannot read properties of null`. The guard mirrors

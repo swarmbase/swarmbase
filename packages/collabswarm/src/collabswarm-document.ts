@@ -37,6 +37,13 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { evaluateBeeKEMWelcome } from './beekem-welcome-handler';
+import { validateAndExportKemKeyPair } from './kem-key-pair';
+import {
+  eciesSeal,
+  eciesOpen,
+  importEciesPublicKey,
+  ECIES_P256_PUBLIC_KEY_LENGTH,
+} from './ecies';
 import {
   beekemWelcomeV1,
   documentKeyUpdateV2,
@@ -241,6 +248,89 @@ export class CollabswarmDocument<
   >();
   private static readonly _PENDING_WELCOMES_MAX_ENTRIES = 16;
   private static readonly _PENDING_WELCOMES_TTL_MS = 5 * 60 * 1000;
+
+  // Recipient-side ECIES (P-256 ECDH) key pair for opening BeeKEM Welcome
+  // sealed payloads. The inviter sends `eciesSealed` -- the keychain delta
+  // encrypted to this public key (see `_sendBeeKEMWelcome`); the recipient
+  // opens it with the matching private key (see
+  // `_evaluateAndApplyBeeKEMWelcome`). When `undefined`, sealed Welcomes
+  // addressed to us cannot be opened and are dropped (the recipient must
+  // fall back to a fresh document load against an authorized peer). The
+  // application is responsible for plumbing in a stable KEM key pair via
+  // `setKemKeyPair` and sharing the matching raw public key with inviters
+  // out-of-band so they can pass it to `addReader`.
+  private _kemKeyPair: CryptoKeyPair | undefined;
+
+  // Cached raw SEC1-uncompressed bytes for `_kemKeyPair.publicKey`,
+  // populated eagerly inside `setKemKeyPair` so the receive path
+  // (`_evaluateAndApplyBeeKEMWelcome`) never has to await an `exportKey`
+  // call -- and so a non-exportable public key surfaces as a clear
+  // error at installation time rather than as a generic WebCrypto
+  // exception inside the Welcome handler.
+  private _kemPublicKeyRaw: Uint8Array | undefined;
+
+  /**
+   * Install the recipient-side ECDH (P-256) key pair used to open
+   * incoming BeeKEM Welcome sealed payloads. The application is
+   * responsible for persisting and re-supplying this key pair across
+   * sessions; the matching raw public key (see
+   * `getKemPublicKeyRaw`) must be communicated out-of-band to any
+   * writer who will invite this user, so they can pass it to
+   * `addReader(reader, readerKemPublicKey)`.
+   *
+   * Idempotent: calling with the same key pair more than once is
+   * fine. Pass `undefined` to clear (subsequent Welcomes will be
+   * dropped).
+   *
+   * Validation: the key pair MUST be an ECDH P-256 pair, and the
+   * private key MUST have `'deriveBits'` in its key usages so
+   * `eciesOpen` can perform the ECDH step. The public key MUST be
+   * raw-exportable (the inviter-side flow ships those bytes as the
+   * `welcomeRecipientKemPublicKey` field). Mismatches are rejected
+   * here with a descriptive error rather than silently accepted and
+   * surfaced as a generic WebCrypto failure later in the Welcome
+   * receive path.
+   *
+   * Async because it eagerly exports the public key to raw bytes via
+   * `crypto.subtle.exportKey` and caches them for the receive path.
+   */
+  public async setKemKeyPair(
+    keyPair: CryptoKeyPair | undefined,
+  ): Promise<void> {
+    if (keyPair === undefined) {
+      this._kemKeyPair = undefined;
+      this._kemPublicKeyRaw = undefined;
+      return;
+    }
+
+    // Algorithm/curve/usages validation + eager raw-export, kept in
+    // a standalone helper so the validation surface can be unit-tested
+    // without standing up the full document dependency graph.
+    // Throws a clear, install-time error on misconfiguration.
+    const rawPublic = await validateAndExportKemKeyPair(keyPair);
+
+    this._kemKeyPair = keyPair;
+    // Defensive copy: ensure the cached bytes are isolated from the
+    // buffer returned by the helper so callers (and the helper's own
+    // internal state) cannot mutate `_kemPublicKeyRaw` after the fact.
+    this._kemPublicKeyRaw = new Uint8Array(rawPublic);
+  }
+
+  /**
+   * Returns the raw SEC1-uncompressed bytes (65 bytes) of the
+   * installed ECDH public key, or `undefined` if no key pair has been
+   * set via `setKemKeyPair`. The bytes are what inviters pass to
+   * `addReader(reader, readerKemPublicKey)`.
+   *
+   * The raw bytes are cached on `setKemKeyPair`, so this is a
+   * synchronous lookup. A defensive copy of the cached `Uint8Array` is
+   * returned so callers cannot accidentally mutate the document's
+   * internal state (e.g. `raw[0] = ...`), which would otherwise cause
+   * hard-to-debug Welcome drops/mismatches on the receive path.
+   */
+  public getKemPublicKeyRaw(): Uint8Array | undefined {
+    return this._kemPublicKeyRaw && new Uint8Array(this._kemPublicKeyRaw);
+  }
 
   /**
    * Set the history visibility for this document.
@@ -2865,36 +2955,68 @@ export class CollabswarmDocument<
    * currently-connected peer; the receiving document ignores Welcomes
    * addressed to a different reader.
    *
-   * SAFETY-CRITICAL: the BeeKEM Welcome
-   * broadcast leaks `keychainChanges` in plaintext to every connected
-   * peer. The dispatch path is therefore gated behind the explicit
-   * `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome` flag, which
-   * defaults to `false`. When the flag is disabled the readers-ACL update
-   * is still broadcast (so the new reader can join the document and
-   * subsequent pubsub traffic), but no Welcome is sent -- the new reader
-   * recovers keychain state via a fresh document load against an
-   * authorized peer instead. See `_sendBeeKEMWelcome` for the rationale.
+   * CONFIDENTIALITY: the Welcome's keychain delta is sealed with ECIES
+   * (P-256 ECDH + AES-256-GCM) under `readerKemPublicKey`, so only the
+   * intended recipient can decrypt it. The recipient binding
+   * (`welcomeRecipient`) is the **authorization** gate; the sealed
+   * payload is the **confidentiality** gate. See `_sendBeeKEMWelcome`
+   * for the full construction.
    *
-   * @param reader User's public key.
+   * @param reader User's identity (signing) public key.
+   * @param readerKemPublicKey Optional raw SEC1-uncompressed P-256
+   *   ECDH public key (65 bytes) of the reader's KEM key pair. The
+   *   reader must hold the matching private key (see
+   *   `setKemKeyPair`). When this is `undefined`, the readers-ACL
+   *   update is still broadcast but **no Welcome is sent**: the new
+   *   reader can join the document but must recover keychain state
+   *   via a fresh document load against an authorized peer. (The
+   *   library refuses to broadcast an un-sealed Welcome to all peers
+   *   because that would leak document key material in plaintext.)
    */
-  public async addReader(reader: PublicKey) {
+  public async addReader(
+    reader: PublicKey,
+    readerKemPublicKey?: Uint8Array,
+  ) {
     await this._ensureCurrentUserCanWrite();
 
-    // Check that the reader is not already a reader.
-    if (await this._readers.check(reader)) {
-      return;
+    // Idempotent on the ACL side, but if the caller has only now obtained
+    // the recipient's KEM public key (e.g. a previous `addReader` call
+    // skipped the Welcome because the key was unknown), still emit the
+    // Welcome so the existing ACL row can be paired with keychain
+    // material. Without this branch the warning emitted below on the
+    // first call would point at a recovery path that is itself a no-op.
+    const alreadyReader = await this._readers.check(reader);
+    if (!alreadyReader) {
+      // Send change over network.
+      const changes = await this._readers.add(reader);
+      await this._makeChange(changes, crdtReaderChangeNode);
     }
 
-    // Send change over network.
-    const changes = await this._readers.add(reader);
-    await this._makeChange(changes, crdtReaderChangeNode);
+    // Without the recipient's KEM public key we cannot seal the
+    // Welcome payload, and we will NEVER send an un-sealed Welcome --
+    // that would broadcast `keychainChanges` to every connected peer.
+    if (!readerKemPublicKey) {
+      if (!alreadyReader) {
+        console.warn(
+          `[${this.documentPath}] addReader: BeeKEM Welcome skipped because ` +
+            `the caller did not provide \`readerKemPublicKey\`. The reader ` +
+            `has been added to the readers ACL, but to deliver the document ` +
+            `key the caller must either (a) re-invoke \`addReader(reader, ` +
+            `readerKemPublicKey)\` once the recipient's raw SEC1 P-256 ECDH ` +
+            `public key is available, or (b) have the recipient perform a ` +
+            `fresh document load against an authorized peer to recover ` +
+            `keychain state.`,
+        );
+      }
+      return;
+    }
 
     // Send a BeeKEM Welcome with the document key so the new reader can
     // decrypt subsequent (and, per visibility, prior) messages. Failures
     // are logged but do not abort -- the ACL change has already been
     // broadcast and the reader can also recover via a fresh document load.
     try {
-      await this._sendBeeKEMWelcome(reader);
+      await this._sendBeeKEMWelcome(reader, readerKemPublicKey);
     } catch (err) {
       console.warn(
         `Failed to send BeeKEM Welcome for ${this.documentPath}:`,
@@ -2917,85 +3039,56 @@ export class CollabswarmDocument<
    *   than installing the document key. The binding is covered by the
    *   writer signature, so a non-writer cannot redirect a Welcome to a
    *   different recipient.
-   *
-   *   IMPORTANT: this binding is **not** a confidentiality control. The
-   *   Welcome payload is sent in plaintext at the application layer (see
-   *   the Confidentiality note below), so a malicious peer that receives
-   *   the broadcast can read or exfiltrate `keychainChanges` regardless
-   *   of whether it would "drop" the message. Closing that gap requires
-   *   recipient-encrypted key delivery (e.g. wrapping the keychain delta
-   *   under the recipient's identity key) or sending the Welcome only
-   *   over a connection authenticated to the recipient; both are
-   *   tracked as follow-up hardening work.
-   * - `keychainChanges`: keychain CRDT changes filtered per the document's
-   *   `historyVisibility` **from the recipient's perspective** (see
-   *   `_keychainChangesForWelcome()`) so the recipient can decrypt
-   *   the current state (and, under `full_history`, prior state).
+   * - `welcomeRecipientKemPublicKey`: raw SEC1 P-256 ECDH public key of
+   *   the recipient. Also covered by the writer signature -- the writer
+   *   commits to a specific encryption key for a specific identity, so
+   *   an attacker that owns one of those two values alone cannot
+   *   redirect the sealed payload.
+   * - `eciesSealed`: the inviter-side serialized keychain delta
+   *   encrypted under the recipient's ECDH key via ECIES (see
+   *   `ecies.ts`). This is the confidentiality control: a
+   *   non-recipient peer that receives the broadcast cannot decrypt
+   *   the keychain delta. The keychain plaintext is filtered per the
+   *   document's `historyVisibility` **from the recipient's
+   *   perspective** (see `_keychainChangesForWelcome()`).
    * - `signature`: writer signature over the message so the receiver can
    *   confirm a legitimate writer is the inviter (and ignore forgeries).
+   *   Crucially, the signature covers the **sealed** bytes, not the
+   *   plaintext, so a replayed or tampered sealed payload fails
+   *   signature verification.
    *
-   * Confidentiality note: the Welcome payload itself is **not** encrypted
-   * at the application layer. The exchange rides libp2p's secure
-   * transport (Noise/TLS), so on-wire confidentiality is provided by the
-   * transport. The new reader cannot decrypt application-layer ciphertext
-   * before installing the keychain delta the Welcome carries, which would
-   * otherwise create a chicken-and-egg bootstrap problem.
+   * Confidentiality: the keychain delta is end-to-end encrypted to the
+   * recipient at the application layer. libp2p's Noise/TLS transport
+   * still protects on-wire bytes against off-path observers, but the
+   * application-layer ECIES seal is the primary confidentiality
+   * guarantee against on-path connected peers.
    *
    * Wire format (mirrors `documentKeyUpdateV2`):
    *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
    */
-  private async _sendBeeKEMWelcome(reader: PublicKey): Promise<void> {
-    // OPT-IN GATE (safe-by-default).
-    //
-    // This method broadcasts a *plaintext* Welcome -- including the
-    // document key material in `keychainChanges` -- to every
-    // currently-connected libp2p peer. The recipient binding
-    // (`welcomeRecipient` + the writer signature covering it) is an
-    // *authorization* control that prevents an honest non-target peer
-    // from installing the document key; it is **not** a confidentiality
-    // control. Any peer with a live connection at broadcast time -- even
-    // an unauthorized or actively malicious one -- can observe the
-    // payload, retain `keychainChanges`, and use it to decrypt
-    // subsequent pubsub traffic for this document. The libp2p
-    // transport's Noise/TLS handshake protects on-wire bytes from
-    // off-path observers but does nothing to limit which connected peers
-    // see the application-layer payload.
-    //
-    // For that reason the broadcast path is gated behind an explicit
-    // opt-in flag, `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome`,
-    // which defaults to `false`. When unset / `false`, this method is a
-    // no-op (with a warning) -- the new reader is still added to the
-    // readers ACL by `addReader` and can recover keychain state via a
-    // fresh document load against an authorized peer. Deployments that
-    // accept the confidentiality trade-off (e.g. trusted private swarms,
-    // closed test/lab environments) can flip the flag to `true`.
-    //
-    // The fix that lets this be on-by-default is recipient-encrypted
-    // key delivery (e.g. HPKE / ECIES under the recipient's identity
-    // key, or wrapping under the recipient's BeeKEM public key once a
-    // stable identity-to-encryption-key mapping is in place), so that
-    // only the intended reader can decrypt `keychainChanges`.
-    // Implementing that is non-trivial -- it requires an agreed
-    // identity-encryption key plumbed through `AuthProvider`, schema
-    // changes in `CRDTSyncMessage`, a versioned wire-format bump, and
-    // migration of the receive path -- and is intentionally out-of-scope
-    // for the initial Welcome introduction.
-    //
-    // TODO(beekem-payload-encryption): wrap the Welcome payload under
-    // the recipient's identity key so `keychainChanges` is opaque to
-    // every other connected peer. Tracked as #BEEKEM-PAYLOAD-ENC.
-    if (this.swarm.config?.experimentalBeeKEMBroadcastWelcome !== true) {
-      console.warn(
-        `BeeKEM Welcome broadcast for ${this.documentPath} skipped: ` +
-          `config.experimentalBeeKEMBroadcastWelcome is not enabled. ` +
-          `The new reader was added to the readers ACL but will need to ` +
-          `perform a fresh document load to receive keychain key material. ` +
-          `Only enable this flag in deployments with a trusted connection ` +
-          `set; the Welcome payload is broadcast in plaintext to every ` +
-          `currently-connected peer.`,
+  private async _sendBeeKEMWelcome(
+    reader: PublicKey,
+    readerKemPublicKey: Uint8Array,
+  ): Promise<void> {
+    // Validate the recipient KEM public key length up front so a
+    // malformed caller fails fast at the call site rather than deep
+    // inside the WebCrypto import.
+    if (readerKemPublicKey.byteLength !== ECIES_P256_PUBLIC_KEY_LENGTH) {
+      throw new Error(
+        `BeeKEM Welcome for ${this.documentPath}: readerKemPublicKey ` +
+          `must be ${ECIES_P256_PUBLIC_KEY_LENGTH} raw SEC1 bytes (P-256 ` +
+          `uncompressed), got ${readerKemPublicKey.byteLength}`,
       );
-      return;
     }
+
+    // Defensive copy: snapshot the recipient's KEM public key bytes once
+    // at the entry point so a caller that reuses or mutates the same
+    // buffer (or shares it across async tasks) after `addReader` returns
+    // cannot corrupt the in-flight Welcome. Both the signed message
+    // field (`welcomeRecipientKemPublicKey`) and the WebCrypto import
+    // must observe the *same* byte sequence; otherwise the receiver
+    // would see a signature/payload mismatch.
+    const kemPub = new Uint8Array(readerKemPublicKey);
 
     // Build the welcome message.
     const welcomeMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
@@ -3023,6 +3116,7 @@ export class CollabswarmDocument<
       'BeeKEM Welcome onboarding',
     );
     welcomeMessage.welcomeRecipient = await serializePublicKey(reader);
+    welcomeMessage.welcomeRecipientKemPublicKey = kemPub;
 
     // Visibility-filtered keychain so the new reader can decrypt the
     // appropriate window of document history. Note: this uses
@@ -3031,15 +3125,30 @@ export class CollabswarmDocument<
     // latter would, in `since_invited` mode, leak the inviter's
     // post-invite slice (or, for founders, the full history) to a
     // reader whose invitation epoch starts at this moment.
-    welcomeMessage.keychainChanges = await this._keychainChangesForWelcome();
+    const keychainPlaintext = await this._keychainChangesForWelcome();
+    const keychainPlaintextBytes =
+      this._changesSerializer.serializeChanges(keychainPlaintext);
+
+    // Seal the keychain delta to the recipient's ECDH public key. Only
+    // the recipient holding the matching ECDH private key can recover
+    // the plaintext; every other connected peer that observes the
+    // broadcast sees only opaque ciphertext + ephemeral public key +
+    // nonce + AES-GCM tag.
+    const recipientKemKey = await importEciesPublicKey(kemPub);
+    welcomeMessage.eciesSealed = await eciesSeal(
+      keychainPlaintextBytes,
+      recipientKemKey,
+    );
 
     // Sign so the receiver can verify the inviter is an authorized
     // writer. Welcomes are ALWAYS writer-authenticated, regardless of
     // the swarm-wide `enableSigning` toggle that gates normal
     // sync-message signing (see SECURITY NOTE in
-    // `beekem-welcome-handler.ts`). Without this, a deployment that
-    // turned `enableSigning` off for change-message signing would
-    // accept unsigned Welcomes from any connected peer.
+    // `beekem-welcome-handler.ts`). The signature covers the sealed
+    // bytes (`eciesSealed`) and the recipient bindings
+    // (`welcomeRecipient` + `welcomeRecipientKemPublicKey`), so an
+    // attacker cannot redirect or substitute the sealed payload
+    // without invalidating the signature.
     welcomeMessage.signature = await this._signWelcomeAsWriter(welcomeMessage);
 
     const serialized =
@@ -3217,19 +3326,79 @@ export class CollabswarmDocument<
       }
     }
 
+    // Open the sealed keychain delta. We must hold the matching ECDH
+    // private key (see `setKemKeyPair`); without it, even a Welcome
+    // that addresses us by identity and KEM public key cannot be
+    // applied. Drop in that case -- the recipient must recover via a
+    // fresh document load against an authorized peer.
+    //
+    // Defense in depth: if the writer-signed `welcomeRecipientKemPublicKey`
+    // does NOT match the local installed KEM public key, the writer
+    // is claiming a different encryption key than the one we hold.
+    // Refuse to attempt decryption: this prevents an attacker who
+    // somehow registered a fake KEM key (e.g. via a parallel
+    // out-of-band channel) from getting us to silently install
+    // keychain state under a key we don't actually control. A
+    // legitimate writer who follows the documented onboarding flow
+    // will always echo back the recipient's own KEM public key.
+    if (!this._kemKeyPair || !this._kemPublicKeyRaw) {
+      console.warn(
+        `Dropping BeeKEM Welcome for ${this.documentPath}: no local KEM ` +
+          `key pair installed via setKemKeyPair; cannot open sealed payload.`,
+      );
+      return false;
+    }
+    // Use the eagerly-cached raw bytes from `setKemKeyPair` rather
+    // than re-exporting on every Welcome.
+    const localKemPublicRaw = this._kemPublicKeyRaw;
+    const messageKemPublic = message.welcomeRecipientKemPublicKey;
+    if (
+      !messageKemPublic ||
+      messageKemPublic.byteLength !== localKemPublicRaw.byteLength ||
+      !this._constantTimeEquals(messageKemPublic, localKemPublicRaw)
+    ) {
+      console.warn(
+        `Dropping BeeKEM Welcome for ${this.documentPath}: ` +
+          `welcomeRecipientKemPublicKey does not match the locally-installed ` +
+          `KEM public key.`,
+      );
+      return false;
+    }
+
+    let keychainPlaintext: ChangesType;
+    try {
+      const sealed = message.eciesSealed as Uint8Array;
+      const plaintextBytes = await eciesOpen(
+        sealed,
+        this._kemKeyPair.privateKey,
+      );
+      keychainPlaintext =
+        this._changesSerializer.deserializeChanges(plaintextBytes);
+    } catch (err) {
+      // ECIES open failure typically means: the sealed payload is
+      // tampered (AES-GCM tag check fails), or the writer encrypted
+      // under a different ECDH public key than the one we hold (so
+      // ECDH produces a different shared secret and the HKDF-derived
+      // AES key cannot decrypt). Both are security-relevant; log and
+      // drop.
+      console.warn(
+        `Failed to open sealed BeeKEM Welcome payload for ${this.documentPath}:`,
+        err,
+      );
+      return false;
+    }
+
     // Merge the keychain changes before recording the invitation epoch,
     // so a recipient handling concurrent Welcomes is not left with an
     // _invitationEpoch pointing at a key that hasn't been installed.
-    if (message.keychainChanges) {
-      try {
-        this._keychain.merge(message.keychainChanges);
-      } catch (err) {
-        console.error(
-          `Failed to merge keychain changes from BeeKEM Welcome for ${this.documentPath}:`,
-          err,
-        );
-        return false;
-      }
+    try {
+      this._keychain.merge(keychainPlaintext);
+    } catch (err) {
+      console.error(
+        `Failed to merge keychain changes from BeeKEM Welcome for ${this.documentPath}:`,
+        err,
+      );
+      return false;
     }
 
     // Record the invitation epoch -- this gates `since_invited` history
@@ -3416,6 +3585,22 @@ export class CollabswarmDocument<
       s += bytes[i].toString(16).padStart(2, '0');
     }
     return s;
+  }
+
+  /**
+   * Constant-time byte-equality check. Used by the BeeKEM Welcome
+   * receive path to compare the writer-signed
+   * `welcomeRecipientKemPublicKey` against the locally-installed KEM
+   * public key without leaking byte-position timing on a mismatch.
+   * Callers must supply equal-length buffers.
+   */
+  private _constantTimeEquals(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff === 0;
   }
 
   /**

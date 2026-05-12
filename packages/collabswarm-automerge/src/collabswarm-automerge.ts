@@ -522,6 +522,11 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         // `welcomeRecipient` is already a string (the serialized recipient
         // public key); pass through verbatim.
         welcomeRecipient: message.welcomeRecipient,
+        welcomeRecipientKemPublicKey:
+          message.welcomeRecipientKemPublicKey &&
+          Base64.fromUint8Array(message.welcomeRecipientKemPublicKey),
+        eciesSealed:
+          message.eciesSealed && Base64.fromUint8Array(message.eciesSealed),
         snapshot: snapshotForWire,
       }),
     );
@@ -550,6 +555,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       keychainChanges?: unknown;
       welcomeEpochId?: unknown;
       welcomeRecipient?: unknown;
+      welcomeRecipientKemPublicKey?: unknown;
+      eciesSealed?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -646,6 +653,30 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       welcomeRecipient = raw.welcomeRecipient;
     }
+    let welcomeRecipientKemPublicKey: Uint8Array | undefined;
+    if (raw.welcomeRecipientKemPublicKey !== undefined) {
+      if (typeof raw.welcomeRecipientKemPublicKey !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'welcomeRecipientKemPublicKey' must be a string when present (got ${describeValue(
+            raw.welcomeRecipientKemPublicKey,
+          )})`,
+        );
+      }
+      welcomeRecipientKemPublicKey = Base64.toUint8Array(
+        raw.welcomeRecipientKemPublicKey,
+      );
+    }
+    let eciesSealed: Uint8Array | undefined;
+    if (raw.eciesSealed !== undefined) {
+      if (typeof raw.eciesSealed !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'eciesSealed' must be a string when present (got ${describeValue(
+            raw.eciesSealed,
+          )})`,
+        );
+      }
+      eciesSealed = Base64.toUint8Array(raw.eciesSealed);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -670,6 +701,9 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     if (keychainChanges !== undefined) result.keychainChanges = keychainChanges;
     if (welcomeEpochId !== undefined) result.welcomeEpochId = welcomeEpochId;
     if (welcomeRecipient !== undefined) result.welcomeRecipient = welcomeRecipient;
+    if (welcomeRecipientKemPublicKey !== undefined)
+      result.welcomeRecipientKemPublicKey = welcomeRecipientKemPublicKey;
+    if (eciesSealed !== undefined) result.eciesSealed = eciesSealed;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
