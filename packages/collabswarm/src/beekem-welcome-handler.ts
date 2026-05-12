@@ -18,6 +18,7 @@
  */
 
 import { CRDTSyncMessage } from './crdt-sync-message';
+import { ECIES_P256_PUBLIC_KEY_LENGTH } from './ecies';
 import { SyncMessageSerializer } from './sync-message-serializer';
 
 /**
@@ -45,6 +46,7 @@ export type WelcomeMalformedReason =
   | 'missing-welcome-epoch-id'
   | 'missing-welcome-recipient'
   | 'missing-recipient-kem-public-key'
+  | 'invalid-recipient-kem-public-key-length'
   | 'missing-ecies-sealed';
 
 export type WelcomeUnauthorizedReason =
@@ -159,6 +161,24 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
     return {
       kind: 'drop-malformed',
       reason: 'missing-recipient-kem-public-key',
+    };
+  }
+
+  // The protocol requires the recipient KEM public key to be a fixed
+  // 65-byte SEC1-uncompressed P-256 point (0x04 || X || Y); see
+  // `ECIES_P256_PUBLIC_KEY_LENGTH`. Enforce the length here so the
+  // validator stays the single structural gate: anything else would
+  // otherwise pass this gate and fail later inside the receive path
+  // (e.g. `importEciesPublicKey` rejects on length mismatch) with a
+  // less specific error. Treating it as malformed lets the bounded
+  // pending-Welcome buffer drop it cleanly without retrying.
+  if (
+    message.welcomeRecipientKemPublicKey.byteLength !==
+    ECIES_P256_PUBLIC_KEY_LENGTH
+  ) {
+    return {
+      kind: 'drop-malformed',
+      reason: 'invalid-recipient-kem-public-key-length',
     };
   }
 

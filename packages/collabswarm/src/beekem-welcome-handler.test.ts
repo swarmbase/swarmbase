@@ -152,6 +152,39 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     });
   });
 
+  test('drops Welcomes whose welcomeRecipientKemPublicKey is shorter than 65 bytes', async () => {
+    // The protocol fixes the recipient KEM public key at the
+    // SEC1-uncompressed P-256 size (65 bytes: 0x04 || X || Y). A
+    // shorter payload could not be a valid P-256 point; the validator
+    // is the single structural gate so we must reject it here instead
+    // of letting it pass and fail later inside `importEciesPublicKey`.
+    const msg = {
+      ...baseAcceptableMessage(),
+      welcomeRecipientKemPublicKey: new Uint8Array(64).fill(4),
+    };
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'invalid-recipient-kem-public-key-length',
+    });
+  });
+
+  test('drops Welcomes whose welcomeRecipientKemPublicKey is longer than 65 bytes', async () => {
+    // Same rationale as the 64-byte case: anything other than the
+    // fixed 65-byte uncompressed P-256 encoding is malformed and the
+    // validator must fail fast rather than handing a wrong-length
+    // buffer downstream.
+    const msg = {
+      ...baseAcceptableMessage(),
+      welcomeRecipientKemPublicKey: new Uint8Array(66).fill(4),
+    };
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'invalid-recipient-kem-public-key-length',
+    });
+  });
+
   test('drops Welcomes missing eciesSealed (would wedge the recipient)', async () => {
     // Without the sealed keychain delta the recipient would record
     // `welcomeEpochId` as their `_invitationEpoch` but have no
