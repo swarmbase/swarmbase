@@ -31,6 +31,7 @@ import {
   documentLoadV2,
   documentKeyUpdateV2,
   snapshotLoadV2,
+  tipAdvertiseV1,
 } from './wire-protocols';
 import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils';
 import { wrapStream } from './stream-adapter';
@@ -571,6 +572,56 @@ export class Collabswarm<
       });
     };
 
+    // Handler implementation for tip-advertise requests (initial-load
+    // quorum probe; see `wire-protocols.ts::tipAdvertiseV1`). Wire format
+    // mirrors documentLoadV2: a single serialized CRDTLoadRequest in,
+    // a single (small) encrypted/serialized CRDTSyncMessage out (whose
+    // only populated payload field is `tipsHash`), or an empty response
+    // on decline.
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    const tipAdvertiseHandler = (rawStream: Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          let assembled: Uint8Array;
+          try {
+            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+          } catch (err) {
+            const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+            console.warn(`Shared tip-advertise handler: ${reason}, dropping`);
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          let request;
+          try {
+            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+          } catch (err) {
+            console.warn(
+              'Shared tip-advertise handler: failed to deserialize load request, dropping:',
+              err,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          const doc = this._documentRegistry.get(request.documentId);
+          if (!doc) {
+            // Unknown document -- decline with empty response so the loader
+            // counts this peer as a non-vote, not a disagreement.
+            console.warn(
+              `Shared tip-advertise handler: no document registered for "${request.documentId}"`,
+            );
+            await stream.sink([] as Iterable<Uint8Array>);
+            return [];
+          }
+          await doc.handleTipAdvertiseRequestData(request, stream);
+          return [];
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared tip-advertise handler:', err);
+      });
+    };
+
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
@@ -579,6 +630,7 @@ export class Collabswarm<
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
     this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
     this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler);
+    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler);
   }
 
   /**

@@ -50,6 +50,7 @@ import {
   documentKeyUpdateV2,
   documentLoadV2,
   snapshotLoadV2,
+  tipAdvertiseV1,
 } from './wire-protocols';
 import { BeeKEM } from './beekem/beekem';
 import { BeeKEMWelcome, PathUpdate } from './beekem/types';
@@ -65,6 +66,14 @@ import {
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
 } from './derive-doc-key';
+import { tipsHash, TIPS_HASH_LENGTH } from './tips-hash';
+import {
+  decideLoadQuorum,
+  effectiveK,
+  effectiveQ,
+  LoadQuorumFailedError,
+  PeerTipAdvertisement,
+} from './load-quorum';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import {
@@ -1815,6 +1824,141 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Handles an initial-load quorum tip-advertise request with pre-read
+   * stream data. Called by the shared protocol handler in Collabswarm
+   * after reading and routing.
+   *
+   * Closes the "no quorum protocol for verifying initial document state"
+   * gap tracked under issue #189 §5.4 item 2 (also bulleted in #186).
+   * The wire protocol is `tipAdvertiseV1` (see `wire-protocols.ts`);
+   * this method returns either an empty payload (decline) or an
+   * encrypted `CRDTSyncMessage` whose only populated payload field is
+   * `tipsHash`. The loader on the other side compares hashes across
+   * multiple peers and requires Q-of-K agreement before accepting any
+   * peer's full document state. See `load-quorum.ts` for the decision
+   * logic.
+   *
+   * Authorization mirrors the doc-load / snapshot-load handlers: when
+   * signing is enabled the requester must sign the document path with
+   * a key that appears in the readers or writers ACL. The response is
+   * encrypted under the document's current key so a peer that does
+   * not already possess the key cannot use the tip hash as an oracle
+   * (key delivery is handled by the BeeKEM Welcome path).
+   *
+   * @internal
+   * @param message The deserialized load request (already parsed by the shared handler).
+   * @param stream The stream object for sending the response.
+   */
+  public async handleTipAdvertiseRequestData(
+    message: CRDTLoadRequest,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      console.log(
+        `received tip-advertise request for ${this.documentPath}:`,
+        message,
+      );
+
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a tip-advertise request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized. Mirrors the
+      // load handlers above so the gate is symmetrical: a deployment that
+      // disables signing keeps the same trust posture across all protocols.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          console.warn(
+            `Rejected tip-advertise request for ${message.documentId}: missing signature`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return;
+        }
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
+          }
+        }
+      }
+
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized tip-advertise request for ${message.documentId}`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Compute the canonical tip-set hash from the document's current
+      // `_hashes` set. Two peers with the same view produce byte-identical
+      // hashes; see `tips-hash.ts` for the canonicalization (sort + `\n`
+      // separator + SHA-256).
+      const hash = await tipsHash(this._hashes);
+
+      const advertisement: CRDTSyncMessage<ChangesType, PublicKey> = {
+        documentId: this.documentPath,
+        tipsHash: hash,
+      };
+
+      // Sign the advertisement so the loader can verify the responder is
+      // an authorized writer (the same trust bar applied to load responses
+      // above). `_signAsWriter` returns '' when signing is disabled, in
+      // which case the loader's pre-load verification block is also a
+      // no-op -- mirrors the doc-load / snapshot-load handlers' pattern.
+      advertisement.signature = await this._signAsWriter(advertisement);
+
+      const serialized =
+        this._syncMessageSerializer.serializeSyncMessage(advertisement);
+
+      // Encrypt the response with the document's current key so that an
+      // unauthorized peer that managed to connect to us but does not have
+      // the key cannot read (or use as an oracle) the tip hash.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serialized,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt tip-advertise response! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending tip-advertise response (encrypted) for ${this.documentPath}`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
+      console.error(
+        `Error handling tip-advertise request for ${this.documentPath}:`,
+        err,
+      );
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
+    }
+  }
+
+  /**
    * Build the deterministic binary payload used for snapshot signing/verification.
    *
    * Binary layout (big-endian integers):
@@ -2023,6 +2167,153 @@ export class CollabswarmDocument<
     );
   }
 
+  /**
+   * Send a single `tipAdvertiseV1` probe to one peer and decrypt the
+   * response to extract the peer's `tipsHash`. Returns `null` for any
+   * non-vote outcome: empty/declined response, decryption failure with an
+   * unknown key (peer has a different keychain), missing/invalid signature,
+   * deserialization failure, document-id mismatch, missing/short tip hash,
+   * or thrown errors. Timeouts are handled at the caller level via
+   * Promise.race.
+   *
+   * Returns `null` rather than throwing so the caller can record this
+   * peer as a non-vote (NOT a disagreement) and `decideLoadQuorum` can
+   * apply the correct quorum semantics. See `load-quorum.ts` for the
+   * timeout-vs-disagreement distinction.
+   *
+   * @internal
+   */
+  private async _probeTipAdvertise(
+    peer: import('@multiformats/multiaddr').Multiaddr,
+    serializedRequest: Uint8Array,
+  ): Promise<Uint8Array | null> {
+    let stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> };
+    try {
+      stream = wrapStream(await this.libp2p.dialProtocol(peer, [tipAdvertiseV1]));
+    } catch {
+      // Peer doesn't support tip-advertise or dial failed -- treat as non-vote.
+      return null;
+    }
+    try {
+      await pipe([serializedRequest], stream.sink);
+      const assembled = await readUint8Iterable(stream.source);
+      if (assembled.length === 0) {
+        // Peer declined (unknown doc, unauthorized, etc.).
+        return null;
+      }
+      const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
+      if (assembled.length <= headerLength) {
+        // Too short to be a valid encrypted payload.
+        return null;
+      }
+      const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
+      const key = this._keychain.getKey(blockKeyID);
+      if (!key) {
+        // Responder used a key we don't have. Treat as non-vote rather than
+        // an attack: a freshly-onboarded reader may legitimately not have
+        // every historical key yet. The decryption-side check on the full
+        // load that follows will still gate trust on the actual state.
+        return null;
+      }
+      const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+      const blockData = assembled.slice(headerLength);
+      const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
+      if (!decrypted) {
+        return null;
+      }
+      let message: CRDTSyncMessage<ChangesType, PublicKey>;
+      try {
+        message = this._syncMessageSerializer.deserializeSyncMessage(decrypted);
+      } catch {
+        return null;
+      }
+      if (message.documentId !== this.documentPath) {
+        return null;
+      }
+      // Verify the writer signature on the advertisement when possible.
+      // On first load (_writers empty) we cannot verify -- trust falls
+      // back to the encryption envelope (only a peer that already holds
+      // the current key could produce this response) plus the quorum
+      // requirement that multiple such peers agree. This matches the
+      // bootstrapping behaviour of `_sendLoadRequestAndSync`.
+      if (this._isSigningEnabled()) {
+        const preLoadWriters = await this._getWriterKeys();
+        if (preLoadWriters.length > 0) {
+          if (!message.signature) {
+            return null;
+          }
+          const { signature, ...messageWithoutSignature } = message;
+          const raw = this._syncMessageSerializer.serializeSyncMessage(
+            messageWithoutSignature,
+          );
+          let signatureBytes: Uint8Array;
+          try {
+            signatureBytes = this._deserializeSignature(signature);
+          } catch {
+            return null;
+          }
+          const verifyTasks = preLoadWriters.map((writerKey) =>
+            this._authProvider.verify(raw, writerKey, signatureBytes),
+          );
+          if (!(await firstTrue(verifyTasks))) {
+            return null;
+          }
+        }
+      }
+      if (!(message.tipsHash instanceof Uint8Array) || message.tipsHash.length !== TIPS_HASH_LENGTH) {
+        return null;
+      }
+      return message.tipsHash;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Run a single tip-advertise probe with a hard timeout. The probe itself
+   * never throws (`_probeTipAdvertise` returns `null` on any failure
+   * mode); a timeout also resolves to `null` so the caller can treat the
+   * peer as a non-vote rather than a disagreement. The pending probe
+   * keeps running on the background event loop after timeout, but its
+   * resolution is discarded by Promise.race.
+   *
+   * @internal
+   */
+  private async _raceTipAdvertiseProbe(
+    peer: import('@multiformats/multiaddr').Multiaddr,
+    serializedRequest: Uint8Array,
+    timeoutMs: number,
+  ): Promise<Uint8Array | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        this._probeTipAdvertise(peer, serializedRequest),
+        timeout,
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Extract the remote peer-id portion of a Multiaddr in a form suitable
+   * for keying the quorum decision map. For relay-circuit multiaddrs (e.g.
+   * `.../p2p/<relay>/p2p-circuit/p2p/<remote>`), the remote peer-id is the
+   * LAST `/p2p/<id>` segment. Falls back to the full multiaddr string when
+   * no `/p2p/<id>` segment is present so two responses from the same peer
+   * always collide on the same map key.
+   *
+   * @internal
+   */
+  private _peerIdOf(peer: import('@multiformats/multiaddr').Multiaddr): string {
+    const str = peer.toString();
+    const matches = [...str.matchAll(/\/p2p\/([^/]+)/g)];
+    return matches.length > 0 ? matches[matches.length - 1][1] : str;
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -2037,12 +2328,37 @@ export class CollabswarmDocument<
    *   substring from each peer's `Multiaddr.toString()` (the canonical string
    *   form), since `@multiformats/multiaddr` v13 dropped the `getPeerId()`
    *   helper and `getComponents()` may surface the `/p2p` value as bytes.
+   * **Initial-load quorum gate.** When
+   * `CollabswarmConfig.loadQuorumEnabled` is `true` (the default), `load()`
+   * first queries up to `loadQuorumK` peers in parallel via the
+   * `tipAdvertiseV1` protocol for a lightweight tip-set hash. The full
+   * document-load only proceeds against a peer that participated in a
+   * majority (`loadQuorumQ`-of-K) agreement on the tip set, defending
+   * against a single malicious or partitioned peer unilaterally serving a
+   * stale or maliciously-crafted initial state. If quorum is not met,
+   * `load()` rejects with a `LoadQuorumFailedError` (see
+   * `load-quorum.ts`). The gate can be disabled wholesale via
+   * `loadQuorumEnabled: false` for single-peer dev/test scenarios; the
+   * single-peer edge case is covered by `loadQuorumAllowSinglePeer`. Tip-
+   * advertise responses with an unknown encryption key, missing/invalid
+   * writer signature, document-id mismatch, or short/missing tip hash are
+   * recorded as non-votes (NOT disagreements) so a stale peer cache does
+   * not flip a partition into a Byzantine-failure verdict. Closes the gap
+   * tracked under issue #189 §5.4 item 2 (and bulleted in #186).
+   *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
    *   may mean the document is brand new (no peers have it) OR that all peers
    *   failed to respond, failed to decrypt, or failed signature verification.
    *   Note: `open()` treats `false` as "new document" and initializes a fresh
    *   document with the current user as writer and a new encryption key.
+   * @throws {LoadQuorumFailedError} When the initial-load quorum gate is
+   *   enabled and fewer than `loadQuorumQ` peers agreed on the same tip
+   *   hash within the configured timeout. Callers can `instanceof`-check
+   *   this error to distinguish quorum failure from other I/O errors
+   *   raised inside `load()`. The original single-peer
+   *   "return false on no peers" behaviour is preserved when the quorum
+   *   gate is disabled (`loadQuorumEnabled: false`).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -2103,6 +2419,132 @@ export class CollabswarmDocument<
       signature,
     };
     const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
+
+    // Initial-load quorum gate (#189 §5.4.2 / #186).
+    //
+    // Run BEFORE the existing single-peer snapshot/doc-load loop so that a
+    // failed quorum aborts the load entirely (the caller cannot accidentally
+    // accept a single peer's response). When the gate is disabled, or the
+    // edge cases below apply (founding-member empty `_hashes`, single peer
+    // with `loadQuorumAllowSinglePeer: true`), we fall through to the
+    // legacy loop unchanged so existing callers see the same behaviour.
+    const quorumEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
+    if (quorumEnabled) {
+      const configuredK = this.swarm.config?.loadQuorumK ?? 3;
+      const configuredQDefault = Math.ceil(configuredK / 2) + 1;
+      const configuredQ = this.swarm.config?.loadQuorumQ ?? configuredQDefault;
+      const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
+      const allowSinglePeer =
+        this.swarm.config?.loadQuorumAllowSinglePeer ?? false;
+
+      const k = effectiveK(configuredK, orderedPeers.length);
+      const q = effectiveQ(configuredQ, k);
+
+      // Edge case: founding-member / brand-new document. If our local
+      // `_hashes` is empty, we have nothing to compare against -- there is
+      // no risk of a peer poisoning state we don't yet hold. Skip the
+      // gate in this case (it would otherwise wedge fresh
+      // `open()` calls on solo dev peers). Note `_hashes` is only ever
+      // non-empty after we have applied changes locally (e.g. previously
+      // loaded successfully), so this safely catches the bootstrap case.
+      const isFoundingCase = this._hashes.size === 0;
+
+      if (k === 0) {
+        // No peers known. Existing behaviour: treat as "new document"
+        // and return false. The open() path will run validateDocumentPath
+        // and create the document from scratch. This is also the founding-
+        // member case, so the quorum gate has nothing to defend.
+        return false;
+      } else if (k === 1 && !allowSinglePeer && !isFoundingCase) {
+        throw new LoadQuorumFailedError({
+          documentPath: this.documentPath,
+          reason: 'insufficient-responses',
+          respondingCount: 0,
+          requiredQ: q,
+          agreement: new Map(),
+        });
+      } else if (k === 1 && allowSinglePeer && !isFoundingCase) {
+        // Single-peer pass-through. Probe the one known peer; if it
+        // responds at all we proceed with the legacy load. Warn loudly
+        // so operators can spot the regression. Q is forced to 1 here.
+        console.warn(
+          `[${this.documentPath}] Initial-load quorum: only one peer known; ` +
+            `proceeding under loadQuorumAllowSinglePeer (trust assumptions ` +
+            `degraded back to single-peer load). Configure additional peers ` +
+            `to restore Byzantine-fault-tolerant quorum semantics.`,
+        );
+        const probe = await this._raceTipAdvertiseProbe(
+          orderedPeers[0],
+          serializedRequest,
+          timeoutMs,
+        );
+        if (probe === null) {
+          throw new LoadQuorumFailedError({
+            documentPath: this.documentPath,
+            reason: 'insufficient-responses',
+            respondingCount: 0,
+            requiredQ: 1,
+            agreement: new Map(),
+          });
+        }
+        // Proceed with `orderedPeers` unchanged (preferred-peer order
+        // preserved). Fall through to the legacy snapshot/doc-load loop.
+      } else if (!isFoundingCase) {
+        // Standard K-of-Q quorum path. Take the first K peers from the
+        // already-ordered list (preferredPeer is at index 0, so it is
+        // always queried), probe in parallel, and decide.
+        const probedPeers = orderedPeers.slice(0, k);
+        const advertisements: PeerTipAdvertisement[] = await Promise.all(
+          probedPeers.map(async (peer) => {
+            const hash = await this._raceTipAdvertiseProbe(
+              peer,
+              serializedRequest,
+              timeoutMs,
+            );
+            return { peerId: this._peerIdOf(peer), hash };
+          }),
+        );
+        const decision = decideLoadQuorum(advertisements, q);
+        if (!decision.ok) {
+          console.warn(
+            `[${this.documentPath}] Initial-load quorum FAILED: ` +
+              `${decision.reason} (${decision.respondingCount} responses, ` +
+              `required ${decision.effectiveQ}). Aborting load.`,
+          );
+          throw new LoadQuorumFailedError({
+            documentPath: this.documentPath,
+            reason: decision.reason,
+            respondingCount: decision.respondingCount,
+            requiredQ: decision.effectiveQ,
+            agreement: decision.agreement,
+          });
+        }
+        console.log(
+          `[${this.documentPath}] Initial-load quorum passed: ` +
+            `${decision.agreeingPeerIds.length}/${decision.respondingCount} ` +
+            `peers agreed on tipsHash=${decision.winningHashHex.slice(0, 12)}...`,
+        );
+        // Narrow `orderedPeers` to only the agreeing cohort. The legacy
+        // snapshot/doc-load loop below then asks one of these peers for
+        // the full state; with quorum agreement, any single agreeing
+        // peer's load is defended by Q-1 other peers attesting to the
+        // same tip set. Order is preserved (preferredPeer first if it
+        // was among the agreeing cohort).
+        const agreeingSet = new Set(decision.agreeingPeerIds);
+        const narrowed = orderedPeers.filter((p) =>
+          agreeingSet.has(this._peerIdOf(p)),
+        );
+        // Defensive: at least one agreeing peer must remain. If
+        // peer-id extraction loses a peer (should never happen given
+        // we built the same set above), fall back to the full list so
+        // we don't accidentally degrade to "no peers to load from".
+        if (narrowed.length > 0) {
+          orderedPeers.length = 0;
+          orderedPeers.push(...narrowed);
+        }
+      }
+      // else: founding case -- fall through with `orderedPeers` unchanged.
+    }
 
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
