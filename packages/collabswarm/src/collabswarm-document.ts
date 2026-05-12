@@ -1642,8 +1642,10 @@ export class CollabswarmDocument<
    * Load is used to fetch any new changes that a connecting node is missing.
    *
    * @param preferredPeer Optional peer to try first (typically a PeerId from a
-   *   pubsub message sender). Matched against peers by extracting the PeerId
-   *   component from their Multiaddr via `getPeerId()`.
+   *   pubsub message sender). Matched against peers by extracting the `/p2p/<id>`
+   *   substring from each peer's `Multiaddr.toString()` (the canonical string
+   *   form), since `@multiformats/multiaddr` v13 dropped the `getPeerId()`
+   *   helper and `getComponents()` may surface the `/p2p` value as bytes.
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
    *   may mean the document is brand new (no peers have it) OR that all peers
@@ -1672,16 +1674,18 @@ export class CollabswarmDocument<
       const preferredId = preferredPeer.toString();
       const preferredIdx = orderedPeers.findIndex(p => {
         // Only compare against the PeerId component of the Multiaddr.
-        // Falling back to p.toString() would compare against the full
-        // multiaddr string (e.g. "/ip4/.../p2p/<id>") which will never
-        // match a plain PeerId string.
+        // Falling back to a full-string equality check would compare against
+        // the full multiaddr string (e.g. "/ip4/.../p2p/<id>") which will
+        // never match a plain PeerId string.
         //
         // `@multiformats/multiaddr` v13 (bundled by libp2p v3) dropped the
-        // `getPeerId()` helper; extract the `/p2p/<id>` component from
-        // `getComponents()` instead.
-        const components = p.getComponents?.() ?? [];
-        const p2p = components.find((c: { name: string; value?: string }) => c.name === 'p2p');
-        const peerId = p2p?.value ?? null;
+        // `getPeerId()` helper. `getComponents()` exists, but its component
+        // `value` field can be either a string or bytes depending on how the
+        // multiaddr was parsed, so a direct `=== preferredId` comparison is
+        // unreliable. `Multiaddr.toString()` always returns the canonical
+        // string form, so extract the `/p2p/<id>` substring from there.
+        const match = p.toString().match(/\/p2p\/([^/]+)/);
+        const peerId = match?.[1] ?? null;
         return peerId != null && peerId === preferredId;
       });
       if (preferredIdx > 0) {
