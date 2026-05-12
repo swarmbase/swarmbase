@@ -174,10 +174,35 @@ export async function initPage(
  * Replace the in-page console tracker after a page reload. Disposes the
  * previous tracker (removes its `page.on('console', ...)` listener and
  * clears its buffer) so listeners don't accumulate across multiple reloads.
+ *
+ * The new tracker is attached synchronously so callers can listen for output
+ * emitted by the reloaded page. The returned handle's `peerId` is NOT yet
+ * refreshed — call `refreshPeerId(handle)` after triggering `page.reload()`
+ * to update it, since the test app generates a new libp2p node (and thus a
+ * new peerId) on every reload.
  */
 export function rebindTracker(handle: PageHandle): PageHandle {
   handle.track.dispose();
   return { ...handle, track: trackConsole(handle.page) };
+}
+
+/**
+ * Await a fresh `PEER_ID:` log line from the (re)loaded page and return a
+ * handle with `peerId` updated to match. Use this after `page.reload()` (or
+ * any flow that restarts the test app's libp2p node) since each restart
+ * generates a new peerId — the prior value on the handle becomes stale.
+ *
+ * Expects `handle.track` to be a tracker attached before the reload was
+ * triggered (e.g. via `rebindTracker`) so the `PEER_ID:` emission isn't
+ * missed.
+ */
+export async function refreshPeerId(
+  handle: PageHandle,
+  timeoutMs = PEER_ID_WAIT_MS,
+): Promise<PageHandle> {
+  const peerIdMsg = await handle.track.waitFor('PEER_ID:', timeoutMs);
+  const peerId = peerIdMsg.replace('PEER_ID:', '').trim();
+  return { ...handle, peerId };
 }
 
 /**

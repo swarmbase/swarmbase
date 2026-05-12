@@ -52,6 +52,7 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   initPage,
   rebindTracker,
+  refreshPeerId,
   waitForMesh,
   waitForPeerConnection,
 } from './helpers/nat-helpers';
@@ -327,9 +328,12 @@ test.describe('NAT Browser Page Reload', () => {
       await preReload;
 
       // Reload B (simulates the cross-NAT browser dropping & coming back).
+      // The test app spins up a fresh libp2p node on reload, so we must
+      // refresh `b.peerId` to match — the prior value is stale.
       b = rebindTracker(b);
       await b.page.reload();
       await b.track.waitFor('INIT_COMPLETE', 90_000);
+      b = await refreshPeerId(b);
       await b.track.waitFor('PEER_CONNECTED:', 120_000);
       await waitForMesh(b.page, 12_000);
 
