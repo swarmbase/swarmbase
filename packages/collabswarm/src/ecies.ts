@@ -68,12 +68,19 @@ function hkdfInfo(): Uint8Array {
   return _hkdfInfo;
 }
 
-/** Cast Uint8Array to ArrayBuffer for WebCrypto API compatibility. */
-function toBuffer(data: Uint8Array): ArrayBuffer {
-  return (data.buffer as ArrayBuffer).slice(
-    data.byteOffset,
-    data.byteOffset + data.byteLength,
-  );
+/**
+ * Zero-copy cast for WebCrypto `BufferSource` parameters.
+ *
+ * The runtime accepts any `Uint8Array` directly, but the TypeScript
+ * DOM types (TS 5.7+) narrow `BufferSource` to
+ * `ArrayBufferView<ArrayBuffer>` and a `Uint8Array<ArrayBufferLike>`
+ * (the default after the TS 5.7 typed-array generic) is not assignable.
+ * Cast at the call boundary instead of copying via `slice` -- the latter
+ * would double memory for large payloads and break for views backed by
+ * `SharedArrayBuffer`.
+ */
+function bs(data: Uint8Array): BufferSource {
+  return data as unknown as BufferSource;
 }
 
 /**
@@ -105,6 +112,13 @@ export async function eciesSeal(
   const salt = crypto.getRandomValues(new Uint8Array(HKDF_SALT_LENGTH));
 
   // Derive AES key from shared secret via HKDF.
+  //
+  // WebCrypto accepts `BufferSource` (i.e. `ArrayBufferView` such as
+  // `Uint8Array`, or `ArrayBuffer`) for the byte-shaped parameters
+  // below, so we pass the views directly rather than cloning into a
+  // fresh `ArrayBuffer`. Avoiding the copies keeps memory usage flat
+  // for large payloads and lets `Uint8Array`s backed by
+  // `SharedArrayBuffer` (which lacks `.slice()`) flow through unchanged.
   const hkdfKey = await crypto.subtle.importKey(
     'raw',
     sharedBits,
@@ -116,8 +130,8 @@ export async function eciesSeal(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: toBuffer(salt),
-      info: toBuffer(hkdfInfo()),
+      salt: bs(salt),
+      info: bs(hkdfInfo()),
     },
     hkdfKey,
     { name: 'AES-GCM', length: 256 },
@@ -128,9 +142,9 @@ export async function eciesSeal(
   // Encrypt with AES-GCM.
   const nonce = crypto.getRandomValues(new Uint8Array(AES_NONCE_LENGTH));
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: toBuffer(nonce) },
+    { name: 'AES-GCM', iv: bs(nonce) },
     aesKey,
-    toBuffer(plaintext),
+    bs(plaintext),
   );
 
   // Export ephemeral public key (uncompressed point, 65 bytes for P-256).
@@ -198,10 +212,12 @@ export async function eciesOpen(
 
   const ciphertext = sealed.slice(pos);
 
-  // Import ephemeral public key.
+  // Import ephemeral public key. WebCrypto accepts a `BufferSource`
+  // here, so we pass the `Uint8Array` view directly instead of
+  // cloning into a fresh `ArrayBuffer` (see seal-side comment above).
   const ephemeralPublicKey = await crypto.subtle.importKey(
     'raw',
-    toBuffer(ephemeralPubBytes),
+    bs(ephemeralPubBytes),
     ECDH_ALGO,
     true,
     [],
@@ -226,8 +242,8 @@ export async function eciesOpen(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: toBuffer(salt),
-      info: toBuffer(hkdfInfo()),
+      salt: bs(salt),
+      info: bs(hkdfInfo()),
     },
     hkdfKey,
     { name: 'AES-GCM', length: 256 },
@@ -237,9 +253,9 @@ export async function eciesOpen(
 
   // Decrypt: AES-GCM tag failure throws.
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: toBuffer(nonce) },
+    { name: 'AES-GCM', iv: bs(nonce) },
     aesKey,
-    toBuffer(ciphertext),
+    bs(ciphertext),
   );
 
   return new Uint8Array(plaintext);
@@ -259,7 +275,7 @@ export async function importEciesPublicKey(
       `importEciesPublicKey: raw key must be ${ECIES_P256_PUBLIC_KEY_LENGTH} bytes (got ${raw.byteLength})`,
     );
   }
-  return crypto.subtle.importKey('raw', toBuffer(raw), ECDH_ALGO, true, []);
+  return crypto.subtle.importKey('raw', bs(raw), ECDH_ALGO, true, []);
 }
 
 /**
