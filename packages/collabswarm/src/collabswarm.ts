@@ -521,7 +521,9 @@ export class Collabswarm<
     // welcome sync-message body. After routing by path, the per-document
     // handler verifies the writer signature, merges the keychain delta,
     // and records the invitation epoch.
-    const beekemWelcomeHandler = ({ stream }: { stream: ProtocolStream }) => {
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    const beekemWelcomeHandler = (rawStream: Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
       pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
@@ -571,7 +573,7 @@ export class Collabswarm<
             // Welcome is fire-and-forget (no response over stream.sink),
             // but the inbound stream still needs to be closed to release
             // resources.
-            stream.close?.();
+            await stream.close();
           }
         },
       ).catch((err: unknown) => {

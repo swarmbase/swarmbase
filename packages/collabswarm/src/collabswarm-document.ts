@@ -3008,7 +3008,9 @@ export class CollabswarmDocument<
     const failedPeers: string[] = [];
     for (const peer of peers) {
       try {
-        const stream = await this.libp2p.dialProtocol(peer, [beekemWelcomeV1]);
+        const stream = wrapStream(
+          await this.libp2p.dialProtocol(peer, [beekemWelcomeV1]),
+        );
         await pipe([payload], stream.sink);
       } catch (err) {
         failedPeers.push(peer.toString());

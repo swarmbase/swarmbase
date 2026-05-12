@@ -18,7 +18,7 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 // the shared handler can route incoming Welcomes to the correct document.
 //
 // =============================================================================
-// SAFETY-CRITICAL: opt-in broadcast (PR #273 review comment #3)
+// SAFETY-CRITICAL: opt-in broadcast
 // =============================================================================
 // The Welcome payload (including `keychainChanges` -- current document key
 // material) is broadcast in **plaintext** at the application layer over this
@@ -38,7 +38,7 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 // (HPKE/ECIES; tracked as `#BEEKEM-PAYLOAD-ENC`) lands.
 //
 // =============================================================================
-// Race mitigation on the receive side (PR #273 review comments #1 + #2)
+// Race mitigation on the receive side
 // =============================================================================
 // The inviter sends the readers-ACL update over pubsub and the Welcome over
 // a direct stream; without coordination these can arrive out of order on the

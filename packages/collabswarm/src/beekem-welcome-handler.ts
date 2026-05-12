@@ -143,6 +143,10 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   const keychainChanges = message.keychainChanges as
     | { length?: number; byteLength?: number }
     | undefined;
+  // Treat unknown shapes (no `length`, no `byteLength`) as malformed by
+  // computing `0` for the fallback case. Combined with `<= 0` below this
+  // fails closed for any structurally invalid payload rather than
+  // accepting it and exploding later during the keychain merge.
   const keychainChangesLength =
     keychainChanges == null
       ? 0
@@ -150,8 +154,8 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
         ? keychainChanges.length
         : typeof keychainChanges.byteLength === 'number'
           ? keychainChanges.byteLength
-          : -1;
-  if (keychainChanges == null || keychainChangesLength === 0) {
+          : 0;
+  if (keychainChanges == null || keychainChangesLength <= 0) {
     return { kind: 'drop-malformed', reason: 'missing-keychain-changes' };
   }
 
