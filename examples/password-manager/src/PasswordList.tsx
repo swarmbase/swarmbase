@@ -88,11 +88,13 @@ export function PasswordList({
               {importingPassword && (
                 <>
                   <Form.Control
+                    aria-label="Secret ID"
                     placeholder="Enter a secret ID"
                     value={importPasswordId}
                     onChange={(e) => setImportPasswordId(e.target.value)}
                   ></Form.Control>
                   <Form.Control
+                    aria-label="Secret name (optional)"
                     placeholder="Enter a name (optional)"
                     value={importPasswordName}
                     onChange={(e) => setImportPasswordName(e.target.value)}

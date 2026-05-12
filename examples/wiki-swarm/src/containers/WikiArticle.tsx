@@ -26,6 +26,21 @@ import {
   AutomergeSwarmDocument,
 } from '../utils';
 
+/**
+ * Set `updatedOn` to now and back-fill `createdOn` / `createdBy` if they
+ * were never recorded. Called from every `onChange` handler so the two
+ * paths (title edits and content edits) can't drift out of sync.
+ */
+function stampTimestamps(doc: WikiSwarmArticle) {
+  doc.updatedOn = dayjs().format();
+  if (!doc.createdOn && doc.updatedOn) {
+    doc.createdOn = doc.updatedOn;
+  }
+  if (!doc.createdBy && doc.updatedBy) {
+    doc.createdBy = doc.updatedBy;
+  }
+}
+
 interface MatchParams {
   documentId: string;
 }
@@ -135,7 +150,10 @@ class WikiArticle extends React.Component<
           this.props.document,
         );
       }
-      const currentTitle = this.props.document.title.toString();
+      // `title` is declared required in the model, but a document opened
+      // before the title field was wired in may legitimately lack it; fall
+      // back to '' so the controlled input still renders.
+      const currentTitle = this.props.document.title?.toString() ?? '';
       return (
         <div className="m-3">
           <label htmlFor="wiki-article-title" className="visually-hidden">
@@ -156,13 +174,7 @@ class WikiArticle extends React.Component<
                   // sufficient for an example app; a production app would
                   // splice character-level diffs to preserve concurrent edits.
                   currentDocument.title = new Text(newTitle);
-                  currentDocument.updatedOn = dayjs().format();
-                  if (
-                    !currentDocument.createdOn &&
-                    currentDocument.updatedOn
-                  ) {
-                    currentDocument.createdOn = currentDocument.updatedOn;
-                  }
+                  stampTimestamps(currentDocument);
                 },
               );
             }}
@@ -176,22 +188,8 @@ class WikiArticle extends React.Component<
                 this.props.onDocumentChange(
                   this.props.match.params.documentId,
                   (currentDocument) => {
-                    currentDocument.updatedOn = dayjs().format();
-                    // currentDocument.updatedBy = ???
-                    if (
-                      !currentDocument.createdOn &&
-                      currentDocument.updatedOn
-                    ) {
-                      currentDocument.createdOn = currentDocument.updatedOn;
-                    }
-                    if (
-                      !currentDocument.createdBy &&
-                      currentDocument.updatedBy
-                    ) {
-                      currentDocument.createdBy = currentDocument.updatedBy;
-                    }
+                    stampTimestamps(currentDocument);
                     currentDocument.content = content;
-                    // console.log('Updating editor content:', currentDocument.content.blocks.map(x => x.text).join(' '));
                   },
                 );
               }}
