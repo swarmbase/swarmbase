@@ -62,22 +62,66 @@ const APP_B_URL = 'http://localhost:3002';
 const COMPOSE_FILE = 'docker-compose.nat-test.yaml';
 
 /**
+ * Shape of the `messages` array stored on `window` by `e2e/test-app/app.js`.
+ * Each entry is a single pubsub-delivered message that the test app rendered.
+ */
+interface TestAppMessage {
+  text: string;
+  // Other fields (id, ts, from, etc.) may be present but aren't asserted on.
+  [key: string]: unknown;
+}
+
+/**
+ * Subset of the test-app's window globals consumed by these tests.
+ * Declaring these explicitly avoids `(window as any)` casts when calling
+ * `page.evaluate(...)` and gives us proper typing for `__messages`.
+ */
+interface TestAppWindow extends Window {
+  __messages: TestAppMessage[];
+  // `__libp2p` is also exposed by the test app but is opaque to these tests.
+  __libp2p?: unknown;
+}
+
+/**
+ * Narrowed shape of execSync's thrown error. The Node typings declare
+ * `stdout`/`stderr` as `string | Buffer | undefined`; with `encoding: 'utf8'`
+ * they are typically strings, but we keep the union to stay safe.
+ */
+interface ExecError {
+  message: string;
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
+}
+
+function isExecError(err: unknown): err is ExecError {
+  return typeof err === 'object' && err !== null && 'message' in err;
+}
+
+function decode(buf: string | Buffer | undefined): string {
+  if (buf === undefined) return '';
+  return typeof buf === 'string' ? buf : buf.toString('utf8');
+}
+
+/**
  * Run a docker compose subcommand against the NAT-test compose file.
  * Failures are surfaced via thrown Error so the test fails loudly.
  */
 function compose(args: string): string {
+  const fullCommand = `docker compose -f ${COMPOSE_FILE} ${args}`;
   try {
-    return execSync(`docker compose -f ${COMPOSE_FILE} ${args}`, {
+    return execSync(fullCommand, {
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
       timeout: 120_000,
     });
-  } catch (err) {
-    const e = err as { stdout?: Buffer; stderr?: Buffer; message: string };
+  } catch (err: unknown) {
+    const message = isExecError(err) ? err.message : String(err);
+    const stdout = isExecError(err) ? decode(err.stdout) : '';
+    const stderr = isExecError(err) ? decode(err.stderr) : '';
     throw new Error(
-      `docker compose ${args} failed: ${e.message}\n` +
-      `stdout: ${e.stdout?.toString() ?? ''}\n` +
-      `stderr: ${e.stderr?.toString() ?? ''}`,
+      `\`${fullCommand}\` failed: ${message}\n` +
+      `stdout: ${stdout}\n` +
+      `stderr: ${stderr}`,
     );
   }
 }
@@ -182,8 +226,10 @@ test.describe('NAT Relay Failure Recovery', () => {
       // anything down. The post-restart assertion below snapshots the new
       // page's message buffer length right after reload and verifies it
       // grows once the post-restart send round-trips.
-      const preMessagesB = await b.page.evaluate(() => (window as any).__messages);
-      expect(preMessagesB.some((m: any) => m.text === 'pre-restart')).toBe(true);
+      const preMessagesB = await b.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
+      expect(preMessagesB.some((m) => m.text === 'pre-restart')).toBe(true);
 
       // Capture the pre-restart relay peer ID so we can detect when the
       // restarted relay has rewritten /shared/relay-info.json.
@@ -229,7 +275,9 @@ test.describe('NAT Relay Failure Recovery', () => {
       // restart send) so we can verify the buffer actually grows as a result
       // of new cross-NAT traffic, not just because the assertion happens to
       // match a stale entry.
-      const baselineMessagesB = await b.page.evaluate(() => (window as any).__messages);
+      const baselineMessagesB = await b.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
       const baselineMessageCountB = baselineMessagesB.length;
 
       // Verify cross-NAT sync works again post-restart.
@@ -238,8 +286,10 @@ test.describe('NAT Relay Failure Recovery', () => {
       await a.page.click('#send-btn');
       await postMsg;
 
-      const postMessagesB = await b.page.evaluate(() => (window as any).__messages);
-      expect(postMessagesB.some((m: any) => m.text === 'post-restart')).toBe(true);
+      const postMessagesB = await b.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
+      expect(postMessagesB.some((m) => m.text === 'post-restart')).toBe(true);
       // Confirm the message buffer actually grew after the post-restart send,
       // proving we observed new traffic on this fresh page (not a stale
       // match against the buffer's initial contents).
@@ -289,8 +339,10 @@ test.describe('NAT Browser Page Reload', () => {
       await a.page.click('#send-btn');
       await postReload;
 
-      const messagesB = await b.page.evaluate(() => (window as any).__messages);
-      expect(messagesB.some((m: any) => m.text === 'after-reload')).toBe(true);
+      const messagesB = await b.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
+      expect(messagesB.some((m) => m.text === 'after-reload')).toBe(true);
     } finally {
       await a.context.close().catch(() => {});
       await b.context.close().catch(() => {});
@@ -339,8 +391,10 @@ test.describe('NAT Browser Network Toggle', () => {
       await b.page.click('#send-btn');
       await aReceives;
 
-      const messagesA = await a.page.evaluate(() => (window as any).__messages);
-      expect(messagesA.some((m: any) => m.text === 'post-offline-from-b')).toBe(true);
+      const messagesA = await a.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
+      expect(messagesA.some((m) => m.text === 'post-offline-from-b')).toBe(true);
     } finally {
       await a.context.close().catch(() => {});
       await b.context.close().catch(() => {});
@@ -388,28 +442,36 @@ test.describe('NAT Rapid Concurrent Edits', () => {
       const target = Math.ceil(count * 0.6);
       await Promise.all([
         a.page.waitForFunction(
-          (n) => (window as any).__messages?.filter((m: any) => m.text.startsWith('B-edit-')).length >= n,
+          (n) =>
+            ((window as unknown as TestAppWindow).__messages ?? [])
+              .filter((m) => m.text.startsWith('B-edit-')).length >= n,
           target,
           { timeout: 90_000 },
         ),
         b.page.waitForFunction(
-          (n) => (window as any).__messages?.filter((m: any) => m.text.startsWith('A-edit-')).length >= n,
+          (n) =>
+            ((window as unknown as TestAppWindow).__messages ?? [])
+              .filter((m) => m.text.startsWith('A-edit-')).length >= n,
           target,
           { timeout: 90_000 },
         ),
       ]);
 
-      const messagesA = await a.page.evaluate(() => (window as any).__messages);
-      const messagesB = await b.page.evaluate(() => (window as any).__messages);
+      const messagesA = await a.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
+      const messagesB = await b.page.evaluate(
+        () => (window as unknown as TestAppWindow).__messages,
+      );
 
       // Each side should always have all of its own messages.
       for (let i = 0; i < count; i++) {
-        expect(messagesA.some((m: any) => m.text === `A-edit-${i}`)).toBe(true);
-        expect(messagesB.some((m: any) => m.text === `B-edit-${i}`)).toBe(true);
+        expect(messagesA.some((m) => m.text === `A-edit-${i}`)).toBe(true);
+        expect(messagesB.some((m) => m.text === `B-edit-${i}`)).toBe(true);
       }
 
-      const aFromB = messagesA.filter((m: any) => m.text.startsWith('B-edit-')).length;
-      const bFromA = messagesB.filter((m: any) => m.text.startsWith('A-edit-')).length;
+      const aFromB = messagesA.filter((m) => m.text.startsWith('B-edit-')).length;
+      const bFromA = messagesB.filter((m) => m.text.startsWith('A-edit-')).length;
       console.log(`Cross-NAT rapid delivery: A<-B ${aFromB}/${count}, B<-A ${bFromA}/${count}`);
 
       expect(aFromB).toBeGreaterThanOrEqual(target);
