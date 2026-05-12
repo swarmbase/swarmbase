@@ -177,20 +177,25 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // update has been applied -- in which case `isReader` legitimately
   // returns `false` here even though the Welcome is genuine.
   //
-  // Current mitigation: the inviter retries Welcomes when the
-  // recipient does not promptly acknowledge (see
-  // `CollabswarmDocument._sendBeeKEMWelcome` / the retry loop). The
-  // transient drop here forces a retry rather than persisting an
-  // unauthorized installation.
+  // Mitigation (PR #273 review comments #1 + #2): this gate still
+  // returns `drop-unauthorized` / `not-in-readers-acl` so the
+  // validator stays pure, but the production receive path in
+  // `CollabswarmDocument._evaluateAndApplyBeeKEMWelcome` treats this
+  // specific drop reason as a signal to *buffer* the Welcome in a
+  // bounded `pendingWelcomes: Map<hex(welcomeEpochId), ...>` (max 16
+  // entries, ~5 min TTL) rather than dropping it forever. The buffer
+  // is drained by `_drainPendingWelcomes` after every readers-ACL
+  // `merge`, so a Welcome that arrived before the ACL update gets
+  // replayed as soon as the ACL catches up.
   //
-  // TODO(#178-followup): consider buffering Welcomes briefly in a
-  // bounded `pendingWelcomes: Map<epochIdHex, CRDTSyncMessage>` keyed
-  // by `welcomeEpochId`, drained by the ACL update handler when a new
-  // reader is added. That would close the race without depending on
-  // inviter retry, at the cost of a small additional state machine
-  // and bound-enforcement policy (LRU + max size). Until then, the
-  // "drop and retry" behavior is the documented contract and the unit
-  // tests in `beekem-welcome-handler.test.ts` enforce it.
+  // The inviter does **not** retry Welcomes (`_sendBeeKEMWelcome` is
+  // fire-and-forget by design -- no ack protocol exists in this
+  // protocol version). Buffering on the recipient is therefore the
+  // authoritative race mitigation; documentation in
+  // `_sendBeeKEMWelcome` and `wire-protocols.ts` reflects that. A
+  // Welcome that exhausts the TTL without an unblocking ACL update
+  // is discarded and the recipient must rely on a fresh
+  // document-load against an authorized peer to recover.
   if (!(await deps.isReader(deps.localUserPublicKey))) {
     return { kind: 'drop-unauthorized', reason: 'not-in-readers-acl' };
   }

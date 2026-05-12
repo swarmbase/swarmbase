@@ -205,6 +205,43 @@ export class CollabswarmDocument<
   // invitation epoch).
   private _invitationEpoch: Uint8Array | undefined;
 
+  // Pending BeeKEM Welcomes parked while the recipient is not yet a reader.
+  //
+  // KNOWN RACE (PR #273 review comments #1 + #2): the inviter publishes
+  // the readers-ACL update over pubsub and sends the Welcome over a
+  // direct libp2p stream. The Welcome can arrive before the ACL update
+  // has been applied on the recipient; without buffering, the
+  // `not-in-readers-acl` gate in `evaluateBeeKEMWelcome` would drop the
+  // Welcome permanently because `_sendBeeKEMWelcome` is fire-and-forget
+  // (no retry / no ack). Buffering closes the race: when a Welcome is
+  // dropped solely because the local user is not yet a reader, we park
+  // it here keyed by hex(welcomeEpochId), and re-evaluate buffered
+  // Welcomes after every readers-ACL `merge` (`_drainPendingWelcomes`).
+  //
+  // Bounding:
+  //  - `_PENDING_WELCOMES_MAX_ENTRIES` (16): caps memory usage so a
+  //    flood of misaddressed or hostile Welcomes cannot grow the buffer
+  //    without bound. Older entries are evicted in insertion order
+  //    (Map iteration order) when the bound is reached.
+  //  - `_PENDING_WELCOMES_TTL_MS` (5 min): caps how long any Welcome
+  //    sits unresolved. Entries past their TTL are discarded on the
+  //    next drain attempt. Five minutes is well above the worst-case
+  //    GossipSub mesh propagation we observe in `e2e/integration/`
+  //    (~10s through a relay) while remaining short enough that stale
+  //    Welcomes don't linger indefinitely after a legitimate
+  //    re-invite.
+  //
+  // The key is the lower-case hex encoding of `welcomeEpochId` (a
+  // `Uint8Array`), chosen so the buffer's identity matches the
+  // canonical epoch identifier used elsewhere in the receive path and
+  // so duplicate Welcomes (same epoch) coalesce automatically.
+  private _pendingWelcomes = new Map<
+    string,
+    { message: CRDTSyncMessage<ChangesType, PublicKey>; bufferedAtMs: number }
+  >();
+  private static readonly _PENDING_WELCOMES_MAX_ENTRIES = 16;
+  private static readonly _PENDING_WELCOMES_TTL_MS = 5 * 60 * 1000;
+
   /**
    * Set the history visibility for this document.
    * Controls what data new members receive when they join.
@@ -573,8 +610,10 @@ export class CollabswarmDocument<
             break;
           }
           case crdtReaderChangeNode: {
-            // Apply the changes that were sent directly.
-            this._readers.merge(sentChanges);
+            // Apply the changes that were sent directly. Use the
+            // `_mergeReaders` wrapper so pending BeeKEM Welcomes are
+            // drained immediately after the ACL update lands.
+            this._mergeReaders(sentChanges);
             newDocumentHashes.push(sentHash);
             newDocumentTips.push([sentHash, sentChangeKind]);
             break;
@@ -644,7 +683,10 @@ export class CollabswarmDocument<
                   return;
                 }
                 case crdtReaderChangeNode: {
-                  this._readers.merge(missingChanges);
+                  // Go through `_mergeReaders` to drain any pending
+                  // BeeKEM Welcomes parked while waiting for this ACL
+                  // update.
+                  this._mergeReaders(missingChanges);
                   this._hashes.add(missingHash);
                   this._trackTip(missingHash, missingHashKind);
                   await this._fireRemoteUpdateHandlers([missingHash]);
@@ -696,13 +738,46 @@ export class CollabswarmDocument<
       if (node.kind === crdtWriterChangeNode) {
         this._mergeWriters(node.change);
       } else if (node.kind === crdtReaderChangeNode) {
-        this._readers.merge(node.change);
+        this._mergeReaders(node.change);
       }
     }
     if (node.children !== undefined && node.children !== crdtChangeNodeDeferred) {
       for (const child of Object.values(node.children)) {
         this._applyACLFromTree(child);
       }
+    }
+  }
+
+  /**
+   * Sanctioned wrapper around `_readers.merge` that also drains any
+   * pending BeeKEM Welcomes parked by `handleBeeKEMWelcomeRequestData`
+   * because the local user was not yet a reader. Centralizing the
+   * post-merge drain here closes the readers-ACL / Welcome reordering
+   * race regardless of which code path applied the ACL change.
+   *
+   * All ACL-merge call sites for the readers ACL must go through this
+   * helper -- a bare `_readers.merge(...)` would silently skip the
+   * drain, leaving a Welcome parked until the next merge (or TTL
+   * eviction) and re-introducing the wedge fixed by PR #273 comments
+   * #1 + #2.
+   *
+   * Drain is fire-and-forget because it must not block the synchronous
+   * ACL-merge call sites (`_syncDocumentChanges`, `_applyACLFromTree`)
+   * on async keychain/signature work. Errors during drain are caught
+   * and logged so a bug in one buffered Welcome cannot starve the
+   * receive path.
+   *
+   * @internal
+   */
+  private _mergeReaders(changes: ChangesType): void {
+    this._readers.merge(changes);
+    if (this._pendingWelcomes.size > 0) {
+      void this._drainPendingWelcomes().catch((err) => {
+        console.error(
+          `Failed to drain pending BeeKEM Welcomes for ${this.documentPath}:`,
+          err,
+        );
+      });
     }
   }
 
@@ -2723,13 +2798,24 @@ export class CollabswarmDocument<
   /**
    * Add a new user as a valid reader. Users are identified by their public keys.
    *
-   * After updating the readers ACL, this also sends a BeeKEM Welcome to the
-   * new reader so they receive (a) the keychain changes appropriate for the
-   * document's `historyVisibility` setting (so they can decrypt at least the
-   * current state), and (b) the invitation epoch ID they should record for
-   * subsequent `since_invited` history filtering. The Welcome is delivered
-   * via the `beekemWelcomeV1` protocol to every currently-connected peer;
-   * the receiving document ignores Welcomes addressed to a different reader.
+   * After updating the readers ACL, this attempts to send a BeeKEM Welcome
+   * to the new reader so they receive (a) the keychain changes appropriate
+   * for the document's `historyVisibility` setting (so they can decrypt at
+   * least the current state), and (b) the invitation epoch ID they should
+   * record for subsequent `since_invited` history filtering. The Welcome
+   * is delivered via the `beekemWelcomeV1` protocol to every
+   * currently-connected peer; the receiving document ignores Welcomes
+   * addressed to a different reader.
+   *
+   * SAFETY-CRITICAL (PR #273 review comment #3): the BeeKEM Welcome
+   * broadcast leaks `keychainChanges` in plaintext to every connected
+   * peer. The dispatch path is therefore gated behind the explicit
+   * `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome` flag, which
+   * defaults to `false`. When the flag is disabled the readers-ACL update
+   * is still broadcast (so the new reader can join the document and
+   * subsequent pubsub traffic), but no Welcome is sent -- the new reader
+   * recovers keychain state via a fresh document load against an
+   * authorized peer instead. See `_sendBeeKEMWelcome` for the rationale.
    *
    * @param reader User's public key.
    */
@@ -2801,8 +2887,10 @@ export class CollabswarmDocument<
    *   [4-byte BE doc-path length] [UTF-8 doc-path] [serialized sync message]
    */
   private async _sendBeeKEMWelcome(reader: PublicKey): Promise<void> {
-    // SECURITY: this method broadcasts a *plaintext* Welcome -- including
-    // the document key material in `keychainChanges` -- to every
+    // OPT-IN GATE (PR #273 review comment #3, safe-by-default).
+    //
+    // This method broadcasts a *plaintext* Welcome -- including the
+    // document key material in `keychainChanges` -- to every
     // currently-connected libp2p peer. The recipient binding
     // (`welcomeRecipient` + the writer signature covering it) is an
     // *authorization* control that prevents an honest non-target peer
@@ -2815,24 +2903,42 @@ export class CollabswarmDocument<
     // off-path observers but does nothing to limit which connected peers
     // see the application-layer payload.
     //
-    // This is a known limitation of the current BeeKEM Welcome design
-    // and a confidentiality gap on untrusted networks. The fix is
-    // recipient-encrypted key delivery (e.g. HPKE / ECIES under the
-    // recipient's identity key, or wrapping under the recipient's BeeKEM
-    // public key once a stable identity-to-encryption-key mapping is in
-    // place), so that only the intended reader can decrypt
-    // `keychainChanges`. Implementing that is non-trivial -- it requires
-    // an agreed identity-encryption key plumbed through `AuthProvider`,
-    // schema changes in `CRDTSyncMessage`, a versioned wire-format bump,
-    // and migration of the receive path -- and is intentionally
-    // out-of-scope for the initial Welcome introduction. Until that
-    // lands, deployments that require confidentiality against connected
-    // peers must restrict the connection set (e.g. authenticated relays,
-    // private swarms).
+    // For that reason the broadcast path is gated behind an explicit
+    // opt-in flag, `CollabswarmConfig.experimentalBeeKEMBroadcastWelcome`,
+    // which defaults to `false`. When unset / `false`, this method is a
+    // no-op (with a warning) -- the new reader is still added to the
+    // readers ACL by `addReader` and can recover keychain state via a
+    // fresh document load against an authorized peer. Deployments that
+    // accept the confidentiality trade-off (e.g. trusted private swarms,
+    // closed test/lab environments) can flip the flag to `true`.
+    //
+    // The fix that lets this be on-by-default is recipient-encrypted
+    // key delivery (e.g. HPKE / ECIES under the recipient's identity
+    // key, or wrapping under the recipient's BeeKEM public key once a
+    // stable identity-to-encryption-key mapping is in place), so that
+    // only the intended reader can decrypt `keychainChanges`.
+    // Implementing that is non-trivial -- it requires an agreed
+    // identity-encryption key plumbed through `AuthProvider`, schema
+    // changes in `CRDTSyncMessage`, a versioned wire-format bump, and
+    // migration of the receive path -- and is intentionally out-of-scope
+    // for the initial Welcome introduction.
     //
     // TODO(beekem-payload-encryption): wrap the Welcome payload under
     // the recipient's identity key so `keychainChanges` is opaque to
     // every other connected peer. Tracked as #BEEKEM-PAYLOAD-ENC.
+    if (this.swarm.config?.experimentalBeeKEMBroadcastWelcome !== true) {
+      console.warn(
+        `BeeKEM Welcome broadcast for ${this.documentPath} skipped: ` +
+          `config.experimentalBeeKEMBroadcastWelcome is not enabled. ` +
+          `The new reader was added to the readers ACL but will need to ` +
+          `perform a fresh document load to receive keychain key material. ` +
+          `Only enable this flag in deployments with a trusted connection ` +
+          `set; the Welcome payload is broadcast in plaintext to every ` +
+          `currently-connected peer.`,
+      );
+      return;
+    }
+
     // Build the welcome message.
     const welcomeMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: this.documentPath,
@@ -2941,122 +3047,284 @@ export class CollabswarmDocument<
   ): Promise<void> {
     try {
       const message = this._syncMessageSerializer.deserializeSyncMessage(payload);
-
-      // Run the pure validation gates (extracted to
-      // `beekem-welcome-handler.ts` so they can be unit-tested without
-      // a full libp2p/Helia stack). On `accept` we apply the keychain
-      // merge + invitation-epoch assignment below. `serializePublicKey`
-      // is required on the AuthProvider for the recipient-binding gate;
-      // we surface a clear error instead of silently dropping
-      // every Welcome for misconfigured providers.
-      const serializePublicKey = requireSerializePublicKey(
-        this._authProvider,
-        'BeeKEM Welcome onboarding',
-      );
-      const decision = await evaluateBeeKEMWelcome(message, {
-        documentPath: this.documentPath,
-        localUserPublicKey: this._userPublicKey,
-        isSigningEnabled: () => this._isSigningEnabled(),
-        serializePublicKey,
-        isReader: (pk) => this._readers.check(pk),
-        verifyWriterSignature: (raw, signature) =>
-          this._verifyWriterSignature(raw, signature),
-        syncMessageSerializer: this._syncMessageSerializer,
+      await this._evaluateAndApplyBeeKEMWelcome(message, {
+        fromBuffer: false,
       });
-
-      if (decision.kind !== 'accept') {
-        switch (decision.kind) {
-          case 'drop-not-for-us':
-            // Legitimate Welcome to another peer flowing past our
-            // connection -- silently ignore.
-            return;
-          case 'drop-malformed':
-            console.warn(
-              `Dropping malformed BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
-            );
-            return;
-          case 'drop-unauthorized':
-            console.warn(
-              `Dropping unauthorized BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
-            );
-            return;
-        }
-      }
-
-      // Merge the keychain changes before recording the invitation epoch,
-      // so a recipient handling concurrent Welcomes is not left with an
-      // _invitationEpoch pointing at a key that hasn't been installed.
-      if (message.keychainChanges) {
-        try {
-          this._keychain.merge(message.keychainChanges);
-        } catch (err) {
-          console.error(
-            `Failed to merge keychain changes from BeeKEM Welcome for ${this.documentPath}:`,
-            err,
-          );
-          return;
-        }
-      }
-
-      // Record the invitation epoch -- this gates `since_invited` history
-      // filtering on subsequent doc-load / snapshot-load responses we send.
-      // `evaluateBeeKEMWelcome` guarantees `welcomeEpochId` is set when
-      // it returns `accept`.
-      //
-      // MONOTONIC UPDATE (PR #273 review): if we already have an
-      // `_invitationEpoch`, only advance it forward in keychain order --
-      // never regress to an earlier epoch.
-      //
-      // The threat model: a writer could (maliciously or via reordering)
-      // send a later writer-signed Welcome that nominally addresses this
-      // node but carries an *earlier* `welcomeEpochId`. If we
-      // unconditionally overwrote `_invitationEpoch`, this would shrink
-      // the recipient's join boundary, broadening the set of keys
-      // returned by future `since_invited` history responses we send
-      // (leaking more history than the original invitation granted).
-      //
-      // Comparison strategy: `_keychain.keys()` returns entries in the
-      // insertion order used by Yjs/Automerge keychain implementations
-      // (`keychain.keys.push(...)`). Position in that array is the
-      // canonical "later means later" relation -- the same one
-      // `historySince` relies on to slice the suffix. We compare the
-      // positions of the existing and incoming epoch IDs; if the new
-      // one is strictly later we advance, otherwise we keep the
-      // existing anchor.
-      //
-      // Fallback: if either ID is not present in `keys()` after the
-      // merge above (e.g. the merge dropped the entry, or the local
-      // keychain implementation does not expose insertion order), we
-      // conservatively keep the existing `_invitationEpoch` -- it is
-      // already known-good. The only path that loses fidelity is the
-      // first-Welcome-ever case (no existing anchor) which is handled
-      // by the simple assignment branch.
-      const newEpochId = message.welcomeEpochId as Uint8Array;
-      if (this._invitationEpoch === undefined) {
-        this._invitationEpoch = newEpochId;
-      } else {
-        const advanced = await this._shouldAdvanceInvitationEpoch(
-          this._invitationEpoch,
-          newEpochId,
-        );
-        if (advanced) {
-          this._invitationEpoch = newEpochId;
-        } else {
-          console.warn(
-            `Ignoring out-of-order BeeKEM Welcome for ${this.documentPath}: ` +
-              `incoming epoch is not later than current invitation epoch`,
-          );
-        }
-      }
-      console.log(
-        `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
-      );
     } catch (err: unknown) {
       console.error(
         `Error handling BeeKEM Welcome for document ${this.documentPath}:`,
         err,
       );
     }
+  }
+
+  /**
+   * Shared receive-path body for both freshly-arrived Welcomes (called
+   * from `handleBeeKEMWelcomeRequestData`) and Welcomes replayed from the
+   * pending-welcomes buffer (called from `_drainPendingWelcomes` after a
+   * readers-ACL update unblocks a previously-dropped Welcome).
+   *
+   * @param message The deserialized sync message.
+   * @param opts.fromBuffer When `true`, the message is being replayed from
+   *   the pending-welcomes buffer; we suppress re-buffering on
+   *   `not-in-readers-acl` to avoid an infinite drain loop and instead
+   *   leave the entry in place for the next drain cycle (or TTL
+   *   eviction).
+   * @returns `true` iff the Welcome was accepted and applied.
+   *
+   * @internal
+   */
+  private async _evaluateAndApplyBeeKEMWelcome(
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
+    opts: { fromBuffer: boolean },
+  ): Promise<boolean> {
+    // Run the pure validation gates (extracted to
+    // `beekem-welcome-handler.ts` so they can be unit-tested without
+    // a full libp2p/Helia stack). On `accept` we apply the keychain
+    // merge + invitation-epoch assignment below. `serializePublicKey`
+    // is required on the AuthProvider for the recipient-binding gate;
+    // we surface a clear error instead of silently dropping
+    // every Welcome for misconfigured providers.
+    const serializePublicKey = requireSerializePublicKey(
+      this._authProvider,
+      'BeeKEM Welcome onboarding',
+    );
+    const decision = await evaluateBeeKEMWelcome(message, {
+      documentPath: this.documentPath,
+      localUserPublicKey: this._userPublicKey,
+      isSigningEnabled: () => this._isSigningEnabled(),
+      serializePublicKey,
+      isReader: (pk) => this._readers.check(pk),
+      verifyWriterSignature: (raw, signature) =>
+        this._verifyWriterSignature(raw, signature),
+      syncMessageSerializer: this._syncMessageSerializer,
+    });
+
+    if (decision.kind !== 'accept') {
+      switch (decision.kind) {
+        case 'drop-not-for-us':
+          // Legitimate Welcome to another peer flowing past our
+          // connection -- silently ignore.
+          return false;
+        case 'drop-malformed':
+          console.warn(
+            `Dropping malformed BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
+          );
+          return false;
+        case 'drop-unauthorized':
+          // PR #273 review comments #1 + #2: if the Welcome was
+          // dropped solely because the local user is not yet a reader
+          // (ACL update + Welcome can reorder; `_sendBeeKEMWelcome` is
+          // fire-and-forget), park the Welcome in a small bounded
+          // buffer and replay it after the next readers-ACL merge.
+          // Without this buffer, a transiently-late ACL update would
+          // permanently wedge onboarding.
+          if (
+            decision.reason === 'not-in-readers-acl' &&
+            !opts.fromBuffer &&
+            message.welcomeEpochId &&
+            message.welcomeEpochId.length > 0
+          ) {
+            this._bufferPendingWelcome(message);
+          } else {
+            console.warn(
+              `Dropping unauthorized BeeKEM Welcome for ${this.documentPath}: ${decision.reason}`,
+            );
+          }
+          return false;
+      }
+    }
+
+    // Merge the keychain changes before recording the invitation epoch,
+    // so a recipient handling concurrent Welcomes is not left with an
+    // _invitationEpoch pointing at a key that hasn't been installed.
+    if (message.keychainChanges) {
+      try {
+        this._keychain.merge(message.keychainChanges);
+      } catch (err) {
+        console.error(
+          `Failed to merge keychain changes from BeeKEM Welcome for ${this.documentPath}:`,
+          err,
+        );
+        return false;
+      }
+    }
+
+    // Record the invitation epoch -- this gates `since_invited` history
+    // filtering on subsequent doc-load / snapshot-load responses we send.
+    // `evaluateBeeKEMWelcome` guarantees `welcomeEpochId` is set when
+    // it returns `accept`.
+    //
+    // MONOTONIC UPDATE (PR #273 review): if we already have an
+    // `_invitationEpoch`, only advance it forward in keychain order --
+    // never regress to an earlier epoch.
+    //
+    // The threat model: a writer could (maliciously or via reordering)
+    // send a later writer-signed Welcome that nominally addresses this
+    // node but carries an *earlier* `welcomeEpochId`. If we
+    // unconditionally overwrote `_invitationEpoch`, this would shrink
+    // the recipient's join boundary, broadening the set of keys
+    // returned by future `since_invited` history responses we send
+    // (leaking more history than the original invitation granted).
+    //
+    // Comparison strategy: `_keychain.keys()` returns entries in the
+    // insertion order used by Yjs/Automerge keychain implementations
+    // (`keychain.keys.push(...)`). Position in that array is the
+    // canonical "later means later" relation -- the same one
+    // `historySince` relies on to slice the suffix. We compare the
+    // positions of the existing and incoming epoch IDs; if the new
+    // one is strictly later we advance, otherwise we keep the
+    // existing anchor.
+    //
+    // Fallback: if either ID is not present in `keys()` after the
+    // merge above (e.g. the merge dropped the entry, or the local
+    // keychain implementation does not expose insertion order), we
+    // conservatively keep the existing `_invitationEpoch` -- it is
+    // already known-good. The only path that loses fidelity is the
+    // first-Welcome-ever case (no existing anchor) which is handled
+    // by the simple assignment branch.
+    const newEpochId = message.welcomeEpochId as Uint8Array;
+    if (this._invitationEpoch === undefined) {
+      this._invitationEpoch = newEpochId;
+    } else {
+      const advanced = await this._shouldAdvanceInvitationEpoch(
+        this._invitationEpoch,
+        newEpochId,
+      );
+      if (advanced) {
+        this._invitationEpoch = newEpochId;
+      } else {
+        console.warn(
+          `Ignoring out-of-order BeeKEM Welcome for ${this.documentPath}: ` +
+            `incoming epoch is not later than current invitation epoch`,
+        );
+      }
+    }
+    console.log(
+      `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
+    );
+    return true;
+  }
+
+  /**
+   * Buffer a Welcome that was dropped solely because the local user is
+   * not yet in the readers ACL. The entry is keyed by
+   * `hex(welcomeEpochId)` so duplicate Welcomes for the same epoch
+   * coalesce automatically. Bounded by
+   * `_PENDING_WELCOMES_MAX_ENTRIES` (oldest evicted in insertion
+   * order); replayed by `_drainPendingWelcomes()` after the next
+   * readers-ACL merge.
+   *
+   * Idempotent and safe to call repeatedly with the same epoch ID --
+   * the buffer is conceptually a set keyed on epoch ID, with
+   * insertion-order eviction.
+   *
+   * @internal
+   */
+  private _bufferPendingWelcome(
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
+  ): void {
+    const epochId = message.welcomeEpochId;
+    if (!epochId || epochId.length === 0) return;
+    const key = this._hexEncode(epochId);
+    // Refresh recency for duplicate Welcomes: delete-then-set so the
+    // Map iteration order puts this entry at the back, matching the
+    // intent of insertion-order eviction.
+    this._pendingWelcomes.delete(key);
+
+    // Bound: if at capacity, evict the oldest entry (first in Map
+    // iteration order).
+    if (
+      this._pendingWelcomes.size >=
+      CollabswarmDocument._PENDING_WELCOMES_MAX_ENTRIES
+    ) {
+      const oldestKey = this._pendingWelcomes.keys().next().value;
+      if (oldestKey !== undefined) {
+        this._pendingWelcomes.delete(oldestKey);
+        console.warn(
+          `Pending BeeKEM Welcomes buffer for ${this.documentPath} ` +
+            `at capacity (${CollabswarmDocument._PENDING_WELCOMES_MAX_ENTRIES}); ` +
+            `evicting oldest entry to make room.`,
+        );
+      }
+    }
+
+    this._pendingWelcomes.set(key, {
+      message,
+      bufferedAtMs: this._now(),
+    });
+    console.log(
+      `Buffered BeeKEM Welcome for ${this.documentPath} pending readers-ACL update ` +
+        `(epoch=${key.slice(0, 16)}..., buffer size=${this._pendingWelcomes.size})`,
+    );
+  }
+
+  /**
+   * Replay buffered BeeKEM Welcomes whose recipient is now in the
+   * readers ACL. Called after every readers-ACL `merge` so a Welcome
+   * that arrived ahead of the ACL update on this node is unblocked as
+   * soon as the ACL catches up. Also discards entries past their TTL
+   * (`_PENDING_WELCOMES_TTL_MS`) so the buffer cannot retain stale
+   * Welcomes indefinitely.
+   *
+   * Each accepted Welcome is removed from the buffer; entries that
+   * still return `not-in-readers-acl` (e.g. the ACL merge didn't
+   * add this user; the merge added someone else) stay in the buffer
+   * until they either resolve or expire.
+   *
+   * @internal
+   */
+  private async _drainPendingWelcomes(): Promise<void> {
+    if (this._pendingWelcomes.size === 0) return;
+    const now = this._now();
+    // Iterate over a snapshot of entries because we mutate the Map
+    // during iteration (delete on accept / TTL).
+    const entries = Array.from(this._pendingWelcomes.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.bufferedAtMs > CollabswarmDocument._PENDING_WELCOMES_TTL_MS) {
+        this._pendingWelcomes.delete(key);
+        console.warn(
+          `Discarding stale buffered BeeKEM Welcome for ${this.documentPath} ` +
+            `(epoch=${key.slice(0, 16)}..., age=${now - entry.bufferedAtMs}ms ` +
+            `exceeds TTL=${CollabswarmDocument._PENDING_WELCOMES_TTL_MS}ms)`,
+        );
+        continue;
+      }
+      const accepted = await this._evaluateAndApplyBeeKEMWelcome(entry.message, {
+        fromBuffer: true,
+      });
+      if (accepted) {
+        this._pendingWelcomes.delete(key);
+        console.log(
+          `Replayed buffered BeeKEM Welcome for ${this.documentPath} ` +
+            `after readers-ACL update (epoch=${key.slice(0, 16)}...)`,
+        );
+      }
+    }
+  }
+
+  /** Indirection so unit tests can stub the wall clock. */
+  private _now(): number {
+    return Date.now();
+  }
+
+  /** Lower-case hex encoding of a `Uint8Array`. */
+  private _hexEncode(bytes: Uint8Array): string {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) {
+      s += bytes[i].toString(16).padStart(2, '0');
+    }
+    return s;
+  }
+
+  /**
+   * Test/inspection helper: number of BeeKEM Welcomes currently parked
+   * in the pending-welcomes buffer awaiting a readers-ACL update.
+   *
+   * @internal exposed only for unit tests.
+   */
+  public get pendingWelcomesCount(): number {
+    return this._pendingWelcomes.size;
   }
 
   /**
