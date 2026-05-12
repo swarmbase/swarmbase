@@ -5891,10 +5891,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ace-builds@npm:^1.35.0":
-  version: 1.36.2
-  resolution: "ace-builds@npm:1.36.2"
-  checksum: 10/66ea2af6c0671781b9f1d58efa84d3af1335d84f48e54e83b5d0518ddb70d2ebe3caf30fe6552ebc759e4da7b1789e717df165055e09169e37c55df4b5d3b78a
+"ace-builds@npm:^1.36.2":
+  version: 1.44.0
+  resolution: "ace-builds@npm:1.44.0"
+  checksum: 10/0a634282046d1f8a714c6babe3640efd07afcbd128fea810de366b08a688728025271dea9eec6bad93ffd68f721880ade89c6b2888f22c6ddbeeb1b06a47c50d
   languageName: node
   linkType: hard
 
@@ -13099,19 +13099,18 @@ __metadata:
   linkType: hard
 
 "jsoneditor@npm:^10":
-  version: 10.1.0
-  resolution: "jsoneditor@npm:10.1.0"
+  version: 10.4.3
+  resolution: "jsoneditor@npm:10.4.3"
   dependencies:
-    ace-builds: "npm:^1.35.0"
+    ace-builds: "npm:^1.36.2"
     ajv: "npm:^6.12.6"
     javascript-natural-sort: "npm:^0.7.1"
     jmespath: "npm:^0.16.0"
     json-source-map: "npm:^0.6.1"
-    jsonrepair: "npm:^3.8.0"
-    mobius1-selectr: "npm:^2.4.13"
+    jsonrepair: "npm:^3.8.1"
     picomodal: "npm:^3.0.0"
     vanilla-picker: "npm:^2.12.3"
-  checksum: 10/646c19328459a3737af9a8061cfd9a5814559aff6c4bb37497dc7afdf9dd9636e7bab10bc9463479ac352c23d4f2f704c8cfadb46aa5ef566afe71e781b14b53
+  checksum: 10/c91d278f6079c2a216c28d72589e45afc7b2562802a0f071e4da9ef0640b3763b818787a14bf8a4d7a2983ce3783ff718fd6e061a5221fcdb5e3edcebb80bb5b
   languageName: node
   linkType: hard
 
@@ -13146,12 +13145,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsonrepair@npm:^3.8.0":
-  version: 3.8.1
-  resolution: "jsonrepair@npm:3.8.1"
+"jsonrepair@npm:^3.8.1":
+  version: 3.14.0
+  resolution: "jsonrepair@npm:3.14.0"
   bin:
     jsonrepair: bin/cli.js
-  checksum: 10/95de23d2ed4e1d8c8a728b20ef14e138dea94b3fb8bb8a8de3c5822c2845aed475369e12693dc0b946d188fea302c7bbecf6c81405250c212360b775a2ca7d31
+  checksum: 10/244e3b7203ffdc2b2a405964a5ac665e4d8f2948424449100befe3f1c1e1bcdf78aa5d366c72d360661cdd1027ff29ad95f67a3840fe7a356c8f7ca73ae6d3e1
   languageName: node
   linkType: hard
 
@@ -13938,13 +13937,6 @@ __metadata:
   bin:
     mkdirp: bin/cmd.js
   checksum: 10/0c91b721bb12c3f9af4b77ebf73604baf350e64d80df91754dc509491ae93bf238581e59c7188360cec7cb62fc4100959245a42cfe01834efedc5e9d068376c2
-  languageName: node
-  linkType: hard
-
-"mobius1-selectr@npm:^2.4.13":
-  version: 2.4.13
-  resolution: "mobius1-selectr@npm:2.4.13"
-  checksum: 10/a61a6d0f92ac4176a5bf70a10dbb0c9aad401c8f024f830bb9c0bac3ad26b545f1d49a44ad35d9e75cd02596d9727c6b0b1bd252983ad8f7343ae51cad298c20
   languageName: node
   linkType: hard
 
