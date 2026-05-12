@@ -172,6 +172,81 @@ export function decideLoadQuorum(
 }
 
 /**
+ * Compute the default quorum threshold `Q` for a given `K` using the
+ * strict-majority rule `Math.floor(K / 2) + 1`. This tolerates `floor((K-1)/2)`
+ * faulty peers (one fault at K=3, K=4; two at K=5) — the standard BFT
+ * threshold — and is the formula `CollabswarmConfig.loadQuorumQ` defaults to
+ * when the user does not override it.
+ *
+ * Worked examples:
+ *   - K=1 → Q=1
+ *   - K=2 → Q=2
+ *   - K=3 → Q=2 (one fault tolerated; previously K=3 → Q=3 under
+ *     `Math.ceil(K/2)+1`, which made the gate refuse to pass with even a
+ *     single non-vote and defeated the fault-tolerance intent)
+ *   - K=4 → Q=3
+ *   - K=5 → Q=3
+ *   - K=7 → Q=4
+ *
+ * Pulled out so the loader, the config docstring, and the test matrix all
+ * reference one canonical formula. Callers must still pass the result
+ * through `effectiveQ(q, k)` to handle `K=0` and user overrides.
+ */
+export function defaultQuorumQ(k: number): number {
+  if (k <= 0) return 0;
+  return Math.floor(k / 2) + 1;
+}
+
+/**
+ * Deduplicate a sequence of (peer, peerId) pairs by `peerId`, preserving
+ * first-seen order. Used by the loader to collapse multiple open
+ * connections to the same remote peer into a single quorum entry — without
+ * this, one peer with two connections (e.g. direct + relay-circuit) would
+ * cast two votes in the tip-advertise tally, allowing a single malicious
+ * peer with multiple connections to single-handedly win an agreement.
+ *
+ * Pulled out so the dedup behaviour is unit-testable without standing up
+ * a libp2p stack. The `T` generic lets the caller dedup either raw peer
+ * objects (Multiaddr in `CollabswarmDocument.load()`) or test doubles.
+ */
+export function dedupePeersByPeerId<T>(
+  peers: readonly T[],
+  peerIdOf: (peer: T) => string,
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const peer of peers) {
+    const id = peerIdOf(peer);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(peer);
+  }
+  return out;
+}
+
+/**
+ * Constant-time string equality used by the post-load hash-binding check.
+ * Both inputs are expected to be lowercase hex strings (typically 64 chars
+ * for SHA-256), but the implementation tolerates differing lengths via the
+ * length-XOR + max-loop pattern. Returns `true` if the strings are
+ * byte-identical.
+ *
+ * Pulled out so the comparison logic is reused by `_enforceQuorumHashBinding`
+ * and is unit-testable (timing properties are not asserted in unit tests but
+ * the equality semantics are).
+ */
+export function constantTimeHexEquals(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  const max = Math.max(a.length, b.length);
+  for (let i = 0; i < max; i++) {
+    const av = i < a.length ? a.charCodeAt(i) : 0;
+    const bv = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= av ^ bv;
+  }
+  return diff === 0;
+}
+
+/**
  * Compute the effective `K` (number of peers to query) given a configured
  * upper bound and the number of currently-known peers. Pulled out so the
  * loader and the quorum decision can share a single source of truth and so

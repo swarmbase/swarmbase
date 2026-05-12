@@ -66,9 +66,12 @@ import {
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
 } from './derive-doc-key';
-import { tipsHash, TIPS_HASH_LENGTH } from './tips-hash';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
 import {
+  constantTimeHexEquals,
   decideLoadQuorum,
+  dedupePeersByPeerId,
+  defaultQuorumQ,
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
@@ -2314,6 +2317,58 @@ export class CollabswarmDocument<
     return matches.length > 0 ? matches[matches.length - 1][1] : str;
   }
 
+  /**
+   * Verify that the just-applied load response matches the tip-set hash the
+   * quorum agreed on. Called after `_sendLoadRequestAndSync` returns `true`
+   * and `_hashes` has been populated with the served state's CIDs. The
+   * recomputed `tipsHash(this._hashes)` MUST equal `expectedHex` (the
+   * quorum's `winningHashHex`), otherwise a peer in the agreeing cohort
+   * voted for one tip set and served a different one (Byzantine
+   * equivocation: cheap to do because the tip-advertise probe and the
+   * full-state load happen on separate streams). On mismatch we throw
+   * `LoadQuorumFailedError`; the in-memory document is already partially
+   * mutated at that point, so the caller MUST treat the document instance
+   * as poisoned and construct a fresh one (this is acceptable because the
+   * gate runs during `open()`, before the document is exposed to
+   * application code or subscribed to pubsub).
+   *
+   * Constant-time comparison: the two hex strings are always 64 chars
+   * (SHA-256 lowercase hex). An early-exit `===` would leak which prefix
+   * matched; a brute-force timing attacker can amplify that into "I know
+   * which agreeing peer you'd accept", which while not catastrophic is
+   * also free to avoid.
+   *
+   * When `expectedHex` is `null` (quorum disabled), this is a no-op.
+   *
+   * @internal
+   */
+  private async _enforceQuorumHashBinding(
+    expectedHex: string | null,
+  ): Promise<void> {
+    if (expectedHex === null) return;
+    const actualBytes = await tipsHash(this._hashes);
+    const actualHex = tipsHashToHex(actualBytes);
+    if (!constantTimeHexEquals(expectedHex, actualHex)) {
+      console.warn(
+        `[${this.documentPath}] Initial-load quorum hash binding FAILED: ` +
+          `expected tipsHash=${expectedHex.slice(0, 12)}... but loaded ` +
+          `state hashed to ${actualHex.slice(0, 12)}.... An agreeing peer ` +
+          `served a state that does not match its tip-advertise vote; ` +
+          `treating as Byzantine equivocation.`,
+      );
+      throw new LoadQuorumFailedError({
+        documentPath: this.documentPath,
+        reason: 'no-majority',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map([
+          [expectedHex, 0],
+          [actualHex, 0],
+        ]),
+      });
+    }
+  }
+
   // API Methods --------------------------------------------------------------
 
   // https://gist.github.com/alanshaw/591dc7dd54e4f99338a347ef568d6ee9#duplex-it
@@ -2335,7 +2390,10 @@ export class CollabswarmDocument<
    * document-load only proceeds against a peer that participated in a
    * majority (`loadQuorumQ`-of-K) agreement on the tip set, defending
    * against a single malicious or partitioned peer unilaterally serving a
-   * stale or maliciously-crafted initial state. If quorum is not met,
+   * stale or maliciously-crafted initial state. The gate runs uniformly
+   * regardless of local `_hashes` state (an empty local `_hashes` is the
+   * exact state the gate must defend on first `open()` of an existing
+   * document — bypassing it then would be unsafe). If quorum is not met,
    * `load()` rejects with a `LoadQuorumFailedError` (see
    * `load-quorum.ts`). The gate can be disabled wholesale via
    * `loadQuorumEnabled: false` for single-peer dev/test scenarios; the
@@ -2343,8 +2401,14 @@ export class CollabswarmDocument<
    * advertise responses with an unknown encryption key, missing/invalid
    * writer signature, document-id mismatch, or short/missing tip hash are
    * recorded as non-votes (NOT disagreements) so a stale peer cache does
-   * not flip a partition into a Byzantine-failure verdict. Closes the gap
-   * tracked under issue #189 §5.4 item 2 (and bulleted in #186).
+   * not flip a partition into a Byzantine-failure verdict. Peers are
+   * deduped by libp2p PeerId before the probe so a single peer with
+   * multiple open connections cannot cast multiple votes. After quorum
+   * passes, the served full state is bound to the agreed hash: the
+   * recomputed `tipsHash(this._hashes)` post-sync must equal the quorum
+   * `winningHashHex`, otherwise an agreeing peer equivocated between its
+   * advertise vote and its served state and the load is rejected. Closes
+   * the gap tracked under issue #189 §5.4 item 2 (and bulleted in #186).
    *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
@@ -2420,19 +2484,47 @@ export class CollabswarmDocument<
     };
     const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
 
+    // Dedupe `orderedPeers` by peer id BEFORE the quorum probe. `getConnections()`
+    // returns one entry per OPEN connection, and libp2p maintains separate
+    // connections per multiaddr / per transport — so a single remote peer with
+    // two open connections (e.g. direct + relay-circuit) shows up twice. Without
+    // this dedup, that peer would cast two votes in the quorum tally, allowing a
+    // single malicious peer with multiple connections to dominate the agreement
+    // count. Dedup by `_peerIdOf` (which extracts the LAST `/p2p/<id>` segment,
+    // i.e. the remote peer's libp2p PeerId for both direct and circuit-relay
+    // multiaddrs). Preserves first-seen order so the preferredPeer (placed at
+    // index 0 above) remains first.
+    {
+      const deduped = dedupePeersByPeerId(orderedPeers, (p) => this._peerIdOf(p));
+      orderedPeers.length = 0;
+      orderedPeers.push(...deduped);
+    }
+
     // Initial-load quorum gate (#189 §5.4.2 / #186).
     //
     // Run BEFORE the existing single-peer snapshot/doc-load loop so that a
     // failed quorum aborts the load entirely (the caller cannot accidentally
-    // accept a single peer's response). When the gate is disabled, or the
-    // edge cases below apply (founding-member empty `_hashes`, single peer
-    // with `loadQuorumAllowSinglePeer: true`), we fall through to the
-    // legacy loop unchanged so existing callers see the same behaviour.
+    // accept a single peer's response). When the gate is disabled we fall
+    // through to the legacy loop unchanged so existing callers see the same
+    // behaviour.
+    //
+    // `winningHashHex` (set when quorum passes) is also used below as the
+    // post-load binding check: after `_sendLoadRequestAndSync` applies the
+    // served state, the recomputed `tipsHash(this._hashes)` MUST equal
+    // `winningHashHex`, otherwise an agreeing peer voted for one tip set and
+    // served a different one (Byzantine equivocation).
     const quorumEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
+    let winningHashHex: string | null = null;
     if (quorumEnabled) {
       const configuredK = this.swarm.config?.loadQuorumK ?? 3;
-      const configuredQDefault = Math.ceil(configuredK / 2) + 1;
-      const configuredQ = this.swarm.config?.loadQuorumQ ?? configuredQDefault;
+      // Strict-majority threshold: `Math.floor(K/2) + 1`. For K=3 this gives
+      // Q=2 (tolerating one fault), matching the BFT design note in #189
+      // §5.4.2. `Math.ceil(K/2) + 1` would yield Q=3 at K=3 (everyone must
+      // agree), defeating the fault-tolerance intent of the gate. The
+      // formula lives in `defaultQuorumQ` so the loader, the config
+      // docstring, and the test matrix all reference one source of truth.
+      const configuredQ =
+        this.swarm.config?.loadQuorumQ ?? defaultQuorumQ(configuredK);
       const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
       const allowSinglePeer =
         this.swarm.config?.loadQuorumAllowSinglePeer ?? false;
@@ -2440,22 +2532,29 @@ export class CollabswarmDocument<
       const k = effectiveK(configuredK, orderedPeers.length);
       const q = effectiveQ(configuredQ, k);
 
-      // Edge case: founding-member / brand-new document. If our local
-      // `_hashes` is empty, we have nothing to compare against -- there is
-      // no risk of a peer poisoning state we don't yet hold. Skip the
-      // gate in this case (it would otherwise wedge fresh
-      // `open()` calls on solo dev peers). Note `_hashes` is only ever
-      // non-empty after we have applied changes locally (e.g. previously
-      // loaded successfully), so this safely catches the bootstrap case.
-      const isFoundingCase = this._hashes.size === 0;
+      // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
+      // on the assumption it identified a "founding-member" brand-new document.
+      // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
+      // of an EXISTING document (before load populates it), which is exactly
+      // the case the gate is meant to protect. We no longer special-case empty
+      // local state; the gate runs uniformly. True founders (no peers in the
+      // mesh) are handled by the `peers.length === 0` short-circuit at the top
+      // of `load()` plus the `k === 0` branch below (which falls through to
+      // return false → caller treats as new document).
 
       if (k === 0) {
-        // No peers known. Existing behaviour: treat as "new document"
-        // and return false. The open() path will run validateDocumentPath
-        // and create the document from scratch. This is also the founding-
-        // member case, so the quorum gate has nothing to defend.
+        // No peers known. Treat as "new document" — `open()` will run
+        // validateDocumentPath and create the document from scratch. This is
+        // the legitimate founder path: no remote peer exists to serve a
+        // mismatched view, so there is nothing for the quorum gate to defend.
         return false;
-      } else if (k === 1 && !allowSinglePeer && !isFoundingCase) {
+      } else if (k === 1 && !allowSinglePeer) {
+        // Only one peer reachable but quorum requires Q>=2 by default.
+        // Without a second opinion we cannot distinguish "honest solo peer"
+        // from "malicious peer serving a forged state". Refuse. Callers in
+        // genuine single-peer scenarios (tests, small private swarms,
+        // founding member with one known seed) must opt in explicitly via
+        // `loadQuorumAllowSinglePeer: true` or `loadQuorumEnabled: false`.
         throw new LoadQuorumFailedError({
           documentPath: this.documentPath,
           reason: 'insufficient-responses',
@@ -2463,7 +2562,7 @@ export class CollabswarmDocument<
           requiredQ: q,
           agreement: new Map(),
         });
-      } else if (k === 1 && allowSinglePeer && !isFoundingCase) {
+      } else if (k === 1 && allowSinglePeer) {
         // Single-peer pass-through. Probe the one known peer; if it
         // responds at all we proceed with the legacy load. Warn loudly
         // so operators can spot the regression. Q is forced to 1 here.
@@ -2487,9 +2586,14 @@ export class CollabswarmDocument<
             agreement: new Map(),
           });
         }
+        // Bind the single peer's advertised hash so the post-load check
+        // below still verifies that the served state matches what was
+        // advertised (defends against a malicious peer that decides what
+        // to serve only after seeing the advertise round-trip).
+        winningHashHex = tipsHashToHex(probe);
         // Proceed with `orderedPeers` unchanged (preferred-peer order
         // preserved). Fall through to the legacy snapshot/doc-load loop.
-      } else if (!isFoundingCase) {
+      } else {
         // Standard K-of-Q quorum path. Take the first K peers from the
         // already-ordered list (preferredPeer is at index 0, so it is
         // always queried), probe in parallel, and decide.
@@ -2524,6 +2628,7 @@ export class CollabswarmDocument<
             `${decision.agreeingPeerIds.length}/${decision.respondingCount} ` +
             `peers agreed on tipsHash=${decision.winningHashHex.slice(0, 12)}...`,
         );
+        winningHashHex = decision.winningHashHex;
         // Narrow `orderedPeers` to only the agreeing cohort. The legacy
         // snapshot/doc-load loop below then asks one of these peers for
         // the full state; with quorum agreement, any single agreeing
@@ -2543,12 +2648,21 @@ export class CollabswarmDocument<
           orderedPeers.push(...narrowed);
         }
       }
-      // else: founding case -- fall through with `orderedPeers` unchanged.
     }
 
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
+    //
+    // After a successful load we verify `tipsHash(this._hashes)` equals the
+    // quorum-agreed `winningHashHex` (when quorum is enabled). This binds the
+    // served full state to what the peer advertised during the probe round.
+    // Without this binding, a peer in the agreeing cohort could vote for
+    // hash X and then serve a different state, defeating the gate's whole
+    // purpose. On mismatch the load is rejected and `LoadQuorumFailedError`
+    // is thrown; the in-memory document state is poisoned at that point so
+    // we cannot transparently retry the next peer — the caller must
+    // construct a fresh document instance.
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
@@ -2560,9 +2674,13 @@ export class CollabswarmDocument<
           snapshotLoadV2,
         ]));
         const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
-        if (loaded) return true;
+        if (loaded) {
+          await this._enforceQuorumHashBinding(winningHashHex);
+          return true;
+        }
         // Empty response -- peer has no snapshot, try doc-load below.
-      } catch {
+      } catch (err) {
+        if (err instanceof LoadQuorumFailedError) throw err;
         // Peer doesn't support snapshot-load protocol.
       }
 
@@ -2573,8 +2691,12 @@ export class CollabswarmDocument<
           documentLoadV2,
         ]));
         const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
-        if (loaded) return true;
+        if (loaded) {
+          await this._enforceQuorumHashBinding(winningHashHex);
+          return true;
+        }
       } catch (err) {
+        if (err instanceof LoadQuorumFailedError) throw err;
         console.warn(
           `Failed to load document via ${documentLoadV2}:`,
           peer.toString(),

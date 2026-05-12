@@ -1,6 +1,9 @@
 import { describe, expect, test } from '@jest/globals';
 import {
+  constantTimeHexEquals,
   decideLoadQuorum,
+  dedupePeersByPeerId,
+  defaultQuorumQ,
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
@@ -164,6 +167,162 @@ describe('effectiveK / effectiveQ', () => {
     expect(effectiveQ(0, 3)).toBe(1); // Q < 1 -> 1
     expect(effectiveQ(-1, 3)).toBe(1);
     expect(effectiveQ(2, 0)).toBe(0); // no peers -> no quorum possible
+  });
+});
+
+describe('defaultQuorumQ (strict-majority formula, #189 §5.4.2)', () => {
+  // The PR description and config docstring require strict majority — i.e.
+  // `Math.floor(K/2) + 1`, NOT `Math.ceil(K/2) + 1`. The earlier ceil-based
+  // default produced Q=3 at K=3, which made the gate refuse to pass with
+  // even one non-vote and silently defeated the BFT intent ("tolerate one
+  // fault"). These tests pin the formula so a future change has to
+  // explicitly justify breaking the matrix.
+  test('K=1 -> Q=1', () => {
+    expect(defaultQuorumQ(1)).toBe(1);
+  });
+  test('K=2 -> Q=2', () => {
+    expect(defaultQuorumQ(2)).toBe(2);
+  });
+  test('K=3 -> Q=2 (one fault tolerated, NOT three-of-three)', () => {
+    expect(defaultQuorumQ(3)).toBe(2);
+  });
+  test('K=4 -> Q=3', () => {
+    expect(defaultQuorumQ(4)).toBe(3);
+  });
+  test('K=5 -> Q=3', () => {
+    expect(defaultQuorumQ(5)).toBe(3);
+  });
+  test('K=7 -> Q=4', () => {
+    expect(defaultQuorumQ(7)).toBe(4);
+  });
+  test('K=0 -> Q=0 (no peers, no quorum possible)', () => {
+    expect(defaultQuorumQ(0)).toBe(0);
+  });
+  test('K<0 -> Q=0 (clamped)', () => {
+    expect(defaultQuorumQ(-1)).toBe(0);
+  });
+
+  test('rejects the legacy ceil-based formula at K=3', () => {
+    // Math.ceil(3 / 2) + 1 === 3 — would require all three peers to agree,
+    // refusing a single timeout. defaultQuorumQ must NOT return 3 here.
+    expect(defaultQuorumQ(3)).not.toBe(Math.ceil(3 / 2) + 1);
+  });
+});
+
+describe('dedupePeersByPeerId (multi-connection vote inflation, #186)', () => {
+  // libp2p's `getConnections()` returns one entry per OPEN connection, not
+  // per remote peer. A peer with both a direct and a relay-circuit
+  // connection shows up twice; without dedup they cast two quorum votes,
+  // letting a single malicious peer with two connections out-vote one
+  // honest peer.
+  test('collapses two entries with the same peerId into one', () => {
+    const peers = [
+      { addr: '/ip4/1.1.1.1/tcp/1/p2p/A' },
+      { addr: '/ip4/2.2.2.2/tcp/2/p2p/A' }, // same peerId A, different multiaddr
+      { addr: '/ip4/3.3.3.3/tcp/3/p2p/B' },
+    ];
+    const out = dedupePeersByPeerId(peers, (p) => {
+      const m = [...p.addr.matchAll(/\/p2p\/([^/]+)/g)];
+      return m.length > 0 ? m[m.length - 1][1] : p.addr;
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0].addr).toBe('/ip4/1.1.1.1/tcp/1/p2p/A');
+    expect(out[1].addr).toBe('/ip4/3.3.3.3/tcp/3/p2p/B');
+  });
+
+  test('preserves first-seen order (preferredPeer at index 0 stays first)', () => {
+    const peers = ['preferred', 'a', 'preferred', 'b', 'a'];
+    const out = dedupePeersByPeerId(peers, (s) => s);
+    expect(out).toEqual(['preferred', 'a', 'b']);
+  });
+
+  test('treats relay-circuit + direct multiaddrs of one peer as one vote', () => {
+    // Real-world case: a peer reachable both directly and via a relay
+    // circuit shows up as `.../p2p/<remote>` and `.../p2p/<relay>/p2p-circuit/p2p/<remote>`.
+    // `_peerIdOf` extracts the LAST `/p2p/<id>` (the remote peer id), so
+    // both entries collapse to the same key.
+    const peers = [
+      { addr: '/ip4/1.1.1.1/tcp/9000/p2p/Q' },
+      { addr: '/ip4/2.2.2.2/tcp/9001/p2p/R/p2p-circuit/p2p/Q' },
+    ];
+    const out = dedupePeersByPeerId(peers, (p) => {
+      const m = [...p.addr.matchAll(/\/p2p\/([^/]+)/g)];
+      return m.length > 0 ? m[m.length - 1][1] : p.addr;
+    });
+    expect(out).toHaveLength(1);
+  });
+
+  test('empty input returns empty output', () => {
+    expect(dedupePeersByPeerId([], (s: string) => s)).toEqual([]);
+  });
+
+  test('does not mutate the input array', () => {
+    const input = ['a', 'a', 'b'];
+    const out = dedupePeersByPeerId(input, (s) => s);
+    expect(input).toEqual(['a', 'a', 'b']);
+    expect(out).toEqual(['a', 'b']);
+  });
+});
+
+describe('founding-case removal (#186, suppressed comment fix)', () => {
+  // Regression coverage for the unsafe `_hashes.size === 0` bypass. Before
+  // this fix, the loader skipped the quorum gate whenever its local
+  // `_hashes` was empty on the theory that an empty set could not be
+  // "poisoned" — but `_hashes` is ALSO empty on the very first `open()` of
+  // an EXISTING document (before load populates it), which is exactly the
+  // case the quorum check is meant to defend. The fix removes the bypass
+  // entirely; the gate now runs uniformly. These tests verify that the
+  // decision logic does not give the gate any escape hatch keyed on the
+  // local hash-set state — the only legitimate "no quorum" paths are
+  // `k === 0` (no peers at all) and the explicit `allowSinglePeer` knob.
+  test('with K>=2 known peers, decideLoadQuorum still requires Q votes regardless of caller state', () => {
+    // Caller passes Q=2; a single agreeing vote (the rest non-votes) is
+    // not enough. This holds whether the caller is a fresh founder or
+    // a partitioned existing-document opener — `decideLoadQuorum` is
+    // stateless w.r.t. the caller, by design.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: new Uint8Array(32).fill(0xaa) },
+        { peerId: 'p2', hash: null },
+        { peerId: 'p3', hash: null },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.reason).toBe('insufficient-responses');
+    }
+  });
+
+  test('effectiveK + defaultQuorumQ together force the gate on K>=2 even when local state is empty', () => {
+    // Simulate "fresh open with peers available": local hashes empty
+    // (irrelevant to these pure helpers), known peers = 3, configured K = 3.
+    const k = effectiveK(3, 3);
+    const q = effectiveQ(defaultQuorumQ(3), k);
+    expect(k).toBe(3);
+    expect(q).toBe(2); // strict majority; founders no longer get a free pass
+  });
+});
+
+describe('constantTimeHexEquals (hash-binding comparison)', () => {
+  test('equal lowercase hex strings compare equal', () => {
+    expect(constantTimeHexEquals('aa'.repeat(32), 'aa'.repeat(32))).toBe(true);
+  });
+
+  test('different hex strings of the same length compare unequal', () => {
+    expect(constantTimeHexEquals('aa'.repeat(32), 'ab'.repeat(32))).toBe(false);
+  });
+
+  test('strings of different lengths compare unequal', () => {
+    expect(constantTimeHexEquals('aa', 'aabb')).toBe(false);
+  });
+
+  test('empty strings compare equal', () => {
+    expect(constantTimeHexEquals('', '')).toBe(true);
+  });
+
+  test('case-sensitive (matches `tipsHashToHex` lowercase output)', () => {
+    expect(constantTimeHexEquals('aabb', 'AABB')).toBe(false);
   });
 });
 

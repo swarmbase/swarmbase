@@ -378,16 +378,19 @@ export interface CollabswarmConfig {
    * pass the initial-load quorum gate. Clamped at runtime to
    * `[1, effectiveK]` so `Q > K` never makes quorum unreachable.
    *
-   * Default formula: `Math.ceil(K / 2) + 1`, which yields:
+   * Default formula: `Math.floor(K / 2) + 1` (strict majority), which yields:
    *   - K=1 -> Q=1 (single-peer pass-through; requires `loadQuorumAllowSinglePeer: true`)
    *   - K=2 -> Q=2 (both peers must agree)
    *   - K=3 -> Q=2 (a single dishonest peer cannot win the vote)
    *   - K=4 -> Q=3
    *   - K=5 -> Q=3
+   *   - K=7 -> Q=4
    * This is the standard "strictly more than half" Byzantine-fault-
    * tolerant threshold and matches the design note in #189 §5.4.2.
+   * Using `floor + 1` rather than `ceil + 1` tolerates one fault at K=3
+   * (Q=2, not Q=3) as the PR description requires.
    *
-   * @default Math.ceil(loadQuorumK / 2) + 1, clamped to [1, loadQuorumK]
+   * @default Math.floor(loadQuorumK / 2) + 1, clamped to [1, loadQuorumK]
    */
   loadQuorumQ?: number;
 
