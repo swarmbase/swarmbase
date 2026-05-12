@@ -1684,8 +1684,13 @@ export class CollabswarmDocument<
         // multiaddr was parsed, so a direct `=== preferredId` comparison is
         // unreliable. `Multiaddr.toString()` always returns the canonical
         // string form, so extract the `/p2p/<id>` substring from there.
-        const match = p.toString().match(/\/p2p\/([^/]+)/);
-        const peerId = match?.[1] ?? null;
+        //
+        // For relay-circuit multiaddrs (e.g.
+        // `.../p2p/<relay>/p2p-circuit/p2p/<remote>`), there are multiple
+        // `/p2p/<id>` segments; the remote peer id is always the LAST one,
+        // so iterate all matches and use the final occurrence.
+        const matches = [...p.toString().matchAll(/\/p2p\/([^/]+)/g)];
+        const peerId = matches.length > 0 ? matches[matches.length - 1][1] : null;
         return peerId != null && peerId === preferredId;
       });
       if (preferredIdx > 0) {
