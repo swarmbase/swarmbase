@@ -311,7 +311,10 @@ export class CollabswarmDocument<
     const rawPublic = await validateAndExportKemKeyPair(keyPair);
 
     this._kemKeyPair = keyPair;
-    this._kemPublicKeyRaw = rawPublic;
+    // Defensive copy: ensure the cached bytes are isolated from the
+    // buffer returned by the helper so callers (and the helper's own
+    // internal state) cannot mutate `_kemPublicKeyRaw` after the fact.
+    this._kemPublicKeyRaw = new Uint8Array(rawPublic);
   }
 
   /**
@@ -321,11 +324,14 @@ export class CollabswarmDocument<
    * `addReader(reader, readerKemPublicKey)`.
    *
    * Cheap: the raw bytes are cached on `setKemKeyPair`; this just
-   * returns the cached `Uint8Array`. The method is still async to
-   * preserve the previous contract.
+   * returns a defensive copy of the cached `Uint8Array` so callers
+   * cannot accidentally mutate the document's internal state (e.g.
+   * `raw[0] = ...`), which would otherwise cause hard-to-debug
+   * Welcome drops/mismatches on the receive path. The method is still
+   * async to preserve the previous contract.
    */
   public async getKemPublicKeyRaw(): Promise<Uint8Array | undefined> {
-    return this._kemPublicKeyRaw;
+    return this._kemPublicKeyRaw && new Uint8Array(this._kemPublicKeyRaw);
   }
 
   /**
@@ -3071,6 +3077,15 @@ export class CollabswarmDocument<
       );
     }
 
+    // Defensive copy: snapshot the recipient's KEM public key bytes once
+    // at the entry point so a caller that reuses or mutates the same
+    // buffer (or shares it across async tasks) after `addReader` returns
+    // cannot corrupt the in-flight Welcome. Both the signed message
+    // field (`welcomeRecipientKemPublicKey`) and the WebCrypto import
+    // must observe the *same* byte sequence; otherwise the receiver
+    // would see a signature/payload mismatch.
+    const kemPub = new Uint8Array(readerKemPublicKey);
+
     // Build the welcome message.
     const welcomeMessage: CRDTSyncMessage<ChangesType, PublicKey> = {
       documentId: this.documentPath,
@@ -3097,7 +3112,7 @@ export class CollabswarmDocument<
       'BeeKEM Welcome onboarding',
     );
     welcomeMessage.welcomeRecipient = await serializePublicKey(reader);
-    welcomeMessage.welcomeRecipientKemPublicKey = readerKemPublicKey;
+    welcomeMessage.welcomeRecipientKemPublicKey = kemPub;
 
     // Visibility-filtered keychain so the new reader can decrypt the
     // appropriate window of document history. Note: this uses
@@ -3115,7 +3130,7 @@ export class CollabswarmDocument<
     // the plaintext; every other connected peer that observes the
     // broadcast sees only opaque ciphertext + ephemeral public key +
     // nonce + AES-GCM tag.
-    const recipientKemKey = await importEciesPublicKey(readerKemPublicKey);
+    const recipientKemKey = await importEciesPublicKey(kemPub);
     welcomeMessage.eciesSealed = await eciesSeal(
       keychainPlaintextBytes,
       recipientKemKey,
