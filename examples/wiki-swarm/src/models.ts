@@ -1,4 +1,4 @@
-import { Text } from 'automerge';
+import { Text } from '@automerge/automerge';
 import { Descendant } from 'slate';
 
 export interface WikiSwarmArticle {

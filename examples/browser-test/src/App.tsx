@@ -19,7 +19,7 @@ import {
   defaultConfig,
   defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
-import { Doc, BinaryChange } from 'automerge';
+import { Doc, BinaryChange } from '@automerge/automerge';
 
 export type AutomergeSwarm<T = any> = Collabswarm<
   Doc<T>,

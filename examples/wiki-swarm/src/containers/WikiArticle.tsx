@@ -1,7 +1,7 @@
 import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
-import { Doc, Text } from 'automerge';
+import { Doc, Text } from '@automerge/automerge';
 import type { CollabswarmConfig } from '@collabswarm/collabswarm';
 import {
   defaultConfig,
@@ -140,7 +140,11 @@ class WikiArticle extends React.Component<
         : '';
       return (
         <div className="m-3">
+          <label htmlFor="wiki-article-title" className="visually-hidden">
+            Article title
+          </label>
           <input
+            id="wiki-article-title"
             type="text"
             className="form-control form-control-lg mb-2"
             placeholder="Article title"
