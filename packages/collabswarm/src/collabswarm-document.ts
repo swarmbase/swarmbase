@@ -291,9 +291,8 @@ export class CollabswarmDocument<
    * surfaced as a generic WebCrypto failure later in the Welcome
    * receive path.
    *
-   * Async because the public key is eagerly exported to raw bytes and
-   * cached for the receive path; callers that previously invoked this
-   * synchronously must now `await` it.
+   * Async because it eagerly exports the public key to raw bytes via
+   * `crypto.subtle.exportKey` and caches them for the receive path.
    */
   public async setKemKeyPair(
     keyPair: CryptoKeyPair | undefined,
@@ -323,14 +322,13 @@ export class CollabswarmDocument<
    * set via `setKemKeyPair`. The bytes are what inviters pass to
    * `addReader(reader, readerKemPublicKey)`.
    *
-   * Cheap: the raw bytes are cached on `setKemKeyPair`; this just
-   * returns a defensive copy of the cached `Uint8Array` so callers
-   * cannot accidentally mutate the document's internal state (e.g.
-   * `raw[0] = ...`), which would otherwise cause hard-to-debug
-   * Welcome drops/mismatches on the receive path. The method is still
-   * async to preserve the previous contract.
+   * The raw bytes are cached on `setKemKeyPair`, so this is a
+   * synchronous lookup. A defensive copy of the cached `Uint8Array` is
+   * returned so callers cannot accidentally mutate the document's
+   * internal state (e.g. `raw[0] = ...`), which would otherwise cause
+   * hard-to-debug Welcome drops/mismatches on the receive path.
    */
-  public async getKemPublicKeyRaw(): Promise<Uint8Array | undefined> {
+  public getKemPublicKeyRaw(): Uint8Array | undefined {
     return this._kemPublicKeyRaw && new Uint8Array(this._kemPublicKeyRaw);
   }
 
