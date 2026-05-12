@@ -11,47 +11,22 @@ import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-const PUBSUB_PEER_DISCOVERY_TOPIC = 'swarmdb._peer-discovery._p2p._pubsub'
-
-// Default document publish path (matches collabswarm-config.ts default).
-// The relay subscribes to this so it can relay document publish notifications
-// between browser peers that haven't yet formed a direct WebRTC mesh.
-const DOCUMENT_PUBLISH_PATH = process.env.DOCUMENT_PUBLISH_PATH || '/documents'
-
-// Configurable listen addresses via environment variables.
-// IPv4 listeners are always enabled. IPv6 dual-stack listeners are opt-in
-// because on platforms where :: is already dual-stack, binding both IPv4
-// and IPv6 on the same port causes EADDRINUSE.
-// Set ENABLE_IPV6=1 to add explicit IPv6 listeners.
-const WS_PORT = process.env.WS_PORT || '9001'
-const TCP_PORT = process.env.TCP_PORT || '9002'
-const WS_LISTEN = process.env.WS_LISTEN || `/ip4/0.0.0.0/tcp/${WS_PORT}/ws`
-const TCP_LISTEN = process.env.TCP_LISTEN || `/ip4/0.0.0.0/tcp/${TCP_PORT}`
-const IPV6_ENABLED = process.env.ENABLE_IPV6 === '1'
-const WS_LISTEN_V6 = process.env.WS_LISTEN_V6 ?? `/ip6/::/tcp/${WS_PORT}/ws`
-const TCP_LISTEN_V6 = process.env.TCP_LISTEN_V6 ?? `/ip6/::/tcp/${TCP_PORT}`
-
-// Auto-subscribe configuration.
-// TOPIC_ALLOWLIST: comma-separated prefixes. If set, only topics matching
-// one of these prefixes will be auto-subscribed. If unset, all non-system
-// topics are allowed (open mode, suitable for development).
-const TOPIC_ALLOWLIST = process.env.TOPIC_ALLOWLIST
-  ? process.env.TOPIC_ALLOWLIST.split(',').map(p => p.trim()).filter(Boolean)
-  : null
-// Maximum number of auto-subscribed topics before rejecting new ones.
-const MAX_AUTO_TOPICS = (() => {
-  const parsed = parseInt(process.env.MAX_AUTO_TOPICS || '1000', 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000
-})()
+import { listenAddresses, loadConfig } from './config.js'
+import { shouldAutoSubscribe } from './topic-policy.js'
 
 async function main() {
+  const config = loadConfig()
+  const {
+    peerDiscoveryTopic,
+    documentPublishPath,
+    topicAllowlist,
+    maxAutoTopics,
+    extraTopics,
+  } = config
+
   const libp2p = await createLibp2p({
     addresses: {
-      listen: [
-        WS_LISTEN,
-        TCP_LISTEN,
-        ...(IPV6_ENABLED ? [WS_LISTEN_V6, TCP_LISTEN_V6] : []),
-      ],
+      listen: listenAddresses(config),
     },
     transports: [
       webSockets(),
@@ -72,7 +47,7 @@ async function main() {
         floodPublish: true,
       }),
       pubsubPeerDiscovery: pubsubPeerDiscovery({
-        topics: [PUBSUB_PEER_DISCOVERY_TOPIC],
+        topics: [peerDiscoveryTopic],
       }),
     },
   })
@@ -80,8 +55,8 @@ async function main() {
   // Subscribe to peer discovery and document publish topics.
   // The relay must be subscribed to these topics to forward messages between
   // browser peers that are connected to the relay but not yet to each other.
-  libp2p.services.pubsub.subscribe(PUBSUB_PEER_DISCOVERY_TOPIC)
-  libp2p.services.pubsub.subscribe(DOCUMENT_PUBLISH_PATH)
+  libp2p.services.pubsub.subscribe(peerDiscoveryTopic)
+  libp2p.services.pubsub.subscribe(documentPublishPath)
 
   // Auto-subscribe to document topics as peers join them.
   // When a browser peer subscribes to a document topic (e.g. /document/my-doc),
@@ -95,41 +70,40 @@ async function main() {
   //     Example: TOPIC_ALLOWLIST="/document/,/documents"
   //   MAX_AUTO_TOPICS — hard cap on auto-subscribed topics (default 1000).
   //     Once reached, new subscriptions are silently ignored.
+  // The actual policy decision lives in `topic-policy.ts` as a pure function
+  // so it can be unit-tested without a libp2p stack.
+  //
   // All topics the relay is subscribed to (seed + extra + auto).
   const trackedTopics = new Set<string>([
-    PUBSUB_PEER_DISCOVERY_TOPIC,
-    DOCUMENT_PUBLISH_PATH,
+    peerDiscoveryTopic,
+    documentPublishPath,
   ])
   // Topics that were auto-subscribed (not seed or EXTRA_TOPICS).
   // Only these are eligible for auto-unsubscribe and counted toward the cap.
   const autoTopics = new Set<string>()
 
-  // System/internal topics that should never be auto-subscribed.
-  const IGNORED_TOPIC_PREFIXES = ['_', 'floodsub:']
-
   libp2p.services.pubsub.addEventListener('subscription-change', (event: any) => {
     const { peerId, subscriptions } = event.detail
     for (const sub of subscriptions) {
-      if (!sub.subscribe || trackedTopics.has(sub.topic)) {
+      if (!sub.subscribe) {
         continue
       }
-      // Skip system/internal topics.
-      if (IGNORED_TOPIC_PREFIXES.some(prefix => sub.topic.startsWith(prefix))) {
-        continue
-      }
-      // Enforce allowlist when configured.
-      if (TOPIC_ALLOWLIST && !TOPIC_ALLOWLIST.some(prefix => sub.topic.startsWith(prefix))) {
-        continue
-      }
-      // Enforce hard cap to prevent unbounded growth.
-      if (autoTopics.size >= MAX_AUTO_TOPICS) {
-        console.warn(`Auto-subscribe cap reached (${MAX_AUTO_TOPICS}), ignoring topic: ${sub.topic}`)
+      const decision = shouldAutoSubscribe(sub.topic, {
+        allowlist: topicAllowlist,
+        maxAutoTopics,
+        autoTopicCount: autoTopics.size,
+        isTracked: (t) => trackedTopics.has(t),
+      })
+      if (decision.action === 'skip') {
+        if (decision.reason === 'CapReached') {
+          console.warn(`Auto-subscribe cap reached (${maxAutoTopics}), ignoring topic: ${sub.topic}`)
+        }
         continue
       }
       trackedTopics.add(sub.topic)
       autoTopics.add(sub.topic)
       libp2p.services.pubsub.subscribe(sub.topic)
-      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId}, ${autoTopics.size}/${MAX_AUTO_TOPICS})`)
+      console.log(`Auto-subscribed to topic: ${sub.topic} (triggered by peer ${peerId}, ${autoTopics.size}/${maxAutoTopics})`)
     }
   })
 
@@ -154,20 +128,17 @@ async function main() {
 
   console.log(
     'Subscribed to topics:',
-    PUBSUB_PEER_DISCOVERY_TOPIC,
-    DOCUMENT_PUBLISH_PATH,
+    peerDiscoveryTopic,
+    documentPublishPath,
   )
 
   // Subscribe to additional topics from environment (comma-separated).
   // Useful for integration tests or pre-configured deployments.
-  const extraTopics = process.env.EXTRA_TOPICS
-  if (extraTopics) {
-    for (const topic of extraTopics.split(',').map(t => t.trim()).filter(Boolean)) {
-      if (!trackedTopics.has(topic)) {
-        trackedTopics.add(topic)
-        libp2p.services.pubsub.subscribe(topic)
-        console.log(`Subscribed to extra topic: ${topic}`)
-      }
+  for (const topic of extraTopics) {
+    if (!trackedTopics.has(topic)) {
+      trackedTopics.add(topic)
+      libp2p.services.pubsub.subscribe(topic)
+      console.log(`Subscribed to extra topic: ${topic}`)
     }
   }
 
