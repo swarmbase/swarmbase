@@ -31,12 +31,15 @@ export function trackConsole(page: Page) {
   page.on('console', collector);
 
   /**
-   * Detach functions for any in-flight `waitFor` / `waitForCount` listeners.
-   * Each pending wait registers its cleanup here and removes itself on
-   * resolve/reject; `dispose()` drains anything still outstanding so we
-   * don't leak per-call listeners (or their timers) across page reloads.
+   * Pending in-flight `waitFor` / `waitForCount` waits. Each entry holds the
+   * cleanup hook (clears the timer + removes the per-call console handler)
+   * and the Promise's `reject`, so `dispose()` can both stop the listener
+   * AND reject the awaited Promise — otherwise callers awaiting through a
+   * `dispose()` would hang forever. Pending waits self-unregister on their
+   * normal resolve/reject paths.
    */
-  const pendingDetachers = new Set<() => void>();
+  type PendingWait = { detach: () => void; reject: (err: Error) => void };
+  const pendingWaits = new Set<PendingWait>();
 
   return {
     messages,
@@ -47,10 +50,13 @@ export function trackConsole(page: Page) {
       const existing = messages.find(m => m.startsWith(prefix));
       if (existing) return Promise.resolve(existing);
 
-      return new Promise((resolve, reject) => {
-        let detach: () => void;
+      return new Promise<string>((resolve, reject) => {
+        const pending: PendingWait = {
+          detach: () => {}, // assigned below
+          reject,
+        };
         const timer = setTimeout(() => {
-          detach();
+          pending.detach();
           reject(new Error(
             `Timeout (${timeout}ms) waiting for console: "${prefix}"\n` +
             `Collected ${messages.length} messages:\n${messages.slice(-20).join('\n')}`,
@@ -58,16 +64,16 @@ export function trackConsole(page: Page) {
         }, timeout);
         const handler = (msg: ConsoleMessage) => {
           if (msg.text().startsWith(prefix)) {
-            detach();
+            pending.detach();
             resolve(msg.text());
           }
         };
-        detach = () => {
+        pending.detach = () => {
           clearTimeout(timer);
           page.off('console', handler);
-          pendingDetachers.delete(detach);
+          pendingWaits.delete(pending);
         };
-        pendingDetachers.add(detach);
+        pendingWaits.add(pending);
         page.on('console', handler);
       });
     },
@@ -76,10 +82,13 @@ export function trackConsole(page: Page) {
       const matched = () => messages.filter(m => m.startsWith(prefix));
       if (matched().length >= count) return Promise.resolve(matched().slice(0, count));
 
-      return new Promise((resolve, reject) => {
-        let detach: () => void;
+      return new Promise<string[]>((resolve, reject) => {
+        const pending: PendingWait = {
+          detach: () => {}, // assigned below
+          reject,
+        };
         const timer = setTimeout(() => {
-          detach();
+          pending.detach();
           const found = matched();
           reject(new Error(
             `Timeout (${timeout}ms) waiting for ${count} "${prefix}" messages (got ${found.length})\n` +
@@ -89,30 +98,34 @@ export function trackConsole(page: Page) {
         const handler = (_msg: ConsoleMessage) => {
           const found = matched();
           if (found.length >= count) {
-            detach();
+            pending.detach();
             resolve(found.slice(0, count));
           }
         };
-        detach = () => {
+        pending.detach = () => {
           clearTimeout(timer);
           page.off('console', handler);
-          pendingDetachers.delete(detach);
+          pendingWaits.delete(pending);
         };
-        pendingDetachers.add(detach);
+        pendingWaits.add(pending);
         page.on('console', handler);
       });
     },
     /**
      * Detach the long-lived collector listener, cancel any pending
      * `waitFor` / `waitForCount` listeners (clearing their timers and
-     * removing their `page.on('console', ...)` handlers), and clear the
-     * buffer. Safe to call more than once.
+     * removing their `page.on('console', ...)` handlers), reject their
+     * Promises so any in-flight awaits unblock instead of hanging, and
+     * clear the buffer. Safe to call more than once.
      */
     dispose() {
       page.off('console', collector);
-      // Snapshot first — each detach() mutates pendingDetachers.
-      for (const detach of [...pendingDetachers]) detach();
-      pendingDetachers.clear();
+      // Snapshot first — each detach() mutates pendingWaits.
+      for (const pending of [...pendingWaits]) {
+        pending.detach();
+        pending.reject(new Error('trackConsole disposed'));
+      }
+      pendingWaits.clear();
       messages.length = 0;
     },
   };
