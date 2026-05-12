@@ -157,6 +157,28 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   pathUpdateEpochId?: Uint8Array;
 
   /**
+   * Optional canonical hash of the responder's current tip set, used by the
+   * initial-load quorum protocol (`tipAdvertiseV1`, see `wire-protocols.ts`
+   * and `tips-hash.ts`).
+   *
+   * When a new node opens a document it queries up to K peers in parallel
+   * via `tipAdvertiseV1`; each peer responds with a `CRDTSyncMessage` whose
+   * only populated payload field is `tipsHash` (computed deterministically
+   * from the peer's `_hashes` set so peers with the same view produce
+   * byte-identical hashes). The loader counts how many peers returned the
+   * same hash and proceeds with a full documentLoadV3/snapshotLoadV3
+   * against one of the agreeing peers only when at least Q peers agree.
+   *
+   * The field is also tolerated (but optional) on regular load responses,
+   * so a future optimization can fold quorum into the full load. It is
+   * base64-encoded for JSON-safe transport by the sync-message serializers
+   * (same pattern as `welcomeEpochId`).
+   *
+   * Closes the gap tracked under issue #189 §5.4 item 2.
+   */
+  tipsHash?: Uint8Array;
+
+  /**
    * Signature of the sync message.
    */
   signature?: string;

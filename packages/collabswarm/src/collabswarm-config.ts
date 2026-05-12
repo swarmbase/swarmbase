@@ -331,6 +331,105 @@ export interface CollabswarmConfig {
   webrtcIceServers?: ReadonlyArray<Readonly<IceServer>>;
 
   /**
+   * Enable the initial-load quorum gate.
+   *
+   * When `true` (the default), `CollabswarmDocument.load()` queries up to
+   * {@link loadQuorumK} peers in parallel via the `tipAdvertiseV1` protocol
+   * for a lightweight tip-set hash before accepting any one peer's full
+   * document state. The full load proceeds only if at least
+   * {@link loadQuorumQ} peers returned the same hash. If quorum is not
+   * met, `load()` rejects with a `LoadQuorumFailedError` and the open
+   * sequence fails -- the application can catch the error and decide how
+   * to recover.
+   *
+   * Closes the gap tracked under issue #189 §5.4 item 2 (also bulleted in
+   * #186). Defends against a single malicious or partitioned peer
+   * unilaterally serving a stale or maliciously-crafted initial state.
+   *
+   * Setting this to `false` reverts to the legacy single-peer load: any
+   * one peer's response is accepted on the strength of its outer
+   * writer-signature alone. This is appropriate for solo-peer dev,
+   * single-node tests, and small-mesh dev scenarios where no second peer
+   * is reachable, but **weakens the trust assumptions** of an open mesh
+   * (the loader has no defence-in-depth against an actively malicious
+   * peer that holds a valid writer key but advertises a forged tip set).
+   *
+   * @default true
+   */
+  loadQuorumEnabled?: boolean;
+
+  /**
+   * Maximum number of peers to probe in parallel for the initial-load
+   * quorum tip-advertise step. The effective K is
+   * `min(loadQuorumK, knownPeers.length)` so the loader never blocks on a
+   * peer that does not exist.
+   *
+   * The default of 3 is a deliberately small number: it gives the gate
+   * defence against a single dishonest peer (Q=2 majority of 3) without
+   * fanning out enough requests to noticeably impact open latency or
+   * bandwidth.
+   *
+   * @default 3
+   */
+  loadQuorumK?: number;
+
+  /**
+   * Minimum number of peers that must agree on the same tip-set hash to
+   * pass the initial-load quorum gate. Clamped at runtime to
+   * `[1, effectiveK]` so `Q > K` never makes quorum unreachable.
+   *
+   * Default formula: `Math.ceil(K / 2) + 1`, which yields:
+   *   - K=1 -> Q=1 (single-peer pass-through; requires `loadQuorumAllowSinglePeer: true`)
+   *   - K=2 -> Q=2 (both peers must agree)
+   *   - K=3 -> Q=2 (a single dishonest peer cannot win the vote)
+   *   - K=4 -> Q=3
+   *   - K=5 -> Q=3
+   * This is the standard "strictly more than half" Byzantine-fault-
+   * tolerant threshold and matches the design note in #189 §5.4.2.
+   *
+   * @default Math.ceil(loadQuorumK / 2) + 1, clamped to [1, loadQuorumK]
+   */
+  loadQuorumQ?: number;
+
+  /**
+   * Per-peer timeout (milliseconds) for the initial-load quorum
+   * tip-advertise probes. A peer that does not respond within this window
+   * is recorded as a non-vote (NOT a disagreement); see
+   * `load-quorum.ts::decideLoadQuorum` for the distinction.
+   *
+   * Default chosen to be larger than typical RTT + protocol-negotiation
+   * latency on a wide-area mesh, but small enough that a partitioned peer
+   * does not stall document open by more than ~5 seconds.
+   *
+   * @default 5000
+   */
+  loadQuorumTimeoutMs?: number;
+
+  /**
+   * Allow the initial-load quorum gate to pass with a single responding
+   * peer when no other peers are reachable.
+   *
+   * When `true` and the effective K resolves to 1 (only one known peer),
+   * the loader accepts that peer's tip-advertise response and proceeds
+   * with the full load. Useful for small private swarms or development
+   * scenarios where running multiple peers is impractical.
+   *
+   * **Trust caveat:** with K=1 there is no second opinion, so this flag
+   * weakens the gate's protection back to legacy single-peer trust
+   * semantics in exactly the case it was designed to defend. A warning
+   * is logged when the single-peer path is taken so operators can spot
+   * the regression in their environment.
+   *
+   * When `false` (the default), a single-peer mesh forces a
+   * `LoadQuorumFailedError`. Callers that genuinely run solo (e.g.
+   * brand-new documents, founding member) should either set
+   * `loadQuorumEnabled: false` or set this flag and accept the warning.
+   *
+   * @default false
+   */
+  loadQuorumAllowSinglePeer?: boolean;
+
+  /**
    * Optional callback to validate document paths before creation.
    *
    * Called when `open()` determines the document is new (i.e., `load()` returned

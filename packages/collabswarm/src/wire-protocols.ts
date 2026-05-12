@@ -8,6 +8,36 @@ export const documentLoadV2 = '/collabswarm/doc-load/2.0.0';
 export const documentKeyUpdateV2 = '/collabswarm/key-update/2.0.0';
 export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 
+// Tip-advertise v1: lightweight initial-load quorum probe.
+//
+// Closes the "no quorum protocol for verifying initial document state" gap
+// tracked under issue #189 §5.4 item 2 (also a bullet under #186). When a
+// node opens a document, it asks up to `loadQuorumK` peers in parallel for
+// a 32-byte SHA-256 digest of their current tip set (see `tips-hash.ts`)
+// and proceeds with a full document-load only if at least `loadQuorumQ`
+// peers agree on the same hash. This defends against a single malicious or
+// partitioned peer serving a stale/maliciously-crafted initial state.
+//
+// Wire format (request and response are length-delimited single frames):
+//
+//   Request:  serialized `CRDTLoadRequest` (same shape as documentLoadV2 --
+//             reuses the existing load-request serializer so a writer can
+//             sign just the document id and the responder can authorize
+//             via the standard ACL/signature check).
+//
+//   Response: empty payload (peer declines: unknown document, unauthorized,
+//             signing disabled-on-one-side mismatch, etc.) OR a serialized
+//             `CRDTSyncMessage` whose only populated payload field is
+//             `tipsHash` (plus `documentId` and optionally `signature`).
+//             The responder does NOT include `changes`, `snapshot`, or
+//             `keychainChanges` -- the heavy state transfer happens later
+//             via documentLoadV2/snapshotLoadV2 against an agreeing peer.
+//
+// Layered on documentLoadV2's transport semantics, but on a separate
+// protocol id so a slow/malicious peer that serves bogus full loads cannot
+// also cheaply poison every quorum vote at the same time.
+export const tipAdvertiseV1 = '/collabswarm/tip-advertise/1.0.0';
+
 // BeeKEM Welcome v1: onboards a new reader into a document. The inviting
 // writer sends a Welcome containing (a) the invitation epoch ID the
 // recipient should record so subsequent `since_invited` history filtering
