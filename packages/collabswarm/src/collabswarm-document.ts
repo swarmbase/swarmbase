@@ -45,11 +45,23 @@ import {
   ECIES_P256_PUBLIC_KEY_LENGTH,
 } from './ecies';
 import {
+  beekemPathUpdateV1,
   beekemWelcomeV1,
   documentKeyUpdateV2,
   documentLoadV2,
   snapshotLoadV2,
 } from './wire-protocols';
+import { BeeKEM } from './beekem/beekem';
+import { PathUpdate } from './beekem/types';
+import {
+  SerializedPathUpdate,
+  deserializePathUpdateFromWire,
+  serializePathUpdateForWire,
+} from './path-update-wire';
+import {
+  deriveDocumentKeyFromRootSecret,
+  deriveEpochIdFromRootSecret,
+} from './derive-doc-key';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import {
@@ -75,6 +87,19 @@ import { UnixFS, unixfs } from '@helia/unixfs';
 // rely on. `Message` (the pubsub message shape) likewise moved here.
 import type { GossipSub, Message } from '@libp2p/gossipsub';
 import { EventHandler, PeerId } from '@libp2p/interface';
+
+/**
+ * Constant-time byte-array equality. Used by the BeeKEM PathUpdate
+ * receive path to compare epoch IDs without leaking which prefix
+ * matched. Returns `false` for mismatched lengths (also in constant
+ * time across same-length inputs).
+ */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
 
 /**
  * Controls what historical data new members receive when joining a document.
@@ -331,6 +356,33 @@ export class CollabswarmDocument<
   public getKemPublicKeyRaw(): Uint8Array | undefined {
     return this._kemPublicKeyRaw && new Uint8Array(this._kemPublicKeyRaw);
   }
+
+  // BeeKEM ratchet-tree state for cryptographic reader revocation.
+  //
+  // `removeReader` blanks the removed reader's BeeKEM leaf, re-keys the
+  // path, and broadcasts a `PathUpdate` over `beekemPathUpdateV1`.
+  // Surviving readers feed the update into `processPathUpdate` and
+  // re-derive the document encryption key from the fresh root secret
+  // (see `derive-doc-key.ts`). The removed reader's leaf is blanked,
+  // so they cannot recompute the root secret -- this closes the
+  // revocation-latency gap of the previous "encrypt the new key under
+  // the old key" rotation scheme.
+  //
+  // Lazily allocated in `_ensureBeeKEM` so a `CollabswarmDocument` that
+  // never calls `removeReader` does not pay the ECDH-keygen cost. The
+  // founder (i.e. the local user, who is always a writer in this
+  // document) seeds the tree with a fresh BeeKEM leaf key pair. A
+  // future PR will plumb BeeKEM Welcome material through `addReader`
+  // so joiners can install their own leaf at the appropriate index
+  // (see also PR #281's KEM-key infrastructure).
+  private _beekem: BeeKEM | null = null;
+  private _beekemInitPromise: Promise<BeeKEM> | null = null;
+
+  // pubkey (serialized) -> BeeKEM leaf index, populated by `addReader`
+  // (writer side) so `removeReader` can look up the leaf to blank.
+  // Joiner-side population requires Welcome plumbing that is out of
+  // scope here and tracked alongside the BeeKEM Welcome work.
+  private _readerLeafIndices = new Map<string, number>();
 
   /**
    * Set the history visibility for this document.
@@ -2992,6 +3044,31 @@ export class CollabswarmDocument<
       await this._makeChange(changes, crdtReaderChangeNode);
     }
 
+    // Record the new reader in the BeeKEM ratchet tree so a future
+    // `removeReader` call can cryptographically revoke them. The leaf
+    // is seeded with a fresh ECDH key pair generated locally: real
+    // joiner-side BeeKEM key delivery (so the joiner can process
+    // future PathUpdates themselves) is paired with the BeeKEM Welcome
+    // payload work tracked alongside PR #281. The inviter side
+    // populated here is sufficient for `removeReader` to look up the
+    // leaf to blank, which is the revocation half of the flow.
+    //
+    // Runs unconditionally (independent of `readerKemPublicKey`), so a
+    // caller that adds a reader without the KEM key can still later
+    // revoke them. `_registerBeeKEMReader` is idempotent on the
+    // serialized reader public key, so re-invoking `addReader` once the
+    // KEM key is known does not double-allocate a leaf. The local tree
+    // mutation does not broadcast a PathUpdate (we only emit those on
+    // revocation), so confidentiality of the tree state is preserved.
+    try {
+      await this._registerBeeKEMReader(reader);
+    } catch (err) {
+      console.warn(
+        `Failed to record BeeKEM membership for new reader of ${this.documentPath}:`,
+        err,
+      );
+    }
+
     // Without the recipient's KEM public key we cannot seal the
     // Welcome payload, and we will NEVER send an un-sealed Welcome --
     // that would broadcast `keychainChanges` to every connected peer.
@@ -3687,9 +3764,37 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Remove a user as a valid reader. Users are identified by their public keys
+   * Remove a user as a valid reader. Users are identified by their public keys.
    *
-   * @param reader User's public key
+   * Revocation is performed via the BeeKEM ratchet tree:
+   *
+   *   1. The reader is removed from the readers ACL and the change is
+   *      broadcast over the document topic.
+   *   2. The BeeKEM leaf assigned to the removed reader is blanked
+   *      (`BeeKEM.removeMember`), severing them from the tree.
+   *   3. A self-update (`BeeKEM.update`) re-keys our path, producing a
+   *      fresh root secret unreachable to the removed reader.
+   *   4. A new document encryption key is derived from the root secret
+   *      via HKDF (see `derive-doc-key.ts`) and installed in the
+   *      keychain under an epoch ID likewise derived from the root.
+   *   5. The combined `PathUpdate` from steps 2 and 3 is broadcast over
+   *      `beekemPathUpdateV1` to every connected peer, signed by the
+   *      writer. Surviving readers feed it into
+   *      `BeeKEM.processPathUpdate` and re-derive the same document
+   *      key.
+   *
+   * Unlike the previous "encrypt the new key under the old key" scheme,
+   * the removed reader cannot derive the new key even if they were
+   * connected at the moment of revocation: their leaf is blanked and
+   * the new path key material is encrypted to subtrees they no longer
+   * occupy. This closes the revocation-latency gap (#189 §5.4 item 5).
+   *
+   * @param reader User's public key.
+   * @throws If the BeeKEM tree has no record of this reader (e.g.
+   *   `addReader` did not seed a leaf for them, or BeeKEM membership
+   *   was lost). Callers must surface this rather than silently
+   *   degrading: a removeReader that "succeeded" without rotating the
+   *   key would leave the removed reader with full ongoing access.
    */
   public async removeReader(reader: PublicKey) {
     await this._ensureCurrentUserCanWrite();
@@ -3699,24 +3804,408 @@ export class CollabswarmDocument<
       return;
     }
 
-    // Send change over network.
+    const serializePublicKey = requireSerializePublicKey(
+      this._authProvider,
+      'BeeKEM reader revocation',
+    );
+    const serializedReader = await serializePublicKey(reader);
+
+    // Look up the BeeKEM leaf for the removed reader BEFORE mutating
+    // any ACL state. If the leaf is unknown we cannot perform the
+    // ratchet step and must fail loudly -- continuing would broadcast
+    // an ACL removal without revoking the document key, leaving the
+    // removed reader able to decrypt subsequent traffic.
+    const leafIndex = this._readerLeafIndices.get(serializedReader);
+    if (leafIndex === undefined) {
+      throw new Error(
+        `Cannot remove reader from "${this.documentPath}": no BeeKEM leaf ` +
+          `recorded for this reader. The reader must have been added via ` +
+          `addReader (which seeds the BeeKEM tree) before they can be ` +
+          `cryptographically revoked.`,
+      );
+    }
+
+    const beekem = await this._ensureBeeKEM();
+
+    // 1. ACL removal. Done before the BeeKEM step so the readers-ACL
+    //    broadcast is in flight while we compute the ratchet update.
     const changes = await this._readers.remove(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // Save the current (soon-to-be-previous) key before rotation.
-    // This key is what peers currently have and can use to decrypt the update.
-    const previousKey = await this._keychain.current();
+    // 2 + 3. Blank the leaf and re-key our path. `removeMember`
+    //    already re-derives the path, so a follow-up `update` is not
+    //    strictly required for the cryptographic property; we run it
+    //    anyway to provide post-compromise security (a fresh leaf key
+    //    pair for the local writer) on every revocation.
+    await beekem.removeMember(leafIndex);
+    const { pathUpdate, rootSecret } = await beekem.update();
 
-    // Create a new document key (rotation required after reader removal).
-    const [keyID, key, keychainChanges] = await this._keychain.add();
+    // 4. Derive the new document key + epoch ID from the root secret
+    //    and install in the keychain.
+    const [newKey, derivedEpochId] = await Promise.all([
+      deriveDocumentKeyFromRootSecret(rootSecret),
+      deriveEpochIdFromRootSecret(rootSecret),
+    ]);
+    // The keychain wire-format reserves `keyIDLength` bytes (currently
+    // 16) for the keychain key ID prefix on encrypted messages. Slice
+    // the derived 32-byte epoch ID down so installs and lookups agree.
+    const epochId = derivedEpochId.slice(0, this._keychainProvider.keyIDLength);
+    // `addEpochKey` is part of the Keychain interface in this codebase
+    // (both yjs and automerge providers implement it). It appends the
+    // key under the supplied ID and returns the keychain delta. We do
+    // NOT broadcast the delta here -- the BeeKEM PathUpdate is the
+    // delivery mechanism (and a surviving reader re-derives the same
+    // ID + key locally, so wire-side delivery of the delta is
+    // unnecessary). The delta is still installed locally so
+    // `_keychain.current()` advances for subsequent encrypts.
+    await this._keychain.addEpochKey(epochId, newKey as unknown as DocumentKey);
 
-    // Distribute the new key to all remaining readers, encrypted with the previous key.
-    await this._distributeKeyUpdate(keychainChanges, previousKey);
+    // 5. Forget the removed reader's leaf-index entry so subsequent
+    //    `removeReader` calls for the same key (idempotency) take the
+    //    "already not a reader" early return instead of trying to
+    //    re-revoke a blank leaf.
+    this._readerLeafIndices.delete(serializedReader);
+
+    // 6. Broadcast the PathUpdate to every connected peer.
+    await this._distributeBeeKEMPathUpdate(pathUpdate, epochId);
   }
 
   /**
-   * Distribute keychain changes to all connected peers via the key-update protocol.
-   * Used after key rotation (e.g., when a reader is removed).
+   * Lazily initialize the per-document BeeKEM ratchet tree.
+   *
+   * Returns the singleton `BeeKEM` instance for this document,
+   * initializing it on first access with a fresh ECDH key pair for
+   * the local member's leaf. The initialization is funnelled through
+   * a single in-flight promise (`_beekemInitPromise`) so concurrent
+   * callers don't race two `initialize` calls against the same
+   * instance.
+   *
+   * NOTE: this seeds the tree with the local user as leaf 0. That is
+   * the correct posture for the document founder (a writer that
+   * called `open()` for a fresh document); a future PR will plumb
+   * BeeKEM Welcome payloads through joiner flows so non-founder
+   * peers initialize from `processWelcome` instead.
+   */
+  private async _ensureBeeKEM(): Promise<BeeKEM> {
+    if (this._beekem) return this._beekem;
+    if (this._beekemInitPromise) return this._beekemInitPromise;
+
+    const init = (async () => {
+      const beekem = new BeeKEM();
+      const keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true,
+        ['deriveBits'],
+      );
+      await beekem.initialize(keyPair.privateKey, keyPair.publicKey);
+      this._beekem = beekem;
+      return beekem;
+    })();
+
+    this._beekemInitPromise = init;
+    try {
+      return await init;
+    } finally {
+      // Clear the gate whether init succeeded or threw so a retry can
+      // re-attempt. On success `_beekem` is set and the next call
+      // short-circuits before reading the promise.
+      this._beekemInitPromise = null;
+    }
+  }
+
+  /**
+   * Register a newly-added reader in the BeeKEM ratchet tree.
+   *
+   * Called from `addReader` after the readers-ACL update. Seeds a
+   * fresh ECDH key pair on the reader's behalf (joiner-side BeeKEM
+   * key delivery is tracked separately) and records the resulting
+   * leaf index in `_readerLeafIndices` so `removeReader` can later
+   * look up the leaf to blank.
+   *
+   * The path update produced by `BeeKEM.addMember` is intentionally
+   * not broadcast here: this PR only ships the **remove** side of
+   * the ratchet-tree-backed revocation flow. The add-side broadcast
+   * would require joiners to already have the tree set up, which
+   * needs Welcome plumbing that is out of scope here.
+   */
+  private async _registerBeeKEMReader(reader: PublicKey): Promise<void> {
+    const serializePublicKey = requireSerializePublicKey(
+      this._authProvider,
+      'BeeKEM reader revocation',
+    );
+    const serializedReader = await serializePublicKey(reader);
+
+    // Idempotency: if a leaf is already recorded (e.g. addReader was
+    // re-invoked) keep the existing assignment.
+    if (this._readerLeafIndices.has(serializedReader)) {
+      return;
+    }
+
+    const beekem = await this._ensureBeeKEM();
+    const placeholderKeyPair = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveBits'],
+    );
+    const result = await beekem.addMember(placeholderKeyPair.publicKey);
+    // `BeeKEMWelcome.leafIndex` is the node index of the new leaf
+    // (even-numbered slot in the tree-math layout), which is exactly
+    // what `removeMember` consumes.
+    this._readerLeafIndices.set(serializedReader, result.welcome.leafIndex);
+  }
+
+  /**
+   * Broadcast a BeeKEM `PathUpdate` to every connected peer over the
+   * `beekemPathUpdateV1` protocol. Used by `removeReader` after a
+   * successful `removeMember` + `update` cycle.
+   *
+   * Wire format mirrors `documentKeyUpdateV2`: a 4-byte big-endian
+   * document-path length, the UTF-8 path bytes, then the serialized
+   * sync message body (which carries the `pathUpdate` /
+   * `pathUpdateEpochId` / `signature` fields). The message is
+   * **writer-signed unconditionally** (independent of the swarm-wide
+   * `enableSigning` toggle) so a malicious peer cannot inject a
+   * forged PathUpdate that steers surviving readers onto an
+   * attacker-controlled ratchet state.
+   *
+   * Best-effort fan-out: each failed dial is logged but does not
+   * abort the broadcast. A surviving reader that misses the
+   * PathUpdate falls back to a fresh document load to recover key
+   * state, matching the legacy `_distributeKeyUpdate` posture.
+   */
+  private async _distributeBeeKEMPathUpdate(
+    pathUpdate: PathUpdate,
+    pathUpdateEpochId: Uint8Array,
+  ): Promise<void> {
+    const message: CRDTSyncMessage<ChangesType, PublicKey> = {
+      documentId: this.documentPath,
+      pathUpdate: serializePathUpdateForWire(pathUpdate),
+      pathUpdateEpochId,
+    };
+
+    // Always writer-sign (mirrors the BeeKEM Welcome flow). Signing
+    // is mandatory here: an unsigned PathUpdate would let any
+    // connected peer rewrite every surviving reader's BeeKEM state.
+    message.signature = await this._signAsWriterUnconditional(message);
+
+    const serialized = this._syncMessageSerializer.serializeSyncMessage(message);
+
+    const pathBytes = this._encoder.encode(this.documentPath);
+    if (pathBytes.length === 0 || pathBytes.length > MAX_DOCUMENT_PATH_LENGTH) {
+      throw new Error(
+        `Document path "${this.documentPath}" encoded length (${pathBytes.length}) exceeds ` +
+          `the maximum allowed path length (${MAX_DOCUMENT_PATH_LENGTH} bytes) for the BeeKEM PathUpdate v1 protocol`,
+      );
+    }
+    const pathHeader = new Uint8Array(4);
+    pathHeader[0] = (pathBytes.length >> 24) & 0xff;
+    pathHeader[1] = (pathBytes.length >> 16) & 0xff;
+    pathHeader[2] = (pathBytes.length >> 8) & 0xff;
+    pathHeader[3] = pathBytes.length & 0xff;
+
+    const payload = concatUint8Arrays(pathHeader, pathBytes, serialized);
+
+    const peers =
+      this.swarm.heliaNode.libp2p
+        .getConnections()
+        ?.map((x) => x.remoteAddr) ?? [];
+
+    const failedPeers: string[] = [];
+    for (const peer of peers) {
+      try {
+        const stream = wrapStream(
+          await this.libp2p.dialProtocol(peer, [beekemPathUpdateV1]),
+        );
+        await pipe([payload], stream.sink);
+      } catch (err) {
+        failedPeers.push(peer.toString());
+        console.warn(
+          `Failed to send BeeKEM PathUpdate to peer:`,
+          peer.toString(),
+          err,
+        );
+      }
+    }
+
+    if (failedPeers.length > 0) {
+      console.warn(
+        `BeeKEM PathUpdate for ${this.documentPath} failed to reach ${failedPeers.length} peer(s):`,
+        failedPeers,
+        'Affected peers may be unable to decrypt subsequent messages until they reload the document.',
+      );
+    }
+  }
+
+  /**
+   * Handle an inbound `beekemPathUpdateV1` payload (already
+   * de-framed of the path-prefix header by the shared handler in
+   * `collabswarm.ts`).
+   *
+   * Validates the writer signature, deserializes the carried
+   * `PathUpdate`, applies it to the local BeeKEM tree via
+   * `processPathUpdate`, and installs the resulting document key
+   * under the supplied epoch ID. Mirrors the wire framing used by
+   * `handleKeyUpdateRequestData` and `handleBeeKEMWelcomeRequestData`.
+   *
+   * SECURITY: the writer signature is **always** verified, regardless
+   * of the swarm-wide `enableSigning` toggle. An unsigned or
+   * invalid-signature PathUpdate is dropped without applying any
+   * state change. The receiver also validates that the epoch ID it
+   * derives locally matches the sender's `pathUpdateEpochId` -- a
+   * mismatch indicates either a peer with stale local BeeKEM state
+   * or a tampered payload, and is treated as a hard error.
+   *
+   * @internal Invoked by the shared protocol handler in `collabswarm.ts`.
+   */
+  public async handleBeeKEMPathUpdateRequestData(
+    payload: Uint8Array,
+  ): Promise<void> {
+    try {
+      let message: CRDTSyncMessage<ChangesType, PublicKey>;
+      try {
+        message = this._syncMessageSerializer.deserializeSyncMessage(payload);
+      } catch (err) {
+        console.warn(
+          `Dropping malformed BeeKEM PathUpdate for ${this.documentPath}:`,
+          err,
+        );
+        return;
+      }
+
+      // Defense-in-depth against misrouted payloads (the shared
+      // handler already routes by document path).
+      if (message.documentId && message.documentId !== this.documentPath) {
+        console.warn(
+          `Ignoring BeeKEM PathUpdate for wrong document ` +
+            `(${message.documentId} !== ${this.documentPath})`,
+        );
+        return;
+      }
+
+      // Writer signature is mandatory.
+      if (!message.signature) {
+        console.warn(
+          `Dropping BeeKEM PathUpdate for ${this.documentPath}: missing signature`,
+        );
+        return;
+      }
+      const { signature, ...messageWithoutSignature } = message;
+      const raw = this._syncMessageSerializer.serializeSyncMessage(
+        messageWithoutSignature,
+      );
+      if (!(await this._verifyWelcomeWriterSignature(raw, signature))) {
+        console.warn(
+          `Dropping BeeKEM PathUpdate for ${this.documentPath}: invalid signature`,
+        );
+        return;
+      }
+
+      if (!message.pathUpdate) {
+        console.warn(
+          `Dropping BeeKEM PathUpdate for ${this.documentPath}: missing pathUpdate field`,
+        );
+        return;
+      }
+      if (!message.pathUpdateEpochId) {
+        console.warn(
+          `Dropping BeeKEM PathUpdate for ${this.documentPath}: missing pathUpdateEpochId field`,
+        );
+        return;
+      }
+
+      let pathUpdate: PathUpdate;
+      try {
+        pathUpdate = deserializePathUpdateFromWire(message.pathUpdate);
+      } catch (err) {
+        console.warn(
+          `Dropping malformed BeeKEM PathUpdate for ${this.documentPath}:`,
+          err,
+        );
+        return;
+      }
+
+      // Apply the path update to the local BeeKEM tree. If the local
+      // state is missing (no Welcome received yet) or stale,
+      // processPathUpdate will throw; surface the failure but do not
+      // crash the inbound handler.
+      const beekem = await this._ensureBeeKEM();
+      let rootSecret: Uint8Array;
+      try {
+        rootSecret = await beekem.processPathUpdate(pathUpdate);
+      } catch (err) {
+        console.warn(
+          `Failed to apply BeeKEM PathUpdate for ${this.documentPath}: ` +
+            `local tree state could not process the update. ` +
+            `Falling back to a fresh document load may be required to ` +
+            `recover keychain state.`,
+          err,
+        );
+        return;
+      }
+
+      // Validate the sender's epoch ID against our locally-derived
+      // value. Different epoch IDs mean we and the sender diverged on
+      // the BeeKEM state, so installing under the sender's ID would
+      // leave us decrypting future traffic with the wrong key.
+      const localEpochId32 = await deriveEpochIdFromRootSecret(rootSecret);
+      const localEpochId = localEpochId32.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      const senderEpochId = message.pathUpdateEpochId.slice(
+        0,
+        this._keychainProvider.keyIDLength,
+      );
+      if (!constantTimeEqual(localEpochId, senderEpochId)) {
+        console.warn(
+          `BeeKEM PathUpdate epoch-ID mismatch for ${this.documentPath}: ` +
+            `local derivation diverged from sender. PathUpdate dropped.`,
+        );
+        return;
+      }
+
+      const newKey = await deriveDocumentKeyFromRootSecret(rootSecret);
+      try {
+        await this._keychain.addEpochKey(
+          localEpochId,
+          newKey as unknown as DocumentKey,
+        );
+      } catch (err) {
+        console.error(
+          `Failed to install BeeKEM-derived epoch key in keychain for ${this.documentPath}:`,
+          err,
+        );
+        return;
+      }
+
+      console.log(
+        `Installed BeeKEM-derived epoch key for ${this.documentPath} via PathUpdate`,
+      );
+    } catch (err: unknown) {
+      console.error(
+        `Error handling BeeKEM PathUpdate for document ${this.documentPath}:`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Distribute keychain changes to all connected peers via the
+   * legacy `documentKeyUpdateV2` protocol (encrypts the new key under
+   * the previous key).
+   *
+   * `removeReader` no longer uses this path: it rotates the document
+   * key via BeeKEM's ratchet tree and broadcasts a signed
+   * `PathUpdate` over `beekemPathUpdateV1` instead, which closes the
+   * revocation-latency gap where a removed-but-still-connected
+   * reader could decrypt the rotation message (#189 §5.4 item 5).
+   *
+   * `removeWriter` continues to use this method: writer revocation
+   * has different threat properties (the removed writer no longer
+   * has write capability, even if they retain read access through
+   * the old key until the next BeeKEM rotation), and the BeeKEM
+   * tree currently models reader membership only. A follow-up
+   * change will fold writer revocation into the BeeKEM path too.
    *
    * @param keychainChanges The keychain CRDT changes containing the new key.
    * @param previousKey The previous document key to encrypt the update with.
