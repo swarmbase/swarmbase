@@ -1807,13 +1807,13 @@ __metadata:
     "@collabswarm/collabswarm": "workspace:packages/collabswarm"
     "@peculiar/webcrypto": "npm:^1.7.1"
     "@types/node": "npm:^22.7.5"
-    "@types/uuid": "npm:^10"
+    "@types/uuid": "npm:^11.0.0"
     eslint: "npm:^10.0.2"
     jest: "npm:^29.2.5"
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
   peerDependencies:
     "@automerge/automerge": ^3.2.4
   bin:
@@ -1943,7 +1943,7 @@ __metadata:
     typedoc: "npm:^0.26.7"
     typescript: "npm:^5.9.3"
     uint8arraylist: "npm:^2.4.8"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
   languageName: unknown
   linkType: soft
 
@@ -1967,7 +1967,7 @@ __metadata:
     "@types/react-router-bootstrap": "npm:^0.26.6"
     "@types/react-router-dom": "npm:^5.3.3"
     "@types/testing-library__jest-dom": "npm:^6"
-    "@types/uuid": "npm:^10.0.0"
+    "@types/uuid": "npm:^11.0.0"
     bootstrap: "npm:^5.3.8"
     quill-delta: "npm:^5.1.0"
     react: "npm:^19.2.6"
@@ -1977,7 +1977,7 @@ __metadata:
     react-router-dom: "npm:^7.15.0"
     react-scripts: "npm:^5.0.1"
     typescript: "npm:^5.9.3"
-    uuid: "npm:^10.0.0"
+    uuid: "npm:^14.0.0"
     web-vitals: "npm:^5.2.0"
     yjs: "npm:^13.6.30"
   languageName: unknown
@@ -5530,10 +5530,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/uuid@npm:^10, @types/uuid@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "@types/uuid@npm:10.0.0"
-  checksum: 10/e3958f8b0fe551c86c14431f5940c3470127293280830684154b91dc7eb3514aeb79fe3216968833cf79d4d1c67f580f054b5be2cd562bebf4f728913e73e944
+"@types/uuid@npm:^11.0.0":
+  version: 11.0.0
+  resolution: "@types/uuid@npm:11.0.0"
+  dependencies:
+    uuid: "npm:*"
+  checksum: 10/9f94bd34e5d220c53cc58ea9f48a0061d3bc343e29bc33a17edc705f5e21fedda21553318151f2bc227c2b2b03727bbb536da2b82a61f84d2e1ca38abc5e5c3f
   languageName: node
   linkType: hard
 
@@ -18901,12 +18903,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^10.0.0":
-  version: 10.0.0
-  resolution: "uuid@npm:10.0.0"
+"uuid@npm:*, uuid@npm:^14.0.0":
+  version: 14.0.0
+  resolution: "uuid@npm:14.0.0"
   bin:
-    uuid: dist/bin/uuid
-  checksum: 10/35aa60614811a201ff90f8ca5e9ecb7076a75c3821e17f0f5ff72d44e36c2d35fcbc2ceee9c4ac7317f4cc41895da30e74f3885e30313bee48fda6338f250538
+    uuid: dist-node/bin/uuid
+  checksum: 10/8ee9b98f9650e25555515f7a28d3c3ae9364e72f7bb19b9e08b681bc135338beba5509b2830f6ae1cfaba4d45401da0d16d4d109b977097bc3d6ba0c5583341b
   languageName: node
   linkType: hard
 
