@@ -3201,6 +3201,9 @@ export class CollabswarmDocument<
     const newEpochId = message.welcomeEpochId as Uint8Array;
     if (this._invitationEpoch === undefined) {
       this._invitationEpoch = newEpochId;
+      console.log(
+        `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
+      );
     } else {
       const advanced = await this._shouldAdvanceInvitationEpoch(
         this._invitationEpoch,
@@ -3208,16 +3211,32 @@ export class CollabswarmDocument<
       );
       if (advanced) {
         this._invitationEpoch = newEpochId;
-      } else {
-        console.warn(
-          `Ignoring out-of-order BeeKEM Welcome for ${this.documentPath}: ` +
-            `incoming epoch is not later than current invitation epoch`,
+        console.log(
+          `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
         );
+      } else {
+        // Byte-equality check distinguishes benign duplicate Welcomes
+        // (same epoch ID arriving more than once -- expected with
+        // gossipsub fanout) from genuine out-of-order or regression
+        // cases (different epoch ID that is not strictly later than
+        // the current anchor). Only the latter is worth warning about;
+        // duplicates are silently ignored to avoid log noise.
+        let isDuplicate = false;
+        if (this._invitationEpoch.byteLength === newEpochId.byteLength) {
+          let diff = 0;
+          for (let i = 0; i < this._invitationEpoch.byteLength; i++) {
+            diff |= this._invitationEpoch[i] ^ newEpochId[i];
+          }
+          isDuplicate = diff === 0;
+        }
+        if (!isDuplicate) {
+          console.warn(
+            `Ignoring out-of-order BeeKEM Welcome for ${this.documentPath}: ` +
+              `incoming epoch is not later than current invitation epoch`,
+          );
+        }
       }
     }
-    console.log(
-      `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
-    );
     return true;
   }
 
