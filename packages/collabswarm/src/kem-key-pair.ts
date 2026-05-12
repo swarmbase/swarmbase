@@ -71,9 +71,16 @@ export async function validateAndExportKemKeyPair(
     // text actionable; the original is preserved via `cause` for
     // structured introspection.
     const msg = err instanceof Error ? err.message : String(err);
+    // The KEM PUBLIC key must be raw-exportable so it can be advertised
+    // out-of-band to inviters. The PRIVATE key should remain
+    // non-extractable; the recommended pattern is to call
+    // `generateKey({ ..., extractable: true })`, then re-import the
+    // private key with `extractable: false` (see `generateEciesKeyPair`
+    // in `ecies.ts` for the canonical approach).
     throw new Error(
       `setKemKeyPair: failed to export public key as raw bytes ` +
-        `(was the public key created with extractable=true?): ${msg}`,
+        `(the public key must be raw-exportable; the private key can ` +
+        `still be non-extractable): ${msg}`,
       { cause: err },
     );
   }

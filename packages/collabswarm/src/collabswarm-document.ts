@@ -2981,29 +2981,35 @@ export class CollabswarmDocument<
   ) {
     await this._ensureCurrentUserCanWrite();
 
-    // Check that the reader is not already a reader.
-    if (await this._readers.check(reader)) {
-      return;
+    // Idempotent on the ACL side, but if the caller has only now obtained
+    // the recipient's KEM public key (e.g. a previous `addReader` call
+    // skipped the Welcome because the key was unknown), still emit the
+    // Welcome so the existing ACL row can be paired with keychain
+    // material. Without this branch the warning emitted below on the
+    // first call would point at a recovery path that is itself a no-op.
+    const alreadyReader = await this._readers.check(reader);
+    if (!alreadyReader) {
+      // Send change over network.
+      const changes = await this._readers.add(reader);
+      await this._makeChange(changes, crdtReaderChangeNode);
     }
-
-    // Send change over network.
-    const changes = await this._readers.add(reader);
-    await this._makeChange(changes, crdtReaderChangeNode);
 
     // Without the recipient's KEM public key we cannot seal the
     // Welcome payload, and we will NEVER send an un-sealed Welcome --
     // that would broadcast `keychainChanges` to every connected peer.
     if (!readerKemPublicKey) {
-      console.warn(
-        `[${this.documentPath}] addReader: BeeKEM Welcome skipped because ` +
-          `the caller did not provide \`readerKemPublicKey\`. The reader ` +
-          `has been added to the readers ACL, but to deliver the document ` +
-          `key the caller must either (a) re-invoke \`addReader(reader, ` +
-          `readerKemPublicKey)\` once the recipient's raw SEC1 P-256 ECDH ` +
-          `public key is available, or (b) have the recipient perform a ` +
-          `fresh document load against an authorized peer to recover ` +
-          `keychain state.`,
-      );
+      if (!alreadyReader) {
+        console.warn(
+          `[${this.documentPath}] addReader: BeeKEM Welcome skipped because ` +
+            `the caller did not provide \`readerKemPublicKey\`. The reader ` +
+            `has been added to the readers ACL, but to deliver the document ` +
+            `key the caller must either (a) re-invoke \`addReader(reader, ` +
+            `readerKemPublicKey)\` once the recipient's raw SEC1 P-256 ECDH ` +
+            `public key is available, or (b) have the recipient perform a ` +
+            `fresh document load against an authorized peer to recover ` +
+            `keychain state.`,
+        );
+      }
       return;
     }
 
