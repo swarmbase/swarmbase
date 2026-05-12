@@ -2,7 +2,7 @@ import {
   CollabswarmActions,
   CollabswarmState,
 } from '@collabswarm/collabswarm-redux';
-import { Doc, BinaryChange } from 'automerge';
+import { Doc, BinaryChange } from '@automerge/automerge';
 
 export type AutomergeSwarmState<T = any> = CollabswarmState<
   Doc<T>,

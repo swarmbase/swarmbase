@@ -1,7 +1,7 @@
 import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
-import { Doc } from 'automerge';
+import { Doc, Text } from '@automerge/automerge';
 import type { CollabswarmConfig } from '@collabswarm/collabswarm';
 import {
   defaultConfig,
@@ -25,6 +25,21 @@ import {
   AutomergeSwarmActions,
   AutomergeSwarmDocument,
 } from '../utils';
+
+/**
+ * Set `updatedOn` to now and back-fill `createdOn` / `createdBy` if they
+ * were never recorded. Called from every `onChange` handler so the two
+ * paths (title edits and content edits) can't drift out of sync.
+ */
+function stampTimestamps(doc: WikiSwarmArticle) {
+  doc.updatedOn = dayjs().format();
+  if (!doc.createdOn && doc.updatedOn) {
+    doc.createdOn = doc.updatedOn;
+  }
+  if (!doc.createdBy && doc.updatedBy) {
+    doc.createdBy = doc.updatedBy;
+  }
+}
 
 interface MatchParams {
   documentId: string;
@@ -135,9 +150,35 @@ class WikiArticle extends React.Component<
           this.props.document,
         );
       }
+      // `title` is declared required in the model, but a document opened
+      // before the title field was wired in may legitimately lack it; fall
+      // back to '' so the controlled input still renders.
+      const currentTitle = this.props.document.title?.toString() ?? '';
       return (
         <div className="m-3">
-          <div>TODO: Title goes here</div>
+          <label htmlFor="wiki-article-title" className="visually-hidden">
+            Article title
+          </label>
+          <input
+            id="wiki-article-title"
+            type="text"
+            className="form-control form-control-lg mb-2"
+            placeholder="Article title"
+            value={currentTitle}
+            onChange={(e) => {
+              const newTitle = e.target.value;
+              this.props.onDocumentChange(
+                this.props.match.params.documentId,
+                (currentDocument) => {
+                  // Replace the title `Text` CRDT with a new one. Simple and
+                  // sufficient for an example app; a production app would
+                  // splice character-level diffs to preserve concurrent edits.
+                  currentDocument.title = new Text(newTitle);
+                  stampTimestamps(currentDocument);
+                },
+              );
+            }}
+          />
           <div>
             <SlateInput
               value={this.props.document.content || initialValue}
@@ -147,22 +188,8 @@ class WikiArticle extends React.Component<
                 this.props.onDocumentChange(
                   this.props.match.params.documentId,
                   (currentDocument) => {
-                    currentDocument.updatedOn = dayjs().format();
-                    // currentDocument.updatedBy = ???
-                    if (
-                      !currentDocument.createdOn &&
-                      currentDocument.updatedOn
-                    ) {
-                      currentDocument.createdOn = currentDocument.updatedOn;
-                    }
-                    if (
-                      !currentDocument.createdBy &&
-                      currentDocument.updatedBy
-                    ) {
-                      currentDocument.createdBy = currentDocument.updatedBy;
-                    }
+                    stampTimestamps(currentDocument);
                     currentDocument.content = content;
-                    // console.log('Updating editor content:', currentDocument.content.blocks.map(x => x.text).join(' '));
                   },
                 );
               }}

@@ -77,7 +77,6 @@ export function PasswordEditor({
       </Form.Group>
       <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
         <Form.Label column="sm">Value</Form.Label>
-        {/* TODO: Switch to a quill editor for nice Yjs integration? */}
         <Form.Control
           as="textarea"
           rows={3}
