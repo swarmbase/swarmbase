@@ -197,29 +197,40 @@ export async function eciesOpen(
     );
   }
 
+  // Slice the sealed payload into segments using `subarray` rather than
+  // `slice`: the former returns a view over the same `ArrayBuffer` and
+  // avoids the per-segment copy that `slice` performs. The downstream
+  // WebCrypto calls accept any `BufferSource`, so the views flow through
+  // unchanged and we keep memory flat for large payloads (matching the
+  // "no copies" comments on the seal side).
   let pos = 0;
-  const salt = sealed.slice(pos, pos + HKDF_SALT_LENGTH);
+  const salt = sealed.subarray(pos, pos + HKDF_SALT_LENGTH);
   pos += HKDF_SALT_LENGTH;
 
-  const ephemeralPubBytes = sealed.slice(
+  const ephemeralPubBytes = sealed.subarray(
     pos,
     pos + ECIES_P256_PUBLIC_KEY_LENGTH,
   );
   pos += ECIES_P256_PUBLIC_KEY_LENGTH;
 
-  const nonce = sealed.slice(pos, pos + AES_NONCE_LENGTH);
+  const nonce = sealed.subarray(pos, pos + AES_NONCE_LENGTH);
   pos += AES_NONCE_LENGTH;
 
-  const ciphertext = sealed.slice(pos);
+  const ciphertext = sealed.subarray(pos);
 
   // Import ephemeral public key. WebCrypto accepts a `BufferSource`
   // here, so we pass the `Uint8Array` view directly instead of
   // cloning into a fresh `ArrayBuffer` (see seal-side comment above).
+  //
+  // `extractable=false`: the ephemeral public key is used only as the
+  // peer-side input to `deriveBits`, never re-exported. Disabling
+  // extractability shrinks the surface for accidental key-material
+  // leakage via `crypto.subtle.exportKey`.
   const ephemeralPublicKey = await crypto.subtle.importKey(
     'raw',
     bs(ephemeralPubBytes),
     ECDH_ALGO,
-    true,
+    false,
     [],
   );
 
@@ -266,6 +277,12 @@ export async function eciesOpen(
  * SEC1 uncompressed bytes into a `CryptoKey` usable with `eciesSeal`.
  *
  * Throws if the bytes are not a valid P-256 public point.
+ *
+ * The returned key is non-extractable: callers use it only as the
+ * peer-side input to `deriveBits`, and anyone holding the raw bytes
+ * already has full re-import capability, so disabling
+ * `crypto.subtle.exportKey` here loses nothing and shrinks the
+ * key-material attack surface.
  */
 export async function importEciesPublicKey(
   raw: Uint8Array,
@@ -275,7 +292,7 @@ export async function importEciesPublicKey(
       `importEciesPublicKey: raw key must be ${ECIES_P256_PUBLIC_KEY_LENGTH} bytes (got ${raw.byteLength})`,
     );
   }
-  return crypto.subtle.importKey('raw', bs(raw), ECDH_ALGO, true, []);
+  return crypto.subtle.importKey('raw', bs(raw), ECDH_ALGO, false, []);
 }
 
 /**
@@ -292,7 +309,35 @@ export async function exportEciesPublicKey(
  * Generate a fresh P-256 ECDH key pair suitable for ECIES sealing.
  * The private key has `deriveBits` usage so it can be passed directly
  * to `eciesOpen`.
+ *
+ * The returned **public** key is extractable so callers can hand the
+ * SEC1 bytes to inviters (via `exportEciesPublicKey`). The returned
+ * **private** key is re-imported as non-extractable to prevent
+ * `crypto.subtle.exportKey` from ever recovering the secret scalar
+ * (PKCS8 / JWK forms) from the in-memory `CryptoKey`. This is the
+ * conventional defence-in-depth posture for KEM private keys --
+ * `eciesOpen` only needs `deriveBits`, which non-extractable keys
+ * still support.
  */
 export async function generateEciesKeyPair(): Promise<CryptoKeyPair> {
-  return crypto.subtle.generateKey(ECDH_ALGO, true, ['deriveBits']);
+  // `generateKey` exposes a single extractable flag that applies to
+  // both keys in the pair; generate as extractable so we can re-import
+  // the private key with `extractable=false` below.
+  const pair = (await crypto.subtle.generateKey(ECDH_ALGO, true, [
+    'deriveBits',
+  ])) as CryptoKeyPair;
+
+  // Re-import the private key as non-extractable. We use JWK rather
+  // than PKCS8 because Safari's WebCrypto historically had gaps in
+  // PKCS8 round-tripping for ECDH; JWK is supported uniformly.
+  const privJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+  const nonExtractablePrivate = await crypto.subtle.importKey(
+    'jwk',
+    privJwk,
+    ECDH_ALGO,
+    false,
+    ['deriveBits'],
+  );
+
+  return { publicKey: pair.publicKey, privateKey: nonExtractablePrivate };
 }
