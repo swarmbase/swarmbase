@@ -1971,7 +1971,7 @@ __metadata:
     react-scripts: "npm:^5.0.1"
     typescript: "npm:^5.9.3"
     uuid: "npm:^10.0.0"
-    web-vitals: "npm:^4.2.3"
+    web-vitals: "npm:^5.2.0"
     yjs: "npm:^13.6.30"
   languageName: unknown
   linkType: soft
@@ -18997,10 +18997,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"web-vitals@npm:^4.2.3":
-  version: 4.2.3
-  resolution: "web-vitals@npm:4.2.3"
-  checksum: 10/f4f1b0d6e0dd06b50a1d48c5cbe8a2804f26c5778d7c9bd0a8f591c147fd044f35465a3e95659b9ca801bfd85742e0ac70c3416228c4241d858fcecb8b396503
+"web-vitals@npm:^5.2.0":
+  version: 5.2.0
+  resolution: "web-vitals@npm:5.2.0"
+  checksum: 10/7ef329aa6398b3b8202ef8a3ce024fbd7a7edd795b5a1a51d6b7b4199bf1d922e67f850accef1e3cc7aa3a700ecb8116192030a4b29f422666714c361d9c509d
   languageName: node
   linkType: hard
 
