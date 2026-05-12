@@ -2989,10 +2989,14 @@ export class CollabswarmDocument<
     // that would broadcast `keychainChanges` to every connected peer.
     if (!readerKemPublicKey) {
       console.warn(
-        `BeeKEM Welcome for ${this.documentPath} skipped: caller did not ` +
-          `provide a recipient KEM public key. The new reader has been ` +
-          `added to the readers ACL but must perform a fresh document load ` +
-          `against an authorized peer to recover keychain state.`,
+        `[${this.documentPath}] addReader: BeeKEM Welcome skipped because ` +
+          `the caller did not provide \`readerKemPublicKey\`. The reader ` +
+          `has been added to the readers ACL, but to deliver the document ` +
+          `key the caller must either (a) re-invoke \`addReader(reader, ` +
+          `readerKemPublicKey)\` once the recipient's raw SEC1 P-256 ECDH ` +
+          `public key is available, or (b) have the recipient perform a ` +
+          `fresh document load against an authorized peer to recover ` +
+          `keychain state.`,
       );
       return;
     }
