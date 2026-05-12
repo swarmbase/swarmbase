@@ -37,6 +37,7 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { evaluateBeeKEMWelcome } from './beekem-welcome-handler';
+import { validateAndExportKemKeyPair } from './kem-key-pair';
 import {
   eciesSeal,
   eciesOpen,
@@ -260,6 +261,14 @@ export class CollabswarmDocument<
   // out-of-band so they can pass it to `addReader`.
   private _kemKeyPair: CryptoKeyPair | undefined;
 
+  // Cached raw SEC1-uncompressed bytes for `_kemKeyPair.publicKey`,
+  // populated eagerly inside `setKemKeyPair` so the receive path
+  // (`_evaluateAndApplyBeeKEMWelcome`) never has to await an `exportKey`
+  // call -- and so a non-exportable public key surfaces as a clear
+  // error at installation time rather than as a generic WebCrypto
+  // exception inside the Welcome handler.
+  private _kemPublicKeyRaw: Uint8Array | undefined;
+
   /**
    * Install the recipient-side ECDH (P-256) key pair used to open
    * incoming BeeKEM Welcome sealed payloads. The application is
@@ -273,11 +282,36 @@ export class CollabswarmDocument<
    * fine. Pass `undefined` to clear (subsequent Welcomes will be
    * dropped).
    *
-   * The private key MUST have `'deriveBits'` in its key usages so
-   * `eciesOpen` can perform the ECDH step.
+   * Validation: the key pair MUST be an ECDH P-256 pair, and the
+   * private key MUST have `'deriveBits'` in its key usages so
+   * `eciesOpen` can perform the ECDH step. The public key MUST be
+   * raw-exportable (the inviter-side flow ships those bytes as the
+   * `welcomeRecipientKemPublicKey` field). Mismatches are rejected
+   * here with a descriptive error rather than silently accepted and
+   * surfaced as a generic WebCrypto failure later in the Welcome
+   * receive path.
+   *
+   * Async because the public key is eagerly exported to raw bytes and
+   * cached for the receive path; callers that previously invoked this
+   * synchronously must now `await` it.
    */
-  public setKemKeyPair(keyPair: CryptoKeyPair | undefined): void {
+  public async setKemKeyPair(
+    keyPair: CryptoKeyPair | undefined,
+  ): Promise<void> {
+    if (keyPair === undefined) {
+      this._kemKeyPair = undefined;
+      this._kemPublicKeyRaw = undefined;
+      return;
+    }
+
+    // Algorithm/curve/usages validation + eager raw-export, kept in
+    // a standalone helper so the validation surface can be unit-tested
+    // without standing up the full document dependency graph.
+    // Throws a clear, install-time error on misconfiguration.
+    const rawPublic = await validateAndExportKemKeyPair(keyPair);
+
     this._kemKeyPair = keyPair;
+    this._kemPublicKeyRaw = rawPublic;
   }
 
   /**
@@ -285,12 +319,13 @@ export class CollabswarmDocument<
    * installed ECDH public key, or `undefined` if no key pair has been
    * set via `setKemKeyPair`. The bytes are what inviters pass to
    * `addReader(reader, readerKemPublicKey)`.
+   *
+   * Cheap: the raw bytes are cached on `setKemKeyPair`; this just
+   * returns the cached `Uint8Array`. The method is still async to
+   * preserve the previous contract.
    */
   public async getKemPublicKeyRaw(): Promise<Uint8Array | undefined> {
-    if (!this._kemKeyPair) return undefined;
-    return new Uint8Array(
-      await crypto.subtle.exportKey('raw', this._kemKeyPair.publicKey),
-    );
+    return this._kemPublicKeyRaw;
   }
 
   /**
@@ -3283,16 +3318,16 @@ export class CollabswarmDocument<
     // keychain state under a key we don't actually control. A
     // legitimate writer who follows the documented onboarding flow
     // will always echo back the recipient's own KEM public key.
-    if (!this._kemKeyPair) {
+    if (!this._kemKeyPair || !this._kemPublicKeyRaw) {
       console.warn(
         `Dropping BeeKEM Welcome for ${this.documentPath}: no local KEM ` +
           `key pair installed via setKemKeyPair; cannot open sealed payload.`,
       );
       return false;
     }
-    const localKemPublicRaw = new Uint8Array(
-      await crypto.subtle.exportKey('raw', this._kemKeyPair.publicKey),
-    );
+    // Use the eagerly-cached raw bytes from `setKemKeyPair` rather
+    // than re-exporting on every Welcome.
+    const localKemPublicRaw = this._kemPublicKeyRaw;
     const messageKemPublic = message.welcomeRecipientKemPublicKey;
     if (
       !messageKemPublic ||
