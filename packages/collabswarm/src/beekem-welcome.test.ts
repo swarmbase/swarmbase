@@ -153,7 +153,46 @@ function applyWelcomeStateChanges(
   if (!message.welcomeRecipient) return;
   if (message.welcomeRecipient !== state.localSerializedKey) return;
   if (message.keychainChanges) state.keychain.merge(message.keychainChanges);
-  state.invitationEpoch = message.welcomeEpochId;
+  // Monotonic-forward update: never regress the invitation-epoch
+  // anchor (mirrors `CollabswarmDocument._shouldAdvanceInvitationEpoch`).
+  // See the doc-comment on the production method for the threat model
+  // (an out-of-order or hostile Welcome carrying an earlier
+  // `welcomeEpochId` would otherwise shrink the recipient's join
+  // boundary and leak more history via `since_invited`).
+  state.invitationEpoch = chooseInvitationEpoch(
+    state.invitationEpoch,
+    message.welcomeEpochId,
+    state.keychain,
+  );
+}
+
+/**
+ * Pure mirror of `CollabswarmDocument._shouldAdvanceInvitationEpoch`
+ * for unit-test exercise without a libp2p/Helia stack. Returns the
+ * epoch the local node should record as its anchor:
+ *   - the incoming one iff strictly later than the existing one in
+ *     keychain insertion order,
+ *   - the existing one in every other case (equal bytes, earlier
+ *     incoming, either ID missing from the keychain).
+ */
+function chooseInvitationEpoch(
+  existing: Uint8Array | undefined,
+  incoming: Uint8Array,
+  keychain: InMemoryKeychain,
+): Uint8Array {
+  if (existing === undefined) return incoming;
+  // Byte-equal: no-op.
+  const sameBytes =
+    existing.length === incoming.length &&
+    existing.every((b, i) => b === incoming[i]);
+  if (sameBytes) return existing;
+  const order = keychain.history();
+  const existingHex = InMemoryKeychain.toHex(existing);
+  const incomingHex = InMemoryKeychain.toHex(incoming);
+  const existingIdx = order.findIndex((k) => k.id === existingHex);
+  const incomingIdx = order.findIndex((k) => k.id === incomingHex);
+  if (existingIdx === -1 || incomingIdx === -1) return existing;
+  return incomingIdx > existingIdx ? incoming : existing;
 }
 
 describe('BeeKEM Welcome receive flow (Issue #178)', () => {
@@ -255,6 +294,84 @@ describe('BeeKEM Welcome receive flow (Issue #178)', () => {
 
     expect(Array.from(receiver.invitationEpoch!)).toEqual(Array.from(id1));
     expect(receiver.keychain.history()).toHaveLength(1);
+  });
+
+  test('handler does NOT regress _invitationEpoch when a later Welcome carries an earlier epoch ID', () => {
+    // Threat model (PR #273 review comment #3): a later writer-signed
+    // Welcome addressed to this node might carry an *earlier*
+    // `welcomeEpochId` than the one already recorded -- either
+    // through network reordering or as a deliberate attempt to shrink
+    // the recipient's join boundary. Unconditionally overwriting
+    // `_invitationEpoch` would regress the anchor and cause this
+    // node's future `since_invited` history responses to leak keys
+    // from before the original invitation. The production handler
+    // therefore applies a monotonic-forward update.
+    const senderKc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    const id2 = new Uint8Array(32).fill(2);
+    const id3 = new Uint8Array(32).fill(3);
+    senderKc.add(id1, 'k1');
+    senderKc.add(id2, 'k2');
+    senderKc.add(id3, 'k3');
+
+    // Receiver: ships with the full keychain merged in (e.g. via a
+    // prior doc-load) so the monotonic comparison can locate both
+    // IDs in keychain insertion order.
+    const receiver = {
+      invitationEpoch: undefined as Uint8Array | undefined,
+      keychain: new InMemoryKeychain(),
+      localSerializedKey: 'my-pubkey',
+    };
+    receiver.keychain.merge(senderKc.history());
+
+    // First Welcome lands at id2 -- recipient records invitation epoch = id2.
+    applyWelcomeStateChanges(receiver, {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id2,
+      welcomeRecipient: 'my-pubkey',
+      keychainChanges: [],
+    });
+    expect(Array.from(receiver.invitationEpoch!)).toEqual(Array.from(id2));
+
+    // Second (stale / hostile) Welcome arrives addressed to us but
+    // claims an earlier epoch ID. The anchor must NOT regress.
+    applyWelcomeStateChanges(receiver, {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id1,
+      welcomeRecipient: 'my-pubkey',
+      keychainChanges: [],
+    });
+    expect(Array.from(receiver.invitationEpoch!)).toEqual(Array.from(id2));
+
+    // A *later* Welcome (id3) should advance the anchor forward.
+    applyWelcomeStateChanges(receiver, {
+      documentId: '/doc/welcome',
+      welcomeEpochId: id3,
+      welcomeRecipient: 'my-pubkey',
+      keychainChanges: [],
+    });
+    expect(Array.from(receiver.invitationEpoch!)).toEqual(Array.from(id3));
+  });
+
+  test('chooseInvitationEpoch: equal IDs leave the anchor unchanged', () => {
+    const kc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    kc.add(id1, 'k1');
+    const chosen = chooseInvitationEpoch(id1, new Uint8Array(id1), kc);
+    expect(Array.from(chosen)).toEqual(Array.from(id1));
+  });
+
+  test('chooseInvitationEpoch: unknown incoming ID keeps existing anchor', () => {
+    // Conservative fallback: if the new epoch ID is not present in
+    // the keychain (perhaps the keychain delta was dropped or arrived
+    // separately), we cannot establish ordering, so we keep the
+    // known-good existing anchor rather than risk a regression.
+    const kc = new InMemoryKeychain();
+    const id1 = new Uint8Array(32).fill(1);
+    kc.add(id1, 'k1');
+    const unknown = new Uint8Array(32).fill(0xff);
+    const chosen = chooseInvitationEpoch(id1, unknown, kc);
+    expect(Array.from(chosen)).toEqual(Array.from(id1));
   });
 
   test('handler drops Welcomes without a welcomeEpochId', () => {

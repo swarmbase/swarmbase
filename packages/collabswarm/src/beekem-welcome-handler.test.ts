@@ -89,6 +89,23 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     });
   });
 
+  test('drops Welcomes with a zero-length welcomeEpochId', async () => {
+    // A truthy check alone passes empty `Uint8Array` values, but
+    // recording an empty epoch ID as `_invitationEpoch` would later
+    // make every `historySince` lookup miss and silently fall back to
+    // returning the full history -- defeating `since_invited`
+    // filtering. The validator must treat empty as malformed.
+    const msg = {
+      ...baseAcceptableMessage(),
+      welcomeEpochId: new Uint8Array(0),
+    };
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
+    expect(result).toEqual({
+      kind: 'drop-malformed',
+      reason: 'missing-welcome-epoch-id',
+    });
+  });
+
   test('drops Welcomes missing welcomeRecipient (recipient-binding gate)', async () => {
     const msg = baseAcceptableMessage();
     delete msg.welcomeRecipient;

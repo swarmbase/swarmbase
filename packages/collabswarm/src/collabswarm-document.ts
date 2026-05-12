@@ -3002,7 +3002,52 @@ export class CollabswarmDocument<
       // filtering on subsequent doc-load / snapshot-load responses we send.
       // `evaluateBeeKEMWelcome` guarantees `welcomeEpochId` is set when
       // it returns `accept`.
-      this._invitationEpoch = message.welcomeEpochId;
+      //
+      // MONOTONIC UPDATE (PR #273 review): if we already have an
+      // `_invitationEpoch`, only advance it forward in keychain order --
+      // never regress to an earlier epoch.
+      //
+      // The threat model: a writer could (maliciously or via reordering)
+      // send a later writer-signed Welcome that nominally addresses this
+      // node but carries an *earlier* `welcomeEpochId`. If we
+      // unconditionally overwrote `_invitationEpoch`, this would shrink
+      // the recipient's join boundary, broadening the set of keys
+      // returned by future `since_invited` history responses we send
+      // (leaking more history than the original invitation granted).
+      //
+      // Comparison strategy: `_keychain.keys()` returns entries in the
+      // insertion order used by Yjs/Automerge keychain implementations
+      // (`keychain.keys.push(...)`). Position in that array is the
+      // canonical "later means later" relation -- the same one
+      // `historySince` relies on to slice the suffix. We compare the
+      // positions of the existing and incoming epoch IDs; if the new
+      // one is strictly later we advance, otherwise we keep the
+      // existing anchor.
+      //
+      // Fallback: if either ID is not present in `keys()` after the
+      // merge above (e.g. the merge dropped the entry, or the local
+      // keychain implementation does not expose insertion order), we
+      // conservatively keep the existing `_invitationEpoch` -- it is
+      // already known-good. The only path that loses fidelity is the
+      // first-Welcome-ever case (no existing anchor) which is handled
+      // by the simple assignment branch.
+      const newEpochId = message.welcomeEpochId as Uint8Array;
+      if (this._invitationEpoch === undefined) {
+        this._invitationEpoch = newEpochId;
+      } else {
+        const advanced = await this._shouldAdvanceInvitationEpoch(
+          this._invitationEpoch,
+          newEpochId,
+        );
+        if (advanced) {
+          this._invitationEpoch = newEpochId;
+        } else {
+          console.warn(
+            `Ignoring out-of-order BeeKEM Welcome for ${this.documentPath}: ` +
+              `incoming epoch is not later than current invitation epoch`,
+          );
+        }
+      }
       console.log(
         `Recorded BeeKEM Welcome invitation epoch for ${this.documentPath}`,
       );
@@ -3025,6 +3070,66 @@ export class CollabswarmDocument<
     return this._invitationEpoch === undefined
       ? undefined
       : new Uint8Array(this._invitationEpoch);
+  }
+
+  /**
+   * Decide whether an incoming BeeKEM Welcome's `welcomeEpochId` is
+   * strictly later than the existing `_invitationEpoch`. Used by
+   * `handleBeeKEMWelcomeRequestData` to enforce a monotonic-forward
+   * update on the invitation-epoch anchor.
+   *
+   * Comparison is performed by looking up both IDs in the
+   * post-merge `_keychain.keys()` ordering. Yjs and Automerge keychain
+   * implementations append entries in insertion order, so the array
+   * position is the canonical "later means later" ordering -- the
+   * same relation `historySince` slices on.
+   *
+   * Returns `true` iff the new epoch is strictly later than the
+   * existing one. Returns `false` if:
+   *   - the two IDs are byte-equal (no-op, do not log a regression),
+   *   - the new epoch is at an earlier position than the existing one
+   *     (would regress the anchor),
+   *   - either ID is not present in the keychain after the merge
+   *     (we cannot establish ordering; conservatively keep the
+   *     known-good existing anchor).
+   *
+   * @internal exposed only for unit tests.
+   */
+  public async _shouldAdvanceInvitationEpoch(
+    existing: Uint8Array,
+    incoming: Uint8Array,
+  ): Promise<boolean> {
+    // Byte-equal: no advancement needed and not a regression.
+    if (
+      existing.length === incoming.length &&
+      existing.every((b, i) => b === incoming[i])
+    ) {
+      return false;
+    }
+
+    let allKeys: [Uint8Array, unknown][];
+    try {
+      allKeys = await this._keychain.keys();
+    } catch {
+      // Keychain refused to enumerate keys (empty keychain, transient
+      // error). Conservatively keep the known-good anchor.
+      return false;
+    }
+
+    const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    };
+
+    const existingIdx = allKeys.findIndex(([id]) => sameBytes(id, existing));
+    const incomingIdx = allKeys.findIndex(([id]) => sameBytes(id, incoming));
+    if (existingIdx === -1 || incomingIdx === -1) {
+      // One of the IDs is not in the keychain -- cannot establish
+      // ordering. Keep the existing anchor.
+      return false;
+    }
+    return incomingIdx > existingIdx;
   }
 
   /**

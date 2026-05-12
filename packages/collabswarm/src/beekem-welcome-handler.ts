@@ -108,7 +108,15 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // The Welcome MUST carry an invitation epoch ID -- without it we
   // cannot record the recipient's join boundary, which is the entire
   // reason the Welcome exists.
-  if (!message.welcomeEpochId) {
+  //
+  // We also treat a zero-length `Uint8Array` as malformed: a truthy
+  // check alone passes empty buffers, but recording an empty epoch ID
+  // as `_invitationEpoch` would later make every `historySince` lookup
+  // miss (key IDs in the keychain are always non-empty, so the
+  // "boundary not found" recovery would kick in on every load and
+  // silently return the full history -- defeating `since_invited`
+  // filtering).
+  if (!message.welcomeEpochId || message.welcomeEpochId.length === 0) {
     return { kind: 'drop-malformed', reason: 'missing-welcome-epoch-id' };
   }
 
@@ -162,6 +170,27 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
   // add ahead of the Welcome). Catches misordered or replayed
   // Welcomes where we have not been added (or have been removed
   // since).
+  //
+  // KNOWN RACE: the inviter publishes the ACL update over pubsub and
+  // sends the Welcome over a direct stream. Network reordering can
+  // cause the Welcome to arrive on the recipient before the ACL
+  // update has been applied -- in which case `isReader` legitimately
+  // returns `false` here even though the Welcome is genuine.
+  //
+  // Current mitigation: the inviter retries Welcomes when the
+  // recipient does not promptly acknowledge (see
+  // `CollabswarmDocument._sendBeeKEMWelcome` / the retry loop). The
+  // transient drop here forces a retry rather than persisting an
+  // unauthorized installation.
+  //
+  // TODO(#178-followup): consider buffering Welcomes briefly in a
+  // bounded `pendingWelcomes: Map<epochIdHex, CRDTSyncMessage>` keyed
+  // by `welcomeEpochId`, drained by the ACL update handler when a new
+  // reader is added. That would close the race without depending on
+  // inviter retry, at the cost of a small additional state machine
+  // and bound-enforcement policy (LRU + max size). Until then, the
+  // "drop and retry" behavior is the documented contract and the unit
+  // tests in `beekem-welcome-handler.test.ts` enforce it.
   if (!(await deps.isReader(deps.localUserPublicKey))) {
     return { kind: 'drop-unauthorized', reason: 'not-in-readers-acl' };
   }
