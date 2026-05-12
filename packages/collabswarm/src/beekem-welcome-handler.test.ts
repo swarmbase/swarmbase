@@ -49,7 +49,6 @@ function makeDeps(
   return {
     documentPath: '/doc/welcome',
     localUserPublicKey: { id: 'my-pubkey' },
-    isSigningEnabled: () => false,
     serializePublicKey: async (pk) => pk.id,
     isReader: async () => true,
     verifyWriterSignature: async () => true,
@@ -58,17 +57,25 @@ function makeDeps(
   };
 }
 
+/**
+ * A fully-valid Welcome message. SECURITY (PR #273 review, comment A):
+ * Welcomes are now **unconditionally** writer-authenticated -- the
+ * validator no longer has an `isSigningEnabled` toggle -- so the base
+ * acceptable message must carry a `signature` for the happy-path
+ * assertions to hold.
+ */
 function baseAcceptableMessage(): CRDTSyncMessage<ChangesType, PublicKey> {
   return {
     documentId: '/doc/welcome',
     welcomeEpochId: new Uint8Array(32).fill(7),
     welcomeRecipient: 'my-pubkey',
     keychainChanges: new Uint8Array([1, 2, 3]),
+    signature: 'good-sig',
   };
 }
 
 describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
-  test('accepts a fully-valid Welcome with signing disabled', async () => {
+  test('accepts a fully-valid signed Welcome', async () => {
     const result = await evaluateBeeKEMWelcome(baseAcceptableMessage(), makeDeps());
     expect(result.kind).toBe('accept');
   });
@@ -166,11 +173,16 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     });
   });
 
-  test('drops unsigned Welcomes when signing is enabled', async () => {
-    const result = await evaluateBeeKEMWelcome(
-      baseAcceptableMessage(),
-      makeDeps({ isSigningEnabled: () => true }),
-    );
+  test('drops unsigned Welcomes unconditionally (writer-auth is mandatory)', async () => {
+    // SECURITY (PR #273 review, comment A): writer-auth on Welcomes is
+    // enforced regardless of the document-key signing toggle. An
+    // unsigned Welcome must be dropped even when the swarm-wide
+    // `enableSigning` is `false` -- otherwise any connected peer could
+    // inject arbitrary `keychainChanges` and set `_invitationEpoch`
+    // for an existing reader.
+    const msg = baseAcceptableMessage();
+    delete msg.signature;
+    const result = await evaluateBeeKEMWelcome(msg, makeDeps());
     expect(result).toEqual({
       kind: 'drop-unauthorized',
       reason: 'missing-signature',
@@ -182,7 +194,6 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     const result = await evaluateBeeKEMWelcome(
       msg,
       makeDeps({
-        isSigningEnabled: () => true,
         verifyWriterSignature: async () => false,
       }),
     );
@@ -200,7 +211,6 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     const result = await evaluateBeeKEMWelcome(
       msg,
       makeDeps({
-        isSigningEnabled: () => true,
         verifyWriterSignature: async (raw, sig) => {
           verifiedRawLength = raw.length;
           verifiedSig = sig;
@@ -212,8 +222,8 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     expect(result.kind).toBe('accept');
     // The signature gate must verify over the message **without** the
     // signature field embedded -- otherwise the inviter's signing
-    // convention (`_signAsWriter` strips the signature before signing)
-    // and the verification convention disagree.
+    // convention (`_signWelcomeAsWriter` strips the signature before
+    // signing) and the verification convention disagree.
     expect(verifiedSig).toBe('good-sig');
     expect(verifiedRawLength).toBeGreaterThan(0);
     const reSerialized = stubSerializer.serializeSyncMessage(msg);
@@ -265,7 +275,6 @@ describe('evaluateBeeKEMWelcome (security-critical gates)', () => {
     const result = await evaluateBeeKEMWelcome(
       msg,
       makeDeps({
-        isSigningEnabled: () => true,
         isReader: async () => false,
         verifyWriterSignature: async () => {
           verifyCalled = true;

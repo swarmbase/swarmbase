@@ -965,6 +965,23 @@ export class CollabswarmDocument<
       return '';
     }
 
+    return this._signAsWriterUnconditional(message);
+  }
+
+  /**
+   * Sign a sync message as a writer **regardless of the swarm-wide
+   * `enableSigning` config**. Used exclusively by paths that always
+   * require writer-auth (currently BeeKEM Welcomes); see
+   * `_signWelcomeAsWriter` below.
+   *
+   * SECURITY: callers that go through `_signAsWriter` should keep doing
+   * so -- it preserves the existing `enableSigning` toggle for normal
+   * sync-message signing. Only paths that have a documented "writer-auth
+   * is mandatory" requirement should use the unconditional variant.
+   */
+  private async _signAsWriterUnconditional(
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
+  ): Promise<string> {
     const { signature: oldSignature, ...messageWithoutSignature } = message;
 
     const raw = this._syncMessageSerializer.serializeSyncMessage(
@@ -972,6 +989,47 @@ export class CollabswarmDocument<
     );
     const rawSignature = await this._authProvider.sign(raw, this._userKey);
     return this._serializeSignature(rawSignature);
+  }
+
+  /**
+   * Sign a BeeKEM Welcome as a writer. Unlike `_signAsWriter`, this is
+   * NOT gated on the swarm-wide `enableSigning` config: Welcomes are
+   * always writer-authenticated, regardless of whether document-change
+   * signing is enabled (see `beekem-welcome-handler.ts` for the receive
+   * side and the SECURITY NOTE there for the threat model).
+   */
+  private async _signWelcomeAsWriter(
+    message: CRDTSyncMessage<ChangesType, PublicKey>,
+  ): Promise<string> {
+    return this._signAsWriterUnconditional(message);
+  }
+
+  /**
+   * Verify a writer signature on a BeeKEM Welcome. Unlike
+   * `_verifyWriterSignature`, this is NOT gated on the swarm-wide
+   * `enableSigning` config -- Welcomes are always writer-authenticated.
+   */
+  private async _verifyWelcomeWriterSignature(
+    raw: Uint8Array,
+    signature: string,
+  ): Promise<boolean> {
+    const writerKeys = await this._getWriterKeys();
+    if (writerKeys.length === 0) {
+      return false;
+    }
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = this._deserializeSignature(signature);
+    } catch {
+      return false;
+    }
+    const verificationTasks: Promise<boolean>[] = [];
+    for (const writerKey of writerKeys) {
+      verificationTasks.push(
+        this._authProvider.verify(raw, writerKey, signatureBytes),
+      );
+    }
+    return firstTrue(verificationTasks);
   }
 
   private _encoder = new TextEncoder();
@@ -2975,8 +3033,14 @@ export class CollabswarmDocument<
     // reader whose invitation epoch starts at this moment.
     welcomeMessage.keychainChanges = await this._keychainChangesForWelcome();
 
-    // Sign so the receiver can verify the inviter is an authorized writer.
-    welcomeMessage.signature = await this._signAsWriter(welcomeMessage);
+    // Sign so the receiver can verify the inviter is an authorized
+    // writer. Welcomes are ALWAYS writer-authenticated, regardless of
+    // the swarm-wide `enableSigning` toggle that gates normal
+    // sync-message signing (see SECURITY NOTE in
+    // `beekem-welcome-handler.ts`). Without this, a deployment that
+    // turned `enableSigning` off for change-message signing would
+    // accept unsigned Welcomes from any connected peer.
+    welcomeMessage.signature = await this._signWelcomeAsWriter(welcomeMessage);
 
     const serialized =
       this._syncMessageSerializer.serializeSyncMessage(welcomeMessage);
@@ -3094,11 +3158,13 @@ export class CollabswarmDocument<
     const decision = await evaluateBeeKEMWelcome(message, {
       documentPath: this.documentPath,
       localUserPublicKey: this._userPublicKey,
-      isSigningEnabled: () => this._isSigningEnabled(),
       serializePublicKey,
       isReader: (pk) => this._readers.check(pk),
+      // Welcomes always require writer-auth, independent of the
+      // swarm-wide `enableSigning` toggle -- wire the unconditional
+      // verifier so the validator can't be downgraded by config.
       verifyWriterSignature: (raw, signature) =>
-        this._verifyWriterSignature(raw, signature),
+        this._verifyWelcomeWriterSignature(raw, signature),
       syncMessageSerializer: this._syncMessageSerializer,
     });
 

@@ -68,9 +68,11 @@ class PendingWelcomesHarness {
     return {
       documentPath: '/doc/welcome',
       localUserPublicKey: { id: 'me' },
-      isSigningEnabled: () => false,
       serializePublicKey: async (pk) => pk.id,
       isReader: async () => this.isReader,
+      // Welcomes are unconditionally writer-authenticated; the test
+      // messages below always carry a `signature` field so this stub
+      // verifier just returns `true` for any signed payload.
       verifyWriterSignature: async () => true,
       syncMessageSerializer: stubSerializer,
     };
@@ -149,6 +151,11 @@ function welcomeFor(
     welcomeEpochId: new Uint8Array(32).fill(epochByte),
     welcomeRecipient: recipient,
     keychainChanges: new Uint8Array([1, 2, 3]),
+    // Welcomes are unconditionally writer-authenticated; the stub
+    // `verifyWriterSignature` in `depsFor` returns `true` for any
+    // signed payload, so this string just satisfies the signature
+    // presence gate in `evaluateBeeKEMWelcome`.
+    signature: 'good-sig',
   };
 }
 

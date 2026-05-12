@@ -55,14 +55,25 @@ export type WelcomeUnauthorizedReason =
  * Minimal dependency surface a Welcome validator needs. Modeled as a
  * record of callables rather than full provider instances so tests can
  * pass small mocks.
+ *
+ * SECURITY NOTE: writer-auth (`verifyWriterSignature`) is enforced
+ * **unconditionally** on Welcomes, independent of the document-key
+ * signing toggle (`enableSigning` on `CollabswarmConfig`). Welcomes are
+ * broadcast in plaintext to every connected peer and carry the document
+ * keychain delta + an `_invitationEpoch` binding; without a writer
+ * signature any peer could inject arbitrary `keychainChanges` and force
+ * a recipient's join boundary, enabling key poisoning / DoS against
+ * `since_invited` history filtering. `enableSigning` is a knob for
+ * application-layer signing of *document changes*; Welcome authenticity
+ * is a separate concern and must always be verified. Wire that up by
+ * having `verifyWriterSignature` actually do the verification regardless
+ * of any signing-config short-circuit elsewhere in the stack.
  */
 export interface WelcomeValidationDeps<ChangesType, PublicKey> {
   /** The document this Welcome should be for. */
   documentPath: string;
   /** Local user's public key, used for the recipient binding check. */
   localUserPublicKey: PublicKey;
-  /** Whether writer signing is currently enabled on this document. */
-  isSigningEnabled: () => boolean;
   /** Serialize a public key into the wire form the Welcome carries. */
   serializePublicKey: (pk: PublicKey) => Promise<string>;
   /** Check whether `pk` is currently a reader on the document. */
@@ -71,6 +82,10 @@ export interface WelcomeValidationDeps<ChangesType, PublicKey> {
    * Verify a writer signature over the canonical (signature-stripped)
    * serialization of the message. Returns `true` iff the signature is
    * valid and the signer is currently an authorized writer.
+   *
+   * MUST always perform real verification (do not short-circuit to
+   * `true` when application-layer signing is disabled): Welcomes are
+   * always writer-authenticated.
    */
   verifyWriterSignature: (
     raw: Uint8Array,
@@ -204,22 +219,32 @@ export async function evaluateBeeKEMWelcome<ChangesType, PublicKey>(
     return { kind: 'drop-unauthorized', reason: 'not-in-readers-acl' };
   }
 
-  // Verify the writer signature when signing is on. The signing
-  // convention matches `_signAsWriter`: the signature is computed
-  // over the serialized message with the `signature` field stripped.
-  // Because the recipient binding is included in the signed payload,
-  // only an authorized writer can claim a particular recipient.
-  if (deps.isSigningEnabled()) {
-    if (!message.signature) {
-      return { kind: 'drop-unauthorized', reason: 'missing-signature' };
-    }
-    const { signature, ...messageWithoutSignature } = message;
-    const raw = deps.syncMessageSerializer.serializeSyncMessage(
-      messageWithoutSignature,
-    );
-    if (!(await deps.verifyWriterSignature(raw, signature))) {
-      return { kind: 'drop-unauthorized', reason: 'invalid-signature' };
-    }
+  // Verify the writer signature **unconditionally**. The signing
+  // convention matches `_signWelcomeAsWriter` on the inviter side: the
+  // signature is computed over the serialized message with the
+  // `signature` field stripped. Because the recipient binding is
+  // included in the signed payload, only an authorized writer can
+  // claim a particular recipient.
+  //
+  // SECURITY (PR #273 review, comment A): unlike normal sync-message
+  // signing -- which is gated by the swarm-wide `enableSigning` config
+  // -- Welcome writer-auth is enforced even when document-key signing
+  // is disabled. Welcomes are plaintext broadcasts that carry the
+  // keychain delta and bind a recipient's `_invitationEpoch`; without
+  // an unconditional writer-signature requirement any connected peer
+  // could inject arbitrary `keychainChanges` (key poisoning) or set
+  // `_invitationEpoch` for an existing reader (history-filter DoS).
+  // The dep contract requires `verifyWriterSignature` to always do
+  // real verification here.
+  if (!message.signature) {
+    return { kind: 'drop-unauthorized', reason: 'missing-signature' };
+  }
+  const { signature, ...messageWithoutSignature } = message;
+  const raw = deps.syncMessageSerializer.serializeSyncMessage(
+    messageWithoutSignature,
+  );
+  if (!(await deps.verifyWriterSignature(raw, signature))) {
+    return { kind: 'drop-unauthorized', reason: 'invalid-signature' };
   }
 
   return { kind: 'accept' };
