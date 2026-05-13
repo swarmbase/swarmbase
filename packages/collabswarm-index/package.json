@@ -117,7 +117,7 @@
       "^bl$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^multiformats$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.cjs",
-      "^uuid$": "<rootDir>/../collabswarm/jest.uuid-mock.cjs"
+      "^uuid$": "<rootDir>/jest.uuid-mock.cjs"
     }
   }
 }
