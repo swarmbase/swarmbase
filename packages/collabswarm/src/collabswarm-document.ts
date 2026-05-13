@@ -26,6 +26,7 @@ import {
   crdtWriterChangeNode,
 } from './crdt-change-node';
 import {
+  collectReferencedAncestors,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
@@ -48,8 +49,8 @@ import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
   documentKeyUpdateV2,
-  documentLoadV2,
-  snapshotLoadV2,
+  documentLoadV3,
+  snapshotLoadV3,
   tipAdvertiseV1,
 } from './wire-protocols';
 import { BeeKEM } from './beekem/beekem';
@@ -472,6 +473,39 @@ export class CollabswarmDocument<
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
 
+  // Set of CIDs that have been seen as a `children` key in any sync tree we
+  // have processed (locally created or remotely received) -- i.e. every CID
+  // some node references as a parent / cross-link target. These are
+  // *referenced ancestors*: by definition they are NOT heads of the local
+  // DAG, because at least one node points to them as a predecessor.
+  //
+  // `_currentFrontier()` returns `_hashes \ _referencedAncestors` -- the set
+  // of CIDs that no node we've ever seen has referenced. That is the actual
+  // "frontier" / "heads" of the merged-changes DAG, which is what the
+  // initial-load quorum tip-set advertisement is supposed to attest to.
+  //
+  // Critically, this set converges across honest peers: two peers with the
+  // same logical state but different sync histories (e.g. one loaded from a
+  // snapshot, the other has been merging changes since founding) will have
+  // *different* `_hashes` cardinality but the same head set, hence the same
+  // `_hashes \ _referencedAncestors`. Drawing the quorum probe from
+  // `_hashes` alone (the prior buggy implementation) would have made the
+  // probe pessimistically diverge on irrelevant sync history.
+  //
+  // Populated in:
+  //   - `_makeChange()`: every newly-attached `changeNode.children` key
+  //     is recorded -- the new change references those parents.
+  //   - `_syncDocumentChanges()`: every received sync tree is walked once
+  //     and its `children` keys are recorded -- the receiver now knows the
+  //     same parent relationships the sender did.
+  //
+  // Snapshot boundaries: when a snapshot is applied, `lastChangeNodeCID` is
+  // added to `_hashes` as a sentinel for dedup, but its ancestor chain is
+  // pruned -- those ancestors are not added to `_referencedAncestors`,
+  // which is correct: the snapshot boundary IS the local "oldest" head
+  // from the loader's view of the DAG.
+  private _referencedAncestors = new Set<string>();
+
   // Bounded list of recently-known change CIDs paired with their node kind.
   // Used by `_makeChange()` to attach Merkle-CRDT cross-links (paper §VI.B.e)
   // in addition to the primary parent link. Cross-links improve consistency
@@ -771,21 +805,57 @@ export class CollabswarmDocument<
   /**
    * Returns this peer's current frontier as a plain string[] of CIDs —
    * "what tips would I advertise to a fresh `tipAdvertiseV1` probe right
-   * now". Drawn from `this._hashes`, which is the same source the
-   * tip-advertise hash is computed from, so the advertised hash and the
-   * load-response `tips` field stay in lockstep across the two streams
-   * the loader uses (probe + full load).
+   * now".
    *
-   * Wrapped in a helper so the load-response handlers, the tip-advertise
-   * handler, and (if reused later) any internal callers all hit the same
-   * canonical primitive. Returns a fresh array so callers can't mutate
-   * `_hashes` through the returned reference; the array is later sorted
-   * by `tipsHash` independently, so we don't sort here.
+   * The frontier is the set of heads of the local merged-changes DAG:
+   * CIDs that this peer has seen but that no other change references as
+   * a parent or cross-link target. Computed as `_hashes \
+   * _referencedAncestors`. See the `_referencedAncestors` field docstring
+   * for why this matters: it is the part of the local DAG that converges
+   * across honest peers regardless of differing sync histories or pruning
+   * levels, so two peers in the same logical state produce identical
+   * `tipsHash` digests.
+   *
+   * Returning the full `_hashes` set (the prior buggy implementation)
+   * silently breaks the initial-load quorum gate -- it includes every
+   * referenced ancestor, so two honest peers with the same heads but
+   * differing ancestor visibility (e.g. one loaded from a snapshot, the
+   * other has the full history) produce different tip-set hashes and
+   * fail quorum even though they agree on state.
+   *
+   * Edge cases:
+   *   - Empty DAG (founding member, brand-new document): `_hashes` is
+   *     empty, the returned frontier is `[]`. `tipsHash([])` is the
+   *     SHA-256 of the empty string, a deterministic value all honest
+   *     peers compute identically -- quorum cleanly bootstraps.
+   *   - Just-loaded from snapshot: `_hashes` holds the snapshot boundary
+   *     CID (and any post-snapshot changes). The boundary CID is NOT in
+   *     `_referencedAncestors` (no in-tree node points back through it),
+   *     so it correctly appears as a head along with any post-snapshot
+   *     leaves -- which is exactly what the responder would serve.
+   *   - Pruned ancestors: irrelevant. Pruning removes CIDs from the
+   *     in-memory change tree but leaves them in `_hashes` for dedup;
+   *     they were already in `_referencedAncestors` (recorded when the
+   *     tree contained them), so they remain marked as non-heads.
+   *
+   * Wrapped in a helper so the load-response handlers
+   * (`handleLoadRequestData`, `handleSnapshotLoadRequestData`) and the
+   * tip-advertise handler (`handleTipAdvertiseRequestData`) all hit the
+   * same canonical primitive -- the probe-then-load round-trip binds
+   * against a byte-identical tip set. Returns a fresh array so callers
+   * can't mutate internal state; `tipsHash` sorts independently, so we
+   * don't sort here.
    *
    * @internal
    */
   private _currentFrontier(): string[] {
-    return Array.from(this._hashes);
+    const out: string[] = [];
+    for (const cid of this._hashes) {
+      if (!this._referencedAncestors.has(cid)) {
+        out.push(cid);
+      }
+    }
+    return out;
   }
 
   /**
@@ -809,6 +879,19 @@ export class CollabswarmDocument<
     changeId: string | undefined,
     changes: CRDTChangeNode<ChangesType>,
   ) {
+    // Walk the incoming sync tree once and record every CID that appears
+    // as a `children` key. Those CIDs are referenced ancestors -- by
+    // definition no longer heads of the local DAG. Doing this BEFORE the
+    // merge keeps `_currentFrontier()` correct regardless of whether the
+    // referenced parent ends up applied inline or fetched lazily from the
+    // blockstore: either way, the receiver now knows the parent relationship
+    // the sender had.
+    //
+    // Idempotent and inexpensive: the helper walks at most the size of the
+    // delivered tree (bounded by the sender's compaction config); duplicates
+    // are no-ops in a Set.
+    collectReferencedAncestors(changeId, changes, this._referencedAncestors);
+
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = await this._mergeSyncTree(
       changeId,
@@ -1313,6 +1396,18 @@ export class CollabswarmDocument<
     updateMessage.changeId = hash;
     updateMessage.changes = changeNode;
 
+    // Record every CID this new change references as a parent / cross-link
+    // target. The primary parent and all cross-link tips become *referenced
+    // ancestors* and drop out of `_currentFrontier()`. Walks just the new
+    // `changeNode` (not the full inherited subtree below it) because the
+    // inherited subtree's ancestor relationships were already recorded
+    // when each of those nodes was created or applied.
+    if (changeNode.children) {
+      for (const childCid of Object.keys(changeNode.children)) {
+        this._referencedAncestors.add(childCid);
+      }
+    }
+
     // Track this new tip for future cross-linking. The primary parent is
     // also retained -- it's the immediate predecessor of *this* tip and may
     // still be useful as a cross-link target for the *next* change if a
@@ -1699,15 +1794,15 @@ export class CollabswarmDocument<
       // Attach an explicit tip-set advertisement so the loader can bind the
       // served state to this responder's current frontier (issue #186 /
       // #189 §5.4.2). The loader recomputes `tipsHash(tips)` and compares
-      // against the quorum-agreed `winningHashHex`; using the responder's
-      // own `_hashes` here keeps the binding source identical to the one
-      // used by the `tipAdvertiseV1` probe response so a peer that voted
-      // for hash X but serves a load whose `tips` hash to Y is caught.
-      // Drawn from the same `_hashes` set so a peer that loaded from a
-      // snapshot (and therefore has a pruned `_hashes`) still produces a
-      // self-consistent advertisement; the responder is attesting to
-      // "what tip-advertise would I respond with right now", not "what
-      // full history did I once have".
+      // against the quorum-agreed `winningHashHex`; `_currentFrontier()`
+      // is the canonical helper used by ALL three protocols (tip-advertise,
+      // doc-load, snapshot-load) so a peer that voted for hash X but
+      // serves a load whose `tips` hash to Y is caught. The frontier is
+      // `_hashes \ _referencedAncestors` -- the heads of the local DAG --
+      // which converges across honest peers even when their full `_hashes`
+      // cardinality differs (e.g. one loaded from a snapshot, the other
+      // has the full ancestor history). This is part of the SIGNED v3
+      // payload; see `wire-protocols.ts` for the version-bump rationale.
       loadMessage.tips = this._currentFrontier();
 
       // Sign new message.
@@ -1829,12 +1924,13 @@ export class CollabswarmDocument<
       snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
       // Tip-set advertisement for the post-load binding check (see the
       // doc-load handler above and the in-line check in
-      // `_sendLoadRequestAndSync` for the rationale). On a snapshot-load
-      // the loader's post-sync `_hashes`
-      // does NOT include ancestor CIDs that were compacted into the
-      // snapshot, so a `tipsHash(loader._hashes)` recomputation would
-      // never match a responder whose `_hashes` retains full history.
-      // The responder's `tips` is the canonical source of truth here.
+      // `_sendLoadRequestAndSync` for the rationale). `_currentFrontier()`
+      // returns the heads of the local DAG (`_hashes \
+      // _referencedAncestors`), which is the convergent quantity across
+      // honest peers regardless of whether either side loaded from a
+      // snapshot or replayed the full history. Part of the signed v3
+      // payload -- the version bump (snapshotLoadV2 -> snapshotLoadV3)
+      // is required because `tips` is now covered by the writer signature.
       snapshotMessage.tips = this._currentFrontier();
       snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
@@ -2799,7 +2895,7 @@ export class CollabswarmDocument<
         // duplex shape that `_sendLoadRequestAndSync` (and the legacy
         // `it-pipe` calls inside it) still expects.
         const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
-          snapshotLoadV2,
+          snapshotLoadV3,
         ]));
         const loaded = await this._sendLoadRequestAndSync(
           snapshotStream,
@@ -2819,7 +2915,7 @@ export class CollabswarmDocument<
         console.log('Trying doc-load from peer:', peer.toString());
         // See snapshot-load above for why we wrap the v3 Stream here.
         const docStream = wrapStream(await this.libp2p.dialProtocol(peer, [
-          documentLoadV2,
+          documentLoadV3,
         ]));
         const loaded = await this._sendLoadRequestAndSync(
           docStream,
@@ -2832,7 +2928,7 @@ export class CollabswarmDocument<
       } catch (err) {
         if (err instanceof LoadQuorumFailedError) throw err;
         console.warn(
-          `Failed to load document via ${documentLoadV2}:`,
+          `Failed to load document via ${documentLoadV3}:`,
           peer.toString(),
           err,
         );
@@ -3375,8 +3471,9 @@ export class CollabswarmDocument<
    * `_documentChangeCount`, `_changesSinceSnapshot`, and `_recentTips`
    * are restored from snapshots captured before `_makeChange()`.
    * (`_recentTips` is bounded to `MAX_RECENT_TIPS` entries so the snapshot
-   * is a cheap shallow array copy.) For `_hashes`, all entries added to
-   * the Set after `hashSizeBefore` are removed. Because the node remains
+   * is a cheap shallow array copy.) For `_hashes` and
+   * `_referencedAncestors`, all entries added to each Set after its
+   * pre-attempt size are removed. Because the node remains
    * subscribed to pubsub during the async transaction, this may include
    * CIDs appended by concurrent remote syncs, not just local ones.
    * This is acceptable because CRDT convergence guarantees those remote
@@ -3411,6 +3508,7 @@ export class CollabswarmDocument<
     // _makeChange adds at most one CID, and JS Sets iterate in insertion order,
     // so on rollback we remove only entries appended after this point.
     const hashSizeBefore = this._hashes.size;
+    const referencedAncestorsSizeBefore = this._referencedAncestors.size;
     const lastSyncSnapshot = this._lastSyncMessage;
     const changeCountSnapshot = this._documentChangeCount;
     const compactionCountSnapshot = this._changesSinceSnapshot;
@@ -3468,6 +3566,24 @@ export class CollabswarmDocument<
         }
         for (const hash of toRemove) {
           this._hashes.delete(hash);
+        }
+      }
+      // Mirror the `_hashes` rollback for `_referencedAncestors`: remove
+      // only entries appended past the pre-attempt size. Same rationale --
+      // insertion-ordered Set iteration plus O(delta) memory -- and same
+      // best-effort caveat for concurrent sync that may have inserted into
+      // either set in parallel.
+      if (this._referencedAncestors.size > referencedAncestorsSizeBefore) {
+        const toRemoveRefs: string[] = [];
+        let j = 0;
+        for (const cid of this._referencedAncestors) {
+          if (j >= referencedAncestorsSizeBefore) {
+            toRemoveRefs.push(cid);
+          }
+          j++;
+        }
+        for (const cid of toRemoveRefs) {
+          this._referencedAncestors.delete(cid);
         }
       }
       this._lastSyncMessage = lastSyncSnapshot;

@@ -28,9 +28,9 @@ import { LoadMessageSerializer } from './load-request-serializer';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
-  documentLoadV2,
+  documentLoadV3,
   documentKeyUpdateV2,
-  snapshotLoadV2,
+  snapshotLoadV3,
   tipAdvertiseV1,
 } from './wire-protocols';
 import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils';
@@ -574,7 +574,7 @@ export class Collabswarm<
 
     // Handler implementation for tip-advertise requests (initial-load
     // quorum probe; see `wire-protocols.ts::tipAdvertiseV1`). Wire format
-    // mirrors documentLoadV2: a single serialized CRDTLoadRequest in,
+    // mirrors documentLoadV3: a single serialized CRDTLoadRequest in,
     // a single (small) encrypted/serialized CRDTSyncMessage out (whose
     // only populated payload field is `tipsHash`), or an empty response
     // on decline.
@@ -625,8 +625,8 @@ export class Collabswarm<
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
-    this.libp2p.handle(documentLoadV2, docLoadHandler);
-    this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
+    this.libp2p.handle(documentLoadV3, docLoadHandler);
+    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
     this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
     this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler);

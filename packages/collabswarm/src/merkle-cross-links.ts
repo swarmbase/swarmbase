@@ -174,6 +174,67 @@ export function mergeRemoteSyncTree<ChangesType>(
 }
 
 /**
+ * Pure helper: walk a sync tree and record every CID that appears as a
+ * `children` key -- i.e. every CID that some node in the tree points to
+ * as a parent (or as a cross-link target, which is also a parent in the
+ * Merkle-CRDT DAG; cross-links reference *predecessor* CIDs).
+ *
+ * Used by `CollabswarmDocument._currentFrontier()` to compute the set of
+ * heads as `(all known CIDs) \ (referenced ancestors)`. A CID is a "head"
+ * iff no node we've ever seen references it as a parent. This gives the
+ * leaves of the merged DAG (the CIDs the responder would attest to as the
+ * current frontier), which is the correct semantic for the initial-load
+ * quorum binding -- two honest peers with the same logical state but
+ * different sync histories converge on the same head set even though
+ * their full `_hashes` cardinality differs.
+ *
+ * The root CID (`rootId`, if provided) is intentionally NOT added to the
+ * referenced set -- the root of a tree is the head, not a child of anything
+ * in this traversal. Descendants reached via `node.children` keys ARE
+ * referenced.
+ *
+ * Walks defensively:
+ *   - Skips a deferred `children` sentinel (`crdtChangeNodeDeferred`); IPLD
+ *     dereferencing happens elsewhere and isn't required to enumerate the
+ *     in-memory parent relationships we already have.
+ *   - Tracks visited node CIDs so cycles (shouldn't happen with content
+ *     addressing, but defensively) don't recurse forever.
+ *
+ * Mutates `out` in place and returns it for convenience.
+ */
+export function collectReferencedAncestors<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType>,
+  out: Set<string>,
+): Set<string> {
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+    }
+
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      // The `children` map keys are CIDs the current node references as
+      // parents (primary parent + cross-links). They are ancestors by
+      // definition -- record them as referenced.
+      out.add(childId);
+      walk(childId, childNode);
+    }
+  }
+
+  walk(rootId, root);
+  return out;
+}
+
+/**
  * Pure helper: append `entry` to `recentTips` with LRU semantics
  * (most-recently-used to the back), evicting the oldest entries when the
  * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is

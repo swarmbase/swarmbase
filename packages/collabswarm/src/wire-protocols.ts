@@ -1,12 +1,27 @@
 export const bloomFilterUpdateV1 = '/collabswarm/bloom-index/1.0.0';
 
-// V2 doc-load, key-update, and snapshot-load handlers use a shared handler
-// model where a single handler serves all documents. The key-update wire
-// format prepends a length-prefixed document-path header so the shared
-// handler can route requests to the correct document.
-export const documentLoadV2 = '/collabswarm/doc-load/2.0.0';
+// V3 doc-load and snapshot-load handlers use a shared handler model where
+// a single handler serves all documents. They include an explicit `tips`
+// field in the SIGNED `CRDTSyncMessage` payload so the loader can bind the
+// served state to the responder's current frontier and complete the
+// initial-load quorum check (see `tipAdvertiseV1` and #189 §5.4.2).
+//
+// Why v3 (not "v2 with an extra optional field")? Including `tips` inside
+// the signed payload changes the bytes the signer authenticated. A
+// receiver whose serializer doesn't recognise `tips` would: (1) deserialize
+// the message dropping `tips`, (2) re-serialize for signature verification,
+// (3) get bytes that differ from what the sender signed -> signature check
+// fails. Versioning the protocol id forces incompatible peers to dial a
+// protocol they don't have a handler for and fail loudly instead of
+// silently dropping the binding. There are no live users of this project,
+// so we did NOT retain a v2 alias -- removing legacy handlers keeps the
+// codebase clean.
+//
+// `documentKeyUpdateV2` is intentionally NOT bumped: its wire shape is
+// unaffected by the load-quorum work (no `tips` field, no `tipsHash`).
+export const documentLoadV3 = '/collabswarm/doc-load/3.0.0';
 export const documentKeyUpdateV2 = '/collabswarm/key-update/2.0.0';
-export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
+export const snapshotLoadV3 = '/collabswarm/snapshot-load/3.0.0';
 
 // Tip-advertise v1: lightweight initial-load quorum probe.
 //
@@ -20,7 +35,7 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 //
 // Wire format (request and response are length-delimited single frames):
 //
-//   Request:  serialized `CRDTLoadRequest` (same shape as documentLoadV2 --
+//   Request:  serialized `CRDTLoadRequest` (same shape as documentLoadV3 --
 //             reuses the existing load-request serializer so a writer can
 //             sign just the document id and the responder can authorize
 //             via the standard ACL/signature check).
@@ -31,9 +46,9 @@ export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
 //             `tipsHash` (plus `documentId` and optionally `signature`).
 //             The responder does NOT include `changes`, `snapshot`, or
 //             `keychainChanges` -- the heavy state transfer happens later
-//             via documentLoadV2/snapshotLoadV2 against an agreeing peer.
+//             via documentLoadV3/snapshotLoadV3 against an agreeing peer.
 //
-// Layered on documentLoadV2's transport semantics, but on a separate
+// Layered on documentLoadV3's transport semantics, but on a separate
 // protocol id so a slow/malicious peer that serves bogus full loads cannot
 // also cheaply poison every quorum vote at the same time.
 export const tipAdvertiseV1 = '/collabswarm/tip-advertise/1.0.0';

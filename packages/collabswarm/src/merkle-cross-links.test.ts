@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 import {
+  collectReferencedAncestors,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
@@ -598,5 +599,207 @@ describe('Merkle CRDT recent-tip tracking from a remote sync tree', () => {
       trackTipInList(naive, { cid, kind });
     }
     expect(naive.map((t) => t.cid)).not.toContain('H');
+  });
+});
+
+describe('collectReferencedAncestors (frontier helper for initial-load quorum)', () => {
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+  type Node = CRDTChangeNode<string>;
+
+  test('empty tree (no children) yields no referenced ancestors', () => {
+    const root: Node = { kind: docKind, change: 'payload-A' };
+    const out = new Set<string>();
+    collectReferencedAncestors('A', root, out);
+    expect(out.size).toBe(0);
+  });
+
+  test('does NOT add the root CID to the referenced set', () => {
+    // The root is the head, not an ancestor. Only `children` keys are
+    // referenced.
+    const root: Node = { kind: docKind, change: 'payload-A' };
+    const out = new Set<string>();
+    collectReferencedAncestors('A', root, out);
+    expect(out.has('A')).toBe(false);
+  });
+
+  test('collects every CID found as a children key (linear chain)', () => {
+    // Local writer chain: C -> B -> A (current head is C; A is the oldest
+    // ancestor). C.children = {B: ...}, B.children = {A: ...}.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-C',
+      children: {
+        B: {
+          kind: docKind,
+          change: 'payload-B',
+          children: { A: { kind: docKind, change: 'payload-A' } },
+        },
+      },
+    };
+    const out = new Set<string>();
+    collectReferencedAncestors('C', tree, out);
+    expect(out.has('B')).toBe(true);
+    expect(out.has('A')).toBe(true);
+    expect(out.has('C')).toBe(false); // root is the head, not an ancestor
+    expect(out.size).toBe(2);
+  });
+
+  test('collects cross-link references emitted as deferred leaves', () => {
+    // D's primary parent is C inline, and D cross-links to an older ancestor
+    // X via a deferred leaf (no `change`, no `children`). Both must be
+    // recorded as referenced.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-D',
+      children: {
+        C: {
+          kind: docKind,
+          change: 'payload-C',
+          children: { B: { kind: docKind, change: 'payload-B' } },
+        },
+        X: { kind: docKind }, // deferred cross-link
+      },
+    };
+    const out = new Set<string>();
+    collectReferencedAncestors('D', tree, out);
+    expect(out.has('C')).toBe(true);
+    expect(out.has('B')).toBe(true);
+    expect(out.has('X')).toBe(true);
+    expect(out.has('D')).toBe(false);
+  });
+
+  test('skips a `crdtChangeNodeDeferred` children sentinel without throwing', () => {
+    // IPLD-deferred subtree: the inline payload was elided and would need a
+    // blockstore fetch. We don't try to walk it -- the caller already has
+    // whatever parent relationships were inlined elsewhere.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-A',
+      // Cast to bypass the type narrowing on `false` literal for tests.
+      children: false as unknown as Record<string, Node>,
+    };
+    const out = new Set<string>();
+    expect(() =>
+      collectReferencedAncestors('A', tree, out),
+    ).not.toThrow();
+    expect(out.size).toBe(0);
+  });
+
+  test('mutates the passed Set in place and returns it', () => {
+    // Tests can compose multiple sync trees into one shared set, mirroring
+    // how `_referencedAncestors` accumulates across calls.
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-B',
+      children: { A: { kind: docKind, change: 'payload-A' } },
+    };
+    const out = new Set<string>(['X']); // pre-existing entry
+    const returned = collectReferencedAncestors('B', tree, out);
+    expect(returned).toBe(out);
+    expect(out.has('X')).toBe(true); // pre-existing entry preserved
+    expect(out.has('A')).toBe(true); // new entry added
+  });
+
+  test('cycle defence: revisiting a previously-walked CID does not recurse', () => {
+    // Construct a pathological tree where two distinct subtree references
+    // reach the same intermediate CID. The helper should not infinitely
+    // recurse and should still surface the right referenced set.
+    const sharedAncestor: Node = {
+      kind: docKind,
+      change: 'payload-A',
+    };
+    const tree: Node = {
+      kind: docKind,
+      change: 'payload-C',
+      children: {
+        B1: { kind: docKind, change: 'payload-B1', children: { A: sharedAncestor } },
+        B2: { kind: docKind, change: 'payload-B2', children: { A: sharedAncestor } },
+      },
+    };
+    const out = new Set<string>();
+    expect(() =>
+      collectReferencedAncestors('C', tree, out),
+    ).not.toThrow();
+    expect(out.has('A')).toBe(true);
+    expect(out.has('B1')).toBe(true);
+    expect(out.has('B2')).toBe(true);
+  });
+
+  test('frontier semantics: two trees of different cardinality but same head produce the same heads', () => {
+    // PR #284 round-3 acceptance scenario: peer A has merged a long
+    // ancestor chain (`_hashes` includes many CIDs) while peer B loaded
+    // from a snapshot (its `_hashes` includes only the snapshot boundary
+    // + post-snapshot changes). Both peers consider HEAD their current
+    // head. The frontier helper (`_hashes \ referenced`) MUST agree on
+    // {HEAD} across the two views.
+    //
+    // We mimic this by giving each peer different `_hashes` and different
+    // tree shapes, then verifying the computed frontier collapses to the
+    // shared head set.
+    const compute = (
+      hashes: Set<string>,
+      rootId: string | undefined,
+      root: Node,
+    ): Set<string> => {
+      const referenced = new Set<string>();
+      collectReferencedAncestors(rootId, root, referenced);
+      const frontier = new Set<string>();
+      for (const cid of hashes) {
+        if (!referenced.has(cid)) frontier.add(cid);
+      }
+      return frontier;
+    };
+
+    // Peer A: long history, current head HEAD with ancestors P1, P2, P3.
+    const peerATree: Node = {
+      kind: docKind,
+      change: 'HEAD',
+      children: {
+        P1: {
+          kind: docKind,
+          change: 'P1',
+          children: {
+            P2: {
+              kind: docKind,
+              change: 'P2',
+              children: { P3: { kind: docKind, change: 'P3' } },
+            },
+          },
+        },
+      },
+    };
+    const peerAHashes = new Set(['HEAD', 'P1', 'P2', 'P3']);
+
+    // Peer B: loaded from a snapshot at P2, then synced forward to HEAD.
+    // The post-snapshot sync that delivered HEAD had a pruned tree -- it
+    // referenced P2 directly as the parent (the sender knew the loader
+    // would have P2 from the snapshot, so no need to inline anything
+    // deeper). P1 was compacted into the snapshot and never enters the
+    // loader's view at all.
+    const peerBTree: Node = {
+      kind: docKind,
+      change: 'HEAD',
+      children: {
+        P2: { kind: docKind }, // deferred reference to the snapshot boundary
+      },
+    };
+    // After applying the snapshot: P2 is the snapshot boundary (added to
+    // _hashes as a sentinel), HEAD is the new head. P1 is not in B's view.
+    const peerBHashes = new Set(['HEAD', 'P2']);
+
+    const frontierA = compute(peerAHashes, 'HEAD', peerATree);
+    const frontierB = compute(peerBHashes, 'HEAD', peerBTree);
+
+    // Each peer's frontier is exactly {HEAD} despite very different
+    // `_hashes` cardinality (4 vs 3) and tree shapes. This is the
+    // convergence property that round-3 of the Copilot review demanded.
+    expect(Array.from(frontierA).sort()).toEqual(['HEAD']);
+    expect(Array.from(frontierB).sort()).toEqual(['HEAD']);
+
+    // Counter-check: the old buggy implementation (`Array.from(_hashes)`)
+    // would have produced DIFFERENT frontiers for these two peers (4
+    // entries vs 3 entries), so any tipsHash derived from it would have
+    // diverged -- the bug round 3 of the review caught.
+    expect(peerAHashes.size).not.toBe(peerBHashes.size);
   });
 });
