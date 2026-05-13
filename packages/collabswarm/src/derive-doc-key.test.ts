@@ -59,7 +59,23 @@ describe('deriveDocumentKeyFromRootSecret', () => {
   test('rejects empty input', async () => {
     await expect(
       deriveDocumentKeyFromRootSecret(new Uint8Array(0)),
-    ).rejects.toThrow(/non-empty/);
+    ).rejects.toThrow(/must be 32 bytes; got 0/);
+  });
+
+  test('rejects 31-byte input (one short of the fixed width)', async () => {
+    // A wrong-buffer that happens to be close to the right width
+    // would otherwise feed HKDF and silently produce a key that
+    // disagrees with every other peer's derivation. The byteLength
+    // gate makes this fail at the call boundary.
+    await expect(
+      deriveDocumentKeyFromRootSecret(new Uint8Array(31)),
+    ).rejects.toThrow(/must be 32 bytes; got 31/);
+  });
+
+  test('rejects 33-byte input (one over the fixed width)', async () => {
+    await expect(
+      deriveDocumentKeyFromRootSecret(new Uint8Array(33)),
+    ).rejects.toThrow(/must be 32 bytes; got 33/);
   });
 
   test('exposes the version-tagged info label as a public constant', () => {
@@ -101,6 +117,18 @@ describe('deriveEpochIdFromRootSecret', () => {
   test('rejects empty input', async () => {
     await expect(
       deriveEpochIdFromRootSecret(new Uint8Array(0)),
-    ).rejects.toThrow(/non-empty/);
+    ).rejects.toThrow(/must be 32 bytes; got 0/);
+  });
+
+  test('rejects 31-byte input (one short of the fixed width)', async () => {
+    await expect(
+      deriveEpochIdFromRootSecret(new Uint8Array(31)),
+    ).rejects.toThrow(/must be 32 bytes; got 31/);
+  });
+
+  test('rejects 33-byte input (one over the fixed width)', async () => {
+    await expect(
+      deriveEpochIdFromRootSecret(new Uint8Array(33)),
+    ).rejects.toThrow(/must be 32 bytes; got 33/);
   });
 });

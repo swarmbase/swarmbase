@@ -50,9 +50,14 @@ export async function deriveDocumentKeyFromRootSecret(
       `deriveDocumentKeyFromRootSecret: rootSecret must be a Uint8Array (got ${typeof rootSecret})`,
     );
   }
-  if (rootSecret.byteLength === 0) {
+  // BeeKEM's root secret width is fixed at 32 bytes (HKDF-SHA-256
+  // output via `BeeKEM.getRootSecret` / `BeeKEM.removeMember`). Pin
+  // the input width here so a caller that passes a wrong-buffer or a
+  // partially-populated view fails fast with a precise error rather
+  // than silently deriving a different key than every other peer.
+  if (rootSecret.byteLength !== 32) {
     throw new Error(
-      'deriveDocumentKeyFromRootSecret: rootSecret must be non-empty',
+      `deriveDocumentKeyFromRootSecret: rootSecret must be 32 bytes; got ${rootSecret.byteLength}`,
     );
   }
 
@@ -113,9 +118,13 @@ export async function deriveEpochIdFromRootSecret(
       `deriveEpochIdFromRootSecret: rootSecret must be a Uint8Array (got ${typeof rootSecret})`,
     );
   }
-  if (rootSecret.byteLength === 0) {
+  // Same 32-byte width pin as `deriveDocumentKeyFromRootSecret`. The
+  // derived epoch ID is also 32 bytes; both functions consume the
+  // same fixed-width BeeKEM root secret so a mismatch on input
+  // typically means a wrong buffer was passed.
+  if (rootSecret.byteLength !== 32) {
     throw new Error(
-      'deriveEpochIdFromRootSecret: rootSecret must be non-empty',
+      `deriveEpochIdFromRootSecret: rootSecret must be 32 bytes; got ${rootSecret.byteLength}`,
     );
   }
 
