@@ -4122,6 +4122,22 @@ export class CollabswarmDocument<
           // immediately below: the entry is deleted again as part
           // of cleanup.
           this._readerLeafIndices.set(serializedReader, leafIndex);
+        } else {
+          // Pubkey is recorded but the BeeKEM tree has no matching
+          // non-blanked leaf. Distinguishing this case from "no
+          // pubkey at all" (below) lets operators tell apart a
+          // local-state gap (reader never registered) from a
+          // tree-state gap (leaf already blanked, or this replica
+          // never received the Welcome that placed the reader).
+          throw new Error(
+            `Cannot remove reader from "${this.documentPath}": the reader's ` +
+              `KEM public key is recorded locally but the BeeKEM tree has ` +
+              `no matching non-blanked leaf. The tree state may have ` +
+              `diverged (leaf already blanked, or this replica never ` +
+              `received the Welcome that placed the reader). A fresh ` +
+              `document load against an authorized peer can re-bootstrap ` +
+              `the local tree.`,
+          );
         }
       }
     }
