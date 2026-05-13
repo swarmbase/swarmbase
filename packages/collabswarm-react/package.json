@@ -91,8 +91,7 @@
       "^bl$": "<rootDir>/jest.empty-mock.js",
       "^multiformats$": "<rootDir>/jest.empty-mock.js",
       "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js",
-      "^uint8arraylist$": "<rootDir>/jest.empty-mock.js",
-      "^uuid$": "<rootDir>/jest.uuid-mock.cjs"
+      "^uint8arraylist$": "<rootDir>/jest.empty-mock.js"
     }
   }
 }

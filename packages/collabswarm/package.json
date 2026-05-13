@@ -113,9 +113,6 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ],
-    "moduleNameMapper": {
-      "^uuid$": "<rootDir>/jest.uuid-mock.cjs"
-    }
+    ]
   }
 }
