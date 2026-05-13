@@ -2803,6 +2803,69 @@ export class CollabswarmDocument<
             );
           }
 
+          // PRE-FETCH gate (PR #284 r20 Copilot review).
+          //
+          // Round 19 added a POST-sync `_hashes`-coverage check, but
+          // `sync()` mutates the document as each fetched block lands
+          // -- so a missing CID would still leave the document
+          // partially mutated by the time the post-check threw a bind
+          // failure. To keep a failed quorum-bound load from altering
+          // local state at all, pull every required block from Helia
+          // here (BEFORE `sync()` is allowed to mutate). Helia's
+          // blockstore content-validates each fetch against its CID
+          // intrinsically; bitswap retrieves from any peer in the swarm
+          // that holds the legitimate block. If ANY fetch fails (CID
+          // not retrievable from any peer, content/CID mismatch, or
+          // timeout inside Helia), throw a per-peer bind failure with
+          // ZERO state mutation -- the load loop can cleanly retry the
+          // next peer in the agreeing cohort, or escalate to
+          // `bind-check-failed-all-agreeing-peers` if every peer
+          // exhausts.
+          //
+          // Run in parallel via `Promise.allSettled` so a single slow
+          // peer cannot pessimize the load. Block bytes are cached
+          // locally on success; the subsequent `sync()` call only does
+          // local lookups for those CIDs and applies them.
+          if (expectedCids.length > 0) {
+            const prefetchResults = await Promise.allSettled(
+              expectedCids.map(async (cidStr) => {
+                const cid = CID.parse(cidStr);
+                // Force the blockstore to retrieve the block. Helia
+                // validates content vs CID on `get`; the read of the
+                // returned async-iterable triggers the actual fetch.
+                await readUint8Iterable(
+                  this.swarm.heliaNode.blockstore.get(cid),
+                );
+              }),
+            );
+            const missingCids: string[] = [];
+            for (let i = 0; i < prefetchResults.length; i++) {
+              if (prefetchResults[i]!.status === 'rejected') {
+                missingCids.push(expectedCids[i]!);
+              }
+            }
+            if (missingCids.length > 0) {
+              console.warn(
+                `[${this.documentPath}] Quorum-bound load pre-fetch ` +
+                  `failed: ${missingCids.length} of ${expectedCids.length} ` +
+                  `expected CIDs were not retrievable from Helia (e.g. ` +
+                  `${missingCids
+                    .slice(0, 3)
+                    .map((c) => c.slice(0, 12) + '...')
+                    .join(', ')}). Recording peer as bind-failed BEFORE ` +
+                  `any state mutation; the loader will try the next ` +
+                  `agreeing peer with a clean document.`,
+              );
+              throw new _QuorumBindCheckFailedError(
+                '(prefetch-missing-blocks)',
+                `Quorum-bound load pre-fetch could not retrieve ` +
+                  `${missingCids.length} of ${expectedCids.length} expected ` +
+                  `CIDs from Helia; aborting before sync() so document ` +
+                  `state is unchanged.`,
+              );
+            }
+          }
+
           const syncResult = await this.sync(message, false);
           if (!syncResult) {
             console.warn(
