@@ -163,11 +163,39 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    *
    * When a new node opens a document it queries up to K peers in parallel
    * via `tipAdvertiseV1`; each peer responds with a `CRDTSyncMessage` whose
-   * only populated payload field is `tipsHash` (computed deterministically
-   * from the peer's `_hashes` set so peers with the same view produce
-   * byte-identical hashes). The loader counts how many peers returned the
-   * same hash and proceeds with a full documentLoadV3/snapshotLoadV3
-   * against one of the agreeing peers only when at least Q peers agree.
+   * only populated payload field is `tipsHash`. The loader counts how many
+   * peers returned the same hash and proceeds with a full
+   * documentLoadV3/snapshotLoadV3 against one of the agreeing peers only
+   * when at least Q peers agree.
+   *
+   * # Protocol contract: WHAT to hash
+   *
+   * `tipsHash` is computed over the canonical **frontier** of the peer's
+   * local change DAG -- i.e. the set of change-block CIDs that have NO
+   * descendants in the local DAG (the "heads" or "tips"). The reference
+   * implementation is `CollabswarmDocument._currentFrontier()` in
+   * `collabswarm-document.ts`, which returns `_hashes \
+   * _referencedAncestors` (the merged-CID set minus every CID that some
+   * other change references as a parent or cross-link target).
+   *
+   * # Implementer warning: do NOT hash `_hashes` directly
+   *
+   * Implementers **MUST NOT** hash the full set of observed/merged CIDs
+   * (e.g. the peer's entire `_hashes` set). Two honest peers with the same
+   * logical document state can have DIFFERENT observed-CID sets when their
+   * history depths differ (history compaction, snapshot-loads that don't
+   * restore ancestors, different join times). Hashing the full set would
+   * cause those honest peers to advertise different hashes, the quorum
+   * gate would never agree, and the load would fail for a state both peers
+   * actually share. Round 3 of the PR #284 Copilot review caught and fixed
+   * exactly this bug -- the docstring previously said "`_hashes` set",
+   * which was wrong; the implementation correctly uses the frontier.
+   *
+   * Hashing the frontier (rather than `_hashes`) makes the hash
+   * deterministic across honest peers with the same logical state
+   * regardless of differing pruning / sync histories: two peers that have
+   * converged on the same CRDT state always have the same frontier even
+   * if their internal merged-CID sets differ.
    *
    * The field is also tolerated (but optional) on regular load responses,
    * so a future optimization can fold quorum into the full load. It is
