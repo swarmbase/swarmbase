@@ -420,7 +420,8 @@ export type LoadQuorumFailedReason =
   | 'no-majority'
   | 'no-peers-queried'
   | 'invalid-config'
-  | 'bind-check-failed-all-agreeing-peers';
+  | 'bind-check-failed-all-agreeing-peers'
+  | 'agreeing-peers-unreachable';
 
 /**
  * Error thrown by `CollabswarmDocument.load()` when the initial-load quorum

@@ -3198,25 +3198,45 @@ export class CollabswarmDocument<
       }
     }
 
-    // If the loop exhausted the agreeing cohort AND at least one peer
-    // bind-failed AND quorum was actually run (`winningHashHex !==
-    // null`), every peer in the cohort either failed the bind check or
-    // failed to serve at all -- which, given they all voted for the
-    // same hash, indicates a coordinated Byzantine cohort. Escalate
-    // with the dedicated reason so callers can distinguish this from
-    // the "no peer responded" outcome. Only raise when at least one
-    // peer was actually flagged as bind-failed; if every peer instead
-    // failed for some OTHER reason (network, protocol, etc.) we fall
-    // through to the legacy `return false` so a brand-new document is
-    // still indistinguishable from a transient outage. See PR #284 r6.
-    if (winningHashHex !== null && agreeingPeerBindFailures.size > 0) {
+    // If quorum was actually run (`winningHashHex !== null`) but the
+    // load loop is exhausted, the cohort agreed the document exists
+    // yet none of them could serve it. Two sub-cases:
+    //
+    //   a) `agreeingPeerBindFailures.size > 0` -- at least one peer
+    //      voted for the agreed hash and then served a divergent
+    //      payload. Coordinated Byzantine behaviour is the simplest
+    //      explanation; we escalate with the dedicated reason.
+    //
+    //   b) `agreeingPeerBindFailures.size === 0` -- every agreeing
+    //      peer failed for an OTHER reason (transport/protocol/etc.).
+    //      We cannot distinguish "all agreeing peers transiently
+    //      offline" from "all agreeing peers refusing to serve", but
+    //      we MUST NOT fall through to `return false` -- that would
+    //      let `open()` initialize a brand-new document despite
+    //      quorum just attesting that the document exists. Surface
+    //      the failure with `'agreeing-peers-unreachable'` so the
+    //      caller decides whether to retry or surface to the user.
+    //
+    // Only after a TRUE no-quorum-was-run outcome (winningHashHex
+    // is null -- legacy non-quorum load or quorum disabled / no
+    // peers / etc.) is `return false` the right answer.
+    if (winningHashHex !== null) {
+      if (agreeingPeerBindFailures.size > 0) {
+        throw new LoadQuorumFailedError({
+          documentPath: this.documentPath,
+          reason: 'bind-check-failed-all-agreeing-peers',
+          respondingCount: 0,
+          requiredQ: 0,
+          agreement: new Map([[winningHashHex, 0]]),
+          agreeingPeerBindFailures,
+        });
+      }
       throw new LoadQuorumFailedError({
         documentPath: this.documentPath,
-        reason: 'bind-check-failed-all-agreeing-peers',
+        reason: 'agreeing-peers-unreachable',
         respondingCount: 0,
         requiredQ: 0,
         agreement: new Map([[winningHashHex, 0]]),
-        agreeingPeerBindFailures,
       });
     }
 
