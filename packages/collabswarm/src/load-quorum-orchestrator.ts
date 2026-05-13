@@ -77,9 +77,24 @@ export interface LoadQuorumOrchestratorConfig {
 
 /**
  * Result of running the quorum orchestration over a peer list.
+ *
+ *   - `{ skipped: true }` — gate disabled or no peers known. Caller
+ *     falls through to the legacy single-peer load loop.
+ *   - `{ newDoc: true }` — a Q-of-K majority of probed peers explicitly
+ *     disclaimed the document (returned `'unknown-doc'` from the probe).
+ *     Caller should treat as "document does not exist yet" and let
+ *     `load()` return `false` so a fresh `open()` creates the document
+ *     on top of the existing swarm. See PR #284 r16 Copilot review for
+ *     the rationale: the previous design conflated unknown-doc with
+ *     partition / timeout and made new-doc creation fail in an existing
+ *     mesh.
+ *   - `{ ok: true, narrowedPeers, winningHashHex }` — quorum passed on
+ *     a tip-set hash; caller does the full document-load against
+ *     `narrowedPeers` with the binding check pinned to `winningHashHex`.
  */
 export type LoadQuorumOrchestratorResult<T> =
   | { skipped: true }
+  | { newDoc: true }
   | { ok: true; narrowedPeers: T[]; winningHashHex: string };
 
 /**
@@ -109,7 +124,7 @@ export type LoadQuorumOrchestratorResult<T> =
 export async function runLoadQuorum<T>(opts: {
   peers: readonly T[];
   peerIdOf: (peer: T) => string;
-  probeFn: (peer: T) => Promise<Uint8Array | null>;
+  probeFn: (peer: T) => Promise<Uint8Array | 'unknown-doc' | null>;
   documentPath: string;
   config?: LoadQuorumOrchestratorConfig;
 }): Promise<LoadQuorumOrchestratorResult<T>> {
@@ -251,7 +266,7 @@ export async function runLoadQuorum<T>(opts: {
     // `probeFn` would let the underlying error escape past the orchestrator
     // and bypass the `LoadQuorumFailedError` API contract `load()` callers
     // are written against. See PR #284 r5 Copilot review.
-    let probe: Uint8Array | null;
+    let probe: Uint8Array | 'unknown-doc' | null;
     try {
       probe = await probeFn(probedPeer);
     } catch (err) {
@@ -270,6 +285,18 @@ export async function runLoadQuorum<T>(opts: {
         requiredQ: 1,
         agreement: new Map(),
       });
+    }
+    if (probe === 'unknown-doc') {
+      // The single probed peer explicitly disclaims the document. Treat
+      // as new-doc-creation -- `load()` will return `false` so a fresh
+      // `open()` can create the document on top of the swarm. This is
+      // symmetric with the K-of-Q `kind === 'new-doc'` branch below.
+      // See PR #284 r16 Copilot review.
+      console.warn(
+        `[${documentPath}] Initial-load quorum single-peer probe returned ` +
+          `'unknown-doc'; treating as new-document path (load() will return false).`,
+      );
+      return { newDoc: true };
     }
     const winningHashHex = tipsHashToHex(probe);
     // Narrow to ONLY the probed peer. Without this, the subsequent
@@ -296,7 +323,7 @@ export async function runLoadQuorum<T>(opts: {
   const probedPeers = peers.slice(0, k);
   const advertisements: PeerTipAdvertisement[] = await Promise.all(
     probedPeers.map(async (peer) => {
-      let hash: Uint8Array | null;
+      let hash: Uint8Array | 'unknown-doc' | null;
       try {
         hash = await probeFn(peer);
       } catch (err) {
@@ -325,6 +352,22 @@ export async function runLoadQuorum<T>(opts: {
       requiredQ: decision.effectiveQ,
       agreement: decision.agreement,
     });
+  }
+  if (decision.kind === 'new-doc') {
+    // Q-of-K peers all returned the `'unknown-doc'` sentinel: the swarm
+    // collectively disclaims the document. Surface as the new-doc path
+    // so `CollabswarmDocument.load()` returns `false` and a fresh
+    // `open()` can create the document on top of the existing swarm.
+    // Defense remains Q-Byzantine: a single lying peer in a 3-of-3 mesh
+    // whose other peers hold the doc cannot force this branch (their
+    // tip-hash bucket wins the tally). See PR #284 r16 Copilot review.
+    console.log(
+      `[${documentPath}] Initial-load quorum passed (new-doc): ` +
+        `${decision.agreeingPeerIds.length}/${decision.respondingCount} ` +
+        `peers disclaimed the document; treating as new-document path ` +
+        `(load() will return false).`,
+    );
+    return { newDoc: true };
   }
   console.log(
     `[${documentPath}] Initial-load quorum passed: ` +

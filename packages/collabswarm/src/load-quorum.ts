@@ -29,15 +29,35 @@ import { tipsHashToHex } from './tips-hash';
  * `hash`:
  *   - `Uint8Array` -- the peer returned a tip-set hash (32 bytes
  *     post-validation; see `tips-hash.ts`).
+ *   - `'unknown-doc'` -- the peer explicitly disclaimed the document
+ *     (received the 1-byte UNKNOWN_DOC sentinel from the wire). Counted
+ *     toward an "unknown-doc" tally exactly like a tip-hash vote: when a
+ *     Q-of-K majority of probed peers all disclaim the document, the
+ *     orchestrator returns `{ newDoc: true }` so `load()` can let a fresh
+ *     `open()` create the document on top of the existing swarm rather
+ *     than failing with `LoadQuorumFailedError`. Worst-case Byzantine
+ *     exposure is identical to the tip-hash case: Q lying peers can
+ *     force a wrong outcome, but a single lying peer cannot. See
+ *     `Collabswarm.tipAdvertiseHandler` for the wire sentinel and
+ *     PR #284 r16 Copilot review for the rationale.
  *   - `null` -- the peer did not return a usable hash. This covers BOTH
- *     timeouts AND explicit declines (empty response, unauthorized, wrong
- *     document id, deserialization failure, etc.). Non-responding peers
- *     are NOT counted toward "disagreement" -- they simply do not vote.
+ *     timeouts AND non-disclaim declines (unauthorized, wrong document
+ *     id, deserialization failure, etc.). Non-responding peers are NOT
+ *     counted toward "disagreement" -- they simply do not vote.
  */
 export interface PeerTipAdvertisement {
   peerId: string;
-  hash: Uint8Array | null;
+  hash: Uint8Array | 'unknown-doc' | null;
 }
+
+/**
+ * Reserved key used in the `decideLoadQuorum` agreement tally for peers
+ * that disclaimed the document (returned `'unknown-doc'` from the probe).
+ * Chosen so the key cannot collide with a real `tipsHashToHex` output:
+ * `tipsHashToHex` produces a 64-char lowercase hex string, while this
+ * sentinel is a 11-char string containing a hyphen.
+ */
+export const UNKNOWN_DOC_TALLY_KEY = 'unknown-doc';
 
 /**
  * Result of running `decideLoadQuorum` over a set of peer advertisements.
@@ -53,6 +73,17 @@ export interface PeerTipAdvertisement {
 export type LoadQuorumDecision =
   | {
       ok: true;
+      /**
+       * Discriminates whether the agreeing peers voted for a tip-set hash
+       * (the normal case) or all disclaimed the document via the
+       * `'unknown-doc'` sentinel (the new-doc-creation case). Callers
+       * branch on `kind` to decide whether to proceed with the full
+       * document-load (`'tip-hash'`) or to let the loader return `false`
+       * so a fresh `open()` creates the document on top of the swarm
+       * (`'new-doc'`). See `Collabswarm.tipAdvertiseHandler` and
+       * PR #284 r16 Copilot review for the unknown-doc wire signal.
+       */
+      kind: 'tip-hash' | 'new-doc';
       winningHashHex: string;
       agreeingPeerIds: string[];
       respondingCount: number;
@@ -93,23 +124,32 @@ export function decideLoadQuorum(
     };
   }
 
-  // Tally agreement keyed by the hex form of each peer's hash. Hex is used
-  // as the Map key because `Uint8Array` reference equality is not what we
-  // want -- two peers returning byte-identical hashes must collide on the
-  // same bucket. The hex encoding mirrors `tipsHashToHex`, so logged
-  // mismatches are human-readable.
+  // Tally agreement keyed by the hex form of each peer's hash (for
+  // tip-hash votes) or `UNKNOWN_DOC_TALLY_KEY` (for `'unknown-doc'`
+  // disclaim votes). Hex is used as the Map key for tip-hash buckets so
+  // two peers returning byte-identical hashes collide on the same bucket;
+  // the unknown-doc sentinel uses a non-hex literal key that cannot
+  // collide with any real `tipsHashToHex` output (64-char lowercase hex).
+  // Mismatches are human-readable in the logged `agreement` snapshot.
   const agreement = new Map<string, string[]>();
   let respondingCount = 0;
   for (const adv of advertisements) {
     if (adv.hash === null) {
-      // Non-vote: timeout or explicit decline. Skip without penalty -- a
-      // stale `knownPeers` cache that points at offline peers must not be
-      // counted as disagreement, otherwise a partition + small mesh would
-      // be indistinguishable from active Byzantine behaviour.
+      // Non-vote: timeout or non-disclaim decline. Skip without penalty
+      // -- a stale `knownPeers` cache that points at offline peers must
+      // not be counted as disagreement, otherwise a partition + small
+      // mesh would be indistinguishable from active Byzantine behaviour.
       continue;
     }
     respondingCount++;
-    const key = tipsHashToHex(adv.hash);
+    // `'unknown-doc'` votes tally under a dedicated reserved key so a
+    // Q-of-K majority of disclaims is detectable by the orchestrator
+    // exactly like a tip-hash majority. The key is intentionally NOT a
+    // hex string so it cannot collide with `tipsHashToHex` output.
+    const key =
+      adv.hash === 'unknown-doc'
+        ? UNKNOWN_DOC_TALLY_KEY
+        : tipsHashToHex(adv.hash);
     let bucket = agreement.get(key);
     if (!bucket) {
       bucket = [];
@@ -164,6 +204,7 @@ export function decideLoadQuorum(
 
   return {
     ok: true,
+    kind: bestKey === UNKNOWN_DOC_TALLY_KEY ? 'new-doc' : 'tip-hash',
     winningHashHex: bestKey,
     agreeingPeerIds: bestPeers,
     respondingCount,

@@ -154,6 +154,105 @@ describe('decideLoadQuorum (initial-load quorum gate, #189 §5.4.2)', () => {
     );
     expect(decision.ok).toBe(true);
   });
+
+  // PR #284 r16: `'unknown-doc'` is a first-class vote alongside tip-hash
+  // values. A Q-of-K majority of disclaims surfaces a `kind: 'new-doc'`
+  // outcome that the orchestrator translates into `{ newDoc: true }` and
+  // the loader translates into a `false` return so a fresh `open()` can
+  // create the document on top of an existing swarm. A single lying
+  // disclaim cannot force this branch if the other peers actually have
+  // the document (their tip-hash bucket wins the tally).
+  test("'unknown-doc' majority returns kind='new-doc' with disclaim peers in agreeing cohort", () => {
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: 'unknown-doc' },
+        { peerId: 'p2', hash: 'unknown-doc' },
+        { peerId: 'p3', hash: 'unknown-doc' },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.kind).toBe('new-doc');
+      expect(decision.respondingCount).toBe(3);
+      expect(decision.agreeingPeerIds).toEqual(['p1', 'p2', 'p3']);
+      // The reserved tally key is non-hex so it cannot collide with a
+      // real `tipsHashToHex` output (64-char lowercase hex).
+      expect(decision.winningHashHex).toBe('unknown-doc');
+    }
+  });
+
+  test("majority 'unknown-doc' vs minority tip-hash returns kind='new-doc'", () => {
+    // 2 disclaims, 1 dissenter that DOES have the doc — disclaims win
+    // the tally (Q=2). Defense-in-depth analogue of the tip-hash
+    // 2-of-3 majority case earlier in this suite.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: 'unknown-doc' },
+        { peerId: 'p2', hash: 'unknown-doc' },
+        { peerId: 'p3', hash: HASH_A },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.kind).toBe('new-doc');
+      expect(decision.agreeingPeerIds).toEqual(['p1', 'p2']);
+    }
+  });
+
+  test("majority tip-hash beats minority 'unknown-doc' (single lying peer cannot force new-doc)", () => {
+    // 2 honest peers vote HASH_A, 1 malicious peer lies 'unknown-doc'.
+    // Tip-hash bucket wins; loader proceeds with normal load.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: HASH_A },
+        { peerId: 'p2', hash: HASH_A },
+        { peerId: 'p3', hash: 'unknown-doc' },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.kind).toBe('tip-hash');
+      expect(decision.agreeingPeerIds).toEqual(['p1', 'p2']);
+    }
+  });
+
+  test("'unknown-doc' votes alongside null non-votes still produce kind='new-doc' when they reach Q", () => {
+    // 2 disclaims + 1 timeout: disclaims meet Q=2 even with a non-vote.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: 'unknown-doc' },
+        { peerId: 'p2', hash: 'unknown-doc' },
+        { peerId: 'p3', hash: null },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.kind).toBe('new-doc');
+      expect(decision.respondingCount).toBe(2);
+    }
+  });
+
+  test("split unknown-doc vs tip-hash with no Q majority fails with no-majority", () => {
+    // 1 disclaim, 1 HASH_A, 1 HASH_B, Q=2. No bucket reaches 2.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: 'unknown-doc' },
+        { peerId: 'p2', hash: HASH_A },
+        { peerId: 'p3', hash: HASH_B },
+      ],
+      2,
+    );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.reason).toBe('no-majority');
+      // All three buckets show up in the diagnostic snapshot.
+      expect(decision.agreement.size).toBe(3);
+    }
+  });
 });
 
 describe('effectiveK / effectiveQ', () => {

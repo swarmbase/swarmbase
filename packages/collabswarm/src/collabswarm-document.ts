@@ -2180,8 +2180,8 @@ export class CollabswarmDocument<
       const snapshotMessage = this._createSyncMessage();
       snapshotMessage.snapshot = this._latestSnapshot;
       snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
-      // Tip-set advertisement for the post-load binding check (see the
-      // doc-load handler above and the in-line check in
+      // Tip-set advertisement for the pre-apply structural binding check
+      // (see the doc-load handler above and the in-line check in
       // `_sendLoadRequestAndSync` for the rationale).
       //
       // PR #284 r8: this is the *served* frontier (`_servedFrontier()`)
@@ -2719,17 +2719,31 @@ export class CollabswarmDocument<
 
   /**
    * Send a single `tipAdvertiseV1` probe to one peer and decrypt the
-   * response to extract the peer's `tipsHash`. Returns `null` for any
-   * non-vote outcome: empty/declined response, decryption failure with an
-   * unknown key (peer has a different keychain), missing/invalid signature,
-   * deserialization failure, document-id mismatch, missing/short tip hash,
-   * or thrown errors. Timeouts are handled at the caller level via
-   * Promise.race.
+   * response to extract the peer's `tipsHash`. Returns one of:
    *
-   * Returns `null` rather than throwing so the caller can record this
-   * peer as a non-vote (NOT a disagreement) and `decideLoadQuorum` can
-   * apply the correct quorum semantics. See `load-quorum.ts` for the
-   * timeout-vs-disagreement distinction.
+   *   - `Uint8Array` -- the peer's advertised `tipsHash` (32 bytes).
+   *   - `'unknown-doc'` -- the peer explicitly disclaimed the document
+   *     (returned the 1-byte `0xFF` UNKNOWN_DOC sentinel). This is the
+   *     signal `Collabswarm.tipAdvertiseHandler` emits when no document
+   *     is registered for the requested path. Distinguishing this from
+   *     `null` lets the orchestrator tally `'unknown-doc'` exactly like
+   *     a tip-hash vote so that when a Q-of-K majority of peers all
+   *     disclaim the document, `load()` returns `false` to let a fresh
+   *     `open()` create the document on top of an existing swarm. The
+   *     previous design returned `null` for the unknown-doc case, which
+   *     was indistinguishable from a partition / timeout and made
+   *     new-document creation in an existing mesh fail with
+   *     `LoadQuorumFailedError`. See PR #284 r16 Copilot review.
+   *   - `null` -- any other non-vote outcome: empty response, decryption
+   *     failure with an unknown key (peer has a different keychain),
+   *     missing/invalid signature, deserialization failure, document-id
+   *     mismatch, missing/short tip hash, or thrown errors. Timeouts are
+   *     handled at the caller level via Promise.race.
+   *
+   * Returns rather than throws so the caller can record this peer as a
+   * non-vote (NOT a disagreement) and `decideLoadQuorum` can apply the
+   * correct quorum semantics. See `load-quorum.ts` for the
+   * timeout-vs-disagreement-vs-unknown-doc distinction.
    *
    * @internal
    */
@@ -2737,7 +2751,7 @@ export class CollabswarmDocument<
     peer: import('@multiformats/multiaddr').Multiaddr,
     serializedRequest: Uint8Array,
     signal?: AbortSignal,
-  ): Promise<Uint8Array | null> {
+  ): Promise<Uint8Array | 'unknown-doc' | null> {
     // Capture the underlying v3 Stream so the abort path below can call
     // `abort()` on it directly (the wrapped DuplexStream only exposes the
     // write-side half-close via `close()`, not a full bidirectional tear-
@@ -2804,8 +2818,22 @@ export class CollabswarmDocument<
         MAX_TIP_ADVERTISE_RESPONSE_SIZE,
       );
       if (assembled.length === 0) {
-        // Peer declined (unknown doc, unauthorized, etc.).
+        // Peer declined (unauthorized, decryption failure, document-id
+        // mismatch, etc.). Distinct from the 1-byte UNKNOWN_DOC sentinel
+        // handled below, which signals "I don't have this document at all"
+        // (a distinguishable case used to let new-doc creation succeed
+        // in an existing swarm; see method docstring).
         return null;
+      }
+      // 1-byte UNKNOWN_DOC sentinel response: `Collabswarm.tipAdvertiseHandler`
+      // emits this when no document is registered for the requested path.
+      // The orchestrator counts these toward a separate "unknown-doc"
+      // tally so a Q-of-K majority of disclaims becomes a clean
+      // new-doc-creation signal rather than a `LoadQuorumFailedError`.
+      // See `_probeTipAdvertise`'s docstring and PR #284 r16 Copilot
+      // review for the rationale.
+      if (assembled.length === 1 && assembled[0] === 0xff) {
+        return 'unknown-doc';
       }
       const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
       if (assembled.length <= headerLength) {
@@ -2910,7 +2938,7 @@ export class CollabswarmDocument<
     peer: import('@multiformats/multiaddr').Multiaddr,
     serializedRequest: Uint8Array,
     timeoutMs: number,
-  ): Promise<Uint8Array | null> {
+  ): Promise<Uint8Array | 'unknown-doc' | null> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {
@@ -3123,28 +3151,32 @@ export class CollabswarmDocument<
     // behaviour.
     //
     // `winningHashHex` (set when quorum passes) is also used below as the
-    // per-peer binding check inside `_sendLoadRequestAndSync`: BEFORE
-    // applying the served state, the loader derives the served frontier
-    // structurally from the responder's payload via
-    // `computeServedFrontier(message.changeId, message.changes,
-    // message.snapshot?.lastChangeNodeCID)`, hashes it, and compares to
-    // `winningHashHex`. If they disagree, an agreeing peer voted for one
-    // tip set and served a different one (Byzantine equivocation): the
-    // peer is recorded as a bind failure and the loader retries the next
-    // agreeing peer without ever mutating in-memory state. The check is
-    // intentionally derived from the served payload (not post-sync
-    // `_hashes`) so a Byzantine peer cannot poison the in-memory document
-    // before the binding decision is made. See PR #284 r7 Copilot review.
+    // per-peer binding check inside `_sendLoadRequestAndSync`. The check
+    // is purely structural and runs BEFORE the served state is applied:
+    // the loader hashes `computeServedFrontier(message.changeId,
+    // message.changes, message.snapshot?.lastChangeNodeCID)` and compares
+    // to `winningHashHex`. If they disagree, an agreeing peer voted for
+    // one tip set and served a different one (Byzantine equivocation):
+    // the peer is recorded as a bind failure and the loader retries the
+    // next agreeing peer without ever mutating in-memory state. The
+    // pre-apply ordering is the load-bearing property -- a Byzantine peer
+    // cannot poison the in-memory document because the bind decision
+    // happens before `sync()` runs. See PR #284 r7 Copilot review.
     // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
     // on the assumption it identified a "founding-member" brand-new document.
     // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
     // of an EXISTING document (before load populates it), which is exactly
     // the case the gate is meant to protect. We no longer special-case empty
-    // local state; the gate runs uniformly. True founders (no peers in the
-    // mesh) are handled by the `peers.length === 0` short-circuit at the top
-    // of `load()` plus the `k === 0` branch inside `runLoadQuorum` (which
-    // returns `{ skipped: true }` → we fall through to the legacy "no peer
-    // could provide the document" path and return false).
+    // local state; the gate runs uniformly. New-document creation in an
+    // EXISTING swarm is handled by the `'unknown-doc'` probe sentinel: each
+    // peer that does not have the document responds with the 1-byte UNKNOWN_DOC
+    // marker (see `Collabswarm.tipAdvertiseHandler`), the orchestrator tallies
+    // these alongside tip-hash votes, and a Q-of-K majority of disclaims
+    // surfaces as `{ newDoc: true }` here -- the loader returns `false` and
+    // `open()` proceeds to create the doc fresh. True founders (no peers in
+    // the mesh) are still handled by the `peers.length === 0` short-circuit
+    // at the top of `load()` plus the `k === 0` branch inside `runLoadQuorum`
+    // (which returns `{ skipped: true }`). See PR #284 r16 Copilot review.
     //
     // The K-of-Q decision logic itself lives in `runLoadQuorum`
     // (`load-quorum-orchestrator.ts`) so the orchestration can be unit-tested
@@ -3197,6 +3229,15 @@ export class CollabswarmDocument<
       }
       // Else: gate disabled. Fall through with the original (un-deduped)
       // `orderedPeers` so the legacy loop can retry per-multiaddr.
+    } else if ('newDoc' in quorumResult) {
+      // A Q-of-K majority of probed peers explicitly disclaimed the
+      // document via the `'unknown-doc'` sentinel. Return `false` so
+      // `open()` can create the document fresh on top of the existing
+      // swarm. Without this branch, the previous design conflated
+      // unknown-doc with partition / timeout and surfaced
+      // `LoadQuorumFailedError` -- preventing new-document creation in
+      // any swarm with online peers. See PR #284 r16 Copilot review.
+      return false;
     } else {
       winningHashHex = quorumResult.winningHashHex;
       // Quorum succeeded: narrow the load loop to the agreeing cohort.

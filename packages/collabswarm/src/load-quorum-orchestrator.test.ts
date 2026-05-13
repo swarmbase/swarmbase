@@ -1518,4 +1518,107 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
       );
     });
   });
+
+  // PR #284 r16: `'unknown-doc'` probe results let the orchestrator
+  // detect the new-doc-creation case in an existing swarm. A Q-of-K
+  // majority of disclaims surfaces `{ newDoc: true }`; the loader uses
+  // this to return `false` so a fresh `open()` can create the document.
+  describe("'unknown-doc' new-document-creation path (PR #284 r16)", () => {
+    test("3 peers all probe 'unknown-doc' => orchestrator returns { newDoc: true }", async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue('unknown-doc');
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+
+      expect('newDoc' in result && result.newDoc).toBe(true);
+      // Should NOT surface as ok=true with narrowedPeers (that would
+      // drag the loader into a full-load round-trip).
+      expect('ok' in result).toBe(false);
+      expect('skipped' in result).toBe(false);
+      expect(probeMock).toHaveBeenCalledTimes(3);
+    });
+
+    test("majority 'unknown-doc' (2 of 3) with 1 tip-hash dissenter => { newDoc: true }", async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) =>
+        peer === 'p3' ? HASH_X : 'unknown-doc',
+      );
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+
+      expect('newDoc' in result && result.newDoc).toBe(true);
+    });
+
+    test("single lying 'unknown-doc' in a 3-peer mesh whose other peers have the doc CANNOT force new-doc creation", async () => {
+      // Defense: a single Byzantine peer claiming 'unknown-doc' while
+      // the others honestly serve HASH_X must lose the tally and let
+      // the loader proceed with the normal tip-hash quorum.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) =>
+        peer === 'p3' ? 'unknown-doc' : HASH_X,
+      );
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      expect(result.winningHashHex).toBe(HASH_X_HEX);
+      expect(result.narrowedPeers).toEqual(['p1', 'p2']);
+    });
+
+    test("single-peer fallback (k=1, allowSinglePeer=true) with 'unknown-doc' returns { newDoc: true }", async () => {
+      // Symmetric with the K-of-Q new-doc path: a single probed peer
+      // that disclaims the document still surfaces as new-doc.
+      const peers: TestPeer[] = ['p1'];
+      probeMock.mockResolvedValue('unknown-doc');
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 1, q: 1, allowSinglePeer: true },
+      });
+
+      expect('newDoc' in result && result.newDoc).toBe(true);
+      expect(probeMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("'unknown-doc' votes alongside null non-votes still reach Q and surface { newDoc: true }", async () => {
+      // 2 disclaims + 1 timeout: disclaims meet Q=2 even with one
+      // non-vote. Mirrors the tip-hash 2-of-3-with-timeout path.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) =>
+        peer === 'p3' ? null : 'unknown-doc',
+      );
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+
+      expect('newDoc' in result && result.newDoc).toBe(true);
+    });
+  });
 });

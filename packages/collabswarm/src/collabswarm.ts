@@ -627,12 +627,35 @@ export class Collabswarm<
           }
           const doc = this._documentRegistry.get(request.documentId);
           if (!doc) {
-            // Unknown document -- decline with empty response so the loader
-            // counts this peer as a non-vote, not a disagreement.
+            // Unknown document -- respond with the 1-byte UNKNOWN_DOC
+            // sentinel (`0xFF`) so the loader can DISTINGUISH "I don't
+            // have this document" from generic probe failures (timeout,
+            // auth failure, decryption failure, malformed response). The
+            // loader uses this signal so that when EVERY queried peer in
+            // the swarm explicitly disclaims the document, `load()`
+            // returns `false` to let a fresh `open()` create the document
+            // on top of an existing swarm -- the previous empty-response
+            // decline was indistinguishable from a partition / timeout
+            // and made new-document creation in an existing mesh fail
+            // with `LoadQuorumFailedError`.
+            //
+            // Unauthenticated: this signal carries no signature. A
+            // Byzantine peer can lie and claim "unknown" even when other
+            // honest peers have the document. Defense: quorum tallies
+            // `'unknown-doc'` exactly like a tip-hash vote -- if Q of K
+            // peers all agree on `'unknown-doc'` the loader trusts the
+            // disclaimer, but a single lying peer in a 3-of-3 mesh whose
+            // other 2 peers have the doc cannot force new-doc creation
+            // (the honest hash X wins the tally). Worst case is the same
+            // Q-Byzantine threshold the rest of the quorum gate already
+            // tolerates. See `decideLoadQuorum` for the tally semantics
+            // and PR #284 r16 Copilot review for the original bug report.
             console.warn(
               `Shared tip-advertise handler: no document registered for "${request.documentId}"`,
             );
-            await stream.sink([] as Iterable<Uint8Array>);
+            await stream.sink([
+              new Uint8Array([0xff]),
+            ] as Iterable<Uint8Array>);
             return [];
           }
           await doc.handleTipAdvertiseRequestData(request, stream);
