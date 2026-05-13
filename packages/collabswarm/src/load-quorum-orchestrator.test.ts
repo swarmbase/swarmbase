@@ -1678,21 +1678,31 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
       expect(probeMock).toHaveBeenCalledTimes(3);
     });
 
-    test("majority 'unknown-doc' (2 of 3) with 1 tip-hash dissenter => { newDoc: true }", async () => {
+    test("majority 'unknown-doc' (2 of 3) with 1 tip-hash dissenter => no-majority (tip-hash priority, PR #284 r19)", async () => {
+      // r19 Copilot review: tip-hash votes take PRIORITY over
+      // unknown-doc disclaims because the probe samples the WHOLE libp2p
+      // mesh (`getConnections()`), not only peers that hold this
+      // document. Two unrelated peers in the mesh legitimately
+      // returning 'unknown-doc' must NOT outvote the one peer that
+      // actually has the document and force a fork via new-doc
+      // creation. With Q=2 here, the lone HASH_X vote does not meet
+      // quorum on its own, so the orchestrator throws no-majority
+      // rather than surfacing { newDoc: true }.
       const peers: TestPeer[] = ['p1', 'p2', 'p3'];
       probeMock.mockImplementation(async (peer: TestPeer) =>
         peer === 'p3' ? HASH_X : 'unknown-doc',
       );
 
-      const result = await runLoadQuorum({
+      const err = await runLoadQuorum({
         peers,
         peerIdOf,
         probeFn: probeMock,
         documentPath: '/test',
         config: { enabled: true, k: 3, q: 2 },
-      });
+      }).catch((e: unknown) => e);
 
-      expect('newDoc' in result && result.newDoc).toBe(true);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('no-majority');
     });
 
     test("single lying 'unknown-doc' in a 3-peer mesh whose other peers have the doc CANNOT force new-doc creation", async () => {

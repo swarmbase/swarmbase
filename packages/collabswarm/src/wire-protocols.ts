@@ -40,13 +40,38 @@ export const snapshotLoadV3 = '/collabswarm/snapshot-load/3.0.0';
 //             sign just the document id and the responder can authorize
 //             via the standard ACL/signature check).
 //
-//   Response: empty payload (peer declines: unknown document, unauthorized,
-//             signing disabled-on-one-side mismatch, etc.) OR a serialized
-//             `CRDTSyncMessage` whose only populated payload field is
-//             `tipsHash` (plus `documentId` and optionally `signature`).
-//             The responder does NOT include `changes`, `snapshot`, or
-//             `keychainChanges` -- the heavy state transfer happens later
-//             via documentLoadV3/snapshotLoadV3 against an agreeing peer.
+//   Response: ONE of three wire shapes -- the loader's probe distinguishes
+//             them by the first-byte and length of the response:
+//
+//               (a) Empty payload (zero bytes) -- the responder declines
+//                   without disclosing whether the document exists: the
+//                   request was unauthorized, the request's documentId
+//                   did not match (signing-on-one-side mismatch), the
+//                   responder threw on serialization, etc. The loader
+//                   records this as a generic non-vote (`null` from the
+//                   probe). NOT used for the "I genuinely don't have
+//                   this document" case -- see (b).
+//
+//               (b) Single-byte `0xff` sentinel (UNKNOWN_DOC) -- the
+//                   responder has NO document registered for this path.
+//                   Distinguished from (a) so the loader can tally
+//                   disclaim votes alongside tip-hash votes via
+//                   `decideLoadQuorum` (see `load-quorum.ts`). The
+//                   sentinel is intentionally unauthenticated (no
+//                   per-doc keychain to sign/encrypt with); the quorum
+//                   gate's Q-Byzantine threshold defends against
+//                   lying-disclaim attacks AND tip-hash votes are
+//                   given precedence over disclaim votes so peers WITH
+//                   the document outvote unrelated peers in the same
+//                   mesh that don't. See PR #284 r16 / r19.
+//
+//               (c) Serialized + encrypted `CRDTSyncMessage` whose
+//                   only populated payload field is `tipsHash` (plus
+//                   `documentId` and optionally `signature`). The
+//                   responder does NOT include `changes`, `snapshot`,
+//                   or `keychainChanges` -- the heavy state transfer
+//                   happens later via documentLoadV3/snapshotLoadV3
+//                   against an agreeing peer.
 //
 // Layered on documentLoadV3's transport semantics, but on a separate
 // protocol id so a slow/malicious peer that serves bogus full loads cannot

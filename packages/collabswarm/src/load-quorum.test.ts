@@ -182,10 +182,17 @@ describe('decideLoadQuorum (initial-load quorum gate, #189 §5.4.2)', () => {
     }
   });
 
-  test("majority 'unknown-doc' vs minority tip-hash returns kind='new-doc'", () => {
-    // 2 disclaims, 1 dissenter that DOES have the doc — disclaims win
-    // the tally (Q=2). Defense-in-depth analogue of the tip-hash
-    // 2-of-3 majority case earlier in this suite.
+  test("majority 'unknown-doc' vs minority tip-hash: tip-hash takes PRIORITY (PR #284 r19)", () => {
+    // 2 disclaims, 1 peer reports HASH_A. The probe samples from the
+    // WHOLE libp2p mesh, not just peers that hold this document, so
+    // peers without the doc (legitimately returning unknown-doc) must
+    // NOT outvote the one peer that has it. Otherwise two unrelated
+    // peers in the mesh could fork an existing document into a new-doc
+    // creation -- silently splitting the swarm.
+    //
+    // New precedence rule: ANY tip-hash vote suppresses the unknown-doc
+    // bucket. With Q=2 here, the lone HASH_A vote does not meet Q on
+    // its own, so the decision is `no-majority` (NOT `kind: 'new-doc'`).
     const decision = decideLoadQuorum(
       [
         { peerId: 'p1', hash: 'unknown-doc' },
@@ -194,9 +201,32 @@ describe('decideLoadQuorum (initial-load quorum gate, #189 §5.4.2)', () => {
       ],
       2,
     );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      // We expect `no-majority` because the tip-hash bucket has size 1
+      // and there were 3 responding peers (>= Q).
+      expect(decision.reason).toBe('no-majority');
+      // The agreement snapshot still records BOTH buckets for operator
+      // diagnostics.
+      expect(decision.agreement.size).toBe(2);
+    }
+  });
+
+  test("tip-hash quorum still passes when at least Q peers vote for the same hash, even alongside unknown-doc disclaims", () => {
+    // 2 vote HASH_A, 2 disclaim. Tip-hash bucket meets Q=2 and wins;
+    // the disclaim bucket is excluded from consideration entirely.
+    const decision = decideLoadQuorum(
+      [
+        { peerId: 'p1', hash: HASH_A },
+        { peerId: 'p2', hash: HASH_A },
+        { peerId: 'p3', hash: 'unknown-doc' },
+        { peerId: 'p4', hash: 'unknown-doc' },
+      ],
+      2,
+    );
     expect(decision.ok).toBe(true);
     if (decision.ok) {
-      expect(decision.kind).toBe('new-doc');
+      expect(decision.kind).toBe('tip-hash');
       expect(decision.agreeingPeerIds).toEqual(['p1', 'p2']);
     }
   });

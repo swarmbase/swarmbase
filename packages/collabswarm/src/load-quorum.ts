@@ -31,15 +31,28 @@ import { tipsHashToHex } from './tips-hash';
  *     post-validation; see `tips-hash.ts`).
  *   - `'unknown-doc'` -- the peer explicitly disclaimed the document
  *     (received the 1-byte UNKNOWN_DOC sentinel from the wire). Counted
- *     toward an "unknown-doc" tally exactly like a tip-hash vote: when a
- *     Q-of-K majority of probed peers all disclaim the document, the
- *     orchestrator returns `{ newDoc: true }` so `load()` can let a fresh
- *     `open()` create the document on top of the existing swarm rather
- *     than failing with `LoadQuorumFailedError`. Worst-case Byzantine
- *     exposure is identical to the tip-hash case: Q lying peers can
- *     force a wrong outcome, but a single lying peer cannot. See
- *     `Collabswarm.tipAdvertiseHandler` for the wire sentinel and
- *     PR #284 r16 Copilot review for the rationale.
+ *     toward an "unknown-doc" tally that the orchestrator uses to
+ *     surface `{ newDoc: true }` when the responding cohort genuinely
+ *     does not hold the document -- so a fresh `open()` can create the
+ *     document on top of the existing swarm rather than failing with
+ *     `LoadQuorumFailedError`.
+ *
+ *     PRECEDENCE: tip-hash votes take priority over disclaim votes. The
+ *     probe samples from `getConnections()`, which is the WHOLE libp2p
+ *     mesh -- NOT only peers that hold this specific document. Unrelated
+ *     peers in the mesh that have not opened this path legitimately
+ *     return `'unknown-doc'`; if they were allowed to outvote a peer
+ *     that genuinely holds the document, the loader would silently fork
+ *     an existing doc into a new local copy. So when ANY peer returns a
+ *     real tip-hash, the `'unknown-doc'` bucket is EXCLUDED from the
+ *     agreement vote; the new-doc path is only taken when ZERO peers
+ *     reported a real tip-hash. See `Collabswarm.tipAdvertiseHandler`
+ *     for the wire sentinel and PR #284 r16 / r19 Copilot review for
+ *     the precedence rationale.
+ *
+ *     Worst-case Byzantine exposure for new-doc is identical to the
+ *     tip-hash case: Q lying peers can force a wrong outcome, but a
+ *     single lying peer cannot.
  *   - `null` -- the peer did not return a usable hash. This covers BOTH
  *     timeouts AND non-disclaim declines (unauthorized, wrong document
  *     id, deserialization failure, etc.). Non-responding peers are NOT
@@ -170,12 +183,49 @@ export function decideLoadQuorum(
     };
   }
 
-  // Find the largest bucket. Ties are broken arbitrarily by Map iteration
-  // order (insertion order); ties never affect ok/!ok because both buckets
-  // would have the same size and we only accept if size >= q.
+  // Tip-hash votes take PRIORITY over `'unknown-doc'` votes when
+  // selecting the winning bucket. The probe is racing every peer
+  // returned by `getConnections()` -- which is the WHOLE libp2p mesh,
+  // not only peers that have specifically opened this document. So an
+  // honest peer that legitimately holds a document and votes its
+  // `tipsHash` can be outvoted by unrelated peers in the same mesh
+  // that simply have not registered the document path (each of which
+  // legitimately returns the `'unknown-doc'` sentinel). Without this
+  // precedence rule, two such uninvolved peers could outvote the one
+  // peer that actually has the document and force the loader into the
+  // new-doc-creation path -- forking the document silently. See
+  // PR #284 r19 Copilot review.
+  //
+  // Precedence rule: if ANY peer returned a real tip-hash, the
+  // `'unknown-doc'` bucket is excluded from the agreement vote. The
+  // tip-hash buckets then decide quorum among themselves (Q-of-respondingCount
+  // for the winning hash). The new-doc path is only ever taken when
+  // ZERO peers reported a real tip-hash AND the `'unknown-doc'` bucket
+  // meets Q -- i.e. the entire responding cohort genuinely disclaims
+  // the document.
+  //
+  // `respondingCount` is intentionally NOT decremented when we exclude
+  // the `'unknown-doc'` bucket: it still represents the cohort that
+  // responded at all (used for the structured failure reason
+  // 'insufficient-responses' versus 'no-majority'). The
+  // `unknownDocBucketSize` count is still surfaced in the `agreement`
+  // snapshot for operator visibility.
+  const hasTipHashVote = [...agreement.keys()].some(
+    (k) => k !== UNKNOWN_DOC_TALLY_KEY,
+  );
+  const eligibleBuckets = hasTipHashVote
+    ? [...agreement.entries()].filter(
+        ([key]) => key !== UNKNOWN_DOC_TALLY_KEY,
+      )
+    : [...agreement.entries()];
+
+  // Find the largest bucket among ELIGIBLE buckets. Ties are broken
+  // arbitrarily by Map iteration order (insertion order); ties never
+  // affect ok/!ok because both buckets would have the same size and we
+  // only accept if size >= q.
   let bestKey: string | null = null;
   let bestPeers: string[] = [];
-  for (const [key, peers] of agreement.entries()) {
+  for (const [key, peers] of eligibleBuckets) {
     if (peers.length > bestPeers.length) {
       bestKey = key;
       bestPeers = peers;
