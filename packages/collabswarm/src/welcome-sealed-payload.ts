@@ -134,7 +134,21 @@ export function decodeWelcomeSealedPayload(
 
   let beekemWelcome: BeeKEMWelcome | null = null;
   if (raw.bk !== undefined && raw.bk !== null) {
-    beekemWelcome = deserializeBeeKEMWelcomeFromWire(raw.bk);
+    try {
+      beekemWelcome = deserializeBeeKEMWelcomeFromWire(raw.bk);
+    } catch (err) {
+      // `deserializeBeeKEMWelcomeFromWire` throws its own field-level
+      // errors but they don't mention the envelope-level field name --
+      // surface that here so the malformed field is identifiable from
+      // the envelope's perspective ("bk"), matching the module
+      // docstring's "name the bad field" contract.
+      throw new Error(
+        `welcome-sealed-payload: invalid 'bk' (BeeKEM welcome): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err },
+      );
+    }
   }
 
   return { keychainChanges, beekemWelcome };

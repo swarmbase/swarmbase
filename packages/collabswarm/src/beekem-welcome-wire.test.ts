@@ -179,4 +179,19 @@ describe('welcome-sealed-payload', () => {
     const decoded = decodeWelcomeSealedPayload(encoded);
     expect(decoded.beekemWelcome).toBeNull();
   });
+
+  test("names the bad field when `bk` deserialization throws", () => {
+    // Module docstring promises errors that "name the bad field". A
+    // malformed `bk` lets `deserializeBeeKEMWelcomeFromWire` raise
+    // its own field-level message (e.g. about `leafIndex`), but the
+    // envelope-level field name (`bk`) must also be present so the
+    // operator can locate the problem in the envelope schema.
+    const keychainB64 = Buffer.from(new Uint8Array([1, 2, 3])).toString('base64');
+    // `bk` is a non-null object but missing the required `leafIndex`
+    // field -- `deserializeBeeKEMWelcomeFromWire` throws.
+    const encoded = new TextEncoder().encode(
+      JSON.stringify({ k: keychainB64, bk: { notAWelcome: true } }),
+    );
+    expect(() => decodeWelcomeSealedPayload(encoded)).toThrow(/'bk'/);
+  });
 });

@@ -70,9 +70,12 @@ export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
 // BeeKEM PathUpdate v1: distributes a BeeKEM ratchet-tree path update to
 // every surviving member of a document. Used by
 // `CollabswarmDocument.removeReader` to revoke a reader: the writer
-// blanks the removed leaf, re-keys the path with `BeeKEM.update`, and
-// broadcasts the resulting `PathUpdate`. Each remaining reader applies it
-// with `BeeKEM.processPathUpdate` and re-derives the document key from
+// calls `BeeKEM.removeMember`, which blanks the removed leaf AND
+// re-keys the writer's path to root in a single step (no separate
+// `BeeKEM.update` call is involved -- see the "Wire format" section
+// below for why). The resulting `PathUpdate` is broadcast to every
+// surviving reader, which applies it with `BeeKEM.processPathUpdate`
+// and re-derives the document key from
 // the fresh root secret (see `derive-doc-key.ts`). The removed reader
 // cannot derive the new key — their leaf is blanked and the new path key
 // material is encrypted to subtrees they no longer occupy — which closes

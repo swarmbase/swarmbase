@@ -4,7 +4,9 @@
  * Used by the BeeKEM-based reader-revocation flow
  * (`CollabswarmDocument.removeReader` and the
  * `beekemPathUpdateV1` receive path): after a successful
- * `BeeKEM.removeMember` + `BeeKEM.update`, the writer derives the
+ * `BeeKEM.removeMember` (which blanks the leaf AND re-derives the
+ * writer's path to root in a single step -- no follow-up
+ * `BeeKEM.update` is involved), the writer derives the
  * next document encryption key from the new root secret and
  * installs it via `Keychain.addEpochKey`. Surviving readers do the
  * same after `BeeKEM.processPathUpdate`. The removed reader cannot
