@@ -739,13 +739,17 @@ describe('formatConfigValue (PR #284 r10 issue #1: non-finite numbers render as 
     expect(formatConfigValue(NaN)).not.toBe(formatConfigValue(null));
   });
 
-  test('undefined renders as JSON.stringify(undefined) === undefined-as-string', () => {
-    // Note: `JSON.stringify(undefined)` returns `undefined`, not a
-    // string. This is JSON.stringify's behaviour, surfaced through the
-    // helper for transparency. `validateLoadQuorumConfig` early-returns
-    // on `undefined` before calling the helper, so this branch is not
-    // hit in production — but the helper's behaviour is still pinned.
-    expect(formatConfigValue(undefined)).toBeUndefined();
+  test("undefined coerces to the string 'undefined'", () => {
+    // `JSON.stringify(undefined)` returns `undefined` (NOT a string),
+    // which would break the function's declared `string` return type
+    // under strict-mode TypeScript and also surface as `got undefined`
+    // through coercion in operator-visible error messages. PR #284 r18
+    // Copilot review tightened the helper to always return a string;
+    // for `undefined` we fall back to `String(undefined)` so callers
+    // (and the type system) see a clean string. `validateLoadQuorumConfig`
+    // still early-returns on `undefined` before calling the helper, so
+    // this fallback is defensive — the helper's behaviour is pinned here.
+    expect(formatConfigValue(undefined)).toBe('undefined');
   });
 
   test('strings, objects, arrays still flow through JSON.stringify', () => {

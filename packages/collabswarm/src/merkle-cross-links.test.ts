@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 import {
+  collectAllCidsInTree,
   collectReferencedAncestors,
   computeServedFrontier,
   MAX_CROSS_LINKS,
@@ -1712,5 +1713,97 @@ describe('stripInlineChanges (PR #284 r17 content-bind defense)', () => {
     const c1 = (tree.children as any).c1;
     expect(c1.kind).toBe(crdtDocumentChangeNode);
     expect(c1.keyID).toBe('k1');
+  });
+});
+
+describe('collectAllCidsInTree (PR #284 r18 post-sync verification basis)', () => {
+  type Changes = { ops: string[] };
+
+  test('flat root with no children returns just the root CID', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['root'] },
+    };
+    expect(collectAllCidsInTree('root-cid', tree)).toEqual(['root-cid']);
+  });
+
+  test('walks every child level and dedupes via Set', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      children: {
+        c1: {
+          kind: crdtDocumentChangeNode,
+          children: {
+            gc1: { kind: crdtDocumentChangeNode },
+            gc2: { kind: crdtDocumentChangeNode },
+          },
+        },
+        c2: { kind: crdtDocumentChangeNode },
+      },
+    };
+    const cids = collectAllCidsInTree('root-cid', tree).sort();
+    expect(cids).toEqual(['c1', 'c2', 'gc1', 'gc2', 'root-cid']);
+  });
+
+  test('handles undefined root (defensive guard)', () => {
+    expect(collectAllCidsInTree<Changes>(undefined, undefined)).toEqual([]);
+  });
+
+  test('rootId-only with undefined root: returns just the rootId', () => {
+    expect(collectAllCidsInTree<Changes>('only-root-cid', undefined)).toEqual(
+      ['only-root-cid'],
+    );
+  });
+
+  test('stops at a deferred children sentinel (cannot enumerate descendants)', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      children: crdtChangeNodeDeferred,
+    };
+    expect(collectAllCidsInTree('root-cid', tree)).toEqual(['root-cid']);
+  });
+
+  test('cycle defense: a child CID that re-appears in a descendant subtree is not walked twice', () => {
+    // Construct an aliasing tree (would not normally happen in practice
+    // because CIDs are content-addressed and unique, but defensive against
+    // a malicious responder that constructs a cyclic-looking tree).
+    const inner: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+    };
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      children: {
+        c1: inner,
+        c2: {
+          kind: crdtDocumentChangeNode,
+          children: { c1: inner }, // alias: c1 appears again
+        },
+      },
+    };
+    // c1 should be visited only once.
+    const cids = collectAllCidsInTree('root-cid', tree).sort();
+    expect(cids).toEqual(['c1', 'c2', 'root-cid']);
+  });
+
+  test('preserves all CID keys in a typical Merkle-DAG tree (post-strip shell shape)', () => {
+    // Mimics the post-`stripInlineChanges` shape used in production: no
+    // inline `change` content, only CID-keyed `children` maps. The CID
+    // collector still walks the whole structure.
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      children: {
+        'bafy-a': {
+          kind: crdtWriterChangeNode,
+          children: {
+            'bafy-b': { kind: crdtDocumentChangeNode },
+          },
+        },
+        'bafy-c': { kind: crdtDocumentChangeNode },
+      },
+    };
+    const cids = collectAllCidsInTree('bafy-root', tree);
+    expect(new Set(cids)).toEqual(
+      new Set(['bafy-root', 'bafy-a', 'bafy-b', 'bafy-c']),
+    );
   });
 });

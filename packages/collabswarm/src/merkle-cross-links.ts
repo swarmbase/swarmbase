@@ -467,3 +467,53 @@ export function stripInlineChanges<ChangesType>(
   }
   return node;
 }
+
+/**
+ * Recursively collect every CID that appears in a `CRDTChangeNode` tree
+ * (the optional root CID, every node-id appearing in any `children` map
+ * key). Returns the CIDs in insertion order, deduplicated via the
+ * underlying `Set`. Used by `CollabswarmDocument._sendLoadRequestAndSync`
+ * on quorum-bound loads as the basis for the post-`sync()` "did every
+ * stripped block actually arrive?" check (PR #284 r18 Copilot review):
+ *
+ *   1. Collect all CIDs from the served tree BEFORE `stripInlineChanges`
+ *      reduces it to a CID-keyed shell.
+ *   2. Strip inline content; call `sync()`.
+ *   3. Verify every collected CID is now in `_hashes`. If any is missing,
+ *      the load is reported as a per-peer bind failure so the loader can
+ *      retry the next peer in the agreeing cohort. Without this check, a
+ *      transient bitswap/blockstore miss would let `sync()` return `true`
+ *      with only a partially-applied document and `load()` report success.
+ *
+ * Skips a deferred `children` sentinel (we cannot enumerate descendants
+ * beneath a deferred node; defensively bounded by a `visited` set on
+ * node CIDs).
+ *
+ * Pure (no I/O); the recursion is bounded by the tree size.
+ */
+export function collectAllCidsInTree<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType> | undefined,
+): string[] {
+  if (!root) return rootId ? [rootId] : [];
+  const cids = new Set<string>();
+  const visited = new Set<string>();
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      cids.add(nodeId);
+    }
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      cids.add(childId);
+      walk(childId, childNode);
+    }
+  }
+  walk(rootId, root);
+  return [...cids];
+}

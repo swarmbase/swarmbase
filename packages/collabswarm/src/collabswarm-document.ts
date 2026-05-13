@@ -27,6 +27,7 @@ import {
 } from './crdt-change-node';
 import {
   collectReferencedAncestors,
+  collectAllCidsInTree,
   computeServedFrontier,
   stripInlineChanges,
   MAX_CROSS_LINKS,
@@ -2745,6 +2746,21 @@ export class CollabswarmDocument<
           // signature forged with an attacker-controlled key (which
           // would be admitted if the inline ACL pre-pass were trusted)
           // never reaches `applySnapshot`.
+          // Capture every CID that appears in the served tree BEFORE
+          // stripping. `_syncDocumentChanges` swallows per-block fetch
+          // failures (logs + returns); without a post-sync verification
+          // step a transient bitswap/blockstore miss would let this
+          // method return `true` with only a partially-applied document
+          // and `load()` report success. After `sync()` we re-check that
+          // every captured CID is now in `_hashes`; any missing CID is
+          // surfaced as a per-peer bind failure so the loader can retry
+          // the next peer in the agreeing cohort. See PR #284 r18
+          // Copilot review.
+          const expectedCids = collectAllCidsInTree(
+            message.changeId,
+            message.changes,
+          );
+
           stripInlineChanges(message.changes);
           const preLoadWriterCount = (await this._writers.users()).length;
           if (preLoadWriterCount === 0 && message.snapshot) {
@@ -2757,6 +2773,77 @@ export class CollabswarmDocument<
             );
             message.snapshot = undefined;
           }
+
+          // Snapshot-only first-load detection: after the snapshot drop
+          // above, if the response now carries NO changes tree AND NO
+          // snapshot, the responder served us nothing usable. Without
+          // this guard the path falls through to `sync(message, false)`
+          // (which returns `true` for a vacuously-empty message because
+          // there is nothing to merge / reject) and this method reports
+          // success — `load()` then returns `true` with neither state
+          // applied nor an opportunity to retry. Treat as a per-peer
+          // bind failure so the agreeing-cohort load loop tries the
+          // next peer (which may serve a real changes tree). See
+          // PR #284 r18 Copilot review.
+          if (
+            message.changes === undefined &&
+            message.snapshot === undefined
+          ) {
+            console.warn(
+              `[${this.documentPath}] Quorum-bound first-load response ` +
+                `carries neither a changes tree nor a snapshot after the ` +
+                `defensive snapshot drop. Treating as bind failure so the ` +
+                `loader tries the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(snapshot-only first-load)',
+              `Quorum-bound first-load response had only a snapshot (now ` +
+                `dropped because writers are not yet populated) and no ` +
+                `changes tree; no state can be applied.`,
+            );
+          }
+
+          const syncResult = await this.sync(message, false);
+          if (!syncResult) {
+            console.warn(
+              `sync rejected message during load for ${this.documentPath}`,
+            );
+            // Return false so the caller tries the next peer.
+            return false;
+          }
+
+          // Post-sync verification (PR #284 r18 Copilot review): every
+          // CID we expected from the (stripped) served tree must have
+          // landed in `_hashes` via either inline application (for the
+          // non-stripped path this branch never reaches) or via the
+          // `_getBlock(cid)` Helia fetch path inside
+          // `_syncDocumentChanges`. A missing CID means bitswap could
+          // not retrieve that block; without surfacing this the load
+          // would silently report success with a partial document.
+          const missingCids: string[] = [];
+          for (const cid of expectedCids) {
+            if (!this._hashes.has(cid)) missingCids.push(cid);
+          }
+          if (missingCids.length > 0) {
+            console.warn(
+              `[${this.documentPath}] Quorum-bound load did not complete: ` +
+                `${missingCids.length} of ${expectedCids.length} expected ` +
+                `CIDs were not fetched from Helia (e.g. ${missingCids
+                  .slice(0, 3)
+                  .map((c) => c.slice(0, 12) + '...')
+                  .join(', ')}). Recording peer as bind-failed so the ` +
+                `loader tries the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(missing-blocks)',
+              `Quorum-bound load completed sync() but ${missingCids.length} ` +
+                `of ${expectedCids.length} expected CIDs were not retrievable; ` +
+                `served tree had stripped inline content and bitswap could ` +
+                `not retrieve the missing blocks.`,
+            );
+          }
+
+          return true;
         }
 
         const syncResult = await this.sync(message, false);
