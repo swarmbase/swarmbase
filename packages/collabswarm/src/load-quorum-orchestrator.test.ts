@@ -29,7 +29,7 @@
 
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import { runLoadQuorum } from './load-quorum-orchestrator';
-import { LoadQuorumFailedError } from './load-quorum';
+import { dedupePeersByPeerId, LoadQuorumFailedError } from './load-quorum';
 import { tipsHashToHex } from './tips-hash';
 
 /**
@@ -598,6 +598,169 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     if (!('ok' in result)) throw new Error('expected ok=true');
     expect(result.narrowedPeers).toEqual(['p1', 'p2']);
     expect(result.winningHashHex).toBe(HASH_X_HEX);
+  });
+
+  describe('legacy load loop preserves un-deduped peer list (PR #284 r7)', () => {
+    // Regression for PR #284 r7 Copilot review: the load loop previously
+    // deduped peers by peer id UNCONDITIONALLY -- before the quorum probe,
+    // affecting BOTH the quorum probe AND the legacy single-peer load
+    // loop. When `loadQuorumEnabled: false`, the legacy loop should keep
+    // multiple multiaddrs for the same peer id (e.g. direct connection +
+    // relay-circuit fallback) so the second can be tried if the first
+    // fails. The fix uses `quorumPeers = dedupePeersByPeerId(orderedPeers)`
+    // for the probe only; `orderedPeers` (un-deduped) is preserved for
+    // the legacy loop.
+    //
+    // The control-flow snippet under test mirrors the relevant slice of
+    // `CollabswarmDocument.load()`: build `quorumPeers` for the probe,
+    // keep `orderedPeers` for the loop. The tests here do NOT use real
+    // multiaddrs -- they use `{ id, addr }` test doubles where `id` is
+    // the peer id and `addr` is a per-connection sentinel. The
+    // `peerIdOf` extractor returns `id` so dedup collapses entries
+    // sharing the same `id` but different `addr`.
+
+    interface MultiAddrPeer {
+      id: string;
+      addr: string;
+    }
+    const idOf = (p: MultiAddrPeer) => p.id;
+
+    function simulateLegacyLoop(opts: {
+      orderedPeers: MultiAddrPeer[];
+      // Per-connection result. Returns `true` if the load succeeded for
+      // this connection, `false` to fall through to the next one.
+      loadFn: (peer: MultiAddrPeer) => Promise<boolean>;
+    }): Promise<{
+      attempts: MultiAddrPeer[];
+      loadedFromAddr: string | null;
+    }> {
+      const attempts: MultiAddrPeer[] = [];
+      return (async () => {
+        for (const peer of opts.orderedPeers) {
+          attempts.push(peer);
+          const ok = await opts.loadFn(peer);
+          if (ok) return { attempts, loadedFromAddr: peer.addr };
+        }
+        return { attempts, loadedFromAddr: null };
+      })();
+    }
+
+    test('quorum disabled: legacy loop iterates ALL multiaddrs for the same peer id', async () => {
+      // Two connections to the same peer id "alice": a direct dial that
+      // fails, and a relay-circuit fallback that succeeds. The legacy
+      // loop must try BOTH (the fallback is the whole point of having
+      // multiple connections). Under the bug, dedup collapses the two
+      // entries to one and the loader gives up after the direct dial
+      // fails.
+      const orderedPeers: MultiAddrPeer[] = [
+        { id: 'alice', addr: '/direct/alice' },
+        { id: 'alice', addr: '/p2p-circuit/alice' },
+      ];
+
+      // Dedup is for the QUORUM probe only; the legacy loop keeps
+      // `orderedPeers` un-deduped (this mirrors the production code in
+      // `CollabswarmDocument.load()` after the PR #284 r7 fix).
+      const quorumPeers = dedupePeersByPeerId(orderedPeers, idOf);
+      expect(quorumPeers).toEqual([
+        { id: 'alice', addr: '/direct/alice' },
+      ]);
+
+      // Quorum disabled => legacy loop walks `orderedPeers` (un-deduped).
+      const loadFn = jest.fn(async (peer: MultiAddrPeer) => {
+        // Direct fails; circuit succeeds.
+        return peer.addr === '/p2p-circuit/alice';
+      });
+      const outcome = await simulateLegacyLoop({
+        orderedPeers,
+        loadFn,
+      });
+      expect(outcome.attempts).toEqual([
+        { id: 'alice', addr: '/direct/alice' },
+        { id: 'alice', addr: '/p2p-circuit/alice' },
+      ]);
+      expect(outcome.loadedFromAddr).toBe('/p2p-circuit/alice');
+      // Both connections were tried.
+      expect(loadFn).toHaveBeenCalledTimes(2);
+    });
+
+    test('quorum disabled: prior buggy behaviour (loop over deduped list) would have stopped after the failed direct dial', async () => {
+      // Documenting the regression we are guarding against: under the
+      // pre-fix code, the loop iterated `dedupePeersByPeerId(orderedPeers)`,
+      // i.e. only ONE entry per peer id. The fallback connection was
+      // never tried.
+      const orderedPeers: MultiAddrPeer[] = [
+        { id: 'alice', addr: '/direct/alice' },
+        { id: 'alice', addr: '/p2p-circuit/alice' },
+      ];
+      const dedupedAsBug = dedupePeersByPeerId(orderedPeers, idOf);
+      const loadFn = jest.fn(async (peer: MultiAddrPeer) => {
+        return peer.addr === '/p2p-circuit/alice';
+      });
+      const outcome = await simulateLegacyLoop({
+        orderedPeers: dedupedAsBug,
+        loadFn,
+      });
+      // Bug behaviour: only the direct dial is attempted, so the load
+      // fails even though a valid fallback existed.
+      expect(outcome.attempts).toEqual([
+        { id: 'alice', addr: '/direct/alice' },
+      ]);
+      expect(outcome.loadedFromAddr).toBeNull();
+      expect(loadFn).toHaveBeenCalledTimes(1);
+    });
+
+    test('quorum disabled: distinct peer ids are unaffected', async () => {
+      // Sanity check: dedup-by-peer-id is a no-op when each peer id
+      // appears once. The fix doesn't regress this path.
+      const orderedPeers: MultiAddrPeer[] = [
+        { id: 'alice', addr: '/direct/alice' },
+        { id: 'bob', addr: '/direct/bob' },
+      ];
+      const quorumPeers = dedupePeersByPeerId(orderedPeers, idOf);
+      expect(quorumPeers).toEqual(orderedPeers);
+      const loadFn = jest.fn(async (peer: MultiAddrPeer) => peer.id === 'alice');
+      const outcome = await simulateLegacyLoop({ orderedPeers, loadFn });
+      expect(outcome.loadedFromAddr).toBe('/direct/alice');
+      expect(loadFn).toHaveBeenCalledTimes(1);
+    });
+
+    test('quorum enabled: probe-only dedup still applies (single vote per peer id)', async () => {
+      // Complementary case: when quorum IS enabled, the probe round uses
+      // the deduped list so a peer with two connections can't cast two
+      // votes. The narrowed cohort returned by `runLoadQuorum` is a
+      // filter of the deduped list, so the subsequent load loop only
+      // sees one connection per peer id in the narrowed cohort. This is
+      // the intended behaviour for the quorum path.
+      const orderedPeers: MultiAddrPeer[] = [
+        { id: 'alice', addr: '/direct/alice' },
+        { id: 'alice', addr: '/p2p-circuit/alice' },
+        { id: 'bob', addr: '/direct/bob' },
+        { id: 'carol', addr: '/direct/carol' },
+      ];
+      const quorumPeers = dedupePeersByPeerId(orderedPeers, idOf);
+      expect(quorumPeers.map(idOf)).toEqual(['alice', 'bob', 'carol']);
+
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers: quorumPeers,
+        peerIdOf: idOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      // Each peer voted exactly once -- alice's duplicate connection did
+      // not give her a second vote.
+      expect(probeMock).toHaveBeenCalledTimes(3);
+      // The narrowed cohort carries one entry per peer id, mirroring the
+      // probe input.
+      expect(result.narrowedPeers.map(idOf)).toEqual([
+        'alice',
+        'bob',
+        'carol',
+      ]);
+    });
   });
 
   describe('default Q is derived from EFFECTIVE K, not configured K (PR #284 r7)', () => {

@@ -2690,10 +2690,14 @@ export class CollabswarmDocument<
    * advertise responses with an unknown encryption key, missing/invalid
    * writer signature, document-id mismatch, or short/missing tip hash are
    * recorded as non-votes (NOT disagreements) so a stale peer cache does
-   * not flip a partition into a Byzantine-failure verdict. Peers are
-   * deduped by libp2p PeerId before the probe so a single peer with
-   * multiple open connections cannot cast multiple votes. After quorum
-   * passes, the served full state is bound to the agreed hash via the
+   * not flip a partition into a Byzantine-failure verdict. The probe
+   * round dedupes peers by libp2p PeerId so a single peer with multiple
+   * open connections cannot cast multiple votes. The legacy load loop
+   * (when `loadQuorumEnabled: false`) keeps the ORIGINAL un-deduped
+   * peer list so it can retry across multiple multiaddrs for the same
+   * peer id (e.g. a direct connection + a relay-circuit fallback). See
+   * PR #284 r7 Copilot review for the dedup-scope rationale. After
+   * quorum passes, the served full state is bound to the agreed hash via the
    * responder-supplied `tips` array on the load response: the loader
    * computes `tipsHash(message.tips)` and verifies it equals the quorum
    * `winningHashHex` BEFORE applying the response. Hashing the
@@ -2790,21 +2794,29 @@ export class CollabswarmDocument<
     };
     const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
 
-    // Dedupe `orderedPeers` by peer id BEFORE the quorum probe. `getConnections()`
-    // returns one entry per OPEN connection, and libp2p maintains separate
-    // connections per multiaddr / per transport — so a single remote peer with
-    // two open connections (e.g. direct + relay-circuit) shows up twice. Without
-    // this dedup, that peer would cast two votes in the quorum tally, allowing a
-    // single malicious peer with multiple connections to dominate the agreement
-    // count. Dedup by `_peerIdOf` (which extracts the LAST `/p2p/<id>` segment,
-    // i.e. the remote peer's libp2p PeerId for both direct and circuit-relay
-    // multiaddrs). Preserves first-seen order so the preferredPeer (placed at
-    // index 0 above) remains first.
-    {
-      const deduped = dedupePeersByPeerId(orderedPeers, (p) => this._peerIdOf(p));
-      orderedPeers.length = 0;
-      orderedPeers.push(...deduped);
-    }
+    // Dedupe peers by peer id ONLY for the quorum probe round.
+    // `getConnections()` returns one entry per OPEN connection, and libp2p
+    // maintains separate connections per multiaddr / per transport — so a
+    // single remote peer with two open connections (e.g. direct +
+    // relay-circuit) shows up twice. Without dedup, that peer would cast
+    // two votes in the quorum tally, allowing a single malicious peer with
+    // multiple connections to dominate the agreement count. Dedup by
+    // `_peerIdOf` (which extracts the LAST `/p2p/<id>` segment, i.e. the
+    // remote peer's libp2p PeerId for both direct and circuit-relay
+    // multiaddrs). Preserves first-seen order so the preferredPeer (placed
+    // at index 0 above) remains first.
+    //
+    // IMPORTANT: dedup applies only to `quorumPeers`. The legacy
+    // single-peer load path (when `loadQuorumEnabled: false`) keeps the
+    // ORIGINAL `orderedPeers` so it can retry across multiple multiaddrs
+    // for the same peer id -- e.g. a direct connection + a relay-circuit
+    // fallback. Collapsing those to one entry pre-quorum would silently
+    // break the legacy fallback even when the quorum gate is off. See PR
+    // #284 r7 Copilot review.
+    const quorumPeers = dedupePeersByPeerId(
+      orderedPeers,
+      (p) => this._peerIdOf(p),
+    );
 
     // Initial-load quorum gate (#189 §5.4.2 / #186).
     //
@@ -2840,7 +2852,7 @@ export class CollabswarmDocument<
     // test-coverage rationale.
     const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
     const quorumResult = await runLoadQuorum({
-      peers: orderedPeers,
+      peers: quorumPeers,
       peerIdOf: (p) => this._peerIdOf(p),
       probeFn: (peer) =>
         this._raceTipAdvertiseProbe(peer, serializedRequest, timeoutMs),
@@ -2860,12 +2872,15 @@ export class CollabswarmDocument<
       // `runLoadQuorum` returns `{ skipped: true }` in two cases: (a) the
       // gate is disabled wholesale (`loadQuorumEnabled: false`), or (b) the
       // effective K resolved to 0 because no peers were known. For (a) we
-      // fall through to the legacy single-peer load loop unchanged (no
-      // narrowing, no winningHashHex). For (b) there is nothing to load
-      // against — treat as new document. The peer-list empty short-circuit
-      // at the top of `load()` already covers the trivial "no peers" path;
-      // this branch is reached when quorum is enabled with a valid K but
-      // the post-dedup `orderedPeers` happens to be empty.
+      // fall through to the legacy single-peer load loop unchanged --
+      // `orderedPeers` is intentionally NOT deduped here so the loop can
+      // retry across multiple multiaddrs for the same peer id (e.g. a
+      // direct connection + a relay-circuit fallback). For (b) there is
+      // nothing to load against — treat as new document. The peer-list
+      // empty short-circuit at the top of `load()` already covers the
+      // trivial "no peers" path; this branch is reached when quorum is
+      // enabled with a valid K but the post-dedup `quorumPeers` happens
+      // to be empty.
       //
       // Note: a misconfigured `loadQuorumK <= 0` no longer reaches this
       // branch — `runLoadQuorum` throws `LoadQuorumFailedError(invalid-
@@ -2873,12 +2888,16 @@ export class CollabswarmDocument<
       // `open()` time instead of silently forking the document. See PR
       // #284 r5 Copilot review.
       const quorumWasEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
-      if (quorumWasEnabled && orderedPeers.length === 0) {
+      if (quorumWasEnabled && quorumPeers.length === 0) {
         return false;
       }
-      // Else: gate disabled. Fall through.
+      // Else: gate disabled. Fall through with the original (un-deduped)
+      // `orderedPeers` so the legacy loop can retry per-multiaddr.
     } else {
       winningHashHex = quorumResult.winningHashHex;
+      // Quorum succeeded: narrow the load loop to the agreeing cohort.
+      // The narrowed list is already deduped (it is a filter of
+      // `quorumPeers`), so we replace `orderedPeers` wholesale.
       orderedPeers.length = 0;
       orderedPeers.push(...quorumResult.narrowedPeers);
     }
