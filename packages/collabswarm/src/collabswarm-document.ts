@@ -3124,6 +3124,45 @@ export class CollabswarmDocument<
       );
     }
 
+    // Founder-vs-joined-writer gate. The BeeKEM tree is rooted in
+    // exactly one of two ways (see the long comment on `_beekem`):
+    //   - **Founder**: a writer who CREATED the document. They have
+    //     no prior document state (`_hashes.size === 0`) and seed
+    //     leaf 0 with their local KEM key pair via
+    //     `_initializeBeeKEMAsFounder`.
+    //   - **Joined writer**: a writer who was added to an existing
+    //     document by another writer. They MUST receive a BeeKEM
+    //     Welcome (which bootstraps their tree via `processWelcome`)
+    //     before they can manipulate the tree.
+    //
+    // Without this gate, a joined writer whose `_beekemInitialized`
+    // is still false (no Welcome received yet) would fall through to
+    // `_registerBeeKEMReader` -> `_initializeBeeKEMAsFounder`, silently
+    // spawning a NEW divergent founder tree from a non-empty document
+    // state. Their subsequent PathUpdates and Welcomes would come from
+    // a tree shape that no other peer shares, so revocations from this
+    // writer would never converge with anyone else's view -- a silent
+    // correctness bug that this gate closes.
+    //
+    // The probe is `_hashes.size > 0`: any entry in `_hashes` means we
+    // have applied at least one change (local or remote), so we are
+    // not on the fresh-creation path. A founder reaching this point
+    // for the first time has `_hashes.size === 0` (the readers-ACL
+    // change is appended by `_makeChange` BELOW this gate). The check
+    // also fires when a joined writer has received zero changes after
+    // a Welcome is dropped, which is the recovery message we want.
+    if (!this._beekemInitialized && this._hashes.size > 0) {
+      throw new Error(
+        `[${this.documentPath}] addReader: cannot register a reader -- ` +
+          `this writer has document state but no BeeKEM tree bootstrapped ` +
+          `from a Welcome. A joined writer must complete a fresh document ` +
+          `load against a BeeKEM-bootstrapped peer (which seeds the local ` +
+          `tree via a Welcome) before they can add or remove readers ` +
+          `cryptographically. Initializing a fresh founder tree here would ` +
+          `silently diverge from every other peer's tree state.`,
+      );
+    }
+
     // Idempotent on the ACL side, but if the caller has only now obtained
     // the recipient's KEM public key (e.g. a previous `addReader` call
     // skipped the Welcome because the key was unknown), still emit the
@@ -4455,7 +4494,31 @@ export class CollabswarmDocument<
     // KEM key pair. On a non-founder writer this branch is invalid
     // (writers other than the founder must themselves have been
     // bootstrapped via a Welcome before they can call `addReader`).
+    //
+    // Defense-in-depth gate: the caller path through `addReader`
+    // already rejects "joined writer with existing document state"
+    // BEFORE running `_makeChange`, so by the time we reach here we
+    // have either (a) a genuine founder with empty `_hashes`, or
+    // (b) a founder mid-first-addReader whose just-emitted ACL
+    // change is sitting in `_hashes` (size === 1). Anything else
+    // (e.g. a future caller that invokes `_registerBeeKEMReader`
+    // outside `addReader`, or a `_hashes` that has been advanced by
+    // pubsub before the founder's first `addReader`) would silently
+    // create a divergent founder tree on a peer that already has
+    // shared state. Throw rather than spawn the rogue tree; the
+    // upstream `addReader` gate's recovery message points at the
+    // right path.
     if (!this._beekemInitialized) {
+      if (this._hashes.size > 1) {
+        throw new Error(
+          `[${this.documentPath}] _registerBeeKEMReader: cannot ` +
+            `initialize a fresh founder BeeKEM tree because the local ` +
+            `replica already has ${this._hashes.size} merged changes. A ` +
+            `joined writer must bootstrap via a BeeKEM Welcome (delivered ` +
+            `over the initial document load) before they can register ` +
+            `readers cryptographically.`,
+        );
+      }
       await this._initializeBeeKEMAsFounder();
     }
     const beekem = this._beekem;
