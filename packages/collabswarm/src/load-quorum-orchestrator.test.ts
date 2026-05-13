@@ -643,7 +643,7 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
     expect((err as LoadQuorumFailedError).message).toMatch(
-      /loadQuorumK must be >= 1; got 0/,
+      /loadQuorumK must be a positive integer; got 0/,
     );
     expect(probeMock).not.toHaveBeenCalled();
   });
@@ -661,7 +661,7 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
     expect((err as LoadQuorumFailedError).message).toMatch(
-      /loadQuorumK must be >= 1; got -1/,
+      /loadQuorumK must be a positive integer; got -1/,
     );
   });
 
@@ -682,6 +682,197 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
     expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  describe('post-init mutation of K/Q is caught as invalid-config (PR #284 r10)', () => {
+    // Regression for PR #284 r10 Copilot review issue #2: `runLoadQuorum`
+    // previously only rejected `K <= 0`. If a caller's `config.loadQuorumK`
+    // was valid at `initialize()` but later mutated to `NaN`/`Infinity`/`-1`
+    // BEFORE `load()` ran, `effectiveK(NaN, peers)` returned 0 (per the r9
+    // defensive guards), the K=0 branch returned `{ skipped: true }`, and
+    // `load()` fell through to the legacy unbound load — but
+    // `loadQuorumEnabled` was still `true`, so the operator's intent
+    // (quorum-protected load) was silently violated. The defensive
+    // re-validation at the top of `runLoadQuorum` now catches this as a
+    // hard `invalid-config` error rather than a silent skip.
+    //
+    // The legitimate `{ skipped: true }` paths (`enabled: false`, zero
+    // peers with a valid default K) are NOT config errors and must NOT
+    // throw — those are covered by the existing "quorum disabled" and
+    // "empty peer list" tests above, plus the explicit re-check below.
+
+    test('K = NaN throws LoadQuorumFailedError(invalid-config) (was: silent skip => legacy unbound load)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: NaN },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      // The error message must show `NaN` (not the misleading `null`
+      // produced by `JSON.stringify(NaN)`) — that's the PR #284 r10
+      // issue #1 fix for `formatConfigValue`.
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumK must be a positive integer; got NaN/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('K = Infinity throws LoadQuorumFailedError(invalid-config) with operator-visible "Infinity"', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: Infinity },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumK must be a positive integer; got Infinity/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('K = -Infinity throws LoadQuorumFailedError(invalid-config)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: -Infinity },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumK must be a positive integer; got -Infinity/,
+      );
+    });
+
+    test('K = 1.5 (fractional) throws LoadQuorumFailedError(invalid-config)', async () => {
+      // Was a silent single-peer probe (`peers.slice(0, 1.5)` => 1 peer)
+      // under the original bug; now refused loud-and-early.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 1.5 },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumK must be a positive integer; got 1\.5/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('Q = NaN throws LoadQuorumFailedError(invalid-config) (was: silent single-peer quorum pass)', async () => {
+      // Symmetric case for Q. Without the validator, `effectiveQ(NaN, k)`
+      // returned `defaultQuorumQ(k)` via the r9 fallback — so the gate
+      // ran with a sensible Q but the operator's *intent* (their
+      // explicitly-set Q) had been silently corrupted. Surface the
+      // mutation as a hard error instead.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: NaN },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumQ must be a positive integer; got NaN/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('rethrown invalid-config carries the actual documentPath (NOT the validator placeholder)', async () => {
+      // `validateLoadQuorumConfig` uses `'<config>'` because it has no
+      // doc path at startup. The orchestrator must replace that with the
+      // load-attempt's actual `documentPath` so operator logs identify
+      // which document's load tripped the post-init mutation.
+      const err = await runLoadQuorum({
+        peers: ['p1', 'p2'] as TestPeer[],
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/docs/x',
+        config: { enabled: true, k: NaN },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).documentPath).toBe('/docs/x');
+      expect((err as LoadQuorumFailedError).message).toMatch(/\/docs\/x/);
+      expect((err as LoadQuorumFailedError).message).not.toMatch(
+        /<config>/,
+      );
+    });
+
+    test('loadQuorumEnabled: false still returns { skipped: true } even with invalid K (early-exit precedes validation)', async () => {
+      // When the operator has explicitly disabled the gate, validation of
+      // K/Q is irrelevant — the values won't be consulted at all. The
+      // `enabled` short-circuit precedes the validator so an
+      // already-disabled gate doesn't suddenly start throwing on a
+      // pre-existing bad K.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: false, k: NaN },
+      });
+      expect(result).toEqual({ skipped: true });
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('valid K with zero peers still returns { skipped: true } (NOT a config error)', async () => {
+      // Zero peers with a valid K is the legitimate founder/partition
+      // case: `effectiveK(3, 0) === 0` => `{ skipped: true }`. The
+      // validator must NOT misfire here because the configured K is
+      // perfectly valid; the absence of peers is a runtime fact, not a
+      // config error.
+      const result = await runLoadQuorum({
+        peers: [] as TestPeer[],
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3 },
+      });
+      expect(result).toEqual({ skipped: true });
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('idempotent: post-init validation is a no-op for already-valid config (matches initialize-time pass)', async () => {
+      // Defence-in-depth must not double-throw on the happy path. A
+      // config that passed `Collabswarm.initialize()`'s validator must
+      // continue to pass `runLoadQuorum`'s identical check on every
+      // load attempt.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      expect(probeMock).toHaveBeenCalledTimes(3);
+    });
   });
 
   test('multi-peer probe that REJECTS is recorded as a non-vote; other peers still tally', async () => {

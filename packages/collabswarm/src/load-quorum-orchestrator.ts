@@ -46,6 +46,7 @@ import {
   effectiveQ,
   LoadQuorumFailedError,
   PeerTipAdvertisement,
+  validateLoadQuorumConfig,
 } from './load-quorum';
 import { tipsHashToHex } from './tips-hash';
 
@@ -111,28 +112,65 @@ export async function runLoadQuorum<T>(opts: {
   if (!enabled) {
     return { skipped: true };
   }
+
+  // Re-validate K/Q on every `runLoadQuorum` call as defence-in-depth
+  // against post-`initialize()` mutation of the shared config object
+  // (direct mutation, deep-clone reuse with a corrupt field, an operator
+  // helper that writes back `NaN`, etc.). `Collabswarm.initialize()` runs
+  // `validateLoadQuorumConfig` once at startup so the static
+  // misconfiguration case (typo, bad cast at config load) is already
+  // covered; this second-line check exists for the dynamic case where a
+  // previously-valid K or Q has since become `NaN`/`Infinity`/0/-1/1.5.
+  //
+  // Without this guard, a mutated `K = NaN` would slip through to
+  // `effectiveK(NaN, peers)` which returns 0 (per the r9 defensive
+  // floor/finiteness guards), the K=0 branch below would return
+  // `{ skipped: true }`, and `CollabswarmDocument.load()` would fall
+  // through to the legacy unbound load even though `loadQuorumEnabled`
+  // is still `true` — silently violating the operator's intent of a
+  // quorum-protected load. Throw a structured `invalid-config`
+  // `LoadQuorumFailedError` so the failure is loud at the
+  // load-attempt boundary instead.
+  //
+  // The validator's documentPath placeholder (`<config>`) is replaced
+  // with the actual `documentPath` here so operator logs surface which
+  // document's load attempt tripped the post-init mutation. See
+  // PR #284 r10 Copilot review.
+  try {
+    validateLoadQuorumConfig({
+      loadQuorumK: config?.k,
+      loadQuorumQ: config?.q,
+    });
+  } catch (err) {
+    if (
+      err instanceof LoadQuorumFailedError &&
+      err.reason === 'invalid-config'
+    ) {
+      // Re-extract the structured detail (everything between the
+      // documentPath prefix and the trailing operator-guidance trailer)
+      // so the rethrown error carries the validator's "<name> must be a
+      // positive integer; got <value>" wording without the
+      // `'<config>'` placeholder leaking through.
+      const detailMatch = err.message.match(
+        /^Initial-load quorum failed for "<config>": (.+?)\. Configure/,
+      );
+      const detail = detailMatch
+        ? detailMatch[1]
+        : 'invalid load-quorum configuration';
+      throw new LoadQuorumFailedError({
+        documentPath,
+        reason: 'invalid-config',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map(),
+        detail,
+      });
+    }
+    throw err;
+  }
+
   const configuredK = config?.k ?? 3;
   const allowSinglePeer = config?.allowSinglePeer ?? false;
-
-  // Validate `loadQuorumK >= 1` up-front. A `configuredK <= 0` would
-  // collapse `effectiveK(...)` to 0 and the K=0 branch below would return
-  // `{ skipped: true }` — which `CollabswarmDocument.load()` then surfaces
-  // to `open()` as a "no peer could provide the document" outcome, and
-  // `open()` would silently re-initialize the document as brand-new
-  // (forking any existing copy held by other peers). Refuse loudly
-  // instead. The misconfiguration is a static operator mistake, not a
-  // recoverable runtime condition, so we throw regardless of peer count.
-  // See PR #284 r5 Copilot review.
-  if (configuredK <= 0) {
-    throw new LoadQuorumFailedError({
-      documentPath,
-      reason: 'invalid-config',
-      respondingCount: 0,
-      requiredQ: 0,
-      agreement: new Map(),
-      detail: `loadQuorumK must be >= 1; got ${configuredK}`,
-    });
-  }
 
   const k = effectiveK(configuredK, peers.length);
   // Compute the default Q from the EFFECTIVE K (after clamping against the

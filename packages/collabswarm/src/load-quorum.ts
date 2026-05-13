@@ -357,12 +357,34 @@ export function validateLoadQuorumConfig(config: {
         respondingCount: 0,
         requiredQ: 0,
         agreement: new Map(),
-        detail: `${name} must be a positive integer; got ${JSON.stringify(value)}`,
+        detail: `${name} must be a positive integer; got ${formatConfigValue(value)}`,
       });
     }
   };
   checkPositiveInt('loadQuorumK', config.loadQuorumK);
   checkPositiveInt('loadQuorumQ', config.loadQuorumQ);
+}
+
+/**
+ * Format a configuration value for inclusion in operator-visible error
+ * messages. `JSON.stringify` has no representation for `NaN`, `Infinity`,
+ * or `-Infinity` and serializes all three as the literal string `'null'` —
+ * so an operator who passed `loadQuorumK: NaN` would see `got null` in the
+ * error message, indistinguishable from explicitly passing `null` and
+ * actively misleading about the actual misconfiguration. Coerce non-finite
+ * numbers via `String(...)` so they render as their JS literal (`'NaN'`,
+ * `'Infinity'`, `'-Infinity'`) instead. All other values pass through
+ * `JSON.stringify` unchanged so structured values (objects, arrays, the
+ * literal `null`, strings) still get quoted/serialized cleanly.
+ *
+ * Used by `validateLoadQuorumConfig` and `runLoadQuorum`'s post-init guard.
+ * See PR #284 r10 Copilot review.
+ */
+export function formatConfigValue(value: unknown): string {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return String(value); // 'NaN' | 'Infinity' | '-Infinity'
+  }
+  return JSON.stringify(value);
 }
 
 /**
@@ -448,7 +470,10 @@ export class LoadQuorumFailedError extends Error {
     agreement: ReadonlyMap<string, number>;
     /** Free-form detail string used by the `'invalid-config'` reason to
      *  carry the offending value into the operator-visible error message
-     *  (e.g. `loadQuorumK must be >= 1; got 0`). Ignored for the other
+     *  (e.g. `loadQuorumK must be a positive integer; got NaN`). Non-finite
+     *  numbers render as their JS literal (`'NaN'` / `'Infinity'` /
+     *  `'-Infinity'`) via {@link formatConfigValue}, not the misleading
+     *  `'null'` that `JSON.stringify` produces. Ignored for the other
      *  reasons, which compose the detail string from the structured
      *  fields. */
     detail?: string;

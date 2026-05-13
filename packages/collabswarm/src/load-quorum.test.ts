@@ -6,6 +6,7 @@ import {
   defaultQuorumQ,
   effectiveK,
   effectiveQ,
+  formatConfigValue,
   LoadQuorumFailedError,
   validateLoadQuorumConfig,
 } from './load-quorum';
@@ -275,7 +276,12 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     expect((err as LoadQuorumFailedError).message).toMatch(/1\.5/);
   });
 
-  test('rejects NaN loadQuorumK', () => {
+  test('rejects NaN loadQuorumK with "got NaN" in message (PR #284 r10 issue #1: not "got null")', () => {
+    // PR #284 r10 Copilot review (issue #1): `JSON.stringify(NaN)` is
+    // the literal string `'null'`, so the previous error message read
+    // `got null` for a `NaN` input — indistinguishable from explicitly
+    // passing `null` and actively misleading. The fix renders non-finite
+    // numbers via `String(...)` so they show their JS literal.
     const err = (() => {
       try {
         validateLoadQuorumConfig({ loadQuorumK: NaN });
@@ -287,11 +293,15 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
     expect((err as LoadQuorumFailedError).message).toMatch(
-      /loadQuorumK must be a positive integer/,
+      /loadQuorumK must be a positive integer; got NaN/,
+    );
+    // Defence: the misleading legacy `got null` rendering must NOT appear.
+    expect((err as LoadQuorumFailedError).message).not.toMatch(
+      /got null/,
     );
   });
 
-  test('rejects Infinity loadQuorumK', () => {
+  test('rejects Infinity loadQuorumK with "got Infinity" in message (PR #284 r10 issue #1)', () => {
     const err = (() => {
       try {
         validateLoadQuorumConfig({ loadQuorumK: Infinity });
@@ -302,12 +312,26 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     })();
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be a positive integer; got Infinity/,
+    );
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
   });
 
-  test('rejects -Infinity loadQuorumK', () => {
-    expect(() =>
-      validateLoadQuorumConfig({ loadQuorumK: -Infinity }),
-    ).toThrow(LoadQuorumFailedError);
+  test('rejects -Infinity loadQuorumK with "got -Infinity" in message (PR #284 r10 issue #1)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: -Infinity });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be a positive integer; got -Infinity/,
+    );
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
   });
 
   test('rejects loadQuorumK = 0', () => {
@@ -348,10 +372,12 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     );
   });
 
-  test('rejects NaN loadQuorumQ (was: silent single-peer quorum pass)', () => {
+  test('rejects NaN loadQuorumQ with "got NaN" in message (was: silent single-peer quorum pass; PR #284 r10 issue #1: not "got null")', () => {
     // The exact bug: `effectiveQ(NaN, k)` returned `NaN`,
     // `decideLoadQuorum` evaluated `bestPeers.length < NaN` as false,
     // and quorum passed with a single responder. Now refused at startup.
+    // PR #284 r10: also verify the rendered value is `NaN`, not the
+    // misleading `null` from `JSON.stringify(NaN)`.
     const err = (() => {
       try {
         validateLoadQuorumConfig({ loadQuorumQ: NaN });
@@ -363,14 +389,26 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
     expect((err as LoadQuorumFailedError).message).toMatch(
-      /loadQuorumQ must be a positive integer/,
+      /loadQuorumQ must be a positive integer; got NaN/,
     );
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
   });
 
-  test('rejects Infinity loadQuorumQ', () => {
-    expect(() => validateLoadQuorumConfig({ loadQuorumQ: Infinity })).toThrow(
-      LoadQuorumFailedError,
+  test('rejects Infinity loadQuorumQ with "got Infinity" in message (PR #284 r10 issue #1)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumQ: Infinity });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumQ must be a positive integer; got Infinity/,
     );
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
   });
 
   test('rejects loadQuorumQ = 0', () => {
@@ -408,6 +446,65 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).message).toMatch(/loadQuorumK/);
     expect((err as LoadQuorumFailedError).message).not.toMatch(/loadQuorumQ/);
+  });
+});
+
+describe('formatConfigValue (PR #284 r10 issue #1: non-finite numbers render as their literal, not "null")', () => {
+  // The root cause: `JSON.stringify(NaN)`, `JSON.stringify(Infinity)`,
+  // and `JSON.stringify(-Infinity)` all return the literal string
+  // `'null'` because JSON has no representation for those values. An
+  // operator who set `loadQuorumK: NaN` would then see `got null` in
+  // the error message, indistinguishable from explicitly passing
+  // `null` and actively misleading about which misconfiguration
+  // they triggered. The helper coerces non-finite numbers via
+  // `String(...)` so they render as their JS literal.
+
+  test('NaN renders as "NaN" (was: "null" under JSON.stringify)', () => {
+    expect(formatConfigValue(NaN)).toBe('NaN');
+    expect(formatConfigValue(NaN)).not.toBe('null');
+  });
+
+  test('Infinity renders as "Infinity"', () => {
+    expect(formatConfigValue(Infinity)).toBe('Infinity');
+    expect(formatConfigValue(Infinity)).not.toBe('null');
+  });
+
+  test('-Infinity renders as "-Infinity"', () => {
+    expect(formatConfigValue(-Infinity)).toBe('-Infinity');
+    expect(formatConfigValue(-Infinity)).not.toBe('null');
+  });
+
+  test('finite numbers pass through JSON.stringify unchanged', () => {
+    expect(formatConfigValue(0)).toBe('0');
+    expect(formatConfigValue(-1)).toBe('-1');
+    expect(formatConfigValue(1.5)).toBe('1.5');
+    expect(formatConfigValue(42)).toBe('42');
+  });
+
+  test('explicit null still renders as "null" (distinct from NaN now)', () => {
+    // An operator who explicitly passes `null` (e.g. via a YAML parse
+    // of an empty value) should see `null` in the error — and the
+    // rendered value must now be DISTINGUISHABLE from a NaN input.
+    expect(formatConfigValue(null)).toBe('null');
+    // Sanity contrast: NaN and null no longer collide.
+    expect(formatConfigValue(NaN)).not.toBe(formatConfigValue(null));
+  });
+
+  test('undefined renders as JSON.stringify(undefined) === undefined-as-string', () => {
+    // Note: `JSON.stringify(undefined)` returns `undefined`, not a
+    // string. This is JSON.stringify's behaviour, surfaced through the
+    // helper for transparency. `validateLoadQuorumConfig` early-returns
+    // on `undefined` before calling the helper, so this branch is not
+    // hit in production — but the helper's behaviour is still pinned.
+    expect(formatConfigValue(undefined)).toBeUndefined();
+  });
+
+  test('strings, objects, arrays still flow through JSON.stringify', () => {
+    expect(formatConfigValue('hello')).toBe('"hello"');
+    expect(formatConfigValue({ k: 3 })).toBe('{"k":3}');
+    expect(formatConfigValue([1, 2, 3])).toBe('[1,2,3]');
+    expect(formatConfigValue(true)).toBe('true');
+    expect(formatConfigValue(false)).toBe('false');
   });
 });
 
