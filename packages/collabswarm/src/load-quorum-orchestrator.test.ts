@@ -599,4 +599,127 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(result.narrowedPeers).toEqual(['p1', 'p2']);
     expect(result.winningHashHex).toBe(HASH_X_HEX);
   });
+
+  describe('default Q is derived from EFFECTIVE K, not configured K (PR #284 r7)', () => {
+    // Regression for PR #284 r7 Copilot review: previously `defaultQuorumQ`
+    // was passed the CONFIGURED K, so a configured K=7 against a peer list
+    // of size 3 required `effectiveQ(defaultQuorumQ(7), effectiveK(7, 3))`
+    // = `effectiveQ(4, 3)` = 3 -- i.e. ALL 3 reachable peers had to agree,
+    // losing the one-fault tolerance the formula targets. The fix passes
+    // the effective K to `defaultQuorumQ`, so the default Q tracks the
+    // actual quorum size in use.
+    //
+    // To prove the default-Q derivation: arrange a setup where exactly
+    // `defaultQuorumQ(effective K)` peers vote the same hash and the rest
+    // do not respond. Under the fix, the agreeing minority crosses the
+    // (lower) threshold and quorum passes. Under the bug, the threshold is
+    // higher and quorum fails. The tests below use `q: undefined` so the
+    // default kicks in.
+    test('configured K=7 but only 3 peers: effective K=3, default Q=2 (was 4 with bug)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) => {
+        // p1 + p2 vote X (2 votes = strict-majority for K=3); p3 times out.
+        // Under the BUG, defaultQuorumQ(7) = 4 > 3 votes available => quorum
+        // could never pass. Under the FIX, defaultQuorumQ(3) = 2 votes
+        // required => quorum passes.
+        return peer === 'p3' ? null : HASH_X;
+      });
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 7 /* q: undefined => derive from effective K */ },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      expect(result.winningHashHex).toBe(HASH_X_HEX);
+      expect(result.narrowedPeers).toEqual(['p1', 'p2']);
+    });
+
+    test('configured K=3 with 3 peers: default Q=2 (unchanged from previous behaviour)', async () => {
+      // Sanity: the canonical configured-K matches-effective-K case still
+      // resolves to defaultQuorumQ(3) = 2. The bug only fired when
+      // configured K > peers.length.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) => {
+        return peer === 'p3' ? null : HASH_X;
+      });
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      expect(result.narrowedPeers).toEqual(['p1', 'p2']);
+    });
+
+    test('configured K=5 with 5 peers: default Q=3 (unchanged)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3', 'p4', 'p5'];
+      probeMock.mockImplementation(async (peer: TestPeer) => {
+        // 3 vote X (strict majority of 5), 2 time out.
+        return peer === 'p4' || peer === 'p5' ? null : HASH_X;
+      });
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 5 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      expect(result.narrowedPeers).toEqual(['p1', 'p2', 'p3']);
+    });
+
+    test('configured K=7 with 7 peers: default Q=4 (unchanged)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
+      probeMock.mockImplementation(async (peer: TestPeer) => {
+        // 4 vote X (strict majority of 7), 3 time out.
+        return ['p5', 'p6', 'p7'].includes(peer) ? null : HASH_X;
+      });
+
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 7 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+      expect(result.narrowedPeers).toEqual(['p1', 'p2', 'p3', 'p4']);
+    });
+
+    test('explicit Q is honoured (??-fallback no-op): configured K=7, 3 peers, explicit Q=3 still requires all 3', async () => {
+      // When the operator explicitly sets `loadQuorumQ`, the `??` fallback
+      // does not fire and the explicit value flows through `effectiveQ`'s
+      // `[1, k]` clamp. Verify the fix did not accidentally clamp the
+      // explicit value too aggressively. With explicit Q=3 and effective
+      // K=3, all 3 peers must agree.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockImplementation(async (peer: TestPeer) => {
+        return peer === 'p3' ? null : HASH_X;
+      });
+
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 7, q: 3 },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      // 2 votes available but 3 required => insufficient-responses.
+      expect((err as LoadQuorumFailedError).reason).toBe(
+        'insufficient-responses',
+      );
+    });
+  });
 });

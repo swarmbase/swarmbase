@@ -112,7 +112,6 @@ export async function runLoadQuorum<T>(opts: {
     return { skipped: true };
   }
   const configuredK = config?.k ?? 3;
-  const configuredQ = config?.q ?? defaultQuorumQ(configuredK);
   const allowSinglePeer = config?.allowSinglePeer ?? false;
 
   // Validate `loadQuorumK >= 1` up-front. A `configuredK <= 0` would
@@ -136,6 +135,17 @@ export async function runLoadQuorum<T>(opts: {
   }
 
   const k = effectiveK(configuredK, peers.length);
+  // Compute the default Q from the EFFECTIVE K (after clamping against the
+  // known peer count), not the CONFIGURED K. With configured K=7 but only
+  // 3 peers reachable, `defaultQuorumQ(7) = 4` but `effectiveK(7, 3) = 3`,
+  // so `effectiveQ(4, 3) = 3` would require ALL 3 peers to agree -- losing
+  // the one-fault tolerance the formula is meant to provide. Deriving the
+  // default from `k` (effective) gives `defaultQuorumQ(3) = 2`, which
+  // tolerates one non-vote among the 3 reachable peers. When the operator
+  // explicitly set `loadQuorumQ`, the `??` is a no-op and the explicit
+  // value flows through `effectiveQ`'s `[1, k]` clamp as before. See PR
+  // #284 r7 Copilot review.
+  const configuredQ = config?.q ?? defaultQuorumQ(k);
   const q = effectiveQ(configuredQ, k);
 
   if (k === 0) {
