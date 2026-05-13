@@ -1,8 +1,13 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    // Match the base tsconfig's Node16 resolution so the ESM-style
+    // `./foo.js` specifiers used in src/ and tests typecheck correctly.
+    // ts-jest still emits CommonJS at the transformer level because
+    // jest.config.cjs sets `useESM: false`, so we don't need the
+    // tsconfig `module` to be CommonJS here.
+    "module": "Node16",
+    "moduleResolution": "node16",
     "noEmit": true
   },
   "include": ["src"],

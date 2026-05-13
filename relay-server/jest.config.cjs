@@ -11,9 +11,16 @@ module.exports = {
       'ts-jest',
       {
         tsconfig: '<rootDir>/tsconfig.test.json',
-        // ts-jest does not need ESM here because we override the test
-        // tsconfig to emit CommonJS.
+        // We transform sources to CommonJS at the jest layer
+        // (useESM: false). The test tsconfig keeps
+        // `module: Node16` / `moduleResolution: node16` so the
+        // ESM-style `./foo.js` specifiers used across the codebase
+        // typecheck correctly. ts-jest's "hybrid module kind"
+        // warning (TS151002) is intentionally suppressed: enabling
+        // `isolatedModules` would force ts-jest to emit real ESM
+        // and break the CJS jest runtime.
         useESM: false,
+        diagnostics: { ignoreCodes: [151002] },
       },
     ],
   },
