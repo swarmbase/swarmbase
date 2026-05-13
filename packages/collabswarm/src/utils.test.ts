@@ -240,7 +240,18 @@ describe('crypto key utilities', () => {
     const key = await generateAndExportSymmetricKey();
     expect(key).toBeDefined();
     expect(key.kty).toBe('oct');
-    expect(key.alg).toBe('A256GCM');
+    // Note: native Web Crypto and some polyfills populate `alg` (e.g. "A256GCM")
+    // on the exported JWK, but @peculiar/webcrypto >=1.7.0 leaves it as an empty
+    // string. Validate via re-import instead of inspecting the JWK header.
+    const reimported = await crypto.subtle.importKey(
+      'jwk',
+      key,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    expect(reimported.algorithm.name).toBe('AES-GCM');
+    expect((reimported.algorithm as AesKeyAlgorithm).length).toBe(256);
   });
 
   test('should import HMAC key from raw data', async () => {
