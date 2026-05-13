@@ -626,7 +626,11 @@ export class LoadQuorumFailedError extends Error {
    *  failure case so callers can branch on the specific failure mode.
    *  See {@link LoadQuorumFailedReason} for the full set. */
   public readonly reason: LoadQuorumFailedReason;
-  /** Number of peers that actually returned a usable hash. */
+  /** Number of peers that returned any non-null probe result — both
+   *  tip-hash votes AND the `'unknown-doc'` sentinel. Timeouts and
+   *  non-disclaim declines do NOT increment this. Used to distinguish
+   *  `'insufficient-responses'` (< Q peers responded at all) from
+   *  `'no-majority'` (≥ Q responded but no single bucket reached Q). */
   public readonly respondingCount: number;
   /** The effective Q threshold the loader was holding peers to. */
   public readonly requiredQ: number;

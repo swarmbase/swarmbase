@@ -680,8 +680,7 @@ describe('collectReferencedAncestors (frontier helper for initial-load quorum)',
     const tree: Node = {
       kind: docKind,
       change: 'payload-A',
-      // Cast to bypass the type narrowing on `false` literal for tests.
-      children: false as unknown as Record<string, Node>,
+      children: crdtChangeNodeDeferred as unknown as Record<string, Node>,
     };
     const out = new Set<string>();
     expect(() =>
