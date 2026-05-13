@@ -707,17 +707,29 @@ describe('AutomergeJSONSerializer', () => {
   });
 
   // Round-trip for the initial-load quorum tip-set hash (#189 §5.4.2).
-  test('serializeSyncMessage/deserializeSyncMessage preserves tipsHash (quorum)', () => {
-    const hash = new Uint8Array(32);
-    for (let i = 0; i < hash.length; i++) hash[i] = (i * 7 + 3) & 0xff;
-    const message = {
-      documentId: 'quorum-doc',
-      tipsHash: hash,
-    };
-    const wire = serializer.serializeSyncMessage(message);
-    const deserialized = serializer.deserializeSyncMessage(wire);
-    expect(deserialized.tipsHash).toEqual(hash);
-  });
+  // Table-driven: covers a deterministic-pattern hash and the all-zeros
+  // boundary (base64 leading-zero handling is a common regression source).
+  test.each([
+    [
+      'deterministic-pattern',
+      (() => {
+        const h = new Uint8Array(32);
+        for (let i = 0; i < h.length; i++) h[i] = (i * 7 + 3) & 0xff;
+        return h;
+      })(),
+    ],
+    ['all-zeros', new Uint8Array(32)],
+  ])(
+    'serializeSyncMessage/deserializeSyncMessage preserves tipsHash (quorum, %s)',
+    (_label, hash) => {
+      const wire = serializer.serializeSyncMessage({
+        documentId: 'quorum-doc',
+        tipsHash: hash,
+      });
+      const deserialized = serializer.deserializeSyncMessage(wire);
+      expect(deserialized.tipsHash).toEqual(hash);
+    },
+  );
 
   test('deserializeSyncMessage omits tipsHash when absent on wire', () => {
     const message = { documentId: 'no-quorum-doc' };
@@ -726,6 +738,9 @@ describe('AutomergeJSONSerializer', () => {
     expect(deserialized.tipsHash).toBeUndefined();
   });
 
+  // Left as a standalone `test` (not folded into the round-trip table) because
+  // it builds a malformed wire payload via `buildWire` to exercise the
+  // deserialize-side validator -- different setup from the round-trip cases.
   test('deserializeSyncMessage rejects non-string tipsHash', () => {
     const wire = buildWire({
       documentId: 'doc',
@@ -734,6 +749,43 @@ describe('AutomergeJSONSerializer', () => {
     expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
       /tipsHash/,
     );
+  });
+
+  // Quorum frontier binding wire-encoding (#186 / #189 §5.4.2). The `tips`
+  // field carries an explicit string[] of CIDs on load responses so the
+  // loader can bind the served state to the responder's frontier hash.
+  test.each([
+    ['typical', ['bafy1', 'bafy2', 'bafy3']],
+    ['single-tip', ['bafyOnly']],
+    ['empty-frontier', [] as string[]],
+  ])(
+    'serializeSyncMessage/deserializeSyncMessage preserves tips (%s)',
+    (_label, tips) => {
+      const wire = serializer.serializeSyncMessage({
+        documentId: 'frontier-doc',
+        tips,
+      });
+      const deserialized = serializer.deserializeSyncMessage(wire);
+      expect(deserialized.tips).toEqual(tips);
+    },
+  );
+
+  test('deserializeSyncMessage omits tips when absent on wire', () => {
+    const wire = serializer.serializeSyncMessage({
+      documentId: 'no-frontier-doc',
+    });
+    const deserialized = serializer.deserializeSyncMessage(wire);
+    expect(deserialized.tips).toBeUndefined();
+  });
+
+  test('deserializeSyncMessage rejects non-array tips', () => {
+    const wire = buildWire({ documentId: 'doc', tips: 'not-an-array' });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(/tips/);
+  });
+
+  test('deserializeSyncMessage rejects non-string tips entries', () => {
+    const wire = buildWire({ documentId: 'doc', tips: ['ok', 42] });
+    expect(() => serializer.deserializeSyncMessage(wire)).toThrow(/tips/);
   });
 
   // Regression: prior to the upfront object guard, a malformed peer payload
