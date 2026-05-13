@@ -650,9 +650,19 @@ export class Collabswarm<
             // Q-Byzantine threshold the rest of the quorum gate already
             // tolerates. See `decideLoadQuorum` for the tally semantics
             // and PR #284 r16 Copilot review for the original bug report.
-            console.warn(
-              `Shared tip-advertise handler: no document registered for "${request.documentId}"`,
-            );
+            //
+            // Information-disclosure tradeoff (PR #284 r27): replying with
+            // `0xff` lets any peer that can dial this node learn whether
+            // `documentId` is registered here. We accept this because the
+            // quorum protocol REQUIRES a distinguishable "unknown-doc"
+            // signal to allow new-document creation on an existing swarm;
+            // suppressing the signal would block legitimate `open()` calls
+            // for fresh paths. Two mitigations are wired in: (1) no
+            // unauthenticated-probe log line so attacker-controlled
+            // `documentId` values don't reach the host log, and (2) the
+            // sentinel is a single byte with no per-document content, so
+            // it leaks only the existence bit -- nothing about contents,
+            // membership, or history.
             await stream.sink([
               new Uint8Array([0xff]),
             ] as Iterable<Uint8Array>);

@@ -2281,10 +2281,12 @@ export class CollabswarmDocument<
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
   ): Promise<void> {
     try {
-      console.log(
-        `received tip-advertise request for ${this.documentPath}:`,
-        message,
-      );
+      // Tip-advertise runs on every `open()` from every peer that opens
+      // this document, so a per-request log line scales with mesh size.
+      // Drop the unconditional log entirely; the only field the handler
+      // would have logged is attacker-controlled (`message`), and the
+      // mismatch/unauthorized branches below already emit targeted
+      // warnings when they fail. See PR #284 r27 Copilot review.
 
       if (message.documentId !== this.documentPath) {
         console.warn(
