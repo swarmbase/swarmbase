@@ -89,6 +89,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "jest": {
     "roots": [
       "<rootDir>/src"
@@ -111,6 +114,9 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^uuid$": "<rootDir>/jest.uuid-mock.cjs"
+    }
   }
 }
