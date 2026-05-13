@@ -865,48 +865,49 @@ export class CollabswarmDocument<
   }
 
   /**
-   * Returns this peer's current frontier as a plain string[] of CIDs —
-   * "what tips would I advertise to a fresh `tipAdvertiseV1` probe right
-   * now".
+   * Returns this peer's structural local-DAG frontier as a plain
+   * string[] of CIDs -- the heads of EVERYTHING this peer has seen.
+   *
+   * NOTE: this is NOT the value advertised in a `tipAdvertiseV1` probe
+   * and NOT the value the responder commits to on a v3 load response.
+   * Both of those use `_servedFrontier()` instead -- the heads of the
+   * change tree this peer can actually ship in a single load round.
+   * See `_servedFrontier()`'s docstring for why the two differ (short
+   * version: a load response only carries the tree rooted at
+   * `_lastSyncMessage.changeId`, so concurrent local heads that aren't
+   * cross-linked into that tree don't appear in what's served).
+   *
+   * `_currentFrontier()` is retained for callers that need the
+   * structural truth of "what heads do I have locally?" rather than
+   * "what would I advertise / serve?":
+   *
+   *   - `_makeChange()` cross-link selection (so a new local change
+   *     can reference concurrent remote heads that landed since the
+   *     last cached sync message).
+   *   - Diagnostics / introspection paths.
    *
    * The frontier is the set of heads of the local merged-changes DAG:
-   * CIDs that this peer has seen but that no other change references as
-   * a parent or cross-link target. Computed as `_hashes \
-   * _referencedAncestors`. See the `_referencedAncestors` field docstring
-   * for why this matters: it is the part of the local DAG that converges
-   * across honest peers regardless of differing sync histories or pruning
-   * levels, so two peers in the same logical state produce identical
-   * `tipsHash` digests.
-   *
-   * Returning the full `_hashes` set (the prior buggy implementation)
-   * silently breaks the initial-load quorum gate -- it includes every
-   * referenced ancestor, so two honest peers with the same heads but
-   * differing ancestor visibility (e.g. one loaded from a snapshot, the
-   * other has the full history) produce different tip-set hashes and
-   * fail quorum even though they agree on state.
+   * CIDs that this peer has seen but that no other change references
+   * as a parent or cross-link target. Computed as `_hashes \
+   * _referencedAncestors`. See the `_referencedAncestors` field
+   * docstring for why this matters: it is the part of the local DAG
+   * that converges across honest peers regardless of differing sync
+   * histories or pruning levels.
    *
    * Edge cases:
    *   - Empty DAG (founding member, brand-new document): `_hashes` is
-   *     empty, the returned frontier is `[]`. `tipsHash([])` is the
-   *     SHA-256 of the empty string, a deterministic value all honest
-   *     peers compute identically -- quorum cleanly bootstraps.
-   *   - Just-loaded from snapshot: `_hashes` holds the snapshot boundary
-   *     CID (and any post-snapshot changes). The boundary CID is NOT in
-   *     `_referencedAncestors` (no in-tree node points back through it),
-   *     so it correctly appears as a head along with any post-snapshot
-   *     leaves -- which is exactly what the responder would serve.
+   *     empty, the returned frontier is `[]`.
+   *   - Just-loaded from snapshot: `_hashes` holds the snapshot
+   *     boundary CID (and any post-snapshot changes). The boundary CID
+   *     is NOT in `_referencedAncestors`, so it correctly appears as a
+   *     head.
    *   - Pruned ancestors: irrelevant. Pruning removes CIDs from the
    *     in-memory change tree but leaves them in `_hashes` for dedup;
-   *     they were already in `_referencedAncestors` (recorded when the
-   *     tree contained them), so they remain marked as non-heads.
+   *     they were already in `_referencedAncestors`, so they remain
+   *     marked as non-heads.
    *
-   * Wrapped in a helper so the load-response handlers
-   * (`handleLoadRequestData`, `handleSnapshotLoadRequestData`) and the
-   * tip-advertise handler (`handleTipAdvertiseRequestData`) all hit the
-   * same canonical primitive -- the probe-then-load round-trip binds
-   * against a byte-identical tip set. Returns a fresh array so callers
-   * can't mutate internal state; `tipsHash` sorts independently, so we
-   * don't sort here.
+   * Returns a fresh array so callers can't mutate internal state;
+   * `tipsHash` sorts independently, so we don't sort here.
    *
    * @internal
    */
@@ -3122,10 +3123,18 @@ export class CollabswarmDocument<
     // behaviour.
     //
     // `winningHashHex` (set when quorum passes) is also used below as the
-    // post-load binding check: after `_sendLoadRequestAndSync` applies the
-    // served state, the recomputed `tipsHash(this._hashes)` MUST equal
-    // `winningHashHex`, otherwise an agreeing peer voted for one tip set and
-    // served a different one (Byzantine equivocation).
+    // per-peer binding check inside `_sendLoadRequestAndSync`: BEFORE
+    // applying the served state, the loader derives the served frontier
+    // structurally from the responder's payload via
+    // `computeServedFrontier(message.changeId, message.changes,
+    // message.snapshot?.lastChangeNodeCID)`, hashes it, and compares to
+    // `winningHashHex`. If they disagree, an agreeing peer voted for one
+    // tip set and served a different one (Byzantine equivocation): the
+    // peer is recorded as a bind failure and the loader retries the next
+    // agreeing peer without ever mutating in-memory state. The check is
+    // intentionally derived from the served payload (not post-sync
+    // `_hashes`) so a Byzantine peer cannot poison the in-memory document
+    // before the binding decision is made. See PR #284 r7 Copilot review.
     // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
     // on the assumption it identified a "founding-member" brand-new document.
     // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
