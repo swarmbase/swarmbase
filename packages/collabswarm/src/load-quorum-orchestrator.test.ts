@@ -630,6 +630,13 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     // The probe must NOT have been issued -- we refuse before talking to
     // the lone peer.
     expect(probeMock).not.toHaveBeenCalled();
+    // Surfaced `requiredQ` is the load-bearing policy threshold (2 -- the
+    // smallest cohort that gives any Byzantine fault tolerance), NOT the
+    // numeric `defaultQuorumQ(1) = 1` that would falsely suggest the
+    // lone peer's vote was "almost enough". See PR #284 r25 Copilot
+    // review.
+    expect((err as LoadQuorumFailedError).requiredQ).toBe(2);
+    expect((err as LoadQuorumFailedError).respondingCount).toBe(0);
   });
 
   test('quorum disabled: returns { skipped: true } so caller falls through to legacy load', async () => {

@@ -219,14 +219,26 @@ export async function runLoadQuorum<T>(opts: {
   }
 
   if (k === 1 && !allowSinglePeer) {
-    // Only one peer reachable but quorum requires Q>=2 by default. Without
-    // a second opinion we cannot distinguish "honest solo peer" from
-    // "malicious peer serving a forged state". Refuse.
+    // Only one peer reachable AND the operator did not opt into the
+    // single-peer pass-through. With a lone peer we cannot distinguish
+    // "honest solo peer" from "malicious peer serving a forged state",
+    // so we refuse on policy grounds rather than on the BFT majority
+    // formula -- with `effectiveK = 1`, `defaultQuorumQ(1) = 1`, so
+    // surfacing the computed `q` (which is 1) as `requiredQ` would be
+    // misleading: it would suggest "the lone peer's vote was sufficient
+    // numerically but happened not to land", when the truth is "we
+    // explicitly refuse to trust any single peer regardless of how it
+    // voted". Surface the load-bearing policy requirement (`requiredQ =
+    // 2`, the smallest cohort that gives any Byzantine fault tolerance)
+    // so the error message reads as a policy refusal, not a vote-count
+    // shortfall. Operators who genuinely want single-peer behaviour
+    // must set `loadQuorumAllowSinglePeer: true` explicitly. See PR
+    // #284 r25 Copilot review.
     throw new LoadQuorumFailedError({
       documentPath,
       reason: 'insufficient-responses',
       respondingCount: 0,
-      requiredQ: q,
+      requiredQ: 2,
       agreement: new Map(),
     });
   }
