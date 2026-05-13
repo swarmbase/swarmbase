@@ -214,6 +214,73 @@ describe('BeeKEM', () => {
     });
   });
 
+  describe('findLeafByPublicKey', () => {
+    test('finds the founder leaf by its own public key', async () => {
+      const alice = new BeeKEM();
+      const aliceKeys = await generateECDHKeyPair();
+      await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+
+      // CryptoKey input
+      expect(await alice.findLeafByPublicKey(aliceKeys.publicKey)).toBe(0);
+
+      // Uint8Array input (raw SEC1)
+      const rawAlice = new Uint8Array(
+        await crypto.subtle.exportKey('raw', aliceKeys.publicKey),
+      );
+      expect(await alice.findLeafByPublicKey(rawAlice)).toBe(0);
+    });
+
+    test('finds a joined member by their public key after addMember', async () => {
+      const alice = new BeeKEM();
+      const aliceKeys = await generateECDHKeyPair();
+      await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+
+      const bobKeys = await generateECDHKeyPair();
+      await alice.addMember(bobKeys.publicKey);
+
+      const charlieKeys = await generateECDHKeyPair();
+      await alice.addMember(charlieKeys.publicKey);
+
+      // Bob is at leaf position 1 => node index 2
+      expect(await alice.findLeafByPublicKey(bobKeys.publicKey)).toBe(2);
+      // Charlie is at leaf position 2 => node index 4
+      expect(await alice.findLeafByPublicKey(charlieKeys.publicKey)).toBe(4);
+    });
+
+    test('returns undefined for an unknown public key', async () => {
+      const alice = new BeeKEM();
+      const aliceKeys = await generateECDHKeyPair();
+      await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+      const bobKeys = await generateECDHKeyPair();
+      await alice.addMember(bobKeys.publicKey);
+
+      const strangerKeys = await generateECDHKeyPair();
+      expect(
+        await alice.findLeafByPublicKey(strangerKeys.publicKey),
+      ).toBeUndefined();
+    });
+
+    test('returns undefined after the leaf is blanked via removeMember', async () => {
+      const alice = new BeeKEM();
+      const aliceKeys = await generateECDHKeyPair();
+      await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+
+      const bobKeys = await generateECDHKeyPair();
+      await alice.addMember(bobKeys.publicKey);
+
+      // Pre-removal: Bob's leaf is locatable.
+      expect(await alice.findLeafByPublicKey(bobKeys.publicKey)).toBe(2);
+
+      // Blank Bob's leaf. After this, the leaf has publicKey === null
+      // and the lookup must NOT return its index -- otherwise a caller
+      // would think a revoked reader is still in the tree.
+      await alice.removeMember(2);
+      expect(
+        await alice.findLeafByPublicKey(bobKeys.publicKey),
+      ).toBeUndefined();
+    });
+  });
+
   describe('processPathUpdate', () => {
     test('Alice processes Bob update and both derive the same root secret', async () => {
       // Alice creates the group

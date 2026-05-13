@@ -456,6 +456,66 @@ export class BeeKEM {
   }
 
   /**
+   * Find the node index of the leaf whose public key matches `publicKey`,
+   * or `undefined` if no such (non-blanked) leaf exists.
+   *
+   * Used by `CollabswarmDocument.removeReader` as the canonical source
+   * of truth for leaf-index lookup during revocation: the writer's
+   * in-memory `_readerLeafIndices` cache is wiped on process restart,
+   * so revocation must be able to recover the leaf assignment from
+   * tree state alone.
+   *
+   * Comparison is done over the raw exported ECDH public key bytes:
+   * - `CryptoKey` inputs are exported via `crypto.subtle.exportKey('raw', ...)`
+   *   so the caller doesn't need to pre-export.
+   * - `Uint8Array` inputs are compared directly (assumed to be raw
+   *   SEC1-uncompressed P-256 bytes, the same shape stored on the wire
+   *   and accepted by `addMember` / `_registerBeeKEMReader`).
+   *
+   * Blanked leaves (publicKey === null) are skipped: their slot index
+   * is meaningless to a "find this member" query, and a match against
+   * a blanked leaf would let stale public-key references re-resolve to
+   * an already-removed slot.
+   *
+   * Returns the **node index** (even-indexed tree slot), which is the
+   * form `removeMember` consumes. Callers that need the dense
+   * leaf-position form should convert via `TreeMath.nodeToLeafIndex`.
+   */
+  async findLeafByPublicKey(
+    publicKey: CryptoKey | Uint8Array,
+  ): Promise<number | undefined> {
+    let target: Uint8Array;
+    if (publicKey instanceof Uint8Array) {
+      target = publicKey;
+    } else {
+      target = new Uint8Array(
+        await crypto.subtle.exportKey('raw', publicKey),
+      );
+    }
+
+    for (let leafPos = 0; leafPos < this._numLeaves; leafPos++) {
+      const nodeIndex = TreeMath.leafToNodeIndex(leafPos);
+      const node = this._nodes.get(nodeIndex);
+      if (!node || node.type !== 'leaf' || !node.publicKey) {
+        continue;
+      }
+      const leafRaw = new Uint8Array(
+        await crypto.subtle.exportKey('raw', node.publicKey),
+      );
+      if (leafRaw.byteLength !== target.byteLength) continue;
+      let match = true;
+      for (let i = 0; i < leafRaw.byteLength; i++) {
+        if (leafRaw[i] !== target[i]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return nodeIndex;
+    }
+    return undefined;
+  }
+
+  /**
    * Remove blanked leaf nodes and their parent path nodes from the tree
    * when an entire subtree is blanked. This reclaims memory for nodes
    * that can never contribute to key derivation.
