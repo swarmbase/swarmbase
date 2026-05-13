@@ -549,13 +549,21 @@ export function formatConfigValue(value: unknown): string {
   if (typeof value === 'number' && !Number.isFinite(value)) {
     return String(value); // 'NaN' | 'Infinity' | '-Infinity'
   }
+  // `JSON.stringify` throws on BigInt and circular references; fall back to
+  // `String(value)` so an exotic operator value yields a useful error
+  // message instead of a raw `TypeError` escaping the validator.
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
   // `JSON.stringify(undefined)` returns `undefined` (not a string), and
   // the function applies a structured replacer to `function` values that
   // also yields `undefined`. Coerce the result so callers that read this
   // in an error message always get a string (avoiding "got undefined")
   // and so strict-mode TypeScript callers see a well-typed `string`
-  // return value. See PR #284 r18 Copilot review.
-  const json = JSON.stringify(value);
+  // return value.
   return json === undefined ? String(value) : json;
 }
 

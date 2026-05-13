@@ -2870,11 +2870,15 @@ export class CollabswarmDocument<
                 try {
                   const cid = CID.parse(cidStr);
                   // Force the blockstore to retrieve the block. Helia
-                  // validates content vs CID on `get`; reading the
+                  // validates content vs CID on `get`; draining the
                   // returned async-iterable triggers the actual fetch.
-                  await readUint8Iterable(
-                    this.swarm.heliaNode.blockstore.get(cid),
-                  );
+                  // Discard the chunks (no concat) — we only need
+                  // content-validation here, not the bytes.
+                  for await (const _chunk of this.swarm.heliaNode.blockstore.get(
+                    cid,
+                  )) {
+                    void _chunk;
+                  }
                 } catch {
                   missingCids.push(cidStr);
                 }

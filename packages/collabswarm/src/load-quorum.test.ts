@@ -820,6 +820,26 @@ describe('formatConfigValue (PR #284 r10 issue #1: non-finite numbers render as 
     expect(formatConfigValue(true)).toBe('true');
     expect(formatConfigValue(false)).toBe('false');
   });
+
+  // `JSON.stringify` raises a `TypeError` on BigInt values and another on
+  // any object that contains a cycle. Before guarding with try/catch those
+  // raw errors would escape the validator and surface to operators as a
+  // bare `TypeError`, masking the actual config-validation message. The
+  // helper now catches and falls back to `String(value)` so the surrounding
+  // `LoadQuorumFailedError(invalid-config, ...)` message stays well-formed.
+  test('BigInt falls back to String() instead of throwing TypeError', () => {
+    expect(() => formatConfigValue(BigInt(42))).not.toThrow();
+    expect(formatConfigValue(BigInt(42))).toBe('42');
+  });
+
+  test('circular object falls back to String() instead of throwing', () => {
+    const cyclic: Record<string, unknown> = { name: 'cycle' };
+    cyclic['self'] = cyclic;
+    expect(() => formatConfigValue(cyclic)).not.toThrow();
+    // `String({})` is `'[object Object]'`; we only pin that the helper
+    // returns *some* string and does not crash on a cycle.
+    expect(typeof formatConfigValue(cyclic)).toBe('string');
+  });
 });
 
 describe('defaultQuorumQ (strict-majority formula, #189 §5.4.2)', () => {
