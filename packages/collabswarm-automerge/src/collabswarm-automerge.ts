@@ -28,6 +28,7 @@ import {
   KeychainProvider,
   LRUCache,
   serializeChangeNodeForJSON,
+  TIPS_HASH_LENGTH,
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
@@ -772,7 +773,13 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     }
     // Initial-load quorum tip-set hash (#189 §5.4.2). Decoded from base64
     // on the way back to Uint8Array; mirrors the serializer above.
-    // Untrusted input -- reject anything that isn't a string.
+    // Untrusted input -- reject anything that isn't a string AND enforce
+    // the fixed-width SHA-256 digest length (32 bytes) at the wire
+    // boundary so malformed values never reach the quorum decision
+    // logic. `tipsHash` is used as a Map key in `decideLoadQuorum`; a
+    // wrong-length value could either silently mis-bucket against
+    // legitimate votes or produce a partial-hash collision under a
+    // hostile peer. Reject on the way in. See PR #284 r24 Copilot review.
     let tipsHash: Uint8Array | undefined;
     if (raw.tipsHash !== undefined) {
       if (typeof raw.tipsHash !== 'string') {
@@ -783,6 +790,12 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         );
       }
       tipsHash = Base64.toUint8Array(raw.tipsHash);
+      if (tipsHash.length !== TIPS_HASH_LENGTH) {
+        throw new Error(
+          `Invalid sync message: 'tipsHash' must decode to exactly ` +
+            `${TIPS_HASH_LENGTH} bytes (SHA-256 digest); got ${tipsHash.length} bytes`,
+        );
+      }
     }
     // Initial-load quorum frontier binding (#186 / #189 §5.4.2). Untrusted
     // input -- reject non-arrays or arrays containing non-strings up front

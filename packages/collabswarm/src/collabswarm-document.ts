@@ -218,6 +218,25 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
 const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 6 * 1024;
 
 /**
+ * Bound on the number of parallel Helia `blockstore.get(cid)` fetches
+ * issued by the quorum-bound load pre-fetch (`_sendLoadRequestAndSync`).
+ *
+ * A bound is needed because the served `changes` tree can be large
+ * under an adversary-shaped response (the agreeing peer voted for the
+ * expected frontier but stuffed the tree with many additional CIDs that
+ * must still be retrieved to satisfy the post-sync coverage check).
+ * Without a cap, the prefetch would issue every fetch in parallel and
+ * each fetch holds a libp2p bitswap stream + buffers the retrieved
+ * payload via `readUint8Iterable`; for very large responses this can
+ * exhaust per-connection stream quotas and pressure memory. The cap is
+ * chosen large enough to overlap WAN-latency-bound bitswap fetches and
+ * keep the load fast (8 inflight is comfortably more than typical mesh
+ * peer counts) but small enough to bound peak resource use on the
+ * loader. See PR #284 r24 Copilot review.
+ */
+const LOAD_PREFETCH_MAX_CONCURRENCY = 8;
+
+/**
  * Module-private sentinel thrown by `_sendLoadRequestAndSync` when the
  * quorum frontier binding check fails on a single peer's load response
  * (either the responder omitted `tips` or the served `tips` hashed to a
@@ -2822,28 +2841,48 @@ export class CollabswarmDocument<
           // `bind-check-failed-all-agreeing-peers` if every peer
           // exhausts.
           //
-          // Run in parallel via `Promise.allSettled` so a single slow
-          // peer cannot pessimize the load. Block bytes are cached
-          // locally on success; the subsequent `sync()` call only does
-          // local lookups for those CIDs and applies them.
+          // Run via a bounded worker pool so a single slow peer cannot
+          // pessimize the load AND a large load response (many CIDs)
+          // cannot trigger a burst of parallel `blockstore.get()` fetches
+          // that exhaust libp2p/Helia per-connection stream quotas or
+          // pressure memory by buffering N inline payloads at once. The
+          // previous implementation used `Promise.allSettled` over the
+          // full `expectedCids` list with no concurrency cap, which
+          // worked fine for typical loads but scaled linearly with the
+          // worst-case adversary-shaped response. `LOAD_PREFETCH_MAX_CONCURRENCY`
+          // (8) is a balance: large enough to overlap WAN-latency-bound
+          // bitswap fetches, small enough to bound peak resource use on
+          // the loader. Block bytes are cached locally on success; the
+          // subsequent `sync()` call only does local lookups for those
+          // CIDs and applies them. See PR #284 r24 Copilot review.
           if (expectedCids.length > 0) {
-            const prefetchResults = await Promise.allSettled(
-              expectedCids.map(async (cidStr) => {
-                const cid = CID.parse(cidStr);
-                // Force the blockstore to retrieve the block. Helia
-                // validates content vs CID on `get`; the read of the
-                // returned async-iterable triggers the actual fetch.
-                await readUint8Iterable(
-                  this.swarm.heliaNode.blockstore.get(cid),
-                );
-              }),
-            );
             const missingCids: string[] = [];
-            for (let i = 0; i < prefetchResults.length; i++) {
-              if (prefetchResults[i]!.status === 'rejected') {
-                missingCids.push(expectedCids[i]!);
+            let nextIndex = 0;
+            const workerCount = Math.min(
+              LOAD_PREFETCH_MAX_CONCURRENCY,
+              expectedCids.length,
+            );
+            const worker = async (): Promise<void> => {
+              while (true) {
+                const i = nextIndex++;
+                if (i >= expectedCids.length) return;
+                const cidStr = expectedCids[i]!;
+                try {
+                  const cid = CID.parse(cidStr);
+                  // Force the blockstore to retrieve the block. Helia
+                  // validates content vs CID on `get`; reading the
+                  // returned async-iterable triggers the actual fetch.
+                  await readUint8Iterable(
+                    this.swarm.heliaNode.blockstore.get(cid),
+                  );
+                } catch {
+                  missingCids.push(cidStr);
+                }
               }
-            }
+            };
+            await Promise.all(
+              Array.from({ length: workerCount }, () => worker()),
+            );
             if (missingCids.length > 0) {
               console.warn(
                 `[${this.documentPath}] Quorum-bound load pre-fetch ` +

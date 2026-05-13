@@ -751,6 +751,25 @@ describe('AutomergeJSONSerializer', () => {
     );
   });
 
+  // PR #284 r24 Copilot review: `tipsHash` is defined as a fixed 32-byte
+  // SHA-256 digest; the deserializer previously accepted any base64-decoded
+  // length and let downstream quorum logic mis-bucket the value. Reject
+  // wrong-length payloads at the wire boundary.
+  test.each([
+    ['empty', new Uint8Array(0)],
+    ['short (16 bytes)', new Uint8Array(16)],
+    ['long (64 bytes)', new Uint8Array(64)],
+  ])(
+    'deserializeSyncMessage rejects tipsHash that is not exactly 32 bytes (%s)',
+    (_label, malformedHash) => {
+      const b64 = Buffer.from(malformedHash).toString('base64');
+      const wire = buildWire({ documentId: 'doc', tipsHash: b64 });
+      expect(() => serializer.deserializeSyncMessage(wire)).toThrow(
+        /tipsHash.*32 bytes/,
+      );
+    },
+  );
+
   // Quorum frontier binding wire-encoding (#186 / #189 §5.4.2). The `tips`
   // field carries an explicit string[] of CIDs on load responses so the
   // loader can bind the served state to the responder's frontier hash.
