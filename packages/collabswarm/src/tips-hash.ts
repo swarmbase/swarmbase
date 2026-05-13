@@ -36,34 +36,51 @@ export const TIPS_HASH_LENGTH = 32;
  * Compute the canonical tip-set hash for a document's set of known change
  * CIDs.
  *
- * # Input contract: pass the FRONTIER, NOT the full observed-CID set
+ * # Input contract: pass the SERVED FRONTIER, NOT `_hashes` or the local DAG frontier
  *
- * The caller **MUST** pass the canonical frontier (heads) of the local
- * change DAG -- the change-block CIDs that no other change in the local
- * DAG references as a parent or cross-link target. The reference
- * implementation is `CollabswarmDocument._currentFrontier()` in
- * `collabswarm-document.ts`, which computes this as `_hashes \
- * _referencedAncestors`.
+ * The caller **MUST** pass the **served frontier** -- the heads of the
+ * change tree the responder would actually ship in a `documentLoadV3`
+ * / `snapshotLoadV3` round. The reference implementation is
+ * `CollabswarmDocument._servedFrontier()` in `collabswarm-document.ts`,
+ * which computes this via `computeServedFrontier` over
+ * `_lastSyncMessage.changes` (the served tree) plus
+ * `_latestSnapshot?.lastChangeNodeCID` (the snapshot boundary, if any).
  *
- * Implementers **MUST NOT** pass the full set of observed/merged CIDs
- * (e.g. a peer's `_hashes` field directly). Two honest peers with the same
+ * # Why "served frontier" and not "current local frontier"?
+ *
+ * A peer's `_currentFrontier()` (`_hashes \ _referencedAncestors`) is the
+ * heads of EVERYTHING this peer has seen. That set is correct for "the
+ * logical state of my local document" but it is the WRONG input for
+ * `tipsHash` when used by the initial-load quorum protocol. The load
+ * response only carries ONE change tree (rooted at
+ * `_lastSyncMessage.changeId`); remote heads received via GossipSub but
+ * not yet cross-linked into a local change are in `_currentFrontier()`
+ * but NOT in the served payload. Hashing `_currentFrontier()` therefore
+ * advertises a frontier the responder cannot actually serve, and the
+ * loader's structural bind check
+ * (`computeServedFrontier(message.changes, ...)` over the received
+ * payload) hashes to a different value -- rejecting the honest peer.
+ * Round 8 of the PR #284 Copilot review caught this exact bug.
+ *
+ * # Implementer warning: do NOT hash `_hashes` directly
+ *
+ * Implementers **MUST NOT** hash the full set of observed/merged CIDs
+ * (e.g. the peer's entire `_hashes` set). Two honest peers with the same
  * logical document state can have different observed-CID sets when their
  * history depths differ (history compaction, snapshot-loads that don't
  * restore ancestor CIDs, different join times). Hashing the full set
- * causes those honest peers to produce different hashes and the
- * initial-load quorum gate (see `load-quorum.ts`) would never agree --
- * the load would fail for a state both peers actually share. Round 3 of
- * the PR #284 Copilot review caught this exact bug; the previous wording
- * of this docstring ("typically a peer's `_hashes`") was misleading and
- * has been corrected.
+ * would cause those honest peers to produce different hashes and the
+ * quorum gate (see `load-quorum.ts`) would never agree. Round 3 of the
+ * PR #284 Copilot review caught this earlier variant of the bug; the
+ * previous wording of this docstring ("typically a peer's `_hashes`")
+ * was misleading and has been corrected.
  *
- * Passing the frontier instead makes the hash deterministic across honest
- * peers with the same logical state regardless of differing pruning /
- * sync histories: two peers that have converged on the same CRDT state
- * always have the same frontier even if their internal merged-CID sets
- * differ.
+ * Passing the served frontier makes the hash deterministic across honest
+ * peers whose `_lastSyncMessage` / `_latestSnapshot` describe the same
+ * logical state -- regardless of differing pruning / sync histories or
+ * unrelated concurrent heads held only in their local DAG.
  *
- * @param hashes The canonical frontier (heads) of the local change DAG.
+ * @param hashes The served frontier (heads of the served change tree).
  *   Accepts either a `Set<string>` or a plain `string[]` (more convenient
  *   for tests). Order within the collection is irrelevant -- the
  *   implementation sorts lexicographically before hashing.

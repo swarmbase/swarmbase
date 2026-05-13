@@ -324,6 +324,105 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(lqfe.message).toMatch(/bind-check|agreeing cohort|3 peer/);
   });
 
+  test('(c4) multi-head honest responder: advertise=served frontier hash binds; loader accepts even when responder has un-served concurrent heads (PR #284 r8)', async () => {
+    // Regression for the PR #284 r8 Copilot finding: previously, an
+    // honest peer with multiple concurrent heads in `_currentFrontier()`
+    // would advertise tipsHash({H1, H2, H3}) in the probe round but
+    // only serve a tree rooted at H1 (the wire shape carries one tree).
+    // The loader's structural derivation `computeServedFrontier` over
+    // the served payload yielded {H1}, hashed differently from the
+    // advertise, and rejected the honest peer.
+    //
+    // The fix advertises the SERVED frontier (the heads of the tree
+    // this peer would actually ship), so probe and load round agree
+    // for honest responders. This test models a 3-peer cohort where
+    // all three peers have un-served concurrent heads but the same
+    // served frontier {H1}: all three vote tipsHash({H1}), all three
+    // serve a payload whose structural frontier is {H1}, and the bind
+    // check accepts.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    // Every honest peer advertises tipsHash(servedFrontier). HASH_X
+    // stands in for tipsHash({H1}) here -- the orchestrator is
+    // hash-agnostic, so we just need the value to be the same across
+    // all three peers (probe round) AND match what each peer serves
+    // on the load round.
+    probeMock.mockResolvedValue(HASH_X);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+    expect(result.winningHashHex).toBe(HASH_X_HEX);
+    expect(result.narrowedPeers).toEqual(['p1', 'p2', 'p3']);
+
+    // Each peer's load response structurally hashes to HASH_X (the
+    // served-frontier hash). Before the fix this would have been
+    // tipsHash({served-only}) while the probe was tipsHash({served +
+    // un-served}), so the bind check would have rejected. After the
+    // fix both sides agree.
+    const serveFn = jest.fn(async () => HASH_X_HEX);
+    const loadOutcome = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    });
+    expect(loadOutcome.loadedFromPeer).toBe('p1');
+    // The first honest peer in the cohort serves a matching response;
+    // no fallback to subsequent peers was needed.
+    expect(loadOutcome.attempts).toEqual(['p1']);
+  });
+
+  test('(c5) Byzantine responder that lies about heads: advertises tipsHash(claimed-full-frontier) but serves a tree hashing to served-only => bind check rejects', async () => {
+    // Complement to (c4): a peer that DIDN'T apply the PR #284 r8 fix
+    // (or is actively malicious) would compute its advertise hash
+    // over its full local DAG frontier {H1, H2, H3} but only ship H1's
+    // tree. The probe-round hash is HASH_Y_HEX (the bigger set); the
+    // load-round structural derivation is HASH_X_HEX (the served-only
+    // frontier). If two such liars somehow agreed on the same lie and
+    // narrowed the cohort, the loader's bind check still rejects --
+    // the structural derivation does not match the agreed-upon
+    // advertise. This is the safety guarantee independent of the
+    // honest-peer fix.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    // All three peers lie consistently: probe advertises HASH_Y (full
+    // local frontier), load serves a tree hashing to HASH_X (served
+    // only). Quorum agrees on HASH_Y; bind rejects on every peer.
+    probeMock.mockResolvedValue(HASH_Y);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+    expect(result.winningHashHex).toBe(HASH_Y_HEX);
+
+    // The loader's structural derivation produces HASH_X for every
+    // served payload (because the served tree only contains H1, and
+    // computeServedFrontier yields {H1}). HASH_X != HASH_Y, so every
+    // peer's bind check fails.
+    const serveFn = jest.fn(async () => HASH_X_HEX);
+    const err = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe(
+      'bind-check-failed-all-agreeing-peers',
+    );
+    expect(serveFn).toHaveBeenCalledTimes(3);
+  });
+
   test('(d) 3 peers, only 1 responds in time => LoadQuorumFailedError(insufficient-responses); no full-load attempted', async () => {
     const peers: TestPeer[] = ['p1', 'p2', 'p3'];
     probeMock.mockImplementation(async (peer: TestPeer) => {

@@ -1053,4 +1053,206 @@ describe('computeServedFrontier (PR #284 r7 served-payload frontier derivation)'
     const loaderFrontier = [...loaderHashes].filter((h) => !loaderRefs.has(h));
     expect(servedFrontier.sort()).toEqual(loaderFrontier.sort());
   });
+
+  /**
+   * Tests added for the PR #284 r8 multi-head responder fix.
+   *
+   * These tests document the exact bug Copilot flagged: an honest peer
+   * with multiple concurrent heads in `_currentFrontier()` cannot serve
+   * all of them in a single load response (the wire shape carries one
+   * tree rooted at `_lastSyncMessage.changeId`). Advertising
+   * `tipsHash(_currentFrontier())` therefore disagrees with the served
+   * payload's structural frontier and the loader's bind check rejects
+   * an honest peer.
+   *
+   * The fix advertises the served frontier
+   * (`computeServedFrontier(_lastSyncMessage.changes, _latestSnapshot)`)
+   * instead. These tests verify the structural property holds across the
+   * multi-head scenario.
+   */
+  describe('multi-head responder served-vs-current frontier divergence (PR #284 r8)', () => {
+    test('responder with concurrent heads {H1, H2, H3} serves a tree rooted at H1 only: served frontier is {H1}, NOT {H1, H2, H3}', () => {
+      // Scenario from the Copilot review:
+      //   - Peer A made one local change H1 (so `_lastSyncMessage.changeId = H1`).
+      //   - Peer A then received H2 and H3 via GossipSub from concurrent
+      //     writers. Both are in `_hashes` but neither is a child of any
+      //     node in `_lastSyncMessage.changes` (H2 and H3 do not appear
+      //     in H1's children map).
+      //   - `_currentFrontier()` = {H1, H2, H3} (all three are unreferenced).
+      //   - But the load response only ships H1's tree (the responder
+      //     has not yet made a new local change that would cross-link
+      //     H2/H3 into the served tree).
+      //
+      // The served payload's structural frontier is {H1}, which is
+      // exactly what the loader's `computeServedFrontier` derives. The
+      // fix in `_servedFrontier()` advertises tipsHash({H1}) instead of
+      // tipsHash({H1, H2, H3}), so the probe and the load round agree.
+      const servedTree: CRDTChangeNode<unknown> = {
+        kind: docKind,
+        // H1 is a leaf in A's served subtree -- no children, no
+        // cross-links to H2/H3 yet.
+      };
+      const servedFrontier = computeServedFrontier('H1', servedTree, undefined);
+      expect(servedFrontier.sort()).toEqual(['H1']);
+
+      // Sanity: the FULL local DAG frontier as `_currentFrontier()`
+      // would have computed it is {H1, H2, H3}. The two frontiers
+      // differ, which is the entire point of the bug.
+      const localFrontier = ['H1', 'H2', 'H3'].sort();
+      expect(servedFrontier.sort()).not.toEqual(localFrontier);
+    });
+
+    test('honest multi-head responder: loader post-sync `_currentFrontier()` equals the served frontier (NOT the responder local frontier)', () => {
+      // After the loader applies the served payload, its
+      // `_currentFrontier()` will be {H1} (the only head in the
+      // received tree). Two honest peers in the same logical state
+      // would each advertise tipsHash({H1}); the quorum agrees on
+      // {H1}; the structural bind check on the loader hashes the
+      // received payload to {H1}; they match. Quorum succeeds for an
+      // honest responder.
+      const servedTree: CRDTChangeNode<unknown> = { kind: docKind };
+
+      // Simulate two honest peers (P1 and P2) both at the same logical
+      // state -- each with `_lastSyncMessage.changeId = H1` and
+      // `_lastSyncMessage.changes = servedTree`. P1 has remote heads
+      // {H2}, P2 has remote heads {H3}; both un-cross-linked.
+      const p1Served = computeServedFrontier('H1', servedTree, undefined);
+      const p2Served = computeServedFrontier('H1', servedTree, undefined);
+      expect(p1Served.sort()).toEqual(p2Served.sort());
+
+      // The loader (starting from empty) applying P1's load response
+      // ends up with `_currentFrontier() = {H1}`. Same hash as
+      // p1Served, so the bind check accepts.
+      const loaderHashes = new Set<string>();
+      const loaderRefs = new Set<string>();
+      function applyWalk(
+        id: string | undefined,
+        node: CRDTChangeNode<unknown>,
+      ) {
+        if (id) loaderHashes.add(id);
+        if (node.children === undefined) return;
+        if (node.children === false) return;
+        for (const [childId, childNode] of Object.entries(node.children)) {
+          loaderHashes.add(childId);
+          loaderRefs.add(childId);
+          applyWalk(childId, childNode);
+        }
+      }
+      applyWalk('H1', servedTree);
+      const loaderFrontier = [...loaderHashes]
+        .filter((h) => !loaderRefs.has(h))
+        .sort();
+      expect(loaderFrontier).toEqual(p1Served.sort());
+    });
+
+    test('multi-head responder with cross-linked remote head: served frontier includes both heads only when actually present in the served tree', () => {
+      // Variant: the responder DID make a second local change that
+      // cross-linked one remote head (H2) but not the other (H3). The
+      // served tree now contains H1 -> H2 as cross-link, but H3 is
+      // still un-cross-linked. The served frontier is {H1} (with H2
+      // referenced as a deferred-leaf child), NOT {H1, H3}.
+      //
+      // This is consistent: the responder will reconcile H3 via
+      // post-load GossipSub sync (cross-linking on the next local
+      // change), not via the initial-load quorum protocol.
+      const servedTree: CRDTChangeNode<unknown> = {
+        kind: docKind,
+        children: {
+          H2: { kind: docKind }, // deferred leaf -- cross-linked but no inline body
+        },
+      };
+      const servedFrontier = computeServedFrontier('H1', servedTree, undefined);
+      // H1 is the head; H2 is referenced (a child of H1 in the served
+      // tree); H3 is not part of the served payload at all.
+      expect(servedFrontier.sort()).toEqual(['H1']);
+    });
+
+    test('Byzantine responder still caught: claims served frontier {H1} but actually serves a tree where H1 references unknown ancestors', () => {
+      // The structural derivation is independent of whatever the
+      // responder claims in `message.tips`. If the responder's
+      // `_servedFrontier()` honest implementation would yield {H1} but
+      // a tampered serializer ships a tree with H1 -> X -> Y (referencing
+      // ancestors the responder never advertised), the structural
+      // frontier remains {H1} (the only unreferenced node) -- the
+      // ancestors X, Y are referenced by H1's children map and drop
+      // out of the frontier. The bind check still passes against the
+      // honest hash, BUT the served payload now includes data the
+      // responder didn't authorize. That class of equivocation
+      // (extra-data smuggling under a matching frontier hash) is out
+      // of scope for `computeServedFrontier` -- it is detected by the
+      // outer signature check + the loader's defense-in-depth
+      // `message.tips` consistency check, both of which compare the
+      // *served frontier* (not the responder's local frontier).
+      //
+      // This test simply confirms the served frontier of an
+      // ancestor-bearing tree is still {H1}: the structural
+      // derivation does not get fooled by "extra" nodes the responder
+      // shipped that aren't heads.
+      const servedTree: CRDTChangeNode<unknown> = {
+        kind: docKind,
+        children: {
+          X: {
+            kind: docKind,
+            children: {
+              Y: { kind: docKind },
+            },
+          },
+        },
+      };
+      const servedFrontier = computeServedFrontier('H1', servedTree, undefined);
+      expect(servedFrontier.sort()).toEqual(['H1']);
+    });
+
+    test('Byzantine responder lies in advertise vs serves: hash of FULL frontier {H1,H2,H3} but ships only H1 => structural derivation exposes the lie', () => {
+      // A peer that lies about which heads they have -- i.e. computes
+      // its advertise hash over the OLD (buggy) `_currentFrontier()`
+      // semantics on {H1, H2, H3} -- but actually only serves H1's
+      // tree, would lose against the loader's structural derivation.
+      // Two honest peers running the FIX (advertise=served) would
+      // both produce tipsHash({H1}); the liar's hash is
+      // tipsHash({H1,H2,H3}). The liar's hash doesn't even win the
+      // quorum (the honest peers disagree with the liar), but if it
+      // somehow did, the loader's structural derivation would still
+      // hash to {H1} and reject the bind.
+      //
+      // Verifies the structural derivation behaves identically
+      // regardless of what the responder *claims* about their heads.
+      const servedTree: CRDTChangeNode<unknown> = { kind: docKind };
+      const structurallyDerived = computeServedFrontier(
+        'H1',
+        servedTree,
+        undefined,
+      );
+      expect(structurallyDerived.sort()).toEqual(['H1']);
+      // The liar's claim is {H1, H2, H3} -- different from the
+      // structural truth. The loader's defense-in-depth check (compare
+      // `message.tips` to structurally-derived frontier) catches this.
+      expect(structurallyDerived.sort()).not.toEqual(
+        ['H1', 'H2', 'H3'].sort(),
+      );
+    });
+
+    test('multi-head responder with snapshot: served frontier is `_servedFrontier()` inputs (snapshot boundary + served tree)', () => {
+      // When the load response also carries `_latestSnapshot`, the
+      // served frontier is computed over BOTH the snapshot boundary
+      // CID and the served tree. If the served tree references the
+      // boundary (the common case post-snapshot), the boundary drops
+      // out and the head of the post-snapshot chain remains. This is
+      // identical to the single-head case -- the multi-head bug is
+      // about heads NOT in the served tree, not about snapshot
+      // semantics. Sanity that the helper handles the mixed input.
+      const servedTree: CRDTChangeNode<unknown> = {
+        kind: docKind,
+        children: {
+          SNAP_BOUNDARY: { kind: docKind },
+        },
+      };
+      const servedFrontier = computeServedFrontier(
+        'POST_SNAPSHOT_HEAD',
+        servedTree,
+        'SNAP_BOUNDARY',
+      );
+      expect(servedFrontier.sort()).toEqual(['POST_SNAPSHOT_HEAD']);
+    });
+  });
 });

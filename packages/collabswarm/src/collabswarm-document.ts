@@ -920,6 +920,75 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Returns the frontier this peer would *advertise as part of a load
+   * response* -- the heads of the change tree this peer can actually ship
+   * in a single `documentLoadV3` / `snapshotLoadV3` round.
+   *
+   * # Why this is NOT the same as `_currentFrontier()`
+   *
+   * `_currentFrontier()` returns the heads of the local DAG (`_hashes \
+   * _referencedAncestors`) -- the structural truth of EVERYTHING this peer
+   * has seen. That set is the right answer for "what is the logical state
+   * of my local document?", but it is the WRONG answer for "what hash
+   * should I advertise in a `tipAdvertiseV1` probe?".
+   *
+   * A load response only carries ONE change tree (rooted at
+   * `_lastSyncMessage.changeId`), plus optionally `_latestSnapshot` --
+   * `_lastSyncMessage` is only refreshed by `_makeChange()`, so its tree
+   * is rooted at *this peer's* last locally-produced change. Remote
+   * changes broadcast over GossipSub are applied to local CRDT state and
+   * recorded in `_hashes`, but they do NOT become roots of
+   * `_lastSyncMessage.changes` until this peer makes its next local
+   * change (which cross-links them via `selectCrossLinks`).
+   *
+   * So when a peer has multiple concurrent heads (e.g. its own last local
+   * change H1 plus remotely-applied changes H2, H3 that aren't yet
+   * cross-linked from any local change), `_currentFrontier()` returns
+   * `{H1, H2, H3}` but the load response only contains H1's subtree.
+   * Round 8 of the PR #284 Copilot review caught the resulting
+   * inconsistency: the tip-advertise probe would hash `{H1, H2, H3}` and
+   * win the quorum vote, but the served payload's structural frontier
+   * (`computeServedFrontier(...)` on the loader side) hashes only `{H1}`,
+   * causing the loader's bind check to reject the honest peer.
+   *
+   * # What this returns
+   *
+   * The heads of the served payload, computed via `computeServedFrontier`
+   * over EXACTLY the same inputs the load response will carry:
+   *   - `_lastSyncMessage?.changeId` -- root CID of the served tree (if any);
+   *   - `_lastSyncMessage?.changes` -- the served tree itself (if any);
+   *   - `_latestSnapshot?.lastChangeNodeCID` -- snapshot boundary CID (if any).
+   *
+   * This mirrors the loader's `_sendLoadRequestAndSync` binding check:
+   * both sides hash the structurally-derived served frontier, so an
+   * honest responder advertises a hash the loader can reproduce from the
+   * payload it received. Two honest peers in the same logical state with
+   * the same `_lastSyncMessage` / `_latestSnapshot` advertise the same
+   * hash regardless of any unrelated concurrent heads they happen to be
+   * holding in `_currentFrontier()`.
+   *
+   * # Trade-off (acknowledged)
+   *
+   * The quorum no longer verifies that a responder has all of its
+   * logical heads -- only the ones it would actually serve. A peer with
+   * un-served concurrent heads can pass quorum on the subset it ships
+   * via load. This matches the existing load semantics (the load only
+   * ever ships what `_lastSyncMessage` covers anyway) and is reconciled
+   * by post-load GossipSub sync; the alternative (Option B in the design
+   * notes) would require the load response itself to carry every head's
+   * subtree, a larger protocol change. See PR #284 r8 review.
+   *
+   * @internal
+   */
+  private _servedFrontier(): string[] {
+    return computeServedFrontier(
+      this._lastSyncMessage?.changeId,
+      this._lastSyncMessage?.changes,
+      this._latestSnapshot?.lastChangeNodeCID,
+    );
+  }
+
+  /**
    * Record a CID as a recently-known tip for Merkle-CRDT cross-linking
    * (paper §VI.B.e). Called for both locally-generated and remote-applied
    * change nodes -- a peer A that just received B's change can cross-link
@@ -1854,7 +1923,7 @@ export class CollabswarmDocument<
 
       // Attach an explicit tip-set advertisement so the loader can apply
       // a defense-in-depth consistency check against this responder's
-      // self-attested current frontier (issue #186 / #189 §5.4.2).
+      // self-attested served frontier (issue #186 / #189 §5.4.2).
       //
       // NOTE: as of PR #284 r7, the loader's PRIMARY binding is derived
       // STRUCTURALLY from the served `changes`/`snapshot` payload via
@@ -1865,18 +1934,21 @@ export class CollabswarmDocument<
       // ALSO verifies that the responder's own attestation hashes to
       // the same value as the structurally-derived served frontier --
       // a peer whose `tips` contradicts their own served payload is
-      // caught at the secondary check. `_currentFrontier()` remains
-      // the canonical helper used by ALL three protocols
-      // (tip-advertise, doc-load, snapshot-load) so an honest
-      // responder advertises the same frontier across the probe and
-      // the load round. The frontier is `_hashes \
-      // _referencedAncestors` -- the heads of the local DAG -- which
-      // converges across honest peers even when their full `_hashes`
-      // cardinality differs (e.g. one loaded from a snapshot, the
-      // other has the full ancestor history). This field is part of
-      // the SIGNED v3 payload; see `wire-protocols.ts` for the
-      // version-bump rationale.
-      loadMessage.tips = this._currentFrontier();
+      // caught at the secondary check.
+      //
+      // PR #284 r8: `tips` is now the *served* frontier
+      // (`_servedFrontier()`) -- i.e. the heads of the change tree this
+      // load response actually carries -- NOT the full local DAG
+      // frontier (`_currentFrontier()`). The two differ when this peer
+      // has multiple concurrent heads but `_lastSyncMessage` only roots
+      // at one of them (the load wire shape only ships a single tree).
+      // The tip-advertise handler hashes the same served frontier, so
+      // the probe and the load round bind against a byte-identical tip
+      // set even when the responder is holding remotely-applied heads
+      // that aren't yet cross-linked into `_lastSyncMessage.changes`.
+      // This field is part of the SIGNED v3 payload; see
+      // `wire-protocols.ts` for the version-bump rationale.
+      loadMessage.tips = this._servedFrontier();
 
       // Sign new message.
       loadMessage.signature = await this._signAsWriter(loadMessage);
@@ -1997,14 +2069,19 @@ export class CollabswarmDocument<
       snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
       // Tip-set advertisement for the post-load binding check (see the
       // doc-load handler above and the in-line check in
-      // `_sendLoadRequestAndSync` for the rationale). `_currentFrontier()`
-      // returns the heads of the local DAG (`_hashes \
-      // _referencedAncestors`), which is the convergent quantity across
-      // honest peers regardless of whether either side loaded from a
-      // snapshot or replayed the full history. Part of the signed v3
-      // payload -- the version bump (snapshotLoadV2 -> snapshotLoadV3)
-      // is required because `tips` is now covered by the writer signature.
-      snapshotMessage.tips = this._currentFrontier();
+      // `_sendLoadRequestAndSync` for the rationale).
+      //
+      // PR #284 r8: this is the *served* frontier (`_servedFrontier()`)
+      // -- the heads of the served payload (`_lastSyncMessage.changes`
+      // tree plus the snapshot boundary) -- NOT the full local DAG
+      // frontier (`_currentFrontier()`). When this peer holds concurrent
+      // heads that `_lastSyncMessage` does not yet root over, the
+      // load response only carries one head's subtree, so the
+      // advertised `tips` must match that subset to satisfy the
+      // loader's structural bind check. Part of the signed v3 payload
+      // -- the version bump (snapshotLoadV2 -> snapshotLoadV3) is
+      // required because `tips` is now covered by the writer signature.
+      snapshotMessage.tips = this._servedFrontier();
       snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
       const serialized =
@@ -2122,14 +2199,31 @@ export class CollabswarmDocument<
         return;
       }
 
-      // Compute the canonical tip-set hash from the document's current
-      // frontier — the same source load responses use for the `tips` field
-      // (see `handleLoadRequestData` / `handleSnapshotLoadRequestData`),
-      // so a probe-then-load round-trip from this responder always binds
-      // against a consistent advertisement. Two peers with the same view
+      // Compute the canonical tip-set hash from the document's *served*
+      // frontier — the heads of the payload this peer would actually ship
+      // in a `documentLoadV3` / `snapshotLoadV3` round (computed via
+      // `computeServedFrontier` over `_lastSyncMessage.changes` plus
+      // `_latestSnapshot?.lastChangeNodeCID`, the exact same sources
+      // `handleLoadRequestData` / `handleSnapshotLoadRequestData` populate
+      // into the load response).
+      //
+      // PR #284 r8: this used to hash `_currentFrontier()` -- the full
+      // local DAG frontier (`_hashes \ _referencedAncestors`). That
+      // produces a hash an honest peer cannot bind against if it holds
+      // multiple concurrent heads: `_currentFrontier()` returns every
+      // head (including remotely-applied tips not yet cross-linked into
+      // `_lastSyncMessage.changes`), but the load response only carries
+      // one head's tree, so the loader's structural derivation of the
+      // served frontier produces a different (smaller) set. Hashing the
+      // served frontier here closes that gap -- a probe-then-load
+      // round-trip from this responder always binds against a
+      // byte-identical tip set. See `_servedFrontier()` for the
+      // full rationale.
+      //
+      // Two peers with the same `_lastSyncMessage` / `_latestSnapshot`
       // produce byte-identical hashes; see `tips-hash.ts` for the
       // canonicalization (sort + `\n` separator + SHA-256).
-      const hash = await tipsHash(this._currentFrontier());
+      const hash = await tipsHash(this._servedFrontier());
 
       const advertisement: CRDTSyncMessage<ChangesType, PublicKey> = {
         documentId: this.documentPath,
