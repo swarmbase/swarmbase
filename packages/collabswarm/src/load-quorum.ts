@@ -305,6 +305,16 @@ export function effectiveQ(configuredQ: number, k: number): number {
 }
 
 /**
+ * Upper bound (milliseconds) for {@link validateLoadQuorumConfig}'s
+ * `loadQuorumTimeoutMs` check. Five minutes is comfortably larger than any
+ * realistic per-probe budget on a wide-area mesh (the default is 5 s) but
+ * small enough to catch a typo like `5000000` (5 000 s = ~83 min) or a
+ * mistakenly-passed nanosecond value before it stalls `open()` for an
+ * absurd duration. See PR #284 r15 Copilot review.
+ */
+export const LOAD_QUORUM_TIMEOUT_MS_MAX = 5 * 60 * 1000;
+
+/**
  * Validate the load-quorum tuning knobs from {@link CollabswarmConfig}.
  *
  * Runs at {@link Collabswarm.initialize} time so a misconfigured value is
@@ -317,14 +327,30 @@ export function effectiveQ(configuredQ: number, k: number): number {
  * evaluate as false (silent single-peer quorum pass). Both classes of
  * misconfig are now rejected here with a clear operator-visible error.
  *
- * Both knobs MUST be finite positive integers (Number.isInteger(x) && x >= 1).
+ * `loadQuorumTimeoutMs` is also validated here under PR #284 r15 Copilot
+ * review: the value flows directly into `setTimeout(...)` inside the
+ * tip-advertise probe race, where `NaN`/`Infinity`/`0`/negative are coerced
+ * to immediate-fire / overflow behaviour by the timer queue. Every probe
+ * then resolves as a non-vote and quorum fails on every load attempt even
+ * with a fully healthy mesh — silently breaking the gate. We require a
+ * finite positive integer no greater than
+ * {@link LOAD_QUORUM_TIMEOUT_MS_MAX} so an operator typo or a misplaced
+ * decimal is caught at startup.
+ *
+ * `loadQuorumK` and `loadQuorumQ` MUST be finite positive integers
+ * (Number.isInteger(x) && x >= 1).
+ * `loadQuorumTimeoutMs` MUST be a finite positive integer in the closed
+ * range `[1, LOAD_QUORUM_TIMEOUT_MS_MAX]`.
+ *
  * Rejects:
- *   - NaN / Infinity / -Infinity
- *   - non-integers (e.g. 1.5, 2.7)
- *   - zero and negative values (0, -1)
+ *   - NaN / Infinity / -Infinity (all knobs)
+ *   - non-integers (e.g. 1.5, 2.7) (all knobs)
+ *   - zero and negative values (0, -1) (all knobs)
+ *   - `loadQuorumTimeoutMs > LOAD_QUORUM_TIMEOUT_MS_MAX`
  * Accepts:
  *   - `undefined` (operator did not override; the orchestrator's defaults apply)
- *   - any positive integer (1, 2, 3, ...)
+ *   - any positive integer (1, 2, 3, ...) for K/Q
+ *   - integers in `[1, LOAD_QUORUM_TIMEOUT_MS_MAX]` for `loadQuorumTimeoutMs`
  *
  * Throws {@link LoadQuorumFailedError} with `reason: 'invalid-config'` so
  * the existing `instanceof`-based error handling in `CollabswarmDocument.load()`
@@ -332,13 +358,14 @@ export function effectiveQ(configuredQ: number, k: number): number {
  * offending value.
  *
  * @param config The {@link CollabswarmConfig} (or its load-quorum subset)
- *   to validate. Pass-through fields (`enabled`, `timeoutMs`,
- *   `allowSinglePeer`) are intentionally NOT validated here; only K and Q
- *   are the load-bearing trust knobs.
+ *   to validate. Pass-through fields (`enabled`, `allowSinglePeer`) are
+ *   intentionally NOT validated here; only K, Q, and timeoutMs are the
+ *   load-bearing trust/timing knobs.
  */
 export function validateLoadQuorumConfig(config: {
   loadQuorumK?: number;
   loadQuorumQ?: number;
+  loadQuorumTimeoutMs?: number;
 }): void {
   const checkPositiveInt = (name: string, value: number | undefined): void => {
     if (value === undefined) return;
@@ -361,8 +388,37 @@ export function validateLoadQuorumConfig(config: {
       });
     }
   };
+  const checkBoundedPositiveInt = (
+    name: string,
+    value: number | undefined,
+    max: number,
+  ): void => {
+    if (value === undefined) return;
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      value < 1 ||
+      value > max
+    ) {
+      throw new LoadQuorumFailedError({
+        documentPath: '<config>',
+        reason: 'invalid-config',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map(),
+        detail:
+          `${name} must be a positive integer no greater than ${max}; ` +
+          `got ${formatConfigValue(value)}`,
+      });
+    }
+  };
   checkPositiveInt('loadQuorumK', config.loadQuorumK);
   checkPositiveInt('loadQuorumQ', config.loadQuorumQ);
+  checkBoundedPositiveInt(
+    'loadQuorumTimeoutMs',
+    config.loadQuorumTimeoutMs,
+    LOAD_QUORUM_TIMEOUT_MS_MAX,
+  );
 }
 
 /**

@@ -62,8 +62,14 @@ export interface LoadQuorumOrchestratorConfig {
   /** Minimum agreement threshold. Defaults to `defaultQuorumQ(k)`. */
   q?: number;
   /** Per-probe timeout in ms (caller-enforced inside `probeFn`). Stored here
-   * for symmetry with `CollabswarmConfig`; this module does not use it
-   * directly because `probeFn` is responsible for the wall-clock timeout. */
+   * for symmetry with `CollabswarmConfig` and validated alongside K/Q so a
+   * `NaN`/`Infinity`/`0`/negative/over-bound value (which would coerce
+   * `setTimeout` to immediate-fire / overflow and silently turn every probe
+   * into a non-vote) is caught loud-and-early. This module does not consume
+   * the value itself — `probeFn` is responsible for the wall-clock timeout
+   * — but it MUST flow through {@link validateLoadQuorumConfig} on every
+   * load attempt as defence-in-depth against post-`initialize()` mutation.
+   * See PR #284 r15 Copilot review. */
   timeoutMs?: number;
   /** Allow a single-peer fallback path when only one peer is reachable. */
   allowSinglePeer?: boolean;
@@ -113,14 +119,15 @@ export async function runLoadQuorum<T>(opts: {
     return { skipped: true };
   }
 
-  // Re-validate K/Q on every `runLoadQuorum` call as defence-in-depth
-  // against post-`initialize()` mutation of the shared config object
-  // (direct mutation, deep-clone reuse with a corrupt field, an operator
-  // helper that writes back `NaN`, etc.). `Collabswarm.initialize()` runs
-  // `validateLoadQuorumConfig` once at startup so the static
-  // misconfiguration case (typo, bad cast at config load) is already
-  // covered; this second-line check exists for the dynamic case where a
-  // previously-valid K or Q has since become `NaN`/`Infinity`/0/-1/1.5.
+  // Re-validate K/Q/timeoutMs on every `runLoadQuorum` call as
+  // defence-in-depth against post-`initialize()` mutation of the shared
+  // config object (direct mutation, deep-clone reuse with a corrupt
+  // field, an operator helper that writes back `NaN`, etc.).
+  // `Collabswarm.initialize()` runs `validateLoadQuorumConfig` once at
+  // startup so the static misconfiguration case (typo, bad cast at
+  // config load) is already covered; this second-line check exists for
+  // the dynamic case where a previously-valid K, Q, or timeoutMs has
+  // since become `NaN`/`Infinity`/0/-1/1.5/over-bound.
   //
   // Without this guard, a mutated `K = NaN` would slip through to
   // `effectiveK(NaN, peers)` which returns 0 (per the r9 defensive
@@ -128,9 +135,13 @@ export async function runLoadQuorum<T>(opts: {
   // `{ skipped: true }`, and `CollabswarmDocument.load()` would fall
   // through to the legacy unbound load even though `loadQuorumEnabled`
   // is still `true` — silently violating the operator's intent of a
-  // quorum-protected load. Throw a structured `invalid-config`
-  // `LoadQuorumFailedError` so the failure is loud at the
-  // load-attempt boundary instead.
+  // quorum-protected load. A mutated `timeoutMs = NaN`/`Infinity`/`0`/
+  // negative similarly would flow into `setTimeout(...)` inside the
+  // probe race, coerce to immediate-fire, and turn every probe into a
+  // non-vote so quorum fails on every load even with a healthy mesh.
+  // Throw a structured `invalid-config` `LoadQuorumFailedError` so the
+  // failure is loud at the load-attempt boundary instead. See PR #284
+  // r15 Copilot review for the `timeoutMs` extension.
   //
   // The validator's documentPath placeholder (`<config>`) is replaced
   // with the actual `documentPath` here so operator logs surface which
@@ -140,6 +151,7 @@ export async function runLoadQuorum<T>(opts: {
     validateLoadQuorumConfig({
       loadQuorumK: config?.k,
       loadQuorumQ: config?.q,
+      loadQuorumTimeoutMs: config?.timeoutMs,
     });
   } catch (err) {
     if (
@@ -209,10 +221,26 @@ export async function runLoadQuorum<T>(opts: {
     // Single-peer pass-through. Probe the one known peer; if it responds at
     // all we proceed with the legacy load. Warn loudly so operators can
     // spot the regression. Q is forced to 1 here.
+    //
+    // The warning text covers BOTH causes of `k === 1`:
+    //   1. peer scarcity — only one peer is reachable in the mesh
+    //      (`peers.length === 1`), OR
+    //   2. configured K — the operator set `loadQuorumK = 1` even though
+    //      more peers ARE known (`peers.length > 1`); `effectiveK` clamps
+    //      the slice to 1 and only that one peer is probed.
+    // The previous wording "only one peer known" was accurate for case 1
+    // but actively misleading for case 2 — operators saw the warning even
+    // though their mesh had multiple peers, making it impossible to tell
+    // whether the regression was peer-availability (a runtime fact) or a
+    // misconfigured K (their own knob). Include the configured K and the
+    // actual peer count so both cases read accurately. See PR #284 r15
+    // Copilot review.
     console.warn(
-      `[${documentPath}] Initial-load quorum: only one peer known; ` +
-        `proceeding under loadQuorumAllowSinglePeer (trust assumptions ` +
-        `degraded back to single-peer load). Configure additional peers ` +
+      `[${documentPath}] Initial-load quorum: only one peer will be probed ` +
+        `(loadQuorumK=${configuredK}, ${peers.length} peer${peers.length === 1 ? '' : 's'} known; ` +
+        `loadQuorumAllowSinglePeer=true); trust assumptions degraded back ` +
+        `to single-peer load. ` +
+        `${peers.length > 1 ? 'Increase loadQuorumK above 1' : 'Configure additional peers'} ` +
         `to restore Byzantine-fault-tolerant quorum semantics.`,
     );
     const probedPeer = peers[0];

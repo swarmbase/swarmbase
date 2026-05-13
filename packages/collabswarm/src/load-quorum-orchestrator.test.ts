@@ -27,7 +27,14 @@
  * (e) single-peer fallback path.
  */
 
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import {
+  describe,
+  expect,
+  test,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { runLoadQuorum } from './load-quorum-orchestrator';
 import { dedupePeersByPeerId, LoadQuorumFailedError } from './load-quorum';
 import { tipsHashToHex } from './tips-hash';
@@ -872,6 +879,256 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
       });
       expect('ok' in result && result.ok).toBe(true);
       expect(probeMock).toHaveBeenCalledTimes(3);
+    });
+
+    // -----------------------------------------------------------------
+    // loadQuorumTimeoutMs post-init mutation guard (PR #284 r15)
+    // -----------------------------------------------------------------
+    // `loadQuorumTimeoutMs` flows directly into `setTimeout(...)` inside
+    // the probe race. A post-init mutation to `NaN`/`Infinity`/`0`/
+    // negative would coerce the timer to immediate-fire / overflow,
+    // every probe would resolve as a non-vote, and quorum would fail on
+    // every load even with a fully healthy mesh — silently breaking the
+    // gate without surfacing the root cause as a config error. The
+    // orchestrator now re-validates `timeoutMs` alongside K/Q on every
+    // call and throws `LoadQuorumFailedError(invalid-config)` so the
+    // misconfiguration is loud at the load-attempt boundary.
+
+    test('timeoutMs = NaN throws LoadQuorumFailedError(invalid-config) (was: setTimeout immediate-fire => every probe non-vote)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, timeoutMs: NaN },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumTimeoutMs must be a positive integer.*got NaN/,
+      );
+      expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('timeoutMs = Infinity throws LoadQuorumFailedError(invalid-config)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, timeoutMs: Infinity },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumTimeoutMs must be a positive integer.*got Infinity/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('timeoutMs = 0 throws LoadQuorumFailedError(invalid-config) (would fire immediately)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, timeoutMs: 0 },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumTimeoutMs must be a positive integer.*got 0/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('timeoutMs = -1 throws LoadQuorumFailedError(invalid-config)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, timeoutMs: -1 },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumTimeoutMs must be a positive integer.*got -1/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('timeoutMs = 1.5 (fractional) throws LoadQuorumFailedError(invalid-config)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, timeoutMs: 1.5 },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+      expect((err as LoadQuorumFailedError).message).toMatch(
+        /loadQuorumTimeoutMs must be a positive integer.*got 1\.5/,
+      );
+      expect(probeMock).not.toHaveBeenCalled();
+    });
+
+    test('timeoutMs = valid integer (5000 ms) passes through and probes run', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2, timeoutMs: 5000 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      expect(probeMock).toHaveBeenCalledTimes(3);
+    });
+
+    test('timeoutMs = undefined passes through (orchestrator default applies)', async () => {
+      // `undefined` means the operator did not override; the orchestrator
+      // doesn't use the value directly (the caller does) but the
+      // defensive validator must NOT reject `undefined`.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2, timeoutMs: undefined },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+    });
+
+    test('rethrown invalid-config (timeoutMs) carries the actual documentPath', async () => {
+      const err = await runLoadQuorum({
+        peers: ['p1', 'p2'] as TestPeer[],
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/docs/y',
+        config: { enabled: true, k: 2, timeoutMs: NaN },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).documentPath).toBe('/docs/y');
+      expect((err as LoadQuorumFailedError).message).toMatch(/\/docs\/y/);
+      expect((err as LoadQuorumFailedError).message).not.toMatch(/<config>/);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // single-peer warning text (PR #284 r15 Copilot review issue #2)
+  // ---------------------------------------------------------------------
+  // The legacy wording was "only one peer known", which is accurate when
+  // the mesh truly has one peer but actively misleading when the operator
+  // configured `loadQuorumK = 1` with more peers available — they would
+  // see the warning and assume their mesh had collapsed even though it
+  // hadn't. The rewritten message includes both the configured K and the
+  // actual peer count so the cause is unambiguous in either case.
+
+  describe('single-peer fallback warning text reflects both cause cases (PR #284 r15)', () => {
+    let warnSpy: ReturnType<typeof jest.spyOn>;
+    beforeEach(() => {
+      warnSpy = jest
+        .spyOn(console, 'warn')
+        .mockImplementation((() => {}) as never);
+    });
+    afterEach(() => {
+      // Restore so the next test (which re-spies) starts from a clean
+      // call history. Without this, `jest.spyOn` returns the SAME spy
+      // and `mock.calls[0]` leaks from earlier tests in this describe.
+      warnSpy.mockRestore();
+    });
+
+    test('case 1: peer scarcity (1 peer in mesh) — message mentions "1 peer known"', async () => {
+      const peers: TestPeer[] = ['only-peer'];
+      probeMock.mockResolvedValue(HASH_X);
+      await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/scarcity',
+        config: { enabled: true, k: 1, allowSinglePeer: true },
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const msg = warnSpy.mock.calls[0][0] as string;
+      expect(msg).toMatch(/only one peer will be probed/);
+      expect(msg).toMatch(/loadQuorumK=1/);
+      expect(msg).toMatch(/1 peer known/);
+      expect(msg).toMatch(/loadQuorumAllowSinglePeer=true/);
+      expect(msg).toMatch(/Configure additional peers/);
+    });
+
+    test('case 2: configured K=1 with multiple peers known — message mentions actual peer count', async () => {
+      // The exact bug: 2 peers are in the mesh, but the operator pinned
+      // `loadQuorumK = 1` so only one is probed. The previous wording
+      // "only one peer known" was a lie — more peers ARE known. The new
+      // wording reflects that the cause is the configured K.
+      const peers: TestPeer[] = ['p1', 'p2'];
+      probeMock.mockResolvedValue(HASH_X);
+      await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/configured-k',
+        config: { enabled: true, k: 1, allowSinglePeer: true },
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const msg = warnSpy.mock.calls[0][0] as string;
+      expect(msg).toMatch(/only one peer will be probed/);
+      expect(msg).toMatch(/loadQuorumK=1/);
+      // The actual peer count must be reflected — NOT a misleading "1".
+      expect(msg).toMatch(/2 peers known/);
+      // Operator guidance should point at the actual remediation
+      // (raising K), not at "configure more peers" which is irrelevant.
+      expect(msg).toMatch(/Increase loadQuorumK/);
+      expect(msg).not.toMatch(/Configure additional peers/);
+      // Sanity: must NOT use the misleading legacy "only one peer known"
+      // phrasing, which was accurate only for case 1.
+      expect(msg).not.toMatch(/only one peer known/);
+    });
+
+    test('case 2 (larger): K=1 with 5 peers known — message reports 5', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3', 'p4', 'p5'];
+      probeMock.mockResolvedValue(HASH_X);
+      await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/big-mesh-k1',
+        config: { enabled: true, k: 1, allowSinglePeer: true },
+      });
+      const msg = warnSpy.mock.calls[0][0] as string;
+      expect(msg).toMatch(/5 peers known/);
+      expect(msg).toMatch(/Increase loadQuorumK/);
+    });
+
+    test('warning includes the documentPath prefix for operator log triage', async () => {
+      const peers: TestPeer[] = ['p1'];
+      probeMock.mockResolvedValue(HASH_X);
+      await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/docs/my-doc',
+        config: { enabled: true, k: 1, allowSinglePeer: true },
+      });
+      const msg = warnSpy.mock.calls[0][0] as string;
+      expect(msg).toMatch(/\[\/docs\/my-doc\]/);
     });
   });
 

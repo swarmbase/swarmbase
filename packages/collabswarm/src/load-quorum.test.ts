@@ -7,6 +7,7 @@ import {
   effectiveK,
   effectiveQ,
   formatConfigValue,
+  LOAD_QUORUM_TIMEOUT_MS_MAX,
   LoadQuorumFailedError,
   validateLoadQuorumConfig,
 } from './load-quorum';
@@ -446,6 +447,155 @@ describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () =
     expect(err).toBeInstanceOf(LoadQuorumFailedError);
     expect((err as LoadQuorumFailedError).message).toMatch(/loadQuorumK/);
     expect((err as LoadQuorumFailedError).message).not.toMatch(/loadQuorumQ/);
+  });
+
+  // ---------------------------------------------------------------------
+  // loadQuorumTimeoutMs validation (PR #284 r15 Copilot review)
+  // ---------------------------------------------------------------------
+  // The bug: `loadQuorumTimeoutMs` is passed directly into `setTimeout(...)`
+  // inside the tip-advertise probe race in `_raceTipAdvertiseProbe`. Values
+  // like `NaN`, `Infinity`, `0`, and negative are coerced by the timer queue
+  // to immediate-fire / overflow behaviour — every probe then resolves as a
+  // non-vote, quorum fails on EVERY load even with a fully healthy mesh, and
+  // the operator has no visible signal pointing back at the misconfig. The
+  // validator now requires a finite positive integer in
+  // `[1, LOAD_QUORUM_TIMEOUT_MS_MAX]` so the misconfig is loud at startup.
+
+  test('accepts undefined loadQuorumTimeoutMs (orchestrator default applies)', () => {
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumTimeoutMs: undefined }),
+    ).not.toThrow();
+  });
+
+  test('accepts valid integer loadQuorumTimeoutMs (1 ms, default 5 s, max)', () => {
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumTimeoutMs: 1 }),
+    ).not.toThrow();
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumTimeoutMs: 5000 }),
+    ).not.toThrow();
+    expect(() =>
+      validateLoadQuorumConfig({
+        loadQuorumTimeoutMs: LOAD_QUORUM_TIMEOUT_MS_MAX,
+      }),
+    ).not.toThrow();
+  });
+
+  test('rejects NaN loadQuorumTimeoutMs with "got NaN" in message', () => {
+    // Was: silently coerced to immediate-fire setTimeout, every probe
+    // recorded as non-vote, quorum failed every load.
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: NaN });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer.*got NaN/,
+    );
+    // Defence: must NOT render NaN as the misleading `null` from JSON.stringify.
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/got null/);
+  });
+
+  test('rejects Infinity loadQuorumTimeoutMs', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: Infinity });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer.*got Infinity/,
+    );
+  });
+
+  test('rejects loadQuorumTimeoutMs = 0 (would fire setTimeout immediately)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: 0 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer.*got 0/,
+    );
+  });
+
+  test('rejects negative loadQuorumTimeoutMs (-1)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: -1 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer.*got -1/,
+    );
+  });
+
+  test('rejects fractional loadQuorumTimeoutMs (1.5)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: 1.5 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer.*got 1\.5/,
+    );
+  });
+
+  test('rejects loadQuorumTimeoutMs above the 5-minute upper bound (catches typos)', () => {
+    // The upper bound catches typos like `5000000` (5 000 s = 83 min)
+    // or mistakenly-passed nanosecond values — far larger than any
+    // realistic per-probe budget on a wide-area mesh.
+    const tooLarge = LOAD_QUORUM_TIMEOUT_MS_MAX + 1;
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumTimeoutMs: tooLarge });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumTimeoutMs must be a positive integer no greater than/,
+    );
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      new RegExp(String(tooLarge)),
+    );
+  });
+
+  test('accepts loadQuorumTimeoutMs combined with valid K/Q', () => {
+    expect(() =>
+      validateLoadQuorumConfig({
+        loadQuorumK: 3,
+        loadQuorumQ: 2,
+        loadQuorumTimeoutMs: 5000,
+      }),
+    ).not.toThrow();
   });
 });
 
