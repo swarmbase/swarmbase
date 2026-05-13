@@ -495,7 +495,12 @@ export class LoadQuorumFailedError extends Error {
                 `(${opts.agreeingPeerBindFailures?.size ?? 0} peer(s)) served a full-load ` +
                 `response whose tips did not hash to the agreed value (or omitted tips entirely); ` +
                 `treating as coordinated Byzantine equivocation on the load step`
-              : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
+              : opts.reason === 'agreeing-peers-unreachable'
+                ? `quorum agreed on a tip-set hash but every peer in the agreeing ` +
+                  `cohort failed to serve a full load (transport / protocol error, ` +
+                  `not a bind mismatch); the document is known to exist but cannot ` +
+                  `currently be retrieved from this peer set`
+                : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
     super(
       `Initial-load quorum failed for "${opts.documentPath}": ${detail}. ` +
         `Configure CollabswarmConfig.loadQuorumK/Q/loadQuorumTimeoutMs, ` +
