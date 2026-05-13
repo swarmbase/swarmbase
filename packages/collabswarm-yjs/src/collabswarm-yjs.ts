@@ -113,6 +113,11 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
         tipsHash:
           message.tipsHash &&
           Base64.fromUint8Array(message.tipsHash),
+        // Explicit tip-set advertisement populated on load responses to
+        // bind the served state to the responder's frontier (see
+        // `CRDTSyncMessage.tips`). Plain string[] of CIDs; passes through
+        // JSON verbatim. Absent on traffic that does not need binding.
+        tips: message.tips,
         snapshot: snapshotForWire,
       }),
     );
@@ -142,6 +147,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       pathUpdate?: unknown;
       pathUpdateEpochId?: unknown;
       tipsHash?: unknown;
+      tips?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -300,6 +306,29 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       tipsHash = Base64.toUint8Array(raw.tipsHash);
     }
+    // Initial-load quorum frontier binding (#186 / #189 §5.4.2). Untrusted
+    // input -- reject non-arrays or arrays containing non-strings up front
+    // so the loader's binding check never has to defensively coerce.
+    let tips: string[] | undefined;
+    if (raw.tips !== undefined) {
+      if (!Array.isArray(raw.tips)) {
+        throw new Error(
+          `Invalid sync message: 'tips' must be an array when present (got ${describeValue(
+            raw.tips,
+          )})`,
+        );
+      }
+      for (const entry of raw.tips) {
+        if (typeof entry !== 'string') {
+          throw new Error(
+            `Invalid sync message: 'tips' entries must be strings (got ${describeValue(
+              entry,
+            )})`,
+          );
+        }
+      }
+      tips = raw.tips as string[];
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -329,6 +358,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array>['pathUpdate'];
     if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
     if (tipsHash !== undefined) result.tipsHash = tipsHash;
+    if (tips !== undefined) result.tips = tips;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }

@@ -56,14 +56,20 @@ describe('tipsHashToHex', () => {
   });
 });
 
-describe('hash binding: equivocating peer rejection (#186, suppressed comment fix)', () => {
-  // Models `CollabswarmDocument._enforceQuorumHashBinding`. The quorum-agreed
-  // hash (the "vote") must match the recomputed `tipsHash` of the
-  // locally-applied state (the "serve"). A peer that votes for tip set X
-  // but serves a load whose tips hash to Y is treated as Byzantine
-  // equivocation and rejected — without this binding, a malicious peer
-  // in the agreeing cohort could vote with the majority and then serve
-  // arbitrary state, completely defeating the gate.
+describe('hash binding: equivocating peer rejection (#186 / #189 §5.4.2)', () => {
+  // Models the in-line binding check in
+  // `CollabswarmDocument._sendLoadRequestAndSync`. The responder includes
+  // its own current frontier as `message.tips` on the load response; the
+  // loader hashes that and compares to the quorum-agreed `winningHashHex`.
+  // A peer that votes for tip set X but serves a load whose `tips` hash
+  // to Y is treated as Byzantine equivocation and rejected — without this
+  // binding, a malicious peer in the agreeing cohort could vote with the
+  // majority and then serve arbitrary state.
+  //
+  // Hashing the responder's signed `tips` attestation (rather than
+  // recomputing `tipsHash(loader._hashes)` post-sync) keeps the binding
+  // correct under snapshot-loads (which don't restore ancestor CIDs to
+  // `_hashes`) and history compaction.
   test('matching vote and serve passes the binding check', async () => {
     const advertisedTips = ['cidA', 'cidB', 'cidC'];
     const servedTips = ['cidC', 'cidA', 'cidB']; // same set, different order
@@ -72,34 +78,36 @@ describe('hash binding: equivocating peer rejection (#186, suppressed comment fi
     expect(constantTimeHexEquals(advertisedHex, servedHex)).toBe(true);
   });
 
-  test('mismatched vote vs serve fails the binding check', async () => {
-    const advertisedTips = ['cidA', 'cidB'];
-    // Malicious peer voted for {A,B} but then served only {A} — the
-    // served state has a different tipsHash and the binding catches it.
-    const servedTips = ['cidA'];
-    const advertisedHex = tipsHashToHex(await tipsHash(advertisedTips));
-    const servedHex = tipsHashToHex(await tipsHash(servedTips));
-    expect(constantTimeHexEquals(advertisedHex, servedHex)).toBe(false);
-  });
-
-  test('extra-CID injection (vote {A,B}, serve {A,B,evil}) fails the binding check', async () => {
-    // The most security-critical case: the agreeing cohort attested to
-    // {A,B} but a member sneaks in an extra "evil" CID in the load
-    // response. Post-sync `tipsHash(_hashes)` reflects {A,B,evil}, which
-    // does NOT match the voted `winningHashHex`.
-    const advertisedHex = tipsHashToHex(await tipsHash(['cidA', 'cidB']));
-    const servedHex = tipsHashToHex(
-      await tipsHash(['cidA', 'cidB', 'cidEvil']),
-    );
-    expect(constantTimeHexEquals(advertisedHex, servedHex)).toBe(false);
-  });
-
-  test('empty-set vote vs non-empty serve fails (founding-case spoof)', async () => {
-    // A peer that voted "I have nothing" (empty tip-set hash) but then
-    // serves a non-empty document must be rejected — the founding-case
-    // bypass that this fix removes would otherwise let this through.
-    const advertisedHex = tipsHashToHex(await tipsHash([]));
-    const servedHex = tipsHashToHex(await tipsHash(['cidA']));
-    expect(constantTimeHexEquals(advertisedHex, servedHex)).toBe(false);
-  });
+  // The same logical case (vote X, serve Y → reject) under a range of
+  // adversarial shapes. Table-driven so adding a new attack pattern only
+  // needs one row.
+  test.each([
+    {
+      label: 'subset-serve (vote {A,B}, serve {A})',
+      advertisedTips: ['cidA', 'cidB'] as string[],
+      servedTips: ['cidA'] as string[],
+    },
+    {
+      label: 'extra-cid-injection (vote {A,B}, serve {A,B,evil})',
+      advertisedTips: ['cidA', 'cidB'] as string[],
+      servedTips: ['cidA', 'cidB', 'cidEvil'] as string[],
+    },
+    {
+      label: 'founding-case-spoof (vote {}, serve {A})',
+      advertisedTips: [] as string[],
+      servedTips: ['cidA'] as string[],
+    },
+    {
+      label: 'disjoint-set (vote {A}, serve {B})',
+      advertisedTips: ['cidA'] as string[],
+      servedTips: ['cidB'] as string[],
+    },
+  ])(
+    'mismatched vote vs serve fails the binding check: $label',
+    async ({ advertisedTips, servedTips }) => {
+      const advertisedHex = tipsHashToHex(await tipsHash(advertisedTips));
+      const servedHex = tipsHashToHex(await tipsHash(servedTips));
+      expect(constantTimeHexEquals(advertisedHex, servedHex)).toBe(false);
+    },
+  );
 });

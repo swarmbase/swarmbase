@@ -179,6 +179,41 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   tipsHash?: Uint8Array;
 
   /**
+   * Optional explicit tip-set advertisement, populated by load responses
+   * (doc-load and snapshot-load) to bind the served full state to the
+   * responder's current frontier.
+   *
+   * The initial-load quorum gate binds the loader's accepted state to the
+   * tip-advertise hash a Q-of-K cohort voted for. Recomputing
+   * `tipsHash(loader._hashes)` after sync is unreliable because:
+   *   - on a snapshot-load, only the snapshot boundary CID is added to
+   *     `_hashes` — the ancestor CIDs the snapshot compacts away are NOT
+   *     restored, so `_hashes` does not represent the responder's full
+   *     history;
+   *   - on a regular doc-load, the loader's pre-existing local CIDs (if
+   *     any) inflate `_hashes` beyond what the responder advertised;
+   *   - on a compacted/pruned peer, the responder's own `_hashes` is the
+   *     responder's *current* frontier, NOT the full historical CID bag,
+   *     so two honest pruned peers could advertise different hashes if
+   *     the loader hashed reconstructed history.
+   *
+   * To avoid both, the responder explicitly includes its current tip set
+   * here (drawn from the same `_hashes` source it would use to respond to
+   * a fresh `tipAdvertiseV1` probe). The loader hashes `tips` directly
+   * and compares against the quorum-agreed `winningHashHex`, decoupling
+   * the binding from either peer's local history retention. Because the
+   * load response is signed by the responder, this is a responder-signed
+   * attestation of "my current frontier"; a peer that voted hash X but
+   * then serves a load with a different `tips` array (and thus a
+   * different `tipsHash(tips)`) is caught by the binding.
+   *
+   * Optional on the wire so legacy peers without quorum support don't
+   * break; the loader treats absence as a binding failure only when the
+   * quorum gate is enabled (i.e. when `winningHashHex` is non-null).
+   */
+  tips?: string[];
+
+  /**
    * Signature of the sync message.
    */
   signature?: string;

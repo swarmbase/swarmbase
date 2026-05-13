@@ -769,6 +769,26 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Returns this peer's current frontier as a plain string[] of CIDs —
+   * "what tips would I advertise to a fresh `tipAdvertiseV1` probe right
+   * now". Drawn from `this._hashes`, which is the same source the
+   * tip-advertise hash is computed from, so the advertised hash and the
+   * load-response `tips` field stay in lockstep across the two streams
+   * the loader uses (probe + full load).
+   *
+   * Wrapped in a helper so the load-response handlers, the tip-advertise
+   * handler, and (if reused later) any internal callers all hit the same
+   * canonical primitive. Returns a fresh array so callers can't mutate
+   * `_hashes` through the returned reference; the array is later sorted
+   * by `tipsHash` independently, so we don't sort here.
+   *
+   * @internal
+   */
+  private _currentFrontier(): string[] {
+    return Array.from(this._hashes);
+  }
+
+  /**
    * Record a CID as a recently-known tip for Merkle-CRDT cross-linking
    * (paper §VI.B.e). Called for both locally-generated and remote-applied
    * change nodes -- a peer A that just received B's change can cross-link
@@ -1676,6 +1696,20 @@ export class CollabswarmDocument<
         loadMessage.snapshot = this._latestSnapshot;
       }
 
+      // Attach an explicit tip-set advertisement so the loader can bind the
+      // served state to this responder's current frontier (issue #186 /
+      // #189 §5.4.2). The loader recomputes `tipsHash(tips)` and compares
+      // against the quorum-agreed `winningHashHex`; using the responder's
+      // own `_hashes` here keeps the binding source identical to the one
+      // used by the `tipAdvertiseV1` probe response so a peer that voted
+      // for hash X but serves a load whose `tips` hash to Y is caught.
+      // Drawn from the same `_hashes` set so a peer that loaded from a
+      // snapshot (and therefore has a pruned `_hashes`) still produces a
+      // self-consistent advertisement; the responder is attesting to
+      // "what tip-advertise would I respond with right now", not "what
+      // full history did I once have".
+      loadMessage.tips = this._currentFrontier();
+
       // Sign new message.
       loadMessage.signature = await this._signAsWriter(loadMessage);
 
@@ -1793,6 +1827,15 @@ export class CollabswarmDocument<
       const snapshotMessage = this._createSyncMessage();
       snapshotMessage.snapshot = this._latestSnapshot;
       snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
+      // Tip-set advertisement for the post-load binding check (see the
+      // doc-load handler above and the in-line check in
+      // `_sendLoadRequestAndSync` for the rationale). On a snapshot-load
+      // the loader's post-sync `_hashes`
+      // does NOT include ancestor CIDs that were compacted into the
+      // snapshot, so a `tipsHash(loader._hashes)` recomputation would
+      // never match a responder whose `_hashes` retains full history.
+      // The responder's `tips` is the canonical source of truth here.
+      snapshotMessage.tips = this._currentFrontier();
       snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
       const serialized =
@@ -1911,10 +1954,13 @@ export class CollabswarmDocument<
       }
 
       // Compute the canonical tip-set hash from the document's current
-      // `_hashes` set. Two peers with the same view produce byte-identical
-      // hashes; see `tips-hash.ts` for the canonicalization (sort + `\n`
-      // separator + SHA-256).
-      const hash = await tipsHash(this._hashes);
+      // frontier — the same source load responses use for the `tips` field
+      // (see `handleLoadRequestData` / `handleSnapshotLoadRequestData`),
+      // so a probe-then-load round-trip from this responder always binds
+      // against a consistent advertisement. Two peers with the same view
+      // produce byte-identical hashes; see `tips-hash.ts` for the
+      // canonicalization (sort + `\n` separator + SHA-256).
+      const hash = await tipsHash(this._currentFrontier());
 
       const advertisement: CRDTSyncMessage<ChangesType, PublicKey> = {
         documentId: this.documentPath,
@@ -2056,6 +2102,7 @@ export class CollabswarmDocument<
   private async _sendLoadRequestAndSync(
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
     serializedRequest: Uint8Array,
+    expectedTipsHashHex: string | null = null,
   ): Promise<boolean> {
     await pipe([serializedRequest], stream.sink);
     return await pipe(
@@ -2157,6 +2204,55 @@ export class CollabswarmDocument<
           }
         }
 
+        // Quorum frontier binding (#186 / #189 §5.4.2). When the loader
+        // ran a quorum probe round, the responder must have included its
+        // current frontier in `message.tips`; we hash that and require it
+        // to match the quorum-agreed `winningHashHex`. Done BEFORE
+        // `this.sync(...)` so a Byzantine peer that voted hash X but
+        // serves a load with a different frontier never gets to mutate
+        // the in-memory document. Recomputing the hash from
+        // `tipsHash(this._hashes)` post-sync (the prior behaviour) is
+        // unreliable because snapshot-loads don't restore ancestor CIDs
+        // and the loader's pre-existing local CIDs (if any) inflate the
+        // recomputed set.
+        if (expectedTipsHashHex !== null) {
+          if (!Array.isArray(message.tips)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding: responder ` +
+                `omitted 'tips' on load response; refusing to apply state ` +
+                `from an un-attesting peer.`,
+            );
+            throw new LoadQuorumFailedError({
+              documentPath: this.documentPath,
+              reason: 'no-majority',
+              respondingCount: 0,
+              requiredQ: 0,
+              agreement: new Map([[expectedTipsHashHex, 0]]),
+            });
+          }
+          const advertisedBytes = await tipsHash(message.tips);
+          const advertisedHex = tipsHashToHex(advertisedBytes);
+          if (!constantTimeHexEquals(expectedTipsHashHex, advertisedHex)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `expected tipsHash=${expectedTipsHashHex.slice(0, 12)}... but ` +
+                `responder advertised tips that hash to ${advertisedHex.slice(0, 12)}.... ` +
+                `An agreeing peer voted for one tip set and served a ` +
+                `different one; treating as Byzantine equivocation.`,
+            );
+            throw new LoadQuorumFailedError({
+              documentPath: this.documentPath,
+              reason: 'no-majority',
+              respondingCount: 0,
+              requiredQ: 0,
+              agreement: new Map([
+                [expectedTipsHashHex, 0],
+                [advertisedHex, 0],
+              ]),
+            });
+          }
+        }
+
         const syncResult = await this.sync(message, false);
         if (!syncResult) {
           console.warn(
@@ -2189,13 +2285,49 @@ export class CollabswarmDocument<
   private async _probeTipAdvertise(
     peer: import('@multiformats/multiaddr').Multiaddr,
     serializedRequest: Uint8Array,
+    signal?: AbortSignal,
   ): Promise<Uint8Array | null> {
+    // Capture the underlying v3 Stream so the abort path below can call
+    // `abort()` on it directly (the wrapped DuplexStream only exposes the
+    // write-side half-close via `close()`, not a full bidirectional tear-
+    // down). Without this, a probe that loses the Promise.race to the
+    // timeout would leak its stream until the libp2p connection itself
+    // closed -- on partitioned/slow peers, each `load()` could leak K
+    // streams, exhausting per-connection stream quotas. See PR #284 r2
+    // CodeRabbit comment on this method.
+    let rawStream: import('@libp2p/interface').Stream;
     let stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> };
     try {
-      stream = wrapStream(await this.libp2p.dialProtocol(peer, [tipAdvertiseV1]));
+      rawStream = await this.libp2p.dialProtocol(peer, [tipAdvertiseV1]);
+      stream = wrapStream(rawStream);
     } catch {
       // Peer doesn't support tip-advertise or dial failed -- treat as non-vote.
       return null;
+    }
+    // Abort handler: tear down the v3 stream bidirectionally so a timed-out
+    // probe doesn't strand the libp2p resource. `abort()` is the v3 full
+    // teardown ("close stream for reading and writing"); `close()` would
+    // only half-close the write side. Re-checking `signal?.aborted` after
+    // attaching handles the race where the signal fired between dial and
+    // listener attach. The handler also resolves `pipe()` / read promises
+    // below with `AbortError`, which we swallow in the outer catch.
+    const onAbort = () => {
+      try {
+        rawStream.abort(new Error('tip-advertise probe aborted'));
+      } catch {
+        // Already torn down -- nothing to do.
+      }
+    };
+    if (signal) {
+      if (signal.aborted) {
+        try {
+          rawStream.abort(new Error('tip-advertise probe aborted'));
+        } catch {
+          /* already torn down */
+        }
+        return null;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
     }
     try {
       await pipe([serializedRequest], stream.sink);
@@ -2269,6 +2401,22 @@ export class CollabswarmDocument<
       return message.tipsHash;
     } catch {
       return null;
+    } finally {
+      // Always detach the abort listener and release the libp2p stream.
+      // The normal success path drops through to here after `return` runs,
+      // so we still need to close the stream to release per-connection
+      // stream quota (the response read consumed the read side but the
+      // write side is half-open until close() runs). On the abort path
+      // `rawStream.abort()` has already been called by `onAbort`; calling
+      // `close()` again is a no-op the libp2p impls tolerate.
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      try {
+        await rawStream.close();
+      } catch {
+        /* already torn down */
+      }
     }
   }
 
@@ -2276,9 +2424,14 @@ export class CollabswarmDocument<
    * Run a single tip-advertise probe with a hard timeout. The probe itself
    * never throws (`_probeTipAdvertise` returns `null` on any failure
    * mode); a timeout also resolves to `null` so the caller can treat the
-   * peer as a non-vote rather than a disagreement. The pending probe
-   * keeps running on the background event loop after timeout, but its
-   * resolution is discarded by Promise.race.
+   * peer as a non-vote rather than a disagreement.
+   *
+   * Stream cancellation: when the timeout wins the race, the underlying
+   * probe's libp2p stream is torn down via an AbortController so the
+   * pending probe doesn't keep the resource alive in the background. Prior
+   * to this fix, every timed-out probe leaked one libp2p stream per
+   * `load()` call; under partitions or slow peers, K such leaks per load
+   * could exhaust per-connection stream quotas. See PR #284 r2 review.
    *
    * @internal
    */
@@ -2287,17 +2440,24 @@ export class CollabswarmDocument<
     serializedRequest: Uint8Array,
     timeoutMs: number,
   ): Promise<Uint8Array | null> {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {
       timer = setTimeout(() => resolve(null), timeoutMs);
     });
     try {
       return await Promise.race([
-        this._probeTipAdvertise(peer, serializedRequest),
+        this._probeTipAdvertise(peer, serializedRequest, controller.signal),
         timeout,
       ]);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      // Whether the probe won or the timeout won, abort the controller so
+      // any in-flight probe (loser of the race, still pending on the event
+      // loop) tears down its stream. Aborting AFTER the probe has already
+      // resolved is a no-op: the probe's finally block will have already
+      // detached the listener and closed the stream itself.
+      controller.abort();
     }
   }
 
@@ -2315,58 +2475,6 @@ export class CollabswarmDocument<
     const str = peer.toString();
     const matches = [...str.matchAll(/\/p2p\/([^/]+)/g)];
     return matches.length > 0 ? matches[matches.length - 1][1] : str;
-  }
-
-  /**
-   * Verify that the just-applied load response matches the tip-set hash the
-   * quorum agreed on. Called after `_sendLoadRequestAndSync` returns `true`
-   * and `_hashes` has been populated with the served state's CIDs. The
-   * recomputed `tipsHash(this._hashes)` MUST equal `expectedHex` (the
-   * quorum's `winningHashHex`), otherwise a peer in the agreeing cohort
-   * voted for one tip set and served a different one (Byzantine
-   * equivocation: cheap to do because the tip-advertise probe and the
-   * full-state load happen on separate streams). On mismatch we throw
-   * `LoadQuorumFailedError`; the in-memory document is already partially
-   * mutated at that point, so the caller MUST treat the document instance
-   * as poisoned and construct a fresh one (this is acceptable because the
-   * gate runs during `open()`, before the document is exposed to
-   * application code or subscribed to pubsub).
-   *
-   * Constant-time comparison: the two hex strings are always 64 chars
-   * (SHA-256 lowercase hex). An early-exit `===` would leak which prefix
-   * matched; a brute-force timing attacker can amplify that into "I know
-   * which agreeing peer you'd accept", which while not catastrophic is
-   * also free to avoid.
-   *
-   * When `expectedHex` is `null` (quorum disabled), this is a no-op.
-   *
-   * @internal
-   */
-  private async _enforceQuorumHashBinding(
-    expectedHex: string | null,
-  ): Promise<void> {
-    if (expectedHex === null) return;
-    const actualBytes = await tipsHash(this._hashes);
-    const actualHex = tipsHashToHex(actualBytes);
-    if (!constantTimeHexEquals(expectedHex, actualHex)) {
-      console.warn(
-        `[${this.documentPath}] Initial-load quorum hash binding FAILED: ` +
-          `expected tipsHash=${expectedHex.slice(0, 12)}... but loaded ` +
-          `state hashed to ${actualHex.slice(0, 12)}.... An agreeing peer ` +
-          `served a state that does not match its tip-advertise vote; ` +
-          `treating as Byzantine equivocation.`,
-      );
-      throw new LoadQuorumFailedError({
-        documentPath: this.documentPath,
-        reason: 'no-majority',
-        respondingCount: 0,
-        requiredQ: 0,
-        agreement: new Map([
-          [expectedHex, 0],
-          [actualHex, 0],
-        ]),
-      });
-    }
   }
 
   // API Methods --------------------------------------------------------------
@@ -2404,11 +2512,19 @@ export class CollabswarmDocument<
    * not flip a partition into a Byzantine-failure verdict. Peers are
    * deduped by libp2p PeerId before the probe so a single peer with
    * multiple open connections cannot cast multiple votes. After quorum
-   * passes, the served full state is bound to the agreed hash: the
-   * recomputed `tipsHash(this._hashes)` post-sync must equal the quorum
-   * `winningHashHex`, otherwise an agreeing peer equivocated between its
-   * advertise vote and its served state and the load is rejected. Closes
-   * the gap tracked under issue #189 §5.4 item 2 (and bulleted in #186).
+   * passes, the served full state is bound to the agreed hash via the
+   * responder-supplied `tips` array on the load response: the loader
+   * computes `tipsHash(message.tips)` and verifies it equals the quorum
+   * `winningHashHex` BEFORE applying the response. Hashing the
+   * responder's own attestation (rather than recomputing
+   * `tipsHash(this._hashes)` post-sync) keeps the binding correct under
+   * snapshot-load (which doesn't restore ancestor CIDs to `_hashes`),
+   * history compaction, and pre-existing local CIDs — the prior
+   * recompute-locally approach would fail-open or fail-closed in those
+   * cases. An agreeing peer that voted hash X but serves a load whose
+   * `tips` hash to Y is caught and the load is rejected before any
+   * in-memory document state is mutated. Closes the gap tracked under
+   * issue #189 §5.4 item 2 (and bulleted in #186).
    *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
@@ -2572,8 +2688,9 @@ export class CollabswarmDocument<
             `degraded back to single-peer load). Configure additional peers ` +
             `to restore Byzantine-fault-tolerant quorum semantics.`,
         );
+        const probedPeer = orderedPeers[0];
         const probe = await this._raceTipAdvertiseProbe(
-          orderedPeers[0],
+          probedPeer,
           serializedRequest,
           timeoutMs,
         );
@@ -2591,8 +2708,18 @@ export class CollabswarmDocument<
         // advertised (defends against a malicious peer that decides what
         // to serve only after seeing the advertise round-trip).
         winningHashHex = tipsHashToHex(probe);
-        // Proceed with `orderedPeers` unchanged (preferred-peer order
-        // preserved). Fall through to the legacy snapshot/doc-load loop.
+        // Narrow `orderedPeers` to ONLY the probed peer. Without this,
+        // the subsequent snapshot/doc-load loop would also try the other
+        // peers in `orderedPeers` (which were never probed) and bind
+        // their served state against THIS peer's hash — a non-sequitur
+        // that could either: (a) pass the binding by coincidence and
+        // accept state from a peer that never voted for it, or (b) fail
+        // the binding and abort the load even though the single-peer
+        // path explicitly opted into single-peer trust. Restrict the
+        // load loop to the one peer whose hash we accepted. See PR #284
+        // r2 CodeRabbit comment on this block.
+        orderedPeers.length = 0;
+        orderedPeers.push(probedPeer);
       } else {
         // Standard K-of-Q quorum path. Take the first K peers from the
         // already-ordered list (preferredPeer is at index 0, so it is
@@ -2654,15 +2781,16 @@ export class CollabswarmDocument<
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
     //
-    // After a successful load we verify `tipsHash(this._hashes)` equals the
-    // quorum-agreed `winningHashHex` (when quorum is enabled). This binds the
-    // served full state to what the peer advertised during the probe round.
-    // Without this binding, a peer in the agreeing cohort could vote for
-    // hash X and then serve a different state, defeating the gate's whole
-    // purpose. On mismatch the load is rejected and `LoadQuorumFailedError`
-    // is thrown; the in-memory document state is poisoned at that point so
-    // we cannot transparently retry the next peer — the caller must
-    // construct a fresh document instance.
+    // Quorum frontier binding: when `winningHashHex` is non-null,
+    // `_sendLoadRequestAndSync` requires the responder to include its
+    // current frontier in `message.tips` and verifies
+    // `tipsHash(message.tips) === winningHashHex` BEFORE applying the
+    // sync, so a Byzantine peer that voted for one tip set and serves a
+    // different one never gets to mutate in-memory document state. On
+    // mismatch the load is rejected via `LoadQuorumFailedError` and the
+    // caller must construct a fresh document instance (the gate runs
+    // during `open()`, so no application code has observed the document
+    // yet).
     for (const peer of orderedPeers) {
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
@@ -2673,9 +2801,12 @@ export class CollabswarmDocument<
         const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
           snapshotLoadV2,
         ]));
-        const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
+        const loaded = await this._sendLoadRequestAndSync(
+          snapshotStream,
+          serializedRequest,
+          winningHashHex,
+        );
         if (loaded) {
-          await this._enforceQuorumHashBinding(winningHashHex);
           return true;
         }
         // Empty response -- peer has no snapshot, try doc-load below.
@@ -2690,9 +2821,12 @@ export class CollabswarmDocument<
         const docStream = wrapStream(await this.libp2p.dialProtocol(peer, [
           documentLoadV2,
         ]));
-        const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
+        const loaded = await this._sendLoadRequestAndSync(
+          docStream,
+          serializedRequest,
+          winningHashHex,
+        );
         if (loaded) {
-          await this._enforceQuorumHashBinding(winningHashHex);
           return true;
         }
       } catch (err) {
