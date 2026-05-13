@@ -27,6 +27,7 @@ import {
 } from './crdt-change-node';
 import {
   collectReferencedAncestors,
+  computeServedFrontier,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
@@ -1851,18 +1852,30 @@ export class CollabswarmDocument<
         loadMessage.snapshot = this._latestSnapshot;
       }
 
-      // Attach an explicit tip-set advertisement so the loader can bind the
-      // served state to this responder's current frontier (issue #186 /
-      // #189 §5.4.2). The loader recomputes `tipsHash(tips)` and compares
-      // against the quorum-agreed `winningHashHex`; `_currentFrontier()`
-      // is the canonical helper used by ALL three protocols (tip-advertise,
-      // doc-load, snapshot-load) so a peer that voted for hash X but
-      // serves a load whose `tips` hash to Y is caught. The frontier is
-      // `_hashes \ _referencedAncestors` -- the heads of the local DAG --
-      // which converges across honest peers even when their full `_hashes`
-      // cardinality differs (e.g. one loaded from a snapshot, the other
-      // has the full ancestor history). This is part of the SIGNED v3
-      // payload; see `wire-protocols.ts` for the version-bump rationale.
+      // Attach an explicit tip-set advertisement so the loader can apply
+      // a defense-in-depth consistency check against this responder's
+      // self-attested current frontier (issue #186 / #189 §5.4.2).
+      //
+      // NOTE: as of PR #284 r7, the loader's PRIMARY binding is derived
+      // STRUCTURALLY from the served `changes`/`snapshot` payload via
+      // `computeServedFrontier`; the responder's `tips` array is NOT
+      // trusted as the source of truth (a Byzantine peer can populate
+      // it with the agreed CIDs while serving a divergent payload).
+      // `tips` is still emitted by honest responders because the loader
+      // ALSO verifies that the responder's own attestation hashes to
+      // the same value as the structurally-derived served frontier --
+      // a peer whose `tips` contradicts their own served payload is
+      // caught at the secondary check. `_currentFrontier()` remains
+      // the canonical helper used by ALL three protocols
+      // (tip-advertise, doc-load, snapshot-load) so an honest
+      // responder advertises the same frontier across the probe and
+      // the load round. The frontier is `_hashes \
+      // _referencedAncestors` -- the heads of the local DAG -- which
+      // converges across honest peers even when their full `_hashes`
+      // cardinality differs (e.g. one loaded from a snapshot, the
+      // other has the full ancestor history). This field is part of
+      // the SIGNED v3 payload; see `wire-protocols.ts` for the
+      // version-bump rationale.
       loadMessage.tips = this._currentFrontier();
 
       // Sign new message.
@@ -2361,21 +2374,41 @@ export class CollabswarmDocument<
         }
 
         // Quorum frontier binding (#186 / #189 §5.4.2). When the loader
-        // ran a quorum probe round, the responder must have included its
-        // current frontier in `message.tips`; we hash that and require it
-        // to match the quorum-agreed `winningHashHex`. Done BEFORE
-        // `this.sync(...)` so a Byzantine peer that voted hash X but
-        // serves a load with a different frontier never gets to mutate
-        // the in-memory document. Recomputing the hash from
-        // `tipsHash(this._hashes)` post-sync (the prior behaviour) is
-        // unreliable because snapshot-loads don't restore ancestor CIDs
-        // and the loader's pre-existing local CIDs (if any) inflate the
-        // recomputed set.
+        // ran a quorum probe round, the served full-load payload must
+        // structurally describe the same tip set the responder voted
+        // for. Done BEFORE `this.sync(...)` so a Byzantine peer that
+        // voted hash X but serves a load with a different frontier
+        // never gets to mutate the in-memory document.
+        //
+        // CRITICAL: the bind decision is derived from the ACTUAL served
+        // payload, NOT from the responder-supplied `message.tips`.
+        // Trusting `message.tips` -- as previous rounds did -- was a
+        // hole: a Byzantine peer could vote hash X, put the matching
+        // tip CIDs in `message.tips`, and then serve a `changes` /
+        // `snapshot` payload describing a completely different state.
+        // The advertised-vs-claimed check would pass even though the
+        // application would receive divergent content. PR #284 r7
+        // Copilot review caught this; the fix delegates frontier
+        // computation to the pure helper `computeServedFrontier`, which
+        // walks the served `changes` tree (plus the snapshot boundary
+        // CID) and returns the set of payload CIDs that no other node
+        // in the same payload references as a parent -- i.e. the heads
+        // of what was actually served. We then hash that frontier and
+        // compare to `winningHashHex`.
+        //
+        // We additionally verify `message.tips`, when present,
+        // matches the structurally-derived served frontier as a
+        // defense-in-depth check: a peer whose `tips` attestation
+        // contradicts their own served payload is misbehaving even if
+        // the served-frontier hash happens to match the quorum vote
+        // (e.g. if they tried to claim extra heads in `tips`). This
+        // catches the responder-equivocation mode where `tips` and
+        // `changes` were assembled inconsistently.
         //
         // Throws the module-private `_QuorumBindCheckFailedError` on
-        // mismatch / missing-tips so the surrounding `load()` loop can
-        // record this peer as a bind-failure and proceed to the NEXT
-        // peer in the agreeing cohort. Previously this site threw
+        // mismatch so the surrounding `load()` loop can record this
+        // peer as a bind-failure and proceed to the NEXT peer in the
+        // agreeing cohort. Previously this site threw
         // `LoadQuorumFailedError` directly, which `load()` re-raised --
         // letting a single malicious peer in the agreeing cohort vote
         // for the majority hash, serve a mismatched full load, and
@@ -2385,32 +2418,52 @@ export class CollabswarmDocument<
         // `LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)`
         // when EVERY narrowed peer fails the bind step.
         if (expectedTipsHashHex !== null) {
-          if (!Array.isArray(message.tips)) {
-            console.warn(
-              `[${this.documentPath}] Quorum frontier binding: responder ` +
-                `omitted 'tips' on load response; refusing to apply state ` +
-                `from an un-attesting peer.`,
-            );
-            throw new _QuorumBindCheckFailedError(
-              '(missing tips)',
-              `Quorum frontier binding: responder omitted 'tips' on load response.`,
-            );
-          }
-          const advertisedBytes = await tipsHash(message.tips);
-          const advertisedHex = tipsHashToHex(advertisedBytes);
-          if (!constantTimeHexEquals(expectedTipsHashHex, advertisedHex)) {
+          // Derive the served frontier STRUCTURALLY from the payload
+          // the responder is asking us to apply -- not from the
+          // responder's own `tips` attestation.
+          const servedFrontier = computeServedFrontier(
+            message.changeId,
+            message.changes,
+            message.snapshot?.lastChangeNodeCID,
+          );
+          const servedBytes = await tipsHash(servedFrontier);
+          const servedHex = tipsHashToHex(servedBytes);
+          if (!constantTimeHexEquals(expectedTipsHashHex, servedHex)) {
             console.warn(
               `[${this.documentPath}] Quorum frontier binding FAILED: ` +
                 `expected tipsHash=${expectedTipsHashHex.slice(0, 12)}... but ` +
-                `responder advertised tips that hash to ${advertisedHex.slice(0, 12)}.... ` +
+                `served payload's frontier hashes to ${servedHex.slice(0, 12)}.... ` +
                 `An agreeing peer voted for one tip set and served a ` +
                 `different one; treating as Byzantine equivocation.`,
             );
             throw new _QuorumBindCheckFailedError(
-              advertisedHex,
-              `Quorum frontier binding mismatch: expected ${expectedTipsHashHex.slice(0, 12)}... ` +
-                `got ${advertisedHex.slice(0, 12)}...`,
+              servedHex,
+              `Quorum frontier binding mismatch (served payload): expected ` +
+                `${expectedTipsHashHex.slice(0, 12)}... got ${servedHex.slice(0, 12)}...`,
             );
+          }
+          // Defense-in-depth: if the responder included `tips`, it
+          // must hash to the same value as the structurally-derived
+          // served frontier. A peer whose attested `tips` contradicts
+          // their own served payload (e.g. claims extra heads that
+          // are not present in the served tree) is misbehaving.
+          if (Array.isArray(message.tips)) {
+            const advertisedBytes = await tipsHash(message.tips);
+            const advertisedHex = tipsHashToHex(advertisedBytes);
+            if (!constantTimeHexEquals(servedHex, advertisedHex)) {
+              console.warn(
+                `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                  `served payload frontier hashes to ${servedHex.slice(0, 12)}... ` +
+                  `but responder advertised tips hashing to ${advertisedHex.slice(0, 12)}.... ` +
+                  `Responder's own attestation contradicts the served payload.`,
+              );
+              throw new _QuorumBindCheckFailedError(
+                advertisedHex,
+                `Quorum frontier binding mismatch (advertised vs served): ` +
+                  `advertised ${advertisedHex.slice(0, 12)}... served ` +
+                  `${servedHex.slice(0, 12)}...`,
+              );
+            }
           }
         }
 
@@ -2696,29 +2749,35 @@ export class CollabswarmDocument<
    * (when `loadQuorumEnabled: false`) keeps the ORIGINAL un-deduped
    * peer list so it can retry across multiple multiaddrs for the same
    * peer id (e.g. a direct connection + a relay-circuit fallback). See
-   * PR #284 r7 Copilot review for the dedup-scope rationale. After
-   * quorum passes, the served full state is bound to the agreed hash via the
-   * responder-supplied `tips` array on the load response: the loader
-   * computes `tipsHash(message.tips)` and verifies it equals the quorum
-   * `winningHashHex` BEFORE applying the response. Hashing the
-   * responder's own attestation (rather than recomputing
-   * `tipsHash(this._hashes)` post-sync) keeps the binding correct under
-   * snapshot-load (which doesn't restore ancestor CIDs to `_hashes`),
-   * history compaction, and pre-existing local CIDs — the prior
-   * recompute-locally approach would fail-open or fail-closed in those
-   * cases. An agreeing peer that voted hash X but serves a load whose
-   * `tips` hash to Y is treated as a PER-PEER bind failure: the loader
-   * records the offending peer in `agreeingPeerBindFailures`, skips it,
-   * and tries the next peer in the agreeing cohort. This prevents a
-   * single malicious peer in the agreeing cohort from DoS'ing the
-   * entire load by voting for the majority hash (passing quorum) and
-   * then serving a mismatched full load. Only after EVERY peer in the
-   * agreeing cohort has bind-failed does the loader throw
-   * `LoadQuorumFailedError(reason: 'bind-check-failed-all-agreeing-
-   * peers')`, with `agreeingPeerBindFailures` recording per-peer what
-   * each Byzantine peer served instead. Closes the gap tracked under
-   * issue #189 §5.4 item 2 (and bulleted in #186). See PR #284 r6
-   * Copilot review for the DoS rationale on the per-peer retry.
+   * PR #284 r7 Copilot review for the dedup-scope rationale.
+   *
+   * After quorum passes, the served full state is bound to the agreed
+   * hash STRUCTURALLY -- the loader derives the responder's served
+   * frontier from the actual `changes`/`snapshot` payload via
+   * `computeServedFrontier`, hashes that, and verifies it equals
+   * `winningHashHex` BEFORE applying the response. The
+   * responder-supplied `message.tips` array is NO LONGER trusted as the
+   * source of truth (previous rounds did, which let a Byzantine peer
+   * vote hash X, put X's tips in `message.tips`, and serve a divergent
+   * payload). When present, `message.tips` is additionally checked to
+   * hash to the same value as the structurally-derived served
+   * frontier; this catches the responder-internal-equivocation case
+   * where the served `changes` and the advertised `tips` were
+   * assembled inconsistently. See PR #284 r7 Copilot review. An
+   * agreeing peer whose served payload's structural frontier hashes to
+   * something other than `winningHashHex` is treated as a PER-PEER bind
+   * failure: the loader records the offending peer in
+   * `agreeingPeerBindFailures`, skips it, and tries the next peer in
+   * the agreeing cohort. This prevents a single malicious peer in the
+   * agreeing cohort from DoS'ing the entire load by voting for the
+   * majority hash (passing quorum) and then serving a mismatched full
+   * load. Only after EVERY peer in the agreeing cohort has bind-failed
+   * does the loader throw `LoadQuorumFailedError(reason: 'bind-check-
+   * failed-all-agreeing-peers')`, with `agreeingPeerBindFailures`
+   * recording per-peer what each Byzantine peer served instead.
+   * Closes the gap tracked under issue #189 §5.4 item 2 (and bulleted
+   * in #186). See PR #284 r6 Copilot review for the DoS rationale on
+   * the per-peer retry.
    *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
@@ -2907,11 +2966,17 @@ export class CollabswarmDocument<
     // fall back to the regular doc-load protocol.
     //
     // Quorum frontier binding: when `winningHashHex` is non-null,
-    // `_sendLoadRequestAndSync` requires the responder to include its
-    // current frontier in `message.tips` and verifies
-    // `tipsHash(message.tips) === winningHashHex` BEFORE applying the
-    // sync, so a Byzantine peer that voted for one tip set and serves a
-    // different one never gets to mutate in-memory document state.
+    // `_sendLoadRequestAndSync` derives the responder's served frontier
+    // STRUCTURALLY from the actual `changes`/`snapshot` payload via
+    // `computeServedFrontier`, hashes that, and verifies it equals
+    // `winningHashHex` BEFORE applying the sync, so a Byzantine peer
+    // that voted for one tip set and serves a different one never gets
+    // to mutate in-memory document state. The responder-supplied
+    // `message.tips` is checked as a defense-in-depth consistency
+    // requirement but is NOT the source of truth -- previous rounds
+    // trusted it as such, which let a Byzantine peer game the binding
+    // by populating `tips` with the agreed CIDs while serving a
+    // divergent `changes` payload. See PR #284 r7 Copilot review.
     //
     // Per-peer bind failures (`_QuorumBindCheckFailedError`) are NOT
     // fatal to the whole load -- they only disqualify the offending
@@ -2924,9 +2989,10 @@ export class CollabswarmDocument<
     // See PR #284 r6 Copilot review.
     //
     // The `agreeingPeerBindFailures` map records, per peer, the hex
-    // hash the responder's served `tips` actually hashed to (or the
-    // sentinel `'(missing tips)'` for an omitted-tips response). This
-    // is threaded into the final error so callers / operators can see
+    // hash the served payload's structural frontier actually hashed to
+    // (or the hex of the responder's contradicting `tips` attestation
+    // when the defense-in-depth secondary check fails). This is
+    // threaded into the final error so callers / operators can see
     // which peers in the agreeing cohort equivocated between the
     // probe round and the load round and what they served instead.
     const agreeingPeerBindFailures = new Map<string, string>();
@@ -2952,14 +3018,15 @@ export class CollabswarmDocument<
         // Empty response -- peer has no snapshot, try doc-load below.
       } catch (err) {
         if (err instanceof _QuorumBindCheckFailedError) {
-          // This peer voted hash X in the probe round but served a
-          // load whose tips hash to something else (or omitted tips
-          // entirely). Record the failure and skip the doc-load
-          // fallback for this peer -- a peer that equivocated once
-          // is not given a second chance on the same load round.
+          // This peer voted hash X in the probe round but the structural
+          // frontier of their served payload hashes to something else
+          // (or their advertised `tips` contradicts the served payload).
+          // Record the failure and skip the doc-load fallback for this
+          // peer -- a peer that equivocated once is not given a second
+          // chance on the same load round.
           console.warn(
             `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
-              `quorum frontier bind on snapshot-load (served ${err.advertisedHex}); ` +
+              `quorum frontier bind on snapshot-load (offending hash ${err.advertisedHex}); ` +
               `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
           );
           agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
@@ -2993,7 +3060,7 @@ export class CollabswarmDocument<
         if (err instanceof _QuorumBindCheckFailedError) {
           console.warn(
             `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
-              `quorum frontier bind on doc-load (served ${err.advertisedHex}); ` +
+              `quorum frontier bind on doc-load (offending hash ${err.advertisedHex}); ` +
               `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
           );
           agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);

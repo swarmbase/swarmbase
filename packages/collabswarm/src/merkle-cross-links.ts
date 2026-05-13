@@ -235,6 +235,113 @@ export function collectReferencedAncestors<ChangesType>(
 }
 
 /**
+ * Pure helper: derive the served frontier of a load-response payload
+ * STRUCTURALLY, without applying any of it to local state.
+ *
+ * The initial-load quorum binding (#186 / #189 §5.4.2) needs to verify that
+ * the full-load response a peer serves actually corresponds to the
+ * tip-set hash that peer voted for in the probe round. Previously the
+ * loader hashed the responder-supplied `message.tips` array and compared
+ * to the quorum-agreed hash -- which trusted the responder's own
+ * attestation as the source of truth. A malicious peer could vote hash
+ * X, put X's tip CIDs in `message.tips`, and then serve a `changes`
+ * payload describing a completely different state; the binding would
+ * still pass.
+ *
+ * This helper closes that gap: given the served `changes` tree (rooted
+ * at `changeId`) plus an optional `snapshotBoundaryCid` from
+ * `message.snapshot.lastChangeNodeCID`, it computes the frontier as a
+ * function of the payload's structure -- the set of CIDs that appear in
+ * the served tree but are NOT referenced as a parent (child-key) of any
+ * node in the same tree. Hashing this set with `tipsHash` and comparing
+ * to `winningHashHex` produces a binding decision that does not depend
+ * on the responder's own attestation.
+ *
+ * Algorithm:
+ *   - Initialise `cids = {}` and `referenced = {}`.
+ *   - If `changes` is present, walk the tree:
+ *       - Record `changeId` (if defined) into `cids` (it is a node in
+ *         the served tree, even if it has no children).
+ *       - For every `(childId, childNode)` pair encountered in any
+ *         `children` map, record `childId` into BOTH `cids` (the child
+ *         is a node in the served tree) AND `referenced` (the child is
+ *         a parent of the current node, so it is NOT a head).
+ *       - Recurse into the child's own children (if not deferred).
+ *   - If `snapshotBoundaryCid` is provided and non-empty, record it
+ *     into `cids`. The snapshot boundary is a node the responder
+ *     attests to (post-sync the loader adds it to `_hashes`); whether
+ *     it ends up in the frontier depends on whether any post-snapshot
+ *     change in `changes` references it as a parent.
+ *   - Return `cids \ referenced` -- the heads (CIDs nobody points to).
+ *
+ * Edge cases:
+ *   - Both `changes` undefined AND `snapshotBoundaryCid` empty: the
+ *     responder is brand new / has no state. Returns `[]`. The loader
+ *     can compare against the canonical hash of `[]` to detect a
+ *     responder that voted for a non-empty state but serves nothing.
+ *   - `changeId === undefined` with `changes` defined: the served tree
+ *     is anonymous (no root CID). Pure helpers in this module already
+ *     tolerate `nodeId === undefined`; we record nothing for the
+ *     anonymous root, so an anonymous served tree contributes only its
+ *     children-keys to the analysis.
+ *   - Deferred children sentinel: treated identically to
+ *     `collectReferencedAncestors` -- the children of a deferred node
+ *     are unknown; we do not recurse. Any CIDs that appear as keys
+ *     leading INTO a deferred child are still recorded as referenced
+ *     (we saw them as a child-key before the deferred indicator).
+ *   - Cycles: defensively guarded by a `visited` set on node CIDs.
+ *
+ * This is structurally identical to applying the served payload and
+ * then computing `_hashes \ _referencedAncestors` on an EMPTY pre-sync
+ * loader, except it works in pure form (no I/O, no Helia blockstore
+ * fetch, no document state mutation). The returned array is unsorted;
+ * `tipsHash` performs its own canonical sort. See PR #284 r7 Copilot
+ * review for the design discussion.
+ */
+export function computeServedFrontier<ChangesType>(
+  changeId: string | undefined,
+  changes: CRDTChangeNode<ChangesType> | undefined,
+  snapshotBoundaryCid: string | undefined,
+): string[] {
+  const cids = new Set<string>();
+  const referenced = new Set<string>();
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      cids.add(nodeId);
+    }
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      cids.add(childId);
+      referenced.add(childId);
+      walk(childId, childNode);
+    }
+  }
+
+  if (changes !== undefined) {
+    walk(changeId, changes);
+  }
+  if (snapshotBoundaryCid) {
+    cids.add(snapshotBoundaryCid);
+  }
+
+  const frontier: string[] = [];
+  for (const cid of cids) {
+    if (!referenced.has(cid)) {
+      frontier.push(cid);
+    }
+  }
+  return frontier;
+}
+
+/**
  * Pure helper: append `entry` to `recentTips` with LRU semantics
  * (most-recently-used to the back), evicting the oldest entries when the
  * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is

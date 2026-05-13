@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
   collectReferencedAncestors,
+  computeServedFrontier,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
@@ -801,5 +802,255 @@ describe('collectReferencedAncestors (frontier helper for initial-load quorum)',
     // entries vs 3 entries), so any tipsHash derived from it would have
     // diverged -- the bug round 3 of the review caught.
     expect(peerAHashes.size).not.toBe(peerBHashes.size);
+  });
+});
+
+/**
+ * Tests for `computeServedFrontier`, the structural-binding helper that
+ * derives a load-response's frontier from the actual served payload
+ * rather than the responder's `tips` attestation. Closes the gap caught
+ * by PR #284 r7 Copilot review: previously the quorum frontier binding
+ * hashed the responder-supplied `tips` array and compared to the
+ * agreed `winningHashHex`, which let a Byzantine peer vote hash X and
+ * then serve a divergent payload while keeping `tips` set to X's CIDs.
+ * The new binding derives the served frontier structurally from
+ * `message.changeId` + `message.changes` (+ optional snapshot
+ * boundary), so the responder cannot lie about what they served.
+ */
+describe('computeServedFrontier (PR #284 r7 served-payload frontier derivation)', () => {
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+
+  test('empty payload (no changes, no snapshot) => empty frontier', () => {
+    // A responder that has no state at all serves nothing. Their
+    // "frontier" is the canonical empty set, which the quorum loader
+    // compares to `tipsHash([])`. Honest brand-new responders bootstrap
+    // cleanly under this case.
+    expect(computeServedFrontier(undefined, undefined, undefined)).toEqual([]);
+    expect(computeServedFrontier(undefined, undefined, '')).toEqual([]);
+  });
+
+  test('snapshot-only payload (no changes) => boundary CID is the sole frontier', () => {
+    // Pure-snapshot load (responder has nothing post-snapshot). The
+    // boundary CID is the only head.
+    const frontier = computeServedFrontier(undefined, undefined, 'SNAP_BOUNDARY');
+    expect(frontier).toEqual(['SNAP_BOUNDARY']);
+  });
+
+  test('single-head linear chain: only the root CID is in the frontier', () => {
+    // Typical case: responder has a linear change history. The served
+    // tree is rooted at HEAD with primary-parent chain HEAD->P1->P2.
+    // The frontier of this payload is {HEAD} -- P1 and P2 are
+    // referenced ancestors.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        P1: {
+          kind: docKind,
+          children: {
+            P2: { kind: docKind },
+          },
+        },
+      },
+    };
+    const frontier = computeServedFrontier('HEAD', tree, undefined);
+    expect(frontier.sort()).toEqual(['HEAD']);
+  });
+
+  test('snapshot + post-snapshot chain that references the boundary: boundary drops out, only post-snapshot head remains', () => {
+    // Responder has a snapshot at SNAP_BOUNDARY plus one post-snapshot
+    // change H1 that points back to it. After applying both:
+    //   - SNAP_BOUNDARY is a node in _hashes (snapshot boundary sentinel)
+    //   - SNAP_BOUNDARY is also referenced by H1 as a parent
+    //   - SNAP_BOUNDARY therefore drops out of the frontier
+    //   - H1 is the sole head
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        SNAP_BOUNDARY: { kind: docKind },
+      },
+    };
+    const frontier = computeServedFrontier('H1', tree, 'SNAP_BOUNDARY');
+    expect(frontier.sort()).toEqual(['H1']);
+  });
+
+  test('snapshot + disjoint post-snapshot change (does NOT reference boundary): two heads', () => {
+    // Edge case: post-snapshot change tree exists but does NOT
+    // reference the snapshot boundary in its children. Both the
+    // snapshot boundary AND the post-snapshot head are tips.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      // No children -- this is a leaf node in the change tree.
+    };
+    const frontier = computeServedFrontier('H1', tree, 'SNAP_BOUNDARY');
+    expect(frontier.sort()).toEqual(['H1', 'SNAP_BOUNDARY']);
+  });
+
+  test('cross-links: deferred children are referenced AND added to cids; not in frontier', () => {
+    // Cross-link entries in the served tree are deferred leaves -- they
+    // appear as a key in a parent's `children` map (so they are
+    // referenced) and the child node has no `change` payload. They
+    // should be treated as referenced ancestors, not as heads.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        PRIMARY_PARENT: {
+          kind: docKind,
+        },
+        CROSS_LINK_TIP: {
+          // Deferred leaf -- no change payload, no children.
+          kind: docKind,
+        },
+      },
+    };
+    const frontier = computeServedFrontier('HEAD', tree, undefined);
+    // HEAD is the only head -- PRIMARY_PARENT and CROSS_LINK_TIP are
+    // both referenced as children.
+    expect(frontier.sort()).toEqual(['HEAD']);
+  });
+
+  test('forged tips attack: responder ships changes for state Y but claims state X tips', () => {
+    // This is the attack the structural-binding closes. Imagine the
+    // quorum agreed on `winningHashHex = tipsHash([X_HEAD])`. A
+    // Byzantine responder votes hash X (truthfully in the probe
+    // round), then on the load serves changes rooted at a completely
+    // different head Y_HEAD. The responder also fakes `message.tips =
+    // [X_HEAD]` -- but the served payload doesn't contain X_HEAD
+    // anywhere.
+    //
+    // The previous (responder-attestation) binding would have
+    // compared `tipsHash([X_HEAD]) === winningHashHex` and PASSED,
+    // allowing the divergent state Y to be applied. The new
+    // structural binding examines the served payload and computes
+    // the frontier as `[Y_HEAD]`. Hashing that gives a value that
+    // differs from `winningHashHex`, so the binding REJECTS the
+    // peer and `load()` retries the next agreeing peer.
+    const forgedTree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        Y_PARENT: { kind: docKind },
+      },
+    };
+    const servedFrontier = computeServedFrontier(
+      'Y_HEAD',
+      forgedTree,
+      undefined,
+    );
+    expect(servedFrontier.sort()).toEqual(['Y_HEAD']);
+    // The responder's CLAIMED `tips` would say [X_HEAD], but the
+    // structural derivation says [Y_HEAD]. The loader hashes the
+    // structural result and compares to `winningHashHex`; they
+    // differ, the peer is rejected.
+    expect(servedFrontier).not.toContain('X_HEAD');
+  });
+
+  test('forged tips attack with snapshot in payload: structural derivation also exposes the lie', () => {
+    // Same attack but the responder includes a snapshot in the
+    // forged payload. The snapshot boundary they ship is for state Y
+    // (Y_BOUNDARY), not for the agreed state X. The structural
+    // derivation collects {Y_BOUNDARY, Y_HEAD} from the payload --
+    // neither matches the agreed X_HEAD.
+    const forgedTree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        Y_BOUNDARY: { kind: docKind },
+      },
+    };
+    const servedFrontier = computeServedFrontier(
+      'Y_HEAD',
+      forgedTree,
+      'Y_BOUNDARY',
+    );
+    // Y_BOUNDARY is referenced by Y_HEAD => not in frontier.
+    // Only Y_HEAD remains.
+    expect(servedFrontier.sort()).toEqual(['Y_HEAD']);
+  });
+
+  test('responder-internal equivocation: tips claim multiple heads but payload only embeds one => structural frontier exposes the inconsistency', () => {
+    // Variant: responder advertises `tips = [H1, H2]` in `message.tips`
+    // (and hashes it correctly into the winning hash they voted for),
+    // but the served `changes` tree only embeds H1. The
+    // structurally-derived frontier is {H1}, which hashes
+    // differently from `tipsHash([H1, H2])`. The loader's primary
+    // structural check fires; the responder's `tips` is also
+    // checked against the structural frontier as defense-in-depth.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      // No children -- a leaf in the change DAG.
+    };
+    const servedFrontier = computeServedFrontier('H1', tree, undefined);
+    expect(servedFrontier.sort()).toEqual(['H1']);
+    // Claimed [H1, H2] != servedFrontier [H1]. Rejected.
+  });
+
+  test('deferred children sentinel: tree walk stops, no descendants recursed into', () => {
+    // A `children === false` sentinel means IPLD-deferred. The
+    // walker should not recurse and the deferred children's keys
+    // are not enumerated. The frontier consists of whatever was
+    // recorded at the level the deferred sentinel was hit.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: false as false,
+    };
+    const frontier = computeServedFrontier('HEAD', tree, undefined);
+    expect(frontier).toEqual(['HEAD']);
+  });
+
+  test('cycle defense: visited-set prevents infinite recursion', () => {
+    // Content-addressed CIDs can't cycle in practice, but the helper
+    // is defensively guarded. Construct a (synthetic) cycle and
+    // verify the walk terminates.
+    const a: CRDTChangeNode<unknown> = { kind: docKind, children: {} };
+    const b: CRDTChangeNode<unknown> = { kind: docKind, children: { A: a } };
+    a.children = { B: b };
+    // Walk should terminate and the frontier should still be the
+    // (anonymous) root -- with named cycles A and B both being
+    // referenced.
+    const frontier = computeServedFrontier(undefined, a, undefined);
+    // Both A and B are children-keys of each other => both referenced
+    // => empty frontier (no unreferenced CIDs).
+    expect(frontier).toEqual([]);
+  });
+
+  test('honest single-head responder: structural frontier == _currentFrontier() on the loader after sync', () => {
+    // Sanity test: the structural derivation produces the same
+    // frontier the loader would compute via `_hashes \
+    // _referencedAncestors` after applying the served payload
+    // (starting from an empty loader). This is the convergence
+    // property the binding relies on.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        P1: {
+          kind: docKind,
+          children: {
+            P2: { kind: docKind },
+          },
+        },
+      },
+    };
+    const servedFrontier = computeServedFrontier('HEAD', tree, undefined);
+    // Simulate the loader applying the payload from scratch:
+    //   _hashes after sync = {HEAD, P1, P2}
+    //   _referencedAncestors after sync = {P1, P2}
+    //   _currentFrontier = {HEAD}
+    const loaderHashes = new Set<string>();
+    const loaderRefs = new Set<string>();
+    // Walk the tree the same way `_syncDocumentChanges` would:
+    function applyWalk(
+      id: string | undefined,
+      node: CRDTChangeNode<unknown>,
+    ) {
+      if (id) loaderHashes.add(id);
+      if (node.children === undefined) return;
+      if (node.children === false) return;
+      for (const [childId, childNode] of Object.entries(node.children)) {
+        loaderHashes.add(childId);
+        loaderRefs.add(childId);
+        applyWalk(childId, childNode);
+      }
+    }
+    applyWalk('HEAD', tree);
+    const loaderFrontier = [...loaderHashes].filter((h) => !loaderRefs.has(h));
+    expect(servedFrontier.sort()).toEqual(loaderFrontier.sort());
   });
 });
