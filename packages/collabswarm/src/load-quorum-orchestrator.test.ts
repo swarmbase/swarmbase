@@ -310,6 +310,140 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(probeMock).not.toHaveBeenCalled();
   });
 
+  test('loadQuorumK = 0 throws LoadQuorumFailedError(invalid-config) even with peers connected', async () => {
+    // Regression for PR #284 r5: a `loadQuorumK <= 0` previously
+    // collapsed `effectiveK(...)` to 0, the orchestrator returned
+    // `{ skipped: true }`, and `CollabswarmDocument.open()` then treated
+    // the load as "new document" and forked any existing copy held by
+    // peers. The orchestrator must now refuse loud-and-early on
+    // misconfigured K so the fork can never happen silently.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockResolvedValue(HASH_X);
+    const err = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 0 },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be >= 1; got 0/,
+    );
+    expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  test('loadQuorumK = -1 throws LoadQuorumFailedError(invalid-config)', async () => {
+    const peers: TestPeer[] = ['p1', 'p2'];
+    probeMock.mockResolvedValue(HASH_X);
+    const err = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: -1 },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be >= 1; got -1/,
+    );
+  });
+
+  test('loadQuorumK = 0 with no peers also throws (config error, not founder case)', async () => {
+    // The "no peers + K=0" combination is NOT a legitimate founder case:
+    // the founder case is "no peers + K=default", which falls through
+    // `effectiveK -> 0` -> `{ skipped: true }`. K=0 is always a static
+    // operator misconfiguration regardless of peer count, so the
+    // orchestrator throws unconditionally rather than silently bypassing
+    // the gate.
+    const err = await runLoadQuorum({
+      peers: [],
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 0 },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  test('multi-peer probe that REJECTS is recorded as a non-vote; other peers still tally', async () => {
+    // Contract regression for PR #284 r5: a `probeFn` that throws/rejects
+    // must NOT escape the orchestrator. Without the per-probe catch the
+    // whole `Promise.all` would reject and bubble past the
+    // `LoadQuorumFailedError` API contract `load()` callers are written
+    // against. With the catch, the rejected peer is counted as a
+    // non-vote and the remaining honest peers can still form quorum.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockImplementation(async (peer: TestPeer) => {
+      if (peer === 'p3') throw new Error('synthetic probe failure');
+      return HASH_X;
+    });
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+    expect(result.narrowedPeers).toEqual(['p1', 'p2']);
+    expect(result.narrowedPeers).not.toContain('p3');
+    expect(result.winningHashHex).toBe(HASH_X_HEX);
+    // Sanity: probe still called for ALL peers, including the rejecter.
+    expect(probeMock).toHaveBeenCalledTimes(3);
+  });
+
+  test('multi-peer with ALL probeFns rejecting => LoadQuorumFailedError(insufficient-responses), no raw probe error escapes', async () => {
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockImplementation(async () => {
+      throw new Error('synthetic probe failure');
+    });
+    const err = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe(
+      'insufficient-responses',
+    );
+    // The synthetic probe error MUST NOT escape — only the structured
+    // LoadQuorumFailedError surfaces.
+    expect((err as Error).message).not.toMatch(/synthetic probe failure/);
+  });
+
+  test('single-peer fallback with rejected probeFn => LoadQuorumFailedError(insufficient-responses), not the raw probe error', async () => {
+    // Single-peer pass-through must also contain probe errors. The
+    // single-peer code path was a separate `await probeFn(...)` (not
+    // inside the multi-peer `Promise.all`) — a regression risk if only
+    // one of the two paths was fixed.
+    const peers: TestPeer[] = ['p1'];
+    probeMock.mockImplementation(async () => {
+      throw new Error('synthetic single-peer probe failure');
+    });
+    const err = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 1, allowSinglePeer: true },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe(
+      'insufficient-responses',
+    );
+    expect((err as Error).message).not.toMatch(
+      /synthetic single-peer probe failure/,
+    );
+  });
+
   test('size-cap-triggered non-vote does NOT poison quorum when honest majority still responds', async () => {
     // Regression for the DoS hardening fix from PR #284 r4: an
     // oversized tip-advertise response is surfaced as `null` (non-vote)

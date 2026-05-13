@@ -277,12 +277,39 @@ export function effectiveQ(configuredQ: number, k: number): number {
 }
 
 /**
+ * The set of reasons `LoadQuorumFailedError` can be thrown with.
+ *
+ *   - `'insufficient-responses'` — fewer than `Q` peers returned a usable
+ *     tip-set hash within the configured timeout (timeouts, declines,
+ *     decryption failures).
+ *   - `'no-majority'` — peers responded but no single tip-set hash reached
+ *     the `Q`-of-respondingCount agreement threshold.
+ *   - `'no-peers-queried'` — `decideLoadQuorum` was called with an empty
+ *     advertisement list; surfaced for defensive completeness.
+ *   - `'invalid-config'` — the operator misconfigured the gate (e.g.
+ *     `loadQuorumK <= 0`) in a way that would silently disable trust
+ *     defences. Surfaced as a configuration error rather than a quorum
+ *     failure so the misconfiguration is loud at `open()` time. See
+ *     PR #284 r5 Copilot review.
+ */
+export type LoadQuorumFailedReason =
+  | 'insufficient-responses'
+  | 'no-majority'
+  | 'no-peers-queried'
+  | 'invalid-config';
+
+/**
  * Error thrown by `CollabswarmDocument.load()` when the initial-load quorum
  * gate fails -- i.e. fewer than `Q` peers agreed on a tip-set hash within
  * the configured timeout. Applications should catch this and either retry
  * later (peers may converge), surface the failure to the user, or fall
  * back to an explicit `loadQuorumEnabled: false` path if they have an
  * out-of-band trust model.
+ *
+ * The `'invalid-config'` reason is a special case that surfaces an operator
+ * misconfiguration (e.g. `loadQuorumK <= 0`) rather than a runtime quorum
+ * failure: retrying without fixing the config will not help. See the
+ * docstring on {@link LoadQuorumFailedReason} for the full reason set.
  *
  * Defined here (alongside the pure decision logic) so callers can `instanceof`
  * test without importing the heavy `CollabswarmDocument` module.
@@ -291,11 +318,9 @@ export class LoadQuorumFailedError extends Error {
   /** The document path the quorum was being computed for. */
   public readonly documentPath: string;
   /** Why quorum failed -- mirrors `LoadQuorumDecision.reason` on the
-   *  failure case so callers can branch on the specific failure mode. */
-  public readonly reason:
-    | 'insufficient-responses'
-    | 'no-majority'
-    | 'no-peers-queried';
+   *  failure case so callers can branch on the specific failure mode.
+   *  See {@link LoadQuorumFailedReason} for the full set. */
+  public readonly reason: LoadQuorumFailedReason;
   /** Number of peers that actually returned a usable hash. */
   public readonly respondingCount: number;
   /** The effective Q threshold the loader was holding peers to. */
@@ -306,17 +331,25 @@ export class LoadQuorumFailedError extends Error {
 
   constructor(opts: {
     documentPath: string;
-    reason: 'insufficient-responses' | 'no-majority' | 'no-peers-queried';
+    reason: LoadQuorumFailedReason;
     respondingCount: number;
     requiredQ: number;
     agreement: ReadonlyMap<string, number>;
+    /** Free-form detail string used by the `'invalid-config'` reason to
+     *  carry the offending value into the operator-visible error message
+     *  (e.g. `loadQuorumK must be >= 1; got 0`). Ignored for the other
+     *  reasons, which compose the detail string from the structured
+     *  fields. */
+    detail?: string;
   }) {
     const detail =
       opts.reason === 'no-peers-queried'
         ? 'no peers were queried'
         : opts.reason === 'insufficient-responses'
           ? `only ${opts.respondingCount} of the required ${opts.requiredQ} peers responded`
-          : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
+          : opts.reason === 'invalid-config'
+            ? (opts.detail ?? 'invalid load-quorum configuration')
+            : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
     super(
       `Initial-load quorum failed for "${opts.documentPath}": ${detail}. ` +
         `Configure CollabswarmConfig.loadQuorumK/Q/loadQuorumTimeoutMs, ` +

@@ -114,6 +114,7 @@ import {
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
+  LoadQuorumFailedReason,
 } from './load-quorum';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
@@ -216,6 +217,7 @@ export {
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
+  LoadQuorumFailedReason,
   // Compaction
   defaultCompactionConfig,
   // Network statistics

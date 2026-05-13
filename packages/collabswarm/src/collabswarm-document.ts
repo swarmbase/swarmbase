@@ -188,15 +188,30 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
 /**
  * Maximum size (in bytes) of a `tipAdvertiseV1` probe response read. A
  * legitimate response is a single encrypted `CRDTSyncMessage` carrying
- * only `documentId`, a 32-byte `tipsHash`, and an optional writer
- * signature — a few hundred bytes at most after JSON framing plus the
- * AES-GCM header/tag. 2 KiB is generous for honest peers (well above the
- * realistic upper bound, even with longer document paths or larger
- * signatures) while bounding what a malicious peer can force the loader
- * to buffer before being rejected as a non-vote. See PR #284 r4 Copilot
- * review.
+ * the `documentId` (pre-encryption path of up to `MAX_DOCUMENT_PATH_LENGTH`
+ * bytes; this is BIGGER than the tipsHash + signature payload combined),
+ * a 32-byte `tipsHash`, and an optional writer signature.
+ *
+ * Bound derivation:
+ *   - documentId: up to `MAX_DOCUMENT_PATH_LENGTH` bytes UTF-8.
+ *   - JSON framing + Base64 expansion of the encrypted body: ~256 bytes.
+ *   - Writer signature: ECDSA P-384 ≈ 96 raw bytes, Base64 ≈ 128 bytes,
+ *     plus the field's JSON key/quotes — round to 256 bytes.
+ *   - tipsHash: 32 raw bytes → Base64 ≈ 44 bytes.
+ *   - AES-GCM nonce: 12 raw bytes → Base64 ≈ 16 bytes.
+ *   - AES-GCM auth tag: 16 bytes.
+ *   - Plus slack for the encrypted-payload header (keyID prefix) and any
+ *     additional JSON overhead.
+ *
+ * The previous 2 KiB cap was tighter than `MAX_DOCUMENT_PATH_LENGTH`
+ * alone, so a document opened at a maximal path would always blow the cap
+ * and be recorded as a non-vote — quorum would never pass for such
+ * documents. 6 KiB comfortably covers a maximum-length path plus all of
+ * the overheads above while still bounding what a malicious peer can
+ * force the loader to buffer before being rejected as a non-vote.
+ * See PR #284 r4/r5 Copilot review.
  */
-const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 2 * 1024;
+const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 6 * 1024;
 
 export class CollabswarmDocument<
   DocType,
@@ -2437,17 +2452,23 @@ export class CollabswarmDocument<
     }
     try {
       await pipe([serializedRequest], stream.sink);
-      // Size-bound the tip-advertise response read. A `tipAdvertiseV1` body
-      // is an encrypted `CRDTSyncMessage` carrying only `documentId`, a
-      // 32-byte `tipsHash`, and (optionally) a writer signature — a few
-      // hundred bytes at most after JSON framing + AES-GCM header/tag. A
-      // 2 KiB cap is generous for legitimate peers but prevents a
-      // malicious peer from streaming an unbounded payload to force
-      // `load()` to buffer it all before returning a non-vote. If the
-      // read overruns the cap, `readUint8Iterable` throws a `RangeError`
-      // that is caught by the surrounding `try { ... } catch { return
-      // null; }` — surfacing as a non-vote (same outcome as a timeout),
-      // NOT a quorum disagreement. See PR #284 r4 Copilot review.
+      // Size-bound the tip-advertise response read. A `tipAdvertiseV1`
+      // body is an encrypted `CRDTSyncMessage` carrying the `documentId`
+      // (up to `MAX_DOCUMENT_PATH_LENGTH` bytes BEFORE encryption — this
+      // dominates the size), a 32-byte `tipsHash`, and (optionally) a
+      // writer signature. The cap is derived from
+      // `MAX_DOCUMENT_PATH_LENGTH` plus JSON / Base64 / AES-GCM / signature
+      // overheads (see `MAX_TIP_ADVERTISE_RESPONSE_SIZE` docstring above
+      // for the breakdown). The previous 2 KiB cap was smaller than the
+      // `documentId` field alone, so any document with a maximal path was
+      // surfaced as a non-vote and quorum could never pass for it. 6 KiB
+      // is generous for legitimate peers but prevents a malicious peer
+      // from streaming an unbounded payload to force `load()` to buffer
+      // it all before returning a non-vote. If the read overruns the cap,
+      // `readUint8Iterable` throws a `RangeError` that is caught by the
+      // surrounding `try { ... } catch { return null; }` — surfacing as a
+      // non-vote (same outcome as a timeout), NOT a quorum disagreement.
+      // See PR #284 r4/r5 Copilot review.
       const assembled = await readUint8Iterable(
         stream.source,
         MAX_TIP_ADVERTISE_RESPONSE_SIZE,
@@ -2789,26 +2810,24 @@ export class CollabswarmDocument<
     if ('skipped' in quorumResult) {
       // `runLoadQuorum` returns `{ skipped: true }` in two cases: (a) the
       // gate is disabled wholesale (`loadQuorumEnabled: false`), or (b) the
-      // effective K resolved to 0 (no peers OR misconfigured `loadQuorumK
-      // <= 0`). For (a) we want to fall through to the legacy single-peer
-      // load loop unchanged (no narrowing, no winningHashHex). For (b)
-      // there is nothing to load against — treat as new document. The
-      // peer-list empty short-circuit at the top of `load()` already
-      // covers the trivial "no peers" path; this branch handles the
-      // configuredK<=0 edge case so a misconfiguration cannot silently
-      // skip the gate against a populated peer list.
+      // effective K resolved to 0 because no peers were known. For (a) we
+      // fall through to the legacy single-peer load loop unchanged (no
+      // narrowing, no winningHashHex). For (b) there is nothing to load
+      // against — treat as new document. The peer-list empty short-circuit
+      // at the top of `load()` already covers the trivial "no peers" path;
+      // this branch is reached when quorum is enabled with a valid K but
+      // the post-dedup `orderedPeers` happens to be empty.
+      //
+      // Note: a misconfigured `loadQuorumK <= 0` no longer reaches this
+      // branch — `runLoadQuorum` throws `LoadQuorumFailedError(invalid-
+      // config)` for that case so the misconfiguration is loud at
+      // `open()` time instead of silently forking the document. See PR
+      // #284 r5 Copilot review.
       const quorumWasEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
-      const configuredK = this.swarm.config?.loadQuorumK ?? 3;
-      if (quorumWasEnabled && configuredK > 0 && orderedPeers.length === 0) {
+      if (quorumWasEnabled && orderedPeers.length === 0) {
         return false;
       }
-      if (quorumWasEnabled && configuredK <= 0) {
-        // Defensive: misconfigured K. Honour the original behaviour
-        // (return false → caller treats as new document) rather than
-        // silently bypassing the gate against a populated peer list.
-        return false;
-      }
-      // Else: gate disabled OR peers list empty. Either way fall through.
+      // Else: gate disabled. Fall through.
     } else {
       winningHashHex = quorumResult.winningHashHex;
       orderedPeers.length = 0;

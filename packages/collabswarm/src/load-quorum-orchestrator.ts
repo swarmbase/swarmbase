@@ -83,10 +83,13 @@ export type LoadQuorumOrchestratorResult<T> =
  *   caller's preferred-peer placement survives.
  * @param peerIdOf Extracts a stable peer-id key from each peer entry; used
  *   to match agreeing-cohort PeerIds back to the original peer entries.
- * @param probeFn Probes one peer for a `tipsHash`. Must return `null` for any
- *   non-vote outcome (timeout, decline, decryption failure, malformed hash,
- *   etc.) — never throw. Throwing surfaces as a non-vote here but the caller
- *   should still treat it as a bug.
+ * @param probeFn Probes one peer for a `tipsHash`. Should return `null` for
+ *   any non-vote outcome (timeout, decline, decryption failure, malformed
+ *   hash, etc.). If `probeFn` throws or rejects, the orchestrator catches
+ *   it at the boundary, logs the error, and records the peer as a non-vote
+ *   so the surrounding `LoadQuorumFailedError` contract is preserved. Even
+ *   so, a thrown probe still indicates a bug in the caller's probe
+ *   implementation and should be fixed at the source.
  * @param documentPath Used to construct the `LoadQuorumFailedError` on
  *   failure; carries the document name into operator-visible logs.
  * @param config Quorum tuning knobs (see `LoadQuorumOrchestratorConfig`).
@@ -111,6 +114,26 @@ export async function runLoadQuorum<T>(opts: {
   const configuredK = config?.k ?? 3;
   const configuredQ = config?.q ?? defaultQuorumQ(configuredK);
   const allowSinglePeer = config?.allowSinglePeer ?? false;
+
+  // Validate `loadQuorumK >= 1` up-front. A `configuredK <= 0` would
+  // collapse `effectiveK(...)` to 0 and the K=0 branch below would return
+  // `{ skipped: true }` — which `CollabswarmDocument.load()` then surfaces
+  // to `open()` as a "no peer could provide the document" outcome, and
+  // `open()` would silently re-initialize the document as brand-new
+  // (forking any existing copy held by other peers). Refuse loudly
+  // instead. The misconfiguration is a static operator mistake, not a
+  // recoverable runtime condition, so we throw regardless of peer count.
+  // See PR #284 r5 Copilot review.
+  if (configuredK <= 0) {
+    throw new LoadQuorumFailedError({
+      documentPath,
+      reason: 'invalid-config',
+      respondingCount: 0,
+      requiredQ: 0,
+      agreement: new Map(),
+      detail: `loadQuorumK must be >= 1; got ${configuredK}`,
+    });
+  }
 
   const k = effectiveK(configuredK, peers.length);
   const q = effectiveQ(configuredQ, k);
@@ -145,7 +168,24 @@ export async function runLoadQuorum<T>(opts: {
         `to restore Byzantine-fault-tolerant quorum semantics.`,
     );
     const probedPeer = peers[0];
-    const probe = await probeFn(probedPeer);
+    // Contain probe errors at the orchestrator boundary. The orchestrator
+    // contract (see module docstring + the per-peer note above on
+    // `probeFn`) is that any non-vote outcome — including a thrown/rejected
+    // probe — is surfaced as a non-vote. Without this catch a misbehaving
+    // `probeFn` would let the underlying error escape past the orchestrator
+    // and bypass the `LoadQuorumFailedError` API contract `load()` callers
+    // are written against. See PR #284 r5 Copilot review.
+    let probe: Uint8Array | null;
+    try {
+      probe = await probeFn(probedPeer);
+    } catch (err) {
+      console.warn(
+        `[${documentPath}] Initial-load quorum single-peer probe threw; ` +
+          `recording as non-vote.`,
+        err,
+      );
+      probe = null;
+    }
     if (probe === null) {
       throw new LoadQuorumFailedError({
         documentPath,
@@ -167,10 +207,31 @@ export async function runLoadQuorum<T>(opts: {
 
   // Standard K-of-Q quorum path. Probe the first K peers in parallel,
   // decide agreement, narrow.
+  //
+  // Contain probe errors at the orchestrator boundary. The contract is
+  // that any non-vote outcome — including a thrown/rejected `probeFn` —
+  // is surfaced as a non-vote (`hash: null`). Without the per-probe
+  // catch, a single rejecting `probeFn` would reject the whole
+  // `Promise.all`, bubble past the orchestrator, and bypass the
+  // `LoadQuorumFailedError` API the caller is written against —
+  // surfacing a raw probe error from `load()` instead of the structured
+  // `LoadQuorumFailedError(insufficient-responses)` callers expect.
+  // See PR #284 r5 Copilot review.
   const probedPeers = peers.slice(0, k);
   const advertisements: PeerTipAdvertisement[] = await Promise.all(
     probedPeers.map(async (peer) => {
-      const hash = await probeFn(peer);
+      let hash: Uint8Array | null;
+      try {
+        hash = await probeFn(peer);
+      } catch (err) {
+        console.warn(
+          `[${documentPath}] Initial-load quorum probe for peer ${peerIdOf(
+            peer,
+          )} threw; recording as non-vote.`,
+          err,
+        );
+        hash = null;
+      }
       return { peerId: peerIdOf(peer), hash };
     }),
   );

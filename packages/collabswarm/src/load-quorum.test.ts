@@ -348,4 +348,22 @@ describe('LoadQuorumFailedError', () => {
     expect(err.agreement.size).toBe(3);
     expect(err.message).toMatch(/quorum failed/i);
   });
+
+  test("invalid-config reason carries operator-visible detail (PR #284 r5)", () => {
+    // The 'invalid-config' variant is surfaced by `runLoadQuorum` when
+    // `loadQuorumK <= 0`, where the structured `respondingCount`/
+    // `requiredQ` fields are not meaningful (no probes were run). The
+    // `detail` constructor field is the surface used to carry the
+    // offending value into the operator-visible message.
+    const err = new LoadQuorumFailedError({
+      documentPath: '/docs/x',
+      reason: 'invalid-config',
+      respondingCount: 0,
+      requiredQ: 0,
+      agreement: new Map(),
+      detail: 'loadQuorumK must be >= 1; got 0',
+    });
+    expect(err.reason).toBe('invalid-config');
+    expect(err.message).toMatch(/loadQuorumK must be >= 1; got 0/);
+  });
 });
