@@ -291,12 +291,25 @@ export function effectiveQ(configuredQ: number, k: number): number {
  *     defences. Surfaced as a configuration error rather than a quorum
  *     failure so the misconfiguration is loud at `open()` time. See
  *     PR #284 r5 Copilot review.
+ *   - `'bind-check-failed-all-agreeing-peers'` — quorum agreement was
+ *     reached, but EVERY peer in the agreeing cohort served a full-load
+ *     response whose `tips` array did not hash to `winningHashHex` (or
+ *     omitted `tips` entirely). Distinct from `'no-majority'` so callers
+ *     can tell "no peer was even willing to vote" apart from "the agreeing
+ *     cohort was entirely Byzantine on the load step". Surfaced by
+ *     `CollabswarmDocument.load()` after exhausting every narrowed peer.
+ *     See PR #284 r6 Copilot review for the DoS rationale: without the
+ *     per-peer retry, a single malicious peer in the agreeing cohort could
+ *     vote for the majority hash and then serve a mismatched full load to
+ *     unilaterally abort the whole load, preventing the loader from
+ *     trying any of the OTHER honest agreeing peers.
  */
 export type LoadQuorumFailedReason =
   | 'insufficient-responses'
   | 'no-majority'
   | 'no-peers-queried'
-  | 'invalid-config';
+  | 'invalid-config'
+  | 'bind-check-failed-all-agreeing-peers';
 
 /**
  * Error thrown by `CollabswarmDocument.load()` when the initial-load quorum
@@ -328,6 +341,15 @@ export class LoadQuorumFailedError extends Error {
   /** Snapshot of (hash hex -> vote count) at the moment of failure, used
    *  for observability. Empty when no peer responded. */
   public readonly agreement: ReadonlyMap<string, number>;
+  /** For `reason === 'bind-check-failed-all-agreeing-peers'`: a map from
+   *  peer-id (as `_peerIdOf` extracts it) to the advertised tipsHash hex
+   *  that peer served on its full-load response (or the sentinel
+   *  `'(missing tips)'` when the responder omitted the `tips` array). Lets
+   *  callers and operators see WHICH peers in the agreeing cohort
+   *  equivocated between the probe round and the load round, and what
+   *  they served instead. Empty for all other reasons. See PR #284 r6
+   *  Copilot review. */
+  public readonly agreeingPeerBindFailures: ReadonlyMap<string, string>;
 
   constructor(opts: {
     documentPath: string;
@@ -341,6 +363,10 @@ export class LoadQuorumFailedError extends Error {
      *  reasons, which compose the detail string from the structured
      *  fields. */
     detail?: string;
+    /** Per-peer bind-failure record. Only meaningful when
+     *  `reason === 'bind-check-failed-all-agreeing-peers'`; ignored
+     *  otherwise. */
+    agreeingPeerBindFailures?: ReadonlyMap<string, string>;
   }) {
     const detail =
       opts.reason === 'no-peers-queried'
@@ -349,7 +375,12 @@ export class LoadQuorumFailedError extends Error {
           ? `only ${opts.respondingCount} of the required ${opts.requiredQ} peers responded`
           : opts.reason === 'invalid-config'
             ? (opts.detail ?? 'invalid load-quorum configuration')
-            : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
+            : opts.reason === 'bind-check-failed-all-agreeing-peers'
+              ? `quorum agreed on a tip-set hash but every peer in the agreeing cohort ` +
+                `(${opts.agreeingPeerBindFailures?.size ?? 0} peer(s)) served a full-load ` +
+                `response whose tips did not hash to the agreed value (or omitted tips entirely); ` +
+                `treating as coordinated Byzantine equivocation on the load step`
+              : `no tip-set hash reached the required ${opts.requiredQ}-of-${opts.respondingCount} agreement`;
     super(
       `Initial-load quorum failed for "${opts.documentPath}": ${detail}. ` +
         `Configure CollabswarmConfig.loadQuorumK/Q/loadQuorumTimeoutMs, ` +
@@ -361,5 +392,7 @@ export class LoadQuorumFailedError extends Error {
     this.respondingCount = opts.respondingCount;
     this.requiredQ = opts.requiredQ;
     this.agreement = opts.agreement;
+    this.agreeingPeerBindFailures =
+      opts.agreeingPeerBindFailures ?? new Map();
   }
 }

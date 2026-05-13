@@ -366,4 +366,50 @@ describe('LoadQuorumFailedError', () => {
     expect(err.reason).toBe('invalid-config');
     expect(err.message).toMatch(/loadQuorumK must be >= 1; got 0/);
   });
+
+  test('bind-check-failed-all-agreeing-peers carries per-peer agreeingPeerBindFailures (PR #284 r6)', () => {
+    // The 'bind-check-failed-all-agreeing-peers' variant is surfaced by
+    // `CollabswarmDocument.load()` after the agreeing cohort is exhausted
+    // and every peer failed the post-load tipsHash bind check. The
+    // `agreeingPeerBindFailures` field records, per peer, the hex hash
+    // the responder's served `tips` actually hashed to (or the sentinel
+    // `'(missing tips)'` for an omitted-tips response).
+    const failures = new Map<string, string>([
+      ['12D3KooWPeer1', 'ff'.repeat(32)],
+      ['12D3KooWPeer2', '(missing tips)'],
+    ]);
+    const err = new LoadQuorumFailedError({
+      documentPath: '/docs/x',
+      reason: 'bind-check-failed-all-agreeing-peers',
+      respondingCount: 0,
+      requiredQ: 0,
+      agreement: new Map([['aa'.repeat(32), 0]]),
+      agreeingPeerBindFailures: failures,
+    });
+    expect(err.reason).toBe('bind-check-failed-all-agreeing-peers');
+    expect(err.agreeingPeerBindFailures).toBe(failures);
+    expect(err.agreeingPeerBindFailures.size).toBe(2);
+    expect(err.agreeingPeerBindFailures.get('12D3KooWPeer2')).toBe(
+      '(missing tips)',
+    );
+    // The composed message names the cohort size for operator observability.
+    expect(err.message).toMatch(/agreeing cohort.*2 peer/);
+    expect(err.message).toMatch(/Byzantine equivocation/);
+  });
+
+  test('agreeingPeerBindFailures defaults to empty map for non-bind reasons', () => {
+    // Reasons other than `bind-check-failed-all-agreeing-peers` do not
+    // populate `agreeingPeerBindFailures`; the field must still be a
+    // readable empty map (NOT undefined) so callers can iterate
+    // unconditionally without a null-check.
+    const err = new LoadQuorumFailedError({
+      documentPath: '/docs/x',
+      reason: 'no-majority',
+      respondingCount: 1,
+      requiredQ: 2,
+      agreement: new Map(),
+    });
+    expect(err.agreeingPeerBindFailures).toBeInstanceOf(Map);
+    expect(err.agreeingPeerBindFailures.size).toBe(0);
+  });
 });
