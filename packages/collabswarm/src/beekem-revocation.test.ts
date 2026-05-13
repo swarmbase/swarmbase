@@ -92,10 +92,17 @@ describe('BeeKEM reader revocation', () => {
     // additional Welcome material, so we keep the test focused on
     // the 2-member case where the security property is unambiguous.
 
-    // Alice revokes Bob.
+    // Alice revokes Bob. `removeMember` itself blanks Bob's leaf,
+    // blanks every internal node on Bob's direct path, AND re-derives
+    // fresh key material along Alice's path to root. The returned
+    // `PathUpdate` + `rootSecret` are exactly what `removeReader`
+    // broadcasts and installs in the keychain -- no follow-up
+    // `update()` call is involved. Asserting against `removeMember`'s
+    // return values mirrors what the integration code actually ships
+    // on the wire.
     const bobLeafIndex = 2;
-    await alice.removeMember(bobLeafIndex);
-    const { pathUpdate, rootSecret: aliceNewRoot } = await alice.update();
+    const { pathUpdate, rootSecret: aliceNewRoot } =
+      await alice.removeMember(bobLeafIndex);
 
     // Wire-format round-trip: PathUpdate goes over the
     // beekemPathUpdateV1 protocol, so the security claim must hold
@@ -222,10 +229,61 @@ describe('BeeKEM reader revocation', () => {
     await expect(bob.processPathUpdate(restored)).rejects.toThrow();
   });
 
+  test('writer can recover leaf assignment from BeeKEM tree after cache wipe', async () => {
+    // Models the integration-layer "writer restart wipes
+    // _readerLeafIndices but BeeKEM tree state is still around" case
+    // exercised by `CollabswarmDocument.removeReader`'s fallback to
+    // `BeeKEM.findLeafByPublicKey`. The collabswarm-document layer
+    // tracks the reader's KEM public key alongside the leaf index;
+    // on a cache miss it scans the BeeKEM tree by that public key.
+    //
+    // This test exercises the cryptographic primitive that backs
+    // that fallback: `findLeafByPublicKey` returns the correct
+    // node index for a joined member, and that index is exactly
+    // what `removeMember` consumes.
+    const alice = new BeeKEM();
+    const aliceKeys = await generateECDHKeyPair();
+    await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+
+    const bobKeys = await generateECDHKeyPair();
+    await alice.addMember(bobKeys.publicKey);
+
+    const charlieKeys = await generateECDHKeyPair();
+    await alice.addMember(charlieKeys.publicKey);
+
+    // Simulate cache wipe: we no longer "know" Bob's leaf index
+    // directly. All we have is his KEM public key (which the
+    // collabswarm-document layer tracks alongside identity). Scan
+    // the tree.
+    const recoveredLeafIndex = await alice.findLeafByPublicKey(
+      bobKeys.publicKey,
+    );
+    expect(recoveredLeafIndex).toBe(2);
+
+    // Use the recovered leaf to revoke Bob -- the same call shape as
+    // the production `removeReader` after cache miss + tree scan.
+    const { rootSecret: postRoot } = await alice.removeMember(
+      recoveredLeafIndex!,
+    );
+    expect(postRoot.byteLength).toBe(32);
+
+    // Post-revocation: Bob's leaf is blanked, so a second scan must
+    // NOT return his old index (otherwise the writer would re-revoke
+    // a blank leaf or, worse, hand the index back as the "current"
+    // leaf for a different reader).
+    expect(
+      await alice.findLeafByPublicKey(bobKeys.publicKey),
+    ).toBeUndefined();
+    // Charlie's leaf is unaffected by Bob's removal -- still
+    // findable.
+    expect(await alice.findLeafByPublicKey(charlieKeys.publicKey)).toBe(4);
+  });
+
   test('removing a reader does not reuse the same root secret', async () => {
-    // Quick sanity that the rotation actually produces a *new* root,
-    // not the previous one. (Sufficient because BeeKEM.update
-    // generates fresh key pairs at every internal node on the path.)
+    // Quick sanity that `removeMember` itself produces a *new* root,
+    // not the previous one. The `removeReader` integration calls
+    // `removeMember` only -- not a follow-up `update()` -- so this
+    // test exercises the same surface.
     const alice = new BeeKEM();
     const aliceKeys = await generateECDHKeyPair();
     await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
@@ -237,8 +295,7 @@ describe('BeeKEM reader revocation', () => {
     await alice.addMember(charlieKeys.publicKey);
 
     const preRoot = await alice.getRootSecret();
-    await alice.removeMember(2);
-    const { rootSecret: postRoot } = await alice.update();
+    const { rootSecret: postRoot } = await alice.removeMember(2);
 
     expect(Buffer.from(preRoot).equals(Buffer.from(postRoot))).toBe(false);
   });

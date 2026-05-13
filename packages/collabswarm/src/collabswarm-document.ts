@@ -402,9 +402,43 @@ export class CollabswarmDocument<
 
   // pubkey (serialized) -> BeeKEM leaf index, populated by `addReader`
   // (writer side) so `removeReader` can look up the leaf to blank.
+  // **Fast-path cache only**: `removeReader` falls back to a BeeKEM
+  // tree scan (`BeeKEM.findLeafByPublicKey`) on cache miss, so a cache
+  // wipe (in-process restart, different replica) does not block
+  // revocation as long as the BeeKEM tree itself is initialized and
+  // the reader's KEM public key is still known (see
+  // `_readerKemPublicKeys`).
   // Joiner-side population requires Welcome plumbing that is out of
   // scope here and tracked alongside the BeeKEM Welcome work.
   private _readerLeafIndices = new Map<string, number>();
+
+  // pubkey (serialized identity) -> raw SEC1-uncompressed P-256 ECDH
+  // public key bytes (the reader's KEM public key as passed to
+  // `addReader`). Used by `removeReader` as the lookup key when the
+  // `_readerLeafIndices` fast-path cache misses: we know the
+  // identity but need the KEM key to query the BeeKEM tree via
+  // `BeeKEM.findLeafByPublicKey`. Persistence is out of scope for
+  // this PR -- on a restart this map is empty and `removeReader`
+  // surfaces the gap with a clear error.
+  private _readerKemPublicKeys = new Map<string, Uint8Array>();
+
+  // BeeKEM leaf node index -> the `BeeKEMWelcome` produced when that
+  // leaf was first registered via `_registerBeeKEMReader`. Used by
+  // `addReader` to re-emit a Welcome when a previous invitation was
+  // dropped: re-invoking `addReader(reader, kemPub)` for an existing
+  // reader is now a re-send, not a silent no-op.
+  //
+  // Cleared when the leaf is blanked via `removeReader`, so a
+  // recipient that was revoked cannot later re-derive the original
+  // Welcome (which would re-deliver the keychain delta at the leaf's
+  // original epoch).
+  //
+  // In-memory only; on writer restart this map is empty and a
+  // re-emit attempt will see the cache miss and the no-op early-out
+  // in `_registerBeeKEMReader`. Recipients in that state should
+  // recover via a fresh document load (which delivers keychain state
+  // via the existing sealed-Welcome envelope or the load response).
+  private _beekemWelcomeByLeaf = new Map<number, BeeKEMWelcome>();
 
   /**
    * Set the history visibility for this document.
@@ -3104,19 +3138,24 @@ export class CollabswarmDocument<
     // material that matches the placeholder. The library refuses
     // that ambiguous half-onboarded state and surfaces the warning
     // below directing the caller to re-invoke with the KEM key.
+    //
+    // If `_registerBeeKEMReader` throws we PROPAGATE the failure
+    // rather than fall through to a half-Welcome. A Welcome with
+    // `beekemWelcomeForJoiner = null` would still let the joiner
+    // decrypt the *current* document key (via the sealed keychain
+    // delta), but their BeeKEM tree would be uninitialized -- so the
+    // NEXT `removeReader` rotation would silently lock them out
+    // (their leaf has no key material to derive the new root from).
+    // The ACL change has already been broadcast and the caller can
+    // retry once the underlying issue is fixed (e.g. by re-invoking
+    // `addReader` with the same KEM public key, or by recovering
+    // BeeKEM state via `setKemKeyPair` + a fresh document load).
     let beekemWelcomeForJoiner: BeeKEMWelcome | null = null;
     if (readerKemPublicKey) {
-      try {
-        beekemWelcomeForJoiner = await this._registerBeeKEMReader(
-          reader,
-          readerKemPublicKey,
-        );
-      } catch (err) {
-        console.warn(
-          `Failed to record BeeKEM membership for new reader of ${this.documentPath}:`,
-          err,
-        );
-      }
+      beekemWelcomeForJoiner = await this._registerBeeKEMReader(
+        reader,
+        readerKemPublicKey,
+      );
     }
 
     // Without the recipient's KEM public key we cannot seal the
@@ -3951,21 +3990,12 @@ export class CollabswarmDocument<
     );
     const serializedReader = await serializePublicKey(reader);
 
-    // Look up the BeeKEM leaf for the removed reader. If the leaf is
-    // unknown we cannot perform the ratchet step and must fail loudly
-    // -- continuing would broadcast an ACL removal without revoking
-    // the document key, leaving the removed reader able to decrypt
-    // subsequent traffic.
-    const leafIndex = this._readerLeafIndices.get(serializedReader);
-    if (leafIndex === undefined) {
-      throw new Error(
-        `Cannot remove reader from "${this.documentPath}": no BeeKEM leaf ` +
-          `recorded for this reader. The reader must have been added via ` +
-          `addReader (which seeds the BeeKEM tree) before they can be ` +
-          `cryptographically revoked.`,
-      );
-    }
-
+    // The BeeKEM tree must be initialized before we can revoke
+    // anything: leaf-derivation, key rotation, and PathUpdate
+    // generation all require live tree state. A fresh-start replica
+    // that has never received a Welcome (and is not the founder)
+    // cannot revoke; surface that clearly rather than fail later
+    // with a confusing leaf-lookup error.
     if (!this._beekemInitialized || !this._beekem) {
       throw new Error(
         `Cannot remove reader from "${this.documentPath}": BeeKEM tree has ` +
@@ -3975,6 +4005,46 @@ export class CollabswarmDocument<
       );
     }
     const beekem = this._beekem;
+
+    // Look up the BeeKEM leaf for the removed reader. Fast-path: an
+    // in-memory cache populated by `addReader` on this same writer
+    // process. Slow-path: derive the leaf from BeeKEM tree state by
+    // matching the reader's KEM public key against every leaf via
+    // `BeeKEM.findLeafByPublicKey`. The slow path is what makes
+    // revocation survive a cache wipe (e.g. an in-process clear of
+    // `_readerLeafIndices` for testing, or a hypothetical sibling
+    // replica with the BeeKEM tree but without the cache).
+    //
+    // Both lookups are in-memory only: BeeKEM tree state is itself
+    // not persisted across writer restarts (tracked separately --
+    // see PR body for the known-limitation note). A fully restarted
+    // writer that loses both BeeKEM state and `_readerKemPublicKeys`
+    // hits the "BeeKEM tree not initialized" error above OR the
+    // "no leaf found" error below, both with actionable messaging.
+    let leafIndex = this._readerLeafIndices.get(serializedReader);
+    if (leafIndex === undefined) {
+      const kemPub = this._readerKemPublicKeys.get(serializedReader);
+      if (kemPub) {
+        leafIndex = await beekem.findLeafByPublicKey(kemPub);
+        if (leafIndex !== undefined) {
+          // Re-populate the fast-path cache so subsequent
+          // revocations for the same reader (within this process)
+          // skip the tree scan. Harmless if the reader gets removed
+          // immediately below: the entry is deleted again as part
+          // of cleanup.
+          this._readerLeafIndices.set(serializedReader, leafIndex);
+        }
+      }
+    }
+    if (leafIndex === undefined) {
+      throw new Error(
+        `Cannot remove reader from "${this.documentPath}": no BeeKEM leaf ` +
+          `recorded for this reader, and the local replica has no KEM public ` +
+          `key recorded to scan the BeeKEM tree with. The reader must have ` +
+          `been added via addReader (which seeds the BeeKEM tree and records ` +
+          `the KEM public key) before they can be cryptographically revoked.`,
+      );
+    }
 
     // 1. Blank the leaf and re-key our path. `removeMember` re-derives
     //    key material along the entire path and returns the
@@ -4026,11 +4096,22 @@ export class CollabswarmDocument<
     const changes = await this._readers.remove(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
-    // 4. Forget the removed reader's leaf-index entry so subsequent
-    //    `removeReader` calls for the same key (idempotency) take the
-    //    "already not a reader" early return instead of trying to
-    //    re-revoke a blank leaf.
+    // 4. Forget the removed reader's per-reader state so subsequent
+    //    `removeReader` calls for the same key (idempotency) take
+    //    the "already not a reader" early return instead of trying
+    //    to re-revoke a blank leaf, and a future `addReader` for
+    //    this identity is a fresh registration -- not a re-emit of
+    //    the now-invalid pre-revocation Welcome.
+    //
+    //    Critically, we also clear the cached `BeeKEMWelcome` for
+    //    this leaf: leaving the stale entry would let a future
+    //    `_registerBeeKEMReader` re-invocation for an unrelated
+    //    reader who happens to land on the same blanked slot
+    //    re-emit a Welcome that bootstraps the new joiner against
+    //    the **revoked reader's** pre-revocation tree state.
     this._readerLeafIndices.delete(serializedReader);
+    this._readerKemPublicKeys.delete(serializedReader);
+    this._beekemWelcomeByLeaf.delete(leafIndex);
 
     // 5. Broadcast the PathUpdate to every connected peer. Carries
     //    the full 32-byte epoch ID; the receiver matches it against
@@ -4098,9 +4179,23 @@ export class CollabswarmDocument<
    * Called from `addReader` after the readers-ACL update. Imports the
    * reader's own KEM public key as the new leaf, records the
    * resulting leaf index in `_readerLeafIndices` so `removeReader`
-   * can later look up the leaf to blank, and returns the
-   * `BeeKEMWelcome` produced by `BeeKEM.addMember` so the inviter
-   * can ship it inside the sealed Welcome envelope to the joiner.
+   * can later look up the leaf to blank, caches the
+   * `BeeKEMWelcome` produced by `BeeKEM.addMember` so it can be
+   * re-emitted on a subsequent `addReader` call (covering the case
+   * where the initial Welcome was dropped on the wire), and returns
+   * the Welcome so the inviter can ship it inside the sealed
+   * Welcome envelope to the joiner.
+   *
+   * **Idempotency / re-send**: if the same reader is registered
+   * again (`addReader` invoked twice with the same KEM key), the
+   * method does NOT re-call `BeeKEM.addMember` (which would mutate
+   * the tree and produce a Welcome that no longer matches the
+   * joiner's actual leaf index). Instead it returns the cached
+   * Welcome from `_beekemWelcomeByLeaf`, so `addReader` can re-send
+   * the same Welcome bytes. If the cache is empty for the existing
+   * leaf (writer restarted), `null` is returned and the caller falls
+   * back to the existing "no BeeKEM bootstrap available, recipient
+   * must recover via a fresh document load" path.
    *
    * The path update produced by `BeeKEM.addMember` is intentionally
    * not broadcast here: that broadcast would only help joiners that
@@ -4122,13 +4217,29 @@ export class CollabswarmDocument<
     );
     const serializedReader = await serializePublicKey(reader);
 
+    // Record the KEM public key bytes alongside the identity so
+    // `removeReader` can recover the leaf assignment from BeeKEM
+    // tree state when the `_readerLeafIndices` fast-path cache
+    // misses (e.g. cache wipe, different writer replica). Defensive
+    // copy: the caller may reuse the buffer after `addReader`
+    // returns; we want our snapshot to be immutable.
+    this._readerKemPublicKeys.set(
+      serializedReader,
+      new Uint8Array(readerKemPublicKey),
+    );
+
     // Idempotency: if a leaf is already recorded (e.g. addReader was
-    // re-invoked) keep the existing assignment. We do NOT regenerate
-    // a Welcome in this case -- a re-invite without a removal in
-    // between would produce a Welcome that does not bootstrap to the
-    // joiner's actual leaf index in the inviter's tree.
-    if (this._readerLeafIndices.has(serializedReader)) {
-      return null;
+    // re-invoked because the initial Welcome was dropped), we do NOT
+    // call `BeeKEM.addMember` again -- that would mutate the tree
+    // and produce a Welcome that no longer matches the joiner's
+    // actual leaf index. Instead we return the cached Welcome (if
+    // any) so the caller can re-send. A miss means the writer
+    // restarted between the original `addReader` and this re-invoke;
+    // we surface that as `null` so the caller falls through to the
+    // existing recovery messaging.
+    const existingLeaf = this._readerLeafIndices.get(serializedReader);
+    if (existingLeaf !== undefined) {
+      return this._beekemWelcomeByLeaf.get(existingLeaf) ?? null;
     }
 
     // Bootstrap the local BeeKEM tree if needed. On the founder's
@@ -4172,13 +4283,20 @@ export class CollabswarmDocument<
     // (even-numbered slot in the tree-math layout), which is exactly
     // what `removeMember` consumes.
     this._readerLeafIndices.set(serializedReader, result.welcome.leafIndex);
+    // Cache the Welcome under its leaf index so a subsequent
+    // `addReader` re-invocation can re-emit it without mutating the
+    // tree. Keyed by leaf index (not identity) so revocation can
+    // clear the cache atomically when the leaf is blanked.
+    this._beekemWelcomeByLeaf.set(result.welcome.leafIndex, result.welcome);
     return result.welcome;
   }
 
   /**
    * Broadcast a BeeKEM `PathUpdate` to every connected peer over the
    * `beekemPathUpdateV1` protocol. Used by `removeReader` after a
-   * successful `removeMember` + `update` cycle.
+   * successful `removeMember` rotation (the leaf-blank + path re-key
+   * are both performed inside `removeMember`; no follow-up
+   * `BeeKEM.update()` call is involved).
    *
    * Wire format mirrors `documentKeyUpdateV2`: a 4-byte big-endian
    * document-path length, the UTF-8 path bytes, then the serialized
