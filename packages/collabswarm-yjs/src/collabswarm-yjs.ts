@@ -487,6 +487,30 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * BREAKING CHANGE (PR #285): keychain key-ID width unified to 32 bytes.
+ *
+ * The keychain now uses 32-byte IDs uniformly for BOTH locally-generated
+ * keys (formerly 16-byte UUIDs via `uuid.v4`) and BeeKEM-derived epoch
+ * keys (already 32 bytes via `deriveEpochIdFromRootSecret`). The wire-
+ * format key-ID prefix, the BeeKEM `pathUpdateEpochId`, and the
+ * keychain's storage key are all the same 32 bytes -- no truncation
+ * step exists.
+ *
+ * This is an **intentional, on-disk-breaking change** from earlier
+ * shipped revisions of this library, which used 16-byte UUIDs. There
+ * are NO live users at the time of this change (project doctrine:
+ * see `CLAUDE.md`/`SPECS.md`), so no migration shim is provided. Any
+ * document state persisted with the old 16-byte UUID format will fail
+ * to load against this version because `cacheKeyToKeyId` only accepts
+ * even-length hex strings (no UUID/dashed format), and existing 16-byte
+ * key IDs would be looked up under a different cache-key format than
+ * they were stored under.
+ *
+ * If a future deployment ever needs migration, the recovery path is a
+ * fresh keychain via `add()` + a BeeKEM Welcome to redistribute
+ * material under the new ID width.
+ */
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private readonly _keychain = new Doc();
