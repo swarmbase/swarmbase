@@ -108,15 +108,17 @@ export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
 //     re-derivation is part of `removeMember`, NOT a separate
 //     follow-up `BeeKEM.update()` call. (A redundant `update()` would
 //     only discard the fresh material `removeMember` just produced.)
-//   - `pathUpdateEpochId`: the FULL 32-byte HKDF-derived epoch
-//     identifier (output of `deriveEpochIdFromRootSecret`). Receivers
-//     compare the full 32 bytes against their locally-derived ID; only
-//     after the full-length match do they truncate to the keychain
-//     provider's narrower key-ID width (`keyIDLength`, currently 16)
-//     for the local install. Sending the full 32 bytes avoids silent
-//     collisions where a sender and receiver agree on the truncated
-//     prefix but diverge on the un-truncated root, which would let a
-//     bogus PathUpdate slip through the epoch-ID gate.
+//   - `pathUpdateEpochId`: the 32-byte HKDF-derived epoch identifier
+//     (output of `deriveEpochIdFromRootSecret`). Receivers compare the
+//     full 32 bytes against their locally-derived ID and install the
+//     new document key under that same 32-byte ID. The keychain
+//     providers' `keyIDLength` is 32 -- byte-identical to the HKDF
+//     output width -- so the wire-format key-ID prefix, the
+//     `pathUpdateEpochId` field on this protocol, and the keychain's
+//     storage key are all the same 32 bytes. No truncation step
+//     exists; an earlier (buggy) revision truncated to a narrower
+//     keychain key-ID width and produced a deterministic post-rotation
+//     decrypt failure on every receiver.
 //   - `signature`: writer signature over the canonical
 //     (signature-stripped) serialization of the sync message.
 //
@@ -134,12 +136,33 @@ export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
 // =============================================================================
 // Failure modes
 // =============================================================================
-// If some surviving reader fails to receive the PathUpdate (peer
-// disconnected, dial failed, etc.) they will be unable to decrypt
-// document traffic encrypted under the new epoch key. A subsequent
-// fresh document-load against an authorized peer recovers keychain state
-// (the new epoch key is added via `Keychain.addEpochKey`, which is part
-// of the keychain CRDT). The library logs each failed dial but does not
-// attempt retries — `removeReader` is fire-and-forget, matching the
-// best-effort posture of the existing key-update flow.
+// Surviving readers MUST receive the PathUpdate (or an equivalent
+// out-of-band Welcome / load that observes the post-rotation
+// keychain state) to install the new epoch key. The PathUpdate
+// distribution is fire-and-forget: the library logs each failed
+// dial but does not retry, matching the best-effort posture of the
+// rest of the document protocol.
+//
+// If a surviving reader misses the PathUpdate, their local keychain
+// state diverges from the writer's. Subsequent writer-originated
+// traffic is encrypted under the new epoch key (`pathUpdateEpochId`
+// is the wire-format key-ID prefix); the recipient has no entry for
+// that ID in their local keychain and the decrypt fails.
+//
+// Recovery is NOT guaranteed by a vanilla `loadDocument` against an
+// arbitrary peer: `handleLoadRequestData` encrypts its response under
+// the responder's `_keychain.current()`, so the recipient can
+// decrypt the load response only if they ALSO already hold the
+// responder's current key. The reliable recovery path today is a
+// fresh BeeKEM Welcome from an authorized writer (Welcome payloads
+// are sealed under the recipient's KEM public key, not under the
+// keychain), which both rebootstraps the recipient's BeeKEM ratchet
+// state and re-shares the keychain.
+//
+// Future work: implement reliable PathUpdate delivery (e.g. signed
+// ACK + retry, or rolling-window resend on libp2p reconnect) so a
+// transient dial failure does not require a full re-onboard. Tracked
+// as a follow-up; in the meantime, application-level policy should
+// treat surviving-reader connectivity at revocation time as a
+// liveness requirement.
 export const beekemPathUpdateV1 = '/collabswarm/beekem-pathupdate/1.0.0';
