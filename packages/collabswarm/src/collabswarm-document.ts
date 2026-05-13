@@ -78,7 +78,6 @@ import { keychainHistorySinceOrFull } from './keychain';
 import { LoadMessageSerializer } from './load-request-serializer';
 import { CRDTLoadRequest } from './crdt-load-request';
 import { Base64 } from 'js-base64';
-import * as uuid from 'uuid';
 import BufferList from 'bl';
 import { Uint8ArrayList } from 'uint8arraylist';
 import { CID } from 'multiformats';
@@ -657,7 +656,7 @@ export class CollabswarmDocument<
       } else {
         console.warn(
           `Failed to find document key!`,
-          uuid.stringify(blockKeyID),
+          this._hexEncode(blockKeyID),
           this._keychain,
         );
       }
@@ -4160,24 +4159,18 @@ export class CollabswarmDocument<
     //    relative to the gossipsub-broadcast ACL change), and so
     //    would be unable to decrypt the ACL change.
     //
-    //    The 32-byte ID is what we put on the wire; the keychain
-    //    provider then truncates locally to `keyIDLength` bytes when
-    //    storing under its narrower keyspace.
+    //    The full 32-byte ID is both what we put on the wire AND what
+    //    the keychain stores: `keyIDLength` is now 32 in the shipped
+    //    providers (matches `deriveEpochIdFromRootSecret`), so there is
+    //    no truncation step. Earlier revisions truncated to 16 bytes
+    //    here, which collided with the keychain providers' UUID-style
+    //    cache-key encoding for 16-byte inputs and produced a
+    //    deterministic post-rotation decrypt failure on the receiver
+    //    side (key stored under hex, looked up under UUID format).
     const [newKey, derivedEpochId32] = await Promise.all([
       deriveDocumentKeyFromRootSecret(rootSecret),
       deriveEpochIdFromRootSecret(rootSecret),
     ]);
-    // The keychain wire-format reserves `keyIDLength` bytes (currently
-    // 16) for the keychain key ID prefix on encrypted blocks, so the
-    // *local* keychain key is keyed under the truncated form.
-    // `_distributeBeeKEMPathUpdate` ships the full 32-byte ID so the
-    // receiver can re-derive both the truncated keychain ID and (if
-    // future protocol versions widen the keyspace) the full
-    // identifier.
-    const localKeychainId = derivedEpochId32.slice(
-      0,
-      this._keychainProvider.keyIDLength,
-    );
 
     // 3. Commit the ACL removal and broadcast it -- still encrypted
     //    under the **previous** keychain key (the new key hasn't been
@@ -4238,9 +4231,9 @@ export class CollabswarmDocument<
 
     // 5. Broadcast the PathUpdate to every connected peer. Carries
     //    the full 32-byte epoch ID; the receiver matches it against
-    //    its own locally-derived 32-byte value, and only after that
-    //    succeeds truncates to the keychain's `keyIDLength` for
-    //    local install.
+    //    its own locally-derived 32-byte value, then installs under
+    //    that same 32-byte ID. No truncation step on either side --
+    //    `keyIDLength` and `deriveEpochIdFromRootSecret` both use 32.
     //
     //    Best-effort relative to the BeeKEM mutation: if the
     //    PathUpdate distribution throws (signing failure, payload
@@ -4286,7 +4279,7 @@ export class CollabswarmDocument<
     //    to keep the on-wire ordering correct.
     try {
       await this._keychain.addEpochKey(
-        localKeychainId,
+        derivedEpochId32,
         newKey as unknown as DocumentKey,
       );
     } catch (err) {
@@ -4704,13 +4697,11 @@ export class CollabswarmDocument<
       }
 
       // Validate the sender's epoch ID against our locally-derived
-      // value. The wire carries the FULL 32-byte HKDF output (no
-      // truncation), so we compare full-length here -- a truncated
-      // comparison on the keychain-key-ID prefix would silently
-      // accept a sender whose root secret happened to collide in the
-      // first `keyIDLength` bytes. Truncation to the keychain's
-      // narrower keyspace happens only AFTER the full-length
-      // comparison succeeds, when installing the key locally.
+      // value. The wire carries the FULL 32-byte HKDF output and the
+      // keychain installs under the same 32-byte ID -- no truncation
+      // step on either side, so the wire-format and storage key are
+      // byte-identical to what both ends will key on for future
+      // encrypted-block lookups.
       const localEpochId32 = await deriveEpochIdFromRootSecret(rootSecret);
       const senderEpochId32 = message.pathUpdateEpochId;
       if (!constantTimeEqual(localEpochId32, senderEpochId32)) {
@@ -4721,18 +4712,10 @@ export class CollabswarmDocument<
         return;
       }
 
-      // Truncate to the keychain's installable key-ID width only
-      // after the full-length comparison passes. Both sides agree on
-      // the 32-byte ID, so both sides end up agreeing on the
-      // truncated form as well.
-      const localKeychainId = localEpochId32.slice(
-        0,
-        this._keychainProvider.keyIDLength,
-      );
       const newKey = await deriveDocumentKeyFromRootSecret(rootSecret);
       try {
         await this._keychain.addEpochKey(
-          localKeychainId,
+          localEpochId32,
           newKey as unknown as DocumentKey,
         );
       } catch (err) {

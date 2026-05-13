@@ -32,8 +32,6 @@ import {
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
 
-import * as uuid from 'uuid';
-
 export type AutomergeSwarmDocumentChangeHandler<T = any> =
   CollabswarmDocumentChangeHandler<Doc<T>, CryptoKey>;
 
@@ -187,7 +185,7 @@ export type AutomergeKeychainDoc = Doc<{
 }>;
 
 /**
- * Convert a Uint8Array to a hex string for use as a cache key.
+ * Convert a Uint8Array to a lowercase hex string for use as a cache key.
  */
 function toHex(bytes: Uint8Array): string {
   const hexChars: string[] = new Array(bytes.length);
@@ -198,32 +196,39 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Convert a key ID (either 16-byte UUID or 32-byte epoch ID) to a cache key string.
+ * Convert any key ID (random or HKDF-derived, any byte length) to a cache
+ * key string.
+ *
+ * Uniform lowercase-hex encoding regardless of byte length. Earlier
+ * revisions special-cased 16-byte IDs through `uuid.stringify` (producing
+ * a dashed-UUID string) on the assumption that 16-byte IDs were always
+ * UUIDs. That assumption broke once BeeKEM epoch IDs (originally 32
+ * bytes from `deriveEpochIdFromRootSecret`) were truncated to the
+ * `keyIDLength` width for wire framing: the truncated 16-byte epoch
+ * prefix would be stored under hex (via `addEpochKey`) but looked up
+ * under the UUID format (via `getKey`), causing a deterministic cache
+ * miss on every PathUpdate-derived key.
+ *
+ * Hex-only avoids the conflation entirely. The keychain's wire-format
+ * key-ID width is now `keyIDLength = 32`, so both UUID-based `add()`
+ * outputs and BeeKEM-derived epoch IDs share the same byte length and
+ * round-trip through this function without any special casing.
  */
 function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
-  if (keyIDBytes.length === 16) {
-    return uuid.stringify(keyIDBytes);
-  }
   return toHex(keyIDBytes);
 }
 
 /**
- * Parse a cache key string back to a Uint8Array key ID.
- * Validates UUID format with regex before parsing, and validates hex strings
- * for correct format and even length.
+ * Parse a cache key string back to a Uint8Array key ID. The keychain
+ * stores cache keys exclusively in lowercase hex (see
+ * {@link keyIdToCacheKey}), so this only needs to decode hex.
  *
- * @throws {Error} If the cache key is not a valid UUID or hex string.
+ * @throws {Error} If the cache key is not a valid even-length hex string.
  */
 function cacheKeyToKeyId(cacheKey: string): Uint8Array {
-  // UUID format: 8-4-4-4-12 hex digits with dashes
-  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-  if (uuidRegex.test(cacheKey)) {
-    return new Uint8Array(uuid.parse(cacheKey));
-  }
-  // Hex-encoded epoch ID: must be even-length and only hex characters
   const hexRegex = /^[0-9a-fA-F]+$/;
   if (!hexRegex.test(cacheKey) || cacheKey.length % 2 !== 0) {
-    throw new Error(`Invalid cache key format: expected UUID or even-length hex string, got "${cacheKey}"`);
+    throw new Error(`Invalid cache key format: expected even-length hex string, got "${cacheKey}"`);
   }
   const bytes = new Uint8Array(cacheKey.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -269,8 +274,17 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
   private _keychain: AutomergeKeychainDoc = newKeychainDoc();
 
   async add(): Promise<[Uint8Array, CryptoKey, BinaryChange[]]> {
-    const keyID = uuid.v4();
-    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
+    // 32 random bytes match the width used by BeeKEM-derived epoch IDs
+    // (`deriveEpochIdFromRootSecret`), so the wire-format key-ID prefix
+    // is a single fixed width regardless of how the key was provisioned.
+    // Earlier revisions used a 16-byte UUID here, but that required the
+    // PathUpdate handler to truncate 32-byte BeeKEM epoch IDs down to 16
+    // bytes on install -- producing a deterministic cache-key-format
+    // mismatch with `getKey` (stored under hex, looked up under UUID
+    // format). Removing the size asymmetry removes the need for the
+    // truncation in the first place.
+    const keyIDBytes = crypto.getRandomValues(new Uint8Array(32));
+    const keyIDHex = toHex(keyIDBytes);
     const key = await crypto.subtle.generateKey(
       {
         name: 'AES-GCM',
@@ -281,12 +295,12 @@ export class AutomergeKeychain implements Keychain<BinaryChange[], CryptoKey> {
     );
 
     const serialized = await serializeKey(key);
-    this._keyCache.set(keyID, key);
+    this._keyCache.set(keyIDHex, key);
     const keychainNew = change(this._keychain, (doc) => {
       if (!doc.keys) {
         doc.keys = [];
       }
-      doc.keys.push([keyID, serialized]);
+      doc.keys.push([keyIDHex, serialized]);
     });
     const keychainChanges = getChanges(this._keychain, keychainNew);
     this._keychain = keychainNew;
@@ -424,10 +438,13 @@ export class AutomergeKeychainProvider
     return new AutomergeKeychain();
   }
 
-  // UUID v4 is 16 bytes. Epoch IDs are 32 bytes.
-  // Use 16 for backward compatibility; will be updated to 32 when
-  // epoch-based key management is fully activated.
-  keyIDLength = 16;
+  // 32 bytes: matches both `add()`'s random key-ID output and the
+  // BeeKEM-derived epoch ID width from `deriveEpochIdFromRootSecret`.
+  // Using one fixed width across the keychain's two key-provisioning
+  // paths means the on-wire key-ID prefix never needs to be truncated
+  // -- which is the failure mode that caused the post-rotation
+  // decryption regression fixed by PR #285 round 6.
+  keyIDLength = 32;
 }
 
 /**
