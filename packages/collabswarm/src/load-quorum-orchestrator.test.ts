@@ -58,11 +58,22 @@ const peerIdOf = (p: TestPeer) => p;
 
 /**
  * Mirror of how `CollabswarmDocument.load()` uses the orchestrator: probe
- * peers, then perform the full document-load against any peer in the
- * narrowed cohort, with the responder's served `tips` hash bound to the
- * quorum's `winningHashHex`. The harness below stands in for the
- * snapshot/doc-load loop so the binding check is exercised against the
- * narrowed peer list this orchestrator produces.
+ * peers, then perform the full document-load against the narrowed cohort,
+ * with the responder's served `tips` hash bound to the quorum's
+ * `winningHashHex`. The harness below stands in for the snapshot/doc-load
+ * loop so the binding check is exercised against the narrowed peer list
+ * this orchestrator produces.
+ *
+ * Per-peer bind failures are NOT fatal: a peer whose served hash does not
+ * match `winningHashHex` is recorded in `agreeingPeerBindFailures` and the
+ * harness continues to the NEXT peer in the cohort. Only after EVERY peer
+ * in the narrowed cohort has bind-failed (and at least one bind failure
+ * was recorded) does the harness throw
+ * `LoadQuorumFailedError(reason: 'bind-check-failed-all-agreeing-peers')`.
+ * This mirrors the PR #284 r6 DoS fix in production `load()` -- a single
+ * malicious peer in the agreeing cohort that votes for the majority hash
+ * and then serves a mismatched full load can NOT unilaterally abort the
+ * whole load.
  */
 async function simulateFullLoad(opts: {
   narrowedPeers: TestPeer[];
@@ -73,24 +84,31 @@ async function simulateFullLoad(opts: {
   attempts: TestPeer[];
 }> {
   const attempts: TestPeer[] = [];
+  const agreeingPeerBindFailures = new Map<string, string>();
   for (const peer of opts.narrowedPeers) {
     attempts.push(peer);
     const servedHashHex = await opts.serveFn(peer);
     if (servedHashHex === opts.winningHashHex) {
       return { loadedFromPeer: peer, attempts };
     }
-    // else: binding fails; the production `_sendLoadRequestAndSync`
-    // would throw LoadQuorumFailedError. Mirror that here so the test
-    // also asserts the load aborts on mismatch.
+    // Bind check failed for THIS peer. Record it and continue to the
+    // next peer in the agreeing cohort. Production `_sendLoadRequestAndSync`
+    // throws an internal `_QuorumBindCheckFailedError` here and `load()`
+    // catches it inside the loop; we collapse that into a "record + continue"
+    // for the harness.
+    agreeingPeerBindFailures.set(peer, servedHashHex);
+  }
+  // Loop exhausted with at least one bind failure recorded => every peer
+  // in the agreeing cohort equivocated between the probe round and the
+  // load round. Escalate with the dedicated reason.
+  if (agreeingPeerBindFailures.size > 0) {
     throw new LoadQuorumFailedError({
       documentPath: '/test',
-      reason: 'no-majority',
+      reason: 'bind-check-failed-all-agreeing-peers',
       respondingCount: 0,
       requiredQ: 0,
-      agreement: new Map([
-        [opts.winningHashHex, 0],
-        [servedHashHex, 0],
-      ]),
+      agreement: new Map([[opts.winningHashHex, 0]]),
+      agreeingPeerBindFailures,
     });
   }
   return { loadedFromPeer: null, attempts };
@@ -169,7 +187,13 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(loadOutcome.loadedFromPeer).toBe('p1');
   });
 
-  test('(c) 3 peers all vote X but the chosen peer serves tips hashing to Y => LoadQuorumFailedError', async () => {
+  test('(c) 3 peers all vote X but EVERY peer serves tips hashing to Y => LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)', async () => {
+    // The whole cohort is Byzantine on the load step: every agreeing peer
+    // voted X in the probe round but serves Y on the full load. The
+    // harness must exhaust the cohort BEFORE escalating, so the
+    // serveFn is called for every peer and the final error carries the
+    // dedicated `bind-check-failed-all-agreeing-peers` reason plus a
+    // per-peer `agreeingPeerBindFailures` map. See PR #284 r6.
     const peers: TestPeer[] = ['p1', 'p2', 'p3'];
     probeMock.mockResolvedValue(HASH_X);
 
@@ -183,16 +207,121 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect('ok' in result && result.ok).toBe(true);
     if (!('ok' in result)) throw new Error('expected ok=true');
 
-    // The first agreeing peer (p1) serves tips that don't match the
-    // winning hash -- exactly the equivocation case from the comment.
     const serveFn = jest.fn(async () => HASH_Y_HEX);
-    await expect(
-      simulateFullLoad({
-        narrowedPeers: result.narrowedPeers,
-        winningHashHex: result.winningHashHex,
-        serveFn,
-      }),
-    ).rejects.toBeInstanceOf(LoadQuorumFailedError);
+    const err = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe(
+      'bind-check-failed-all-agreeing-peers',
+    );
+    // Every agreeing peer must have been tried before the escalation.
+    expect(serveFn).toHaveBeenCalledTimes(3);
+    // Per-peer record of what each Byzantine peer served instead.
+    expect(
+      (err as LoadQuorumFailedError).agreeingPeerBindFailures,
+    ).toEqual(
+      new Map([
+        ['p1', HASH_Y_HEX],
+        ['p2', HASH_Y_HEX],
+        ['p3', HASH_Y_HEX],
+      ]),
+    );
+  });
+
+  test('(c2) DoS regression: ONE Byzantine agreeing peer cannot abort the whole load; honest peer is tried next', async () => {
+    // Regression for the critical PR #284 r6 finding: previously, if the
+    // first peer chosen for the full load was Byzantine on the load
+    // step (voted hash X, served tips hashing to Y), the loader threw
+    // `LoadQuorumFailedError` and aborted -- never trying the OTHER
+    // honest agreeing peers who WOULD have served a matching response.
+    // That was a DoS vector: a single malicious peer in the agreeing
+    // cohort could unilaterally prevent any load. After the fix, the
+    // loader records the bind failure against the offending peer and
+    // falls through to the next peer in the cohort.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockResolvedValue(HASH_X);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+    expect(result.narrowedPeers).toEqual(['p1', 'p2', 'p3']);
+
+    // p1 is Byzantine on the load step: voted X, serves Y.
+    // p2 is honest: voted X, serves X.
+    // p3 should never be reached because p2 succeeds.
+    const serveFn = jest.fn(async (peer: TestPeer) => {
+      if (peer === 'p1') return HASH_Y_HEX;
+      return HASH_X_HEX;
+    });
+    const loadOutcome = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    });
+    // Load succeeded against p2 (the honest peer immediately after
+    // the Byzantine p1) -- NOT thrown.
+    expect(loadOutcome.loadedFromPeer).toBe('p2');
+    // Both p1 (bind-failed) and p2 (success) were attempted in order.
+    expect(loadOutcome.attempts).toEqual(['p1', 'p2']);
+    // p3 must NOT have been touched -- the load short-circuits on
+    // the first successful bind.
+    expect(serveFn).toHaveBeenCalledWith('p1');
+    expect(serveFn).toHaveBeenCalledWith('p2');
+    expect(serveFn).not.toHaveBeenCalledWith('p3');
+  });
+
+  test('(c3) all agreeing peers Byzantine on load: error carries per-peer agreeingPeerBindFailures with what each served', async () => {
+    // Complement of (c2): when EVERY agreeing peer equivocates between
+    // probe and load, the loader must escalate -- with the new
+    // `bind-check-failed-all-agreeing-peers` reason and a per-peer
+    // record of what each Byzantine peer served instead, so callers
+    // can tell "the whole cohort lied on the load step" apart from
+    // "no peer responded at all".
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockResolvedValue(HASH_X);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+
+    // Each Byzantine peer can serve a DIFFERENT mismatched hash; the
+    // per-peer record must preserve the distinction.
+    const HASH_Z_HEX = 'cc'.repeat(32);
+    const serveFn = jest.fn(async (peer: TestPeer) => {
+      if (peer === 'p1') return HASH_Y_HEX;
+      if (peer === 'p2') return HASH_Z_HEX;
+      return HASH_Y_HEX; // p3 mirrors p1, exercising shared-hex case
+    });
+    const err = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    const lqfe = err as LoadQuorumFailedError;
+    expect(lqfe.reason).toBe('bind-check-failed-all-agreeing-peers');
+    // Per-peer record carries the specific hash each peer served.
+    expect(lqfe.agreeingPeerBindFailures.get('p1')).toBe(HASH_Y_HEX);
+    expect(lqfe.agreeingPeerBindFailures.get('p2')).toBe(HASH_Z_HEX);
+    expect(lqfe.agreeingPeerBindFailures.get('p3')).toBe(HASH_Y_HEX);
+    expect(lqfe.agreeingPeerBindFailures.size).toBe(3);
+    // Error message mentions the cohort-wide failure and the count.
+    expect(lqfe.message).toMatch(/bind-check|agreeing cohort|3 peer/);
   });
 
   test('(d) 3 peers, only 1 responds in time => LoadQuorumFailedError(insufficient-responses); no full-load attempted', async () => {

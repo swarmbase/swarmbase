@@ -213,6 +213,41 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  */
 const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 6 * 1024;
 
+/**
+ * Module-private sentinel thrown by `_sendLoadRequestAndSync` when the
+ * quorum frontier binding check fails on a single peer's load response
+ * (either the responder omitted `tips` or the served `tips` hashed to a
+ * value other than the agreed `winningHashHex`). Caught by the `load()`
+ * loop, which records the failure against the responsible peer and
+ * proceeds to the NEXT peer in the agreeing cohort.
+ *
+ * Critical to the DoS fix from PR #284 r6: previously
+ * `_sendLoadRequestAndSync` threw `LoadQuorumFailedError` on bind
+ * mismatch and `load()` re-raised it, aborting the entire load. A
+ * single malicious peer in the agreeing cohort could vote for the
+ * majority hash (passing quorum) and then serve a mismatched full load
+ * (failing the bind check), unilaterally preventing the loader from
+ * trying any other honest agreeing peer.
+ *
+ * Public callers never see this type; `load()` catches it internally
+ * and only escalates to `LoadQuorumFailedError(reason:
+ * 'bind-check-failed-all-agreeing-peers')` once EVERY peer in the
+ * narrowed cohort has bind-failed.
+ *
+ * The `advertisedHex` field carries the hash the responder's served
+ * `tips` actually hashed to (or the sentinel `'(missing tips)'` when the
+ * response omitted the `tips` field entirely) so the outer loop can
+ * thread it into the final error's `agreeingPeerBindFailures` map.
+ */
+class _QuorumBindCheckFailedError extends Error {
+  public readonly advertisedHex: string;
+  constructor(advertisedHex: string, message: string) {
+    super(message);
+    this.name = '_QuorumBindCheckFailedError';
+    this.advertisedHex = advertisedHex;
+  }
+}
+
 export class CollabswarmDocument<
   DocType,
   ChangesType,
@@ -2336,6 +2371,19 @@ export class CollabswarmDocument<
         // unreliable because snapshot-loads don't restore ancestor CIDs
         // and the loader's pre-existing local CIDs (if any) inflate the
         // recomputed set.
+        //
+        // Throws the module-private `_QuorumBindCheckFailedError` on
+        // mismatch / missing-tips so the surrounding `load()` loop can
+        // record this peer as a bind-failure and proceed to the NEXT
+        // peer in the agreeing cohort. Previously this site threw
+        // `LoadQuorumFailedError` directly, which `load()` re-raised --
+        // letting a single malicious peer in the agreeing cohort vote
+        // for the majority hash, serve a mismatched full load, and
+        // unilaterally DoS the entire load by aborting before the
+        // honest agreeing peers could be tried. See PR #284 r6 Copilot
+        // review. `load()` only escalates to a structured
+        // `LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)`
+        // when EVERY narrowed peer fails the bind step.
         if (expectedTipsHashHex !== null) {
           if (!Array.isArray(message.tips)) {
             console.warn(
@@ -2343,13 +2391,10 @@ export class CollabswarmDocument<
                 `omitted 'tips' on load response; refusing to apply state ` +
                 `from an un-attesting peer.`,
             );
-            throw new LoadQuorumFailedError({
-              documentPath: this.documentPath,
-              reason: 'no-majority',
-              respondingCount: 0,
-              requiredQ: 0,
-              agreement: new Map([[expectedTipsHashHex, 0]]),
-            });
+            throw new _QuorumBindCheckFailedError(
+              '(missing tips)',
+              `Quorum frontier binding: responder omitted 'tips' on load response.`,
+            );
           }
           const advertisedBytes = await tipsHash(message.tips);
           const advertisedHex = tipsHashToHex(advertisedBytes);
@@ -2361,16 +2406,11 @@ export class CollabswarmDocument<
                 `An agreeing peer voted for one tip set and served a ` +
                 `different one; treating as Byzantine equivocation.`,
             );
-            throw new LoadQuorumFailedError({
-              documentPath: this.documentPath,
-              reason: 'no-majority',
-              respondingCount: 0,
-              requiredQ: 0,
-              agreement: new Map([
-                [expectedTipsHashHex, 0],
-                [advertisedHex, 0],
-              ]),
-            });
+            throw new _QuorumBindCheckFailedError(
+              advertisedHex,
+              `Quorum frontier binding mismatch: expected ${expectedTipsHashHex.slice(0, 12)}... ` +
+                `got ${advertisedHex.slice(0, 12)}...`,
+            );
           }
         }
 
@@ -2663,9 +2703,18 @@ export class CollabswarmDocument<
    * history compaction, and pre-existing local CIDs — the prior
    * recompute-locally approach would fail-open or fail-closed in those
    * cases. An agreeing peer that voted hash X but serves a load whose
-   * `tips` hash to Y is caught and the load is rejected before any
-   * in-memory document state is mutated. Closes the gap tracked under
-   * issue #189 §5.4 item 2 (and bulleted in #186).
+   * `tips` hash to Y is treated as a PER-PEER bind failure: the loader
+   * records the offending peer in `agreeingPeerBindFailures`, skips it,
+   * and tries the next peer in the agreeing cohort. This prevents a
+   * single malicious peer in the agreeing cohort from DoS'ing the
+   * entire load by voting for the majority hash (passing quorum) and
+   * then serving a mismatched full load. Only after EVERY peer in the
+   * agreeing cohort has bind-failed does the loader throw
+   * `LoadQuorumFailedError(reason: 'bind-check-failed-all-agreeing-
+   * peers')`, with `agreeingPeerBindFailures` recording per-peer what
+   * each Byzantine peer served instead. Closes the gap tracked under
+   * issue #189 §5.4 item 2 (and bulleted in #186). See PR #284 r6
+   * Copilot review for the DoS rationale on the per-peer retry.
    *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
@@ -2843,12 +2892,27 @@ export class CollabswarmDocument<
     // current frontier in `message.tips` and verifies
     // `tipsHash(message.tips) === winningHashHex` BEFORE applying the
     // sync, so a Byzantine peer that voted for one tip set and serves a
-    // different one never gets to mutate in-memory document state. On
-    // mismatch the load is rejected via `LoadQuorumFailedError` and the
-    // caller must construct a fresh document instance (the gate runs
-    // during `open()`, so no application code has observed the document
-    // yet).
+    // different one never gets to mutate in-memory document state.
+    //
+    // Per-peer bind failures (`_QuorumBindCheckFailedError`) are NOT
+    // fatal to the whole load -- they only disqualify the offending
+    // peer. The loop records the failure and continues to the NEXT
+    // peer in the agreeing cohort, so a single malicious peer that
+    // voted for the majority hash and then served a mismatched full
+    // load cannot DoS the entire load. Only after every peer in the
+    // narrowed cohort has bind-failed does `load()` escalate to
+    // `LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)`.
+    // See PR #284 r6 Copilot review.
+    //
+    // The `agreeingPeerBindFailures` map records, per peer, the hex
+    // hash the responder's served `tips` actually hashed to (or the
+    // sentinel `'(missing tips)'` for an omitted-tips response). This
+    // is threaded into the final error so callers / operators can see
+    // which peers in the agreeing cohort equivocated between the
+    // probe round and the load round and what they served instead.
+    const agreeingPeerBindFailures = new Map<string, string>();
     for (const peer of orderedPeers) {
+      let peerBindFailed = false;
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
@@ -2868,8 +2932,28 @@ export class CollabswarmDocument<
         }
         // Empty response -- peer has no snapshot, try doc-load below.
       } catch (err) {
-        if (err instanceof LoadQuorumFailedError) throw err;
-        // Peer doesn't support snapshot-load protocol.
+        if (err instanceof _QuorumBindCheckFailedError) {
+          // This peer voted hash X in the probe round but served a
+          // load whose tips hash to something else (or omitted tips
+          // entirely). Record the failure and skip the doc-load
+          // fallback for this peer -- a peer that equivocated once
+          // is not given a second chance on the same load round.
+          console.warn(
+            `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
+              `quorum frontier bind on snapshot-load (served ${err.advertisedHex}); ` +
+              `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+          );
+          agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
+          peerBindFailed = true;
+        }
+        // Else: peer doesn't support snapshot-load protocol, or some
+        // other transient error -- fall through to doc-load below.
+      }
+
+      if (peerBindFailed) {
+        // Don't retry doc-load against a peer that already equivocated
+        // on snapshot-load -- continue to the next peer in the cohort.
+        continue;
       }
 
       try {
@@ -2887,13 +2971,43 @@ export class CollabswarmDocument<
           return true;
         }
       } catch (err) {
-        if (err instanceof LoadQuorumFailedError) throw err;
+        if (err instanceof _QuorumBindCheckFailedError) {
+          console.warn(
+            `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
+              `quorum frontier bind on doc-load (served ${err.advertisedHex}); ` +
+              `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+          );
+          agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
+          continue;
+        }
         console.warn(
           `Failed to load document via ${documentLoadV3}:`,
           peer.toString(),
           err,
         );
       }
+    }
+
+    // If the loop exhausted the agreeing cohort AND at least one peer
+    // bind-failed AND quorum was actually run (`winningHashHex !==
+    // null`), every peer in the cohort either failed the bind check or
+    // failed to serve at all -- which, given they all voted for the
+    // same hash, indicates a coordinated Byzantine cohort. Escalate
+    // with the dedicated reason so callers can distinguish this from
+    // the "no peer responded" outcome. Only raise when at least one
+    // peer was actually flagged as bind-failed; if every peer instead
+    // failed for some OTHER reason (network, protocol, etc.) we fall
+    // through to the legacy `return false` so a brand-new document is
+    // still indistinguishable from a transient outage. See PR #284 r6.
+    if (winningHashHex !== null && agreeingPeerBindFailures.size > 0) {
+      throw new LoadQuorumFailedError({
+        documentPath: this.documentPath,
+        reason: 'bind-check-failed-all-agreeing-peers',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map([[winningHashHex, 0]]),
+        agreeingPeerBindFailures,
+      });
     }
 
     // No peer could provide the document -- assume new document.
