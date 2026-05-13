@@ -279,6 +279,92 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
     expect(serveFn).not.toHaveBeenCalledWith('p3');
   });
 
+  test('(c2-missing-tips) PR #284 r9 issue #1: responder omits `tips` on v3 quorum-enabled load => per-peer bind failure; loader tries next agreeing peer', async () => {
+    // PR #284 r9 Copilot review (issue #1): the v3 load-response
+    // contract requires `tips` to be present on every quorum-enabled
+    // load response so the responder commits to an explicit frontier
+    // attestation. A v3 responder that omits `tips` previously slipped
+    // through the bind path (the `Array.isArray(message.tips)` defense-
+    // in-depth branch simply skipped). Now the omission is treated as
+    // a per-peer bind failure with the sentinel `'(missing tips)'` so
+    // the loader retries the next agreeing peer (mirrors the PR #284
+    // r6 DoS fix: one peer cannot unilaterally DoS the load).
+    //
+    // The simulated harness models the missing-tips case by having the
+    // peer's `serveFn` return the `'(missing tips)'` sentinel (which
+    // production `_sendLoadRequestAndSync` uses inside
+    // `_QuorumBindCheckFailedError.advertisedHex` for the same path).
+    // The sentinel is never byte-equal to the `winningHashHex`, so the
+    // harness records the peer as bind-failed and continues.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockResolvedValue(HASH_X);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+    expect(result.narrowedPeers).toEqual(['p1', 'p2', 'p3']);
+
+    // p1 voted X but omits `tips` on the load response (v3 protocol
+    // violation). p2 is honest: voted X, serves X with tips. p3 should
+    // never be touched -- p2 succeeds.
+    const MISSING_TIPS = '(missing tips)';
+    const serveFn = jest.fn(async (peer: TestPeer) => {
+      if (peer === 'p1') return MISSING_TIPS;
+      return HASH_X_HEX;
+    });
+    const loadOutcome = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    });
+    expect(loadOutcome.loadedFromPeer).toBe('p2');
+    expect(loadOutcome.attempts).toEqual(['p1', 'p2']);
+    expect(serveFn).toHaveBeenCalledWith('p1');
+    expect(serveFn).toHaveBeenCalledWith('p2');
+    expect(serveFn).not.toHaveBeenCalledWith('p3');
+  });
+
+  test('(c2-missing-tips-all) PR #284 r9 issue #1: ALL agreeing peers omit `tips` => LoadQuorumFailedError(bind-check-failed-all-agreeing-peers) with `(missing tips)` sentinel', async () => {
+    // The whole cohort violates the v3 protocol contract by omitting
+    // `tips` on every load response. Loader must exhaust the cohort,
+    // escalate with the dedicated reason, and record the
+    // `'(missing tips)'` sentinel per peer so operators can tell
+    // missing-tips equivocation apart from served-vs-claimed mismatch.
+    const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+    probeMock.mockResolvedValue(HASH_X);
+
+    const result = await runLoadQuorum({
+      peers,
+      peerIdOf,
+      probeFn: probeMock,
+      documentPath: '/test',
+      config: { enabled: true, k: 3, q: 2 },
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result)) throw new Error('expected ok=true');
+
+    const MISSING_TIPS = '(missing tips)';
+    const serveFn = jest.fn(async () => MISSING_TIPS);
+    const err = await simulateFullLoad({
+      narrowedPeers: result.narrowedPeers,
+      winningHashHex: result.winningHashHex,
+      serveFn,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    const lqfe = err as LoadQuorumFailedError;
+    expect(lqfe.reason).toBe('bind-check-failed-all-agreeing-peers');
+    expect(serveFn).toHaveBeenCalledTimes(3);
+    expect(lqfe.agreeingPeerBindFailures.get('p1')).toBe(MISSING_TIPS);
+    expect(lqfe.agreeingPeerBindFailures.get('p2')).toBe(MISSING_TIPS);
+    expect(lqfe.agreeingPeerBindFailures.get('p3')).toBe(MISSING_TIPS);
+  });
+
   test('(c3) all agreeing peers Byzantine on load: error carries per-peer agreeingPeerBindFailures with what each served', async () => {
     // Complement of (c2): when EVERY agreeing peer equivocates between
     // probe and load, the loader must escalate -- with the new

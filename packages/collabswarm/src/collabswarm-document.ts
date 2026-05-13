@@ -2490,14 +2490,19 @@ export class CollabswarmDocument<
         // of what was actually served. We then hash that frontier and
         // compare to `winningHashHex`.
         //
-        // We additionally verify `message.tips`, when present,
-        // matches the structurally-derived served frontier as a
-        // defense-in-depth check: a peer whose `tips` attestation
-        // contradicts their own served payload is misbehaving even if
-        // the served-frontier hash happens to match the quorum vote
-        // (e.g. if they tried to claim extra heads in `tips`). This
-        // catches the responder-equivocation mode where `tips` and
-        // `changes` were assembled inconsistently.
+        // We additionally REQUIRE `message.tips` on every v3 quorum-
+        // enabled load response (PR #284 r9 Copilot review, issue #1).
+        // The v3 load-response contract mandates the responder commit
+        // to an explicit frontier attestation; a responder that omits
+        // `tips` is recorded as a per-peer bind failure so the loader
+        // retries the next agreeing peer. The structural check above
+        // is the primary defense; the explicit `tips` requirement
+        // ensures protocol compliance AND that the defense-in-depth
+        // check below (verifying `tips` matches the structurally-
+        // derived served frontier) actually runs. Catches the
+        // responder-equivocation mode where `tips` and `changes` were
+        // assembled inconsistently — e.g. a peer that claims extra
+        // heads in `tips` that are not present in the served tree.
         //
         // Throws the module-private `_QuorumBindCheckFailedError` on
         // mismatch so the surrounding `load()` loop can record this
@@ -2536,28 +2541,53 @@ export class CollabswarmDocument<
                 `${expectedTipsHashHex.slice(0, 12)}... got ${servedHex.slice(0, 12)}...`,
             );
           }
-          // Defense-in-depth: if the responder included `tips`, it
-          // must hash to the same value as the structurally-derived
-          // served frontier. A peer whose attested `tips` contradicts
-          // their own served payload (e.g. claims extra heads that
-          // are not present in the served tree) is misbehaving.
-          if (Array.isArray(message.tips)) {
-            const advertisedBytes = await tipsHash(message.tips);
-            const advertisedHex = tipsHashToHex(advertisedBytes);
-            if (!constantTimeHexEquals(servedHex, advertisedHex)) {
-              console.warn(
-                `[${this.documentPath}] Quorum frontier binding FAILED: ` +
-                  `served payload frontier hashes to ${servedHex.slice(0, 12)}... ` +
-                  `but responder advertised tips hashing to ${advertisedHex.slice(0, 12)}.... ` +
-                  `Responder's own attestation contradicts the served payload.`,
-              );
-              throw new _QuorumBindCheckFailedError(
-                advertisedHex,
-                `Quorum frontier binding mismatch (advertised vs served): ` +
-                  `advertised ${advertisedHex.slice(0, 12)}... served ` +
-                  `${servedHex.slice(0, 12)}...`,
-              );
-            }
+          // Protocol compliance: under the v3 load-response contract,
+          // a quorum-enabled load REQUIRES `message.tips` to be present
+          // on the response so the responder commits to an explicit
+          // frontier attestation alongside the served payload. The
+          // structural-frontier check above is the primary defense; this
+          // explicit `Array.isArray(message.tips)` guard ensures a v3
+          // responder that omits `tips` is recorded as a per-peer bind
+          // failure (so the loader retries the NEXT agreeing peer)
+          // rather than silently passing on the structural-hash check
+          // alone. Without this guard, a responder could violate the
+          // protocol contract — and a defense-in-depth check that
+          // catches contradictions between `tips` and the served payload
+          // would never run because the `Array.isArray` branch would
+          // simply skip. See PR #284 r9 Copilot review (issue #1).
+          if (!Array.isArray(message.tips)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `quorum-enabled load response omitted required \`tips\` ` +
+                `attestation (v3 protocol violation). Recording peer as ` +
+                `bind-failed; loader will try the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(missing tips)',
+              `Quorum frontier binding: responder omitted required \`tips\` ` +
+                `attestation on v3 quorum-enabled load response.`,
+            );
+          }
+          // Defense-in-depth: the responder-supplied `tips` must hash
+          // to the same value as the structurally-derived served
+          // frontier. A peer whose attested `tips` contradicts their
+          // own served payload (e.g. claims extra heads that are not
+          // present in the served tree) is misbehaving.
+          const advertisedBytes = await tipsHash(message.tips);
+          const advertisedHex = tipsHashToHex(advertisedBytes);
+          if (!constantTimeHexEquals(servedHex, advertisedHex)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `served payload frontier hashes to ${servedHex.slice(0, 12)}... ` +
+                `but responder advertised tips hashing to ${advertisedHex.slice(0, 12)}.... ` +
+                `Responder's own attestation contradicts the served payload.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              advertisedHex,
+              `Quorum frontier binding mismatch (advertised vs served): ` +
+                `advertised ${advertisedHex.slice(0, 12)}... served ` +
+                `${servedHex.slice(0, 12)}...`,
+            );
           }
         }
 
