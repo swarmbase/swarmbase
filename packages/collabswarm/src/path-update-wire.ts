@@ -69,9 +69,13 @@ export function deserializePathUpdateFromWire(
   }
   const raw = wire as Record<string, unknown>;
 
-  if (typeof raw.senderLeafIndex !== 'number' || !Number.isInteger(raw.senderLeafIndex)) {
+  if (
+    typeof raw.senderLeafIndex !== 'number' ||
+    !Number.isInteger(raw.senderLeafIndex) ||
+    raw.senderLeafIndex < 0
+  ) {
     throw new Error(
-      `Invalid PathUpdate: 'senderLeafIndex' must be an integer (got ${describe(raw.senderLeafIndex)})`,
+      `Invalid PathUpdate: 'senderLeafIndex' must be a non-negative integer (got ${describe(raw.senderLeafIndex)})`,
     );
   }
   if (typeof raw.senderLeafPublicKey !== 'string') {
@@ -92,9 +96,13 @@ export function deserializePathUpdateFromWire(
       );
     }
     const nn = n as Record<string, unknown>;
-    if (typeof nn.nodeIndex !== 'number' || !Number.isInteger(nn.nodeIndex)) {
+    if (
+      typeof nn.nodeIndex !== 'number' ||
+      !Number.isInteger(nn.nodeIndex) ||
+      nn.nodeIndex < 0
+    ) {
       throw new Error(
-        `Invalid PathUpdate: node[${i}].nodeIndex must be an integer (got ${describe(nn.nodeIndex)})`,
+        `Invalid PathUpdate: node[${i}].nodeIndex must be a non-negative integer (got ${describe(nn.nodeIndex)})`,
       );
     }
     if (typeof nn.publicKey !== 'string') {
@@ -109,16 +117,43 @@ export function deserializePathUpdateFromWire(
     }
     return {
       nodeIndex: nn.nodeIndex,
-      publicKey: Base64.toUint8Array(nn.publicKey),
-      encryptedPrivateKey: Base64.toUint8Array(nn.encryptedPrivateKey),
+      publicKey: decodeBase64(nn.publicKey, `node[${i}].publicKey`),
+      encryptedPrivateKey: decodeBase64(
+        nn.encryptedPrivateKey,
+        `node[${i}].encryptedPrivateKey`,
+      ),
     };
   });
 
   return {
     senderLeafIndex: raw.senderLeafIndex,
-    senderLeafPublicKey: Base64.toUint8Array(raw.senderLeafPublicKey),
+    senderLeafPublicKey: decodeBase64(
+      raw.senderLeafPublicKey,
+      'senderLeafPublicKey',
+    ),
     nodes,
   };
+}
+
+/**
+ * Decode a base64 string with field-level error context. A malformed
+ * peer payload that survives the per-field type checks above but
+ * carries syntactically-invalid base64 in one of the `Uint8Array`
+ * fields would otherwise throw a generic decoder error with no
+ * indication of which field failed. Wrap each decode so the message
+ * names the field, making protocol-level debugging tractable.
+ */
+function decodeBase64(value: string, fieldName: string): Uint8Array {
+  try {
+    return Base64.toUint8Array(value);
+  } catch (err) {
+    throw new Error(
+      `path-update wire: invalid base64 for field ${fieldName}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { cause: err },
+    );
+  }
 }
 
 function describe(value: unknown): string {

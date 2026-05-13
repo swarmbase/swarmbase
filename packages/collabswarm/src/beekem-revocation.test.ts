@@ -67,13 +67,15 @@ async function decryptUnder(
 
 describe('BeeKEM reader revocation', () => {
   test('removed reader cannot derive the new document key even if connected', async () => {
-    // Alice (writer) sets up a 4-member group so the removed reader
-    // (Bob) has at least one survivor (Charlie) on the OTHER side of
-    // his subtree boundary -- the configuration in which the
-    // revocation security property actually has to do work.
-    // Tree layout (4 leaves):
-    //   leaf positions: 0=Alice, 1=Bob, 2=Charlie, 3=Dave
-    //   node indices:   0       2     4         6
+    // Alice (writer) sets up a 2-member group (Alice + Bob). The test
+    // focuses on the simplest configuration that exercises the
+    // revocation security property: a removed reader cannot derive the
+    // new document key from the writer-broadcast PathUpdate. Larger
+    // tree configurations are exercised by the wire-integration tests
+    // in `beekem-revocation-wire.test.ts`.
+    // Tree layout (2 leaves):
+    //   leaf positions: 0=Alice, 1=Bob
+    //   node indices:   0,       2
     const alice = new BeeKEM();
     const aliceKeys = await generateECDHKeyPair();
     await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
