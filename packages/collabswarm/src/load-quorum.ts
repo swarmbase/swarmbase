@@ -127,6 +127,24 @@ export function decideLoadQuorum(
   advertisements: readonly PeerTipAdvertisement[],
   q: number,
 ): LoadQuorumDecision {
+  // Fail fast on programming errors. `decideLoadQuorum` is exported, so a
+  // direct caller (or a future refactor that bypasses `runLoadQuorum`)
+  // could otherwise pass `q <= 0` / `NaN` / non-integer and silently
+  // disable the quorum gate -- the largest-bucket size would always be
+  // `>= 0 >= q` and a single peer's vote would pass. The orchestrator
+  // already clamps via `effectiveQ`, but this guard is the load-bearing
+  // backstop for any other code path that builds the advertisements list
+  // by hand. Coding-guideline rule applies here: throw on programming
+  // mistakes (vs. logging warnings for runtime issues) so the failure is
+  // loud at the first call site. See PR #284 r12 CodeRabbit review.
+  if (!Number.isInteger(q) || q < 1) {
+    throw new Error(
+      `decideLoadQuorum: q must be a positive integer; got ${String(q)}. ` +
+        `Pass the value through effectiveQ() / runLoadQuorum() so the ` +
+        `clamp against the responding cohort fires before reaching this ` +
+        `function.`,
+    );
+  }
   if (advertisements.length === 0) {
     return {
       ok: false,

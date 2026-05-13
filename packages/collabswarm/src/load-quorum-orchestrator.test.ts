@@ -1765,4 +1765,50 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
       expect('newDoc' in result && result.newDoc).toBe(true);
     });
   });
+
+  describe('quorum agreement maps to zero peers => fail closed (PR #284 r12)', () => {
+    // If `peerIdOf` returns a stable id for the probe round but the post-
+    // probe narrowing step somehow loses every agreeing peer (e.g. a bug
+    // in `peerIdOf` produces a different id on the second call, or the
+    // agreement map references peer ids that are not in the peer list),
+    // the orchestrator must FAIL CLOSED rather than silently fall back to
+    // probing every original peer -- including the ones that voted for
+    // the LOSING hash. The previous behaviour widened trust scope to
+    // escape this edge case, defeating the very narrowing the gate
+    // exists to enforce. The fix raises a structured
+    // `LoadQuorumFailedError(no-majority)` so the caller sees the same
+    // contract as any other quorum failure.
+
+    test('unstable peerIdOf that maps probe-round ids to non-existent post-narrowing ids => LoadQuorumFailedError(no-majority)', async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      // Probe round sees ids `p1/p2/p3`; narrowing round sees totally
+      // different ids (`probed-p1`, etc.) so `agreeingSet.has(...)` is
+      // never true on any peer. This is the "should-be-impossible-but-
+      // happened" branch the fail-closed guard exists for.
+      let callCount = 0;
+      const unstablePeerIdOf = (p: TestPeer): string => {
+        callCount++;
+        return callCount <= peers.length ? p : `probed-${p}`;
+      };
+
+      const err = await runLoadQuorum({
+        peers,
+        peerIdOf: unstablePeerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      }).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe('no-majority');
+      // Agreement map carries the winning hex + the count of agreeing
+      // peers so observability is preserved across the fail-closed path.
+      const agreement = (err as LoadQuorumFailedError).agreement;
+      expect(agreement.size).toBe(1);
+      const [[hex, count]] = [...agreement.entries()];
+      expect(hex).toBe(HASH_X_HEX);
+      expect(count).toBe(3);
+    });
+  });
 });

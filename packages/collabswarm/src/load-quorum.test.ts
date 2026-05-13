@@ -118,6 +118,37 @@ describe('decideLoadQuorum (initial-load quorum gate, #189 §5.4.2)', () => {
     }
   });
 
+  // PR #284 r12 CodeRabbit review: `decideLoadQuorum` is exported, so a
+  // direct caller (or future refactor that bypasses `runLoadQuorum`)
+  // passing `q <= 0` or a non-integer would silently disable the quorum
+  // gate -- the largest-bucket size is always `>= 0 >= q` and a single
+  // peer's vote would pass. Throw on programming errors so the failure
+  // is loud at the first call site rather than relying on the docstring
+  // precondition.
+  test('non-positive q is a programming error and throws', () => {
+    expect(() =>
+      decideLoadQuorum([{ peerId: 'p1', hash: HASH_A }], 0),
+    ).toThrow(/q must be a positive integer.*got 0/);
+    expect(() =>
+      decideLoadQuorum([{ peerId: 'p1', hash: HASH_A }], -1),
+    ).toThrow(/q must be a positive integer.*got -1/);
+  });
+
+  test('non-integer q is a programming error and throws', () => {
+    expect(() =>
+      decideLoadQuorum([{ peerId: 'p1', hash: HASH_A }], 1.5),
+    ).toThrow(/q must be a positive integer.*got 1\.5/);
+    expect(() =>
+      decideLoadQuorum([{ peerId: 'p1', hash: HASH_A }], Number.NaN),
+    ).toThrow(/q must be a positive integer.*got NaN/);
+    expect(() =>
+      decideLoadQuorum(
+        [{ peerId: 'p1', hash: HASH_A }],
+        Number.POSITIVE_INFINITY,
+      ),
+    ).toThrow(/q must be a positive integer.*got Infinity/);
+  });
+
   test('single peer with Q=1 (allowSinglePeer path) passes', () => {
     const decision = decideLoadQuorum(
       [{ peerId: 'p1', hash: HASH_A }],

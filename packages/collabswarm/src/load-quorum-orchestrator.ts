@@ -381,14 +381,36 @@ export async function runLoadQuorum<T>(opts: {
   const agreeingSet = new Set(decision.agreeingPeerIds);
   const narrowed = peers.filter((p) => agreeingSet.has(peerIdOf(p)));
   // Defensive: at least one agreeing peer must remain. If peer-id
-  // extraction loses a peer (should never happen given we built the same
-  // set above), fall back to the full list so we don't accidentally
-  // degrade to "no peers to load from".
-  const finalNarrowed =
-    narrowed.length > 0 ? narrowed : ([...peers] as T[]);
+  // extraction loses every peer (should be impossible because we built
+  // `agreeingSet` from `peerIdOf` outputs over the same `peers` array),
+  // FAIL CLOSED rather than silently widening the load to ALL peers --
+  // which would re-introduce non-agreeing peers into the load path and
+  // bypass the very narrowing the quorum gate is meant to enforce. The
+  // previous fallback (`narrowed.length > 0 ? narrowed : [...peers]`)
+  // expanded trust scope to escape a no-op edge case, which is exactly
+  // the kind of silent-degrade-to-unsafe-default that the gate exists to
+  // prevent. Surface as a structured `LoadQuorumFailedError` so callers
+  // see the same error contract as any other quorum failure. See PR #284
+  // r12 CodeRabbit review.
+  if (narrowed.length === 0) {
+    throw new LoadQuorumFailedError({
+      documentPath,
+      reason: 'no-majority',
+      respondingCount: decision.respondingCount,
+      requiredQ: decision.effectiveQ,
+      // Re-derive a `hash -> count` agreement summary from the agreeing
+      // cohort so the structured error carries the same observability
+      // payload as the normal `'no-majority'` path (decideLoadQuorum's
+      // success branch does not expose the full agreement map; we
+      // reconstruct just the winning bucket here).
+      agreement: new Map([
+        [decision.winningHashHex, decision.agreeingPeerIds.length],
+      ]),
+    });
+  }
   return {
     ok: true,
-    narrowedPeers: finalNarrowed,
+    narrowedPeers: narrowed,
     winningHashHex: decision.winningHashHex,
   };
 }
