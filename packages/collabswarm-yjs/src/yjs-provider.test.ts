@@ -260,7 +260,11 @@ describe('YjsKeychain', () => {
     const keychain = new YjsKeychain();
     const [keyIDBytes, key, changes] = await keychain.add();
     expect(keyIDBytes).toBeInstanceOf(Uint8Array);
-    expect(keyIDBytes.length).toBe(16); // UUID v4 = 16 bytes
+    // 32 bytes -- matches `keyIDLength` and the BeeKEM-derived epoch
+    // ID width from `deriveEpochIdFromRootSecret`. A single fixed
+    // width across both provisioning paths means the wire-format
+    // key-ID prefix never needs to be truncated.
+    expect(keyIDBytes.length).toBe(32);
     expect(key).toBeDefined();
     expect(key.type).toBe('secret');
     expect(changes).toBeInstanceOf(Uint8Array);
@@ -275,7 +279,7 @@ describe('YjsKeychain', () => {
     expect(allKeys).toHaveLength(2);
     for (const [idBytes, key] of allKeys) {
       expect(idBytes).toBeInstanceOf(Uint8Array);
-      expect(idBytes.length).toBe(16);
+      expect(idBytes.length).toBe(32);
       expect(key.type).toBe('secret');
     }
   });
@@ -289,7 +293,7 @@ describe('YjsKeychain', () => {
 
   test('getKey() returns undefined for unknown ID', () => {
     const keychain = new YjsKeychain();
-    const unknownID = new Uint8Array(16);
+    const unknownID = new Uint8Array(32);
     expect(keychain.getKey(unknownID)).toBeUndefined();
   });
 
@@ -327,11 +331,11 @@ describe('YjsKeychain', () => {
     expect(Array.from(kc2Keys[0][0])).toEqual(Array.from(keyIDBytes));
   });
 
-  test('YjsKeychainProvider.initialize() returns YjsKeychain with keyIDLength=16', () => {
+  test('YjsKeychainProvider.initialize() returns YjsKeychain with keyIDLength=32', () => {
     const provider = new YjsKeychainProvider();
     const keychain = provider.initialize();
     expect(keychain).toBeInstanceOf(YjsKeychain);
-    expect(provider.keyIDLength).toBe(16);
+    expect(provider.keyIDLength).toBe(32);
   });
 
   test('historySince() returns only keys from the given key ID onward', async () => {
@@ -358,7 +362,7 @@ describe('YjsKeychain', () => {
     const [id1] = await source.add();
     const [id2] = await source.add();
 
-    const unknownID = new Uint8Array(16).fill(0xff);
+    const unknownID = new Uint8Array(32).fill(0xff);
     const slice = await source.historySince(unknownID);
 
     const receiver = new YjsKeychain();
@@ -382,6 +386,79 @@ describe('YjsKeychain', () => {
     const keys = await receiver.keys();
     expect(keys).toHaveLength(1);
     expect(Array.from(keys[0][0])).toEqual(Array.from(currentID));
+  });
+
+  // ───────────────────────────────────────────────────────────────────
+  // PR #285 round 6 regression coverage: BeeKEM PathUpdate flow installs
+  // epoch keys via addEpochKey(...) using the FULL 32-byte HKDF output
+  // (no truncation). The keychain MUST store the key under a cache-key
+  // form that round-trips with getKey() on the exact same 32 bytes.
+  // Earlier revisions stored 32-byte epoch IDs under hex but, for
+  // 16-byte inputs (the result of truncating to the old `keyIDLength`),
+  // looked up under UUID format -- a deterministic cache miss on every
+  // post-rotation lookup. These tests pin the round-trip behaviour.
+  // ───────────────────────────────────────────────────────────────────
+
+  test('addEpochKey() round-trips through getKey() for a 32-byte epoch ID', async () => {
+    const keychain = new YjsKeychain();
+    const epochId = crypto.getRandomValues(new Uint8Array(32));
+    const key = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    await keychain.addEpochKey(epochId, key);
+
+    // The exact 32-byte ID that went in must come back out of getKey.
+    // A failure here surfaces the round-6 cache-key-format mismatch.
+    const retrieved = keychain.getKey(epochId);
+    expect(retrieved).toBe(key);
+
+    // current() must report the same 32-byte ID (and key) so
+    // `_makeChange` writes the correct wire-format key-ID prefix.
+    const [currentID, currentKey] = await keychain.current();
+    expect(currentID.length).toBe(32);
+    expect(Array.from(currentID)).toEqual(Array.from(epochId));
+    expect(currentKey).toBe(key);
+  });
+
+  test('addEpochKey() output merges into a fresh keychain and getKey() works there too', async () => {
+    // Models the surviving-reader case: writer installs the new
+    // key via addEpochKey on their local keychain AND propagates
+    // the keychain CRDT changes to peers. After a peer merges the
+    // change, `getKey()` for the same 32-byte epoch ID must succeed
+    // -- this is what unblocks post-rotation decrypt on the
+    // surviving-reader side.
+    const sender = new YjsKeychain();
+    const epochId = crypto.getRandomValues(new Uint8Array(32));
+    const key = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    const changes = await sender.addEpochKey(epochId, key);
+
+    const receiver = new YjsKeychain();
+    receiver.merge(changes);
+
+    // Touch keys() so the deserialized AES-GCM key is imported and
+    // cached -- getKey() is a pure cache lookup (see jsdoc).
+    const receiverKeys = await receiver.keys();
+    expect(receiverKeys).toHaveLength(1);
+    expect(Array.from(receiverKeys[0][0])).toEqual(Array.from(epochId));
+
+    const retrieved = receiver.getKey(epochId);
+    expect(retrieved).toBeDefined();
+
+    // Same raw key material on both sides: this is the BeeKEM-rotation
+    // invariant the test is here to defend.
+    const rawSender = new Uint8Array(
+      await crypto.subtle.exportKey('raw', key),
+    );
+    const rawReceiver = new Uint8Array(
+      await crypto.subtle.exportKey('raw', retrieved!),
+    );
+    expect(rawReceiver).toEqual(rawSender);
   });
 
   // Replicates CollabswarmDocument._keychainChangesForVisibility so the
