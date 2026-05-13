@@ -91,7 +91,22 @@ import {
 } from './acl-chain';
 import { NetworkStats } from './network-stats';
 import { LRUCache } from './lru-cache';
-import { beekemWelcomeV1, bloomFilterUpdateV1 } from './wire-protocols';
+import {
+  beekemPathUpdateV1,
+  beekemWelcomeV1,
+  bloomFilterUpdateV1,
+} from './wire-protocols';
+import {
+  DOC_KEY_INFO,
+  deriveDocumentKeyFromRootSecret,
+  deriveEpochIdFromRootSecret,
+} from './derive-doc-key';
+import {
+  SerializedPathNodeUpdate,
+  SerializedPathUpdate,
+  deserializePathUpdateFromWire,
+  serializePathUpdateForWire,
+} from './path-update-wire';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -176,6 +191,14 @@ export {
   // Wire protocols
   bloomFilterUpdateV1,
   beekemWelcomeV1,
+  beekemPathUpdateV1,
+  // BeeKEM document-key derivation
+  DOC_KEY_INFO,
+  deriveDocumentKeyFromRootSecret,
+  deriveEpochIdFromRootSecret,
+  // BeeKEM PathUpdate wire serialization
+  serializePathUpdateForWire,
+  deserializePathUpdateFromWire,
   // Compaction
   defaultCompactionConfig,
   // Network statistics
@@ -190,6 +213,7 @@ export type { NetworkStatsSnapshot } from './network-stats';
 
 // Re-export types
 export type { AuthProvider, AesAlgorithmName } from './auth-provider';
+export type { SerializedPathUpdate, SerializedPathNodeUpdate } from './path-update-wire';
 export type { DocumentCapability } from './capabilities';
 export type { UCAN, UCANCapability, UCANPayload } from './ucan';
 export type { UCANACLEntry } from './ucan-acl';

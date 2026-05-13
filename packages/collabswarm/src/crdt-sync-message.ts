@@ -1,4 +1,5 @@
 import { CRDTChangeNode } from './crdt-change-node';
+import { SerializedPathUpdate } from './path-update-wire';
 import { CRDTSnapshotNode } from './snapshot-node';
 
 /**
@@ -116,6 +117,44 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    * the plaintext without detection.
    */
   eciesSealed?: Uint8Array;
+
+  /**
+   * Optional BeeKEM ratchet-tree `PathUpdate` carried by the
+   * `beekemPathUpdateV1` wire protocol. Populated when a writer revokes
+   * a reader via `CollabswarmDocument.removeReader`: the writer calls
+   * `BeeKEM.removeMember(leafIdx)`, serializes the resulting
+   * `PathUpdate` via `serializePathUpdateForWire`, and broadcasts it
+   * here so surviving readers can re-derive the new document
+   * encryption key. (`removeMember` already blanks the removed leaf
+   * and re-derives fresh key material along the writer's path to
+   * root; no follow-up `BeeKEM.update()` call is needed.) Receivers
+   * feed the deserialized `PathUpdate` into `BeeKEM.processPathUpdate`
+   * to advance their local ratchet state.
+   *
+   * Only populated on the BeeKEM PathUpdate v1 wire path; absent on
+   * sync messages flowing over GossipSub / document-load / Welcome.
+   */
+  pathUpdate?: SerializedPathUpdate;
+
+  /**
+   * Optional 32-byte epoch identifier paired with `pathUpdate`. The
+   * sender derives this from the new BeeKEM root secret via
+   * `deriveEpochIdFromRootSecret`; the receiver re-derives it after
+   * `BeeKEM.processPathUpdate` and validates that the two match
+   * byte-for-byte before installing the new key. Mismatch means the
+   * receiver derived a different root than the sender (e.g. stale
+   * local tree state) and the PathUpdate is rejected rather than
+   * installing a key under the wrong epoch ID.
+   *
+   * Both ends key the on-wire encrypted-block prefix on this exact
+   * 32-byte ID -- the keychain providers' `keyIDLength` is 32,
+   * matching the HKDF output width, so there is no truncation step
+   * between the epoch-ID gate and the keychain install.
+   *
+   * Base64-encoded by the sync-message serializers (yjs / automerge)
+   * for JSON-safe transport, mirroring `welcomeEpochId`.
+   */
+  pathUpdateEpochId?: Uint8Array;
 
   /**
    * Signature of the sync message.

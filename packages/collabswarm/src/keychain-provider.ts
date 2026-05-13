@@ -15,7 +15,12 @@ export interface KeychainProvider<KeychainChange, DocumentKey> {
   initialize(): Keychain<KeychainChange, DocumentKey>;
 
   /**
-   * Number of bytes in a document key.
+   * Number of bytes reserved on the wire for the key ID prefix on every
+   * encrypted block, and the byte width of all key IDs emitted by
+   * `Keychain.add()` / `Keychain.addEpochKey()`. The two provisioning
+   * paths use the SAME width so the wire-format key-ID prefix is a
+   * single fixed size and no truncation step exists between
+   * BeeKEM-derived epoch IDs and the keychain's storage key.
    */
   readonly keyIDLength: number;
 }

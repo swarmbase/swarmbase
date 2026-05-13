@@ -1,9 +1,16 @@
 /**
  * A keychain contains a CollabswarmDocument's encryption keys.
  *
- * Keys are identified by a key ID. Two key-ID schemes coexist: 16-byte UUID v4
- * values (used by `add()` for keys not tied to a specific epoch) and 32-byte
- * SHA-256 hashes from `addEpochKey()` for epoch-based key management.
+ * Keys are identified by a fixed-width binary key ID. Both
+ * provisioning paths (`add()`, which generates random per-key
+ * identifiers, and `addEpochKey()`, which installs BeeKEM-derived
+ * epoch IDs from `deriveEpochIdFromRootSecret`) use the SAME byte
+ * width -- 32 bytes in the shipped Yjs / Automerge providers, surfaced
+ * via `KeychainProvider.keyIDLength`. The matching width means the
+ * wire-format encrypted-block key-ID prefix is a single fixed size for
+ * any key the keychain has installed, regardless of how it was
+ * provisioned: there is no truncation step, and `getKey()` never has to
+ * disambiguate between key-ID encodings.
  *
  * @typeParam KeychainChange Type of a block of change(s) describing edits made to the document keychain.
  * @typeParam DocumentKey Type of a document encryption key.
@@ -45,7 +52,10 @@ export interface Keychain<KeychainChange, DocumentKey> {
   /**
    * Looks up a document key by its ID.
    *
-   * @param keyID An identifier for a document key (16-byte UUID or 32-byte epoch ID).
+   * @param keyID An identifier for a document key. Provider implementations
+   *   define the width via `KeychainProvider.keyIDLength` and both
+   *   provisioning paths (`add()` and `addEpochKey()`) emit IDs of that
+   *   exact width.
    * @return The requested document key.
    */
   getKey(keyID: Uint8Array): DocumentKey | undefined;
@@ -60,10 +70,16 @@ export interface Keychain<KeychainChange, DocumentKey> {
   currentKeyChange(): Promise<KeychainChange>;
 
   /**
-   * Add an encryption key for a specific epoch.
-   * Used when transitioning to epoch-based key management.
+   * Add an encryption key for a specific epoch. The epoch ID is the
+   * full HKDF output from `deriveEpochIdFromRootSecret` -- the
+   * `KeychainProvider.keyIDLength`-wide identifier (32 bytes in the
+   * shipped providers) that also becomes the wire-format key-ID
+   * prefix on subsequent encrypted blocks. No truncation: the byte
+   * width is uniform across provisioning, storage, and the wire.
    *
-   * @param epochId The 32-byte epoch ID.
+   * @param epochId The epoch ID, exactly `KeychainProvider.keyIDLength`
+   *   bytes wide. Implementations MAY throw on mismatched widths but
+   *   the shipped providers store the supplied bytes verbatim.
    * @param key The encryption key for this epoch.
    * @return A block of change(s) describing the keychain addition.
    */
@@ -71,9 +87,9 @@ export interface Keychain<KeychainChange, DocumentKey> {
 
   /**
    * Gets a block of change(s) describing only the keys at or after the given
-   * key ID (an epoch ID or legacy UUID). Used for the `since_invited` history
-   * visibility mode where a new member should receive every key from the
-   * moment they were invited onward, but no earlier history.
+   * key ID. Used for the `since_invited` history visibility mode where a new
+   * member should receive every key from the moment they were invited onward,
+   * but no earlier history.
    *
    * If the supplied `keyID` is not present in the keychain, the keychain is
    * not yet aware of that epoch -- the method returns the full history so the

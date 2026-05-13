@@ -16,7 +16,6 @@ import {
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { applyUpdateV2, Doc, encodeStateAsUpdateV2, encodeStateVector } from 'yjs';
-import * as uuid from 'uuid';
 import { Base64 } from 'js-base64';
 
 // Binary data is stored as a base64 string for JSON serialization.
@@ -98,6 +97,15 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
           Base64.fromUint8Array(message.welcomeRecipientKemPublicKey),
         eciesSealed:
           message.eciesSealed && Base64.fromUint8Array(message.eciesSealed),
+        // BeeKEM PathUpdate v1 fields. `pathUpdate` is already a
+        // JSON-safe `SerializedPathUpdate` (per-field base64) produced
+        // by `serializePathUpdateForWire`, so pass it through verbatim.
+        // `pathUpdateEpochId` is a `Uint8Array`; base64-encode it the
+        // same way as `welcomeEpochId`.
+        pathUpdate: message.pathUpdate,
+        pathUpdateEpochId:
+          message.pathUpdateEpochId &&
+          Base64.fromUint8Array(message.pathUpdateEpochId),
         snapshot: snapshotForWire,
       }),
     );
@@ -124,6 +132,8 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       welcomeRecipient?: unknown;
       welcomeRecipientKemPublicKey?: unknown;
       eciesSealed?: unknown;
+      pathUpdate?: unknown;
+      pathUpdateEpochId?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -236,6 +246,38 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }
       welcomeRecipient = raw.welcomeRecipient;
     }
+    // The `pathUpdate` field is a `SerializedPathUpdate` whose internal
+    // shape is validated when the receive handler hands it to
+    // `deserializePathUpdateFromWire`. Reject obviously malformed
+    // top-level values (null / array / primitive) here so a peer who
+    // sends e.g. `pathUpdate: 42` doesn't propagate that through to the
+    // downstream consumer. The strict per-field decode happens later.
+    let pathUpdate: unknown;
+    if (raw.pathUpdate !== undefined) {
+      if (
+        raw.pathUpdate === null ||
+        typeof raw.pathUpdate !== 'object' ||
+        Array.isArray(raw.pathUpdate)
+      ) {
+        throw new Error(
+          `Invalid sync message: 'pathUpdate' must be an object when present (got ${describeValue(
+            raw.pathUpdate,
+          )})`,
+        );
+      }
+      pathUpdate = raw.pathUpdate;
+    }
+    let pathUpdateEpochId: Uint8Array | undefined;
+    if (raw.pathUpdateEpochId !== undefined) {
+      if (typeof raw.pathUpdateEpochId !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'pathUpdateEpochId' must be a string when present (got ${describeValue(
+            raw.pathUpdateEpochId,
+          )})`,
+        );
+      }
+      pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
@@ -261,6 +303,9 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     if (welcomeRecipientKemPublicKey !== undefined)
       result.welcomeRecipientKemPublicKey = welcomeRecipientKemPublicKey;
     if (eciesSealed !== undefined) result.eciesSealed = eciesSealed;
+    if (pathUpdate !== undefined)
+      result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array>['pathUpdate'];
+    if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
@@ -390,7 +435,7 @@ export class YjsACL implements ACL<Uint8Array, CryptoKey> {
 }
 
 /**
- * Convert a Uint8Array to a hex string for use as a cache key.
+ * Convert a Uint8Array to a lowercase hex string for use as a cache key.
  */
 function toHex(bytes: Uint8Array): string {
   const hexChars: string[] = new Array(bytes.length);
@@ -401,32 +446,39 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Convert a key ID (either 16-byte UUID or 32-byte epoch ID) to a cache key string.
+ * Convert any key ID (random or HKDF-derived, any byte length) to a cache
+ * key string.
+ *
+ * Uniform lowercase-hex encoding regardless of byte length. Earlier
+ * revisions special-cased 16-byte IDs through `uuid.stringify` (producing
+ * a dashed-UUID string) on the assumption that 16-byte IDs were always
+ * UUIDs. That assumption broke once BeeKEM epoch IDs (originally 32
+ * bytes from `deriveEpochIdFromRootSecret`) were truncated to the
+ * `keyIDLength` width for wire framing: the truncated 16-byte epoch
+ * prefix would be stored under hex (via `addEpochKey`) but looked up
+ * under the UUID format (via `getKey`), causing a deterministic cache
+ * miss on every PathUpdate-derived key.
+ *
+ * Hex-only avoids the conflation entirely. The keychain's wire-format
+ * key-ID width is now `keyIDLength = 32`, so both UUID-based `add()`
+ * outputs and BeeKEM-derived epoch IDs share the same byte length and
+ * round-trip through this function without any special casing.
  */
 function keyIdToCacheKey(keyIDBytes: Uint8Array): string {
-  if (keyIDBytes.length === 16) {
-    return uuid.stringify(keyIDBytes);
-  }
   return toHex(keyIDBytes);
 }
 
 /**
- * Parse a cache key string back to a Uint8Array key ID.
- * Validates UUID format with regex before parsing, and validates hex strings
- * for correct format and even length.
+ * Parse a cache key string back to a Uint8Array key ID. The keychain
+ * stores cache keys exclusively in lowercase hex (see
+ * {@link keyIdToCacheKey}), so this only needs to decode hex.
  *
- * @throws {Error} If the cache key is not a valid UUID or hex string.
+ * @throws {Error} If the cache key is not a valid even-length hex string.
  */
 function cacheKeyToKeyId(cacheKey: string): Uint8Array {
-  // UUID format: 8-4-4-4-12 hex digits with dashes
-  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-  if (uuidRegex.test(cacheKey)) {
-    return new Uint8Array(uuid.parse(cacheKey));
-  }
-  // Hex-encoded epoch ID: must be even-length and only hex characters
   const hexRegex = /^[0-9a-fA-F]+$/;
   if (!hexRegex.test(cacheKey) || cacheKey.length % 2 !== 0) {
-    throw new Error(`Invalid cache key format: expected UUID or even-length hex string, got "${cacheKey}"`);
+    throw new Error(`Invalid cache key format: expected even-length hex string, got "${cacheKey}"`);
   }
   const bytes = new Uint8Array(cacheKey.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -435,19 +487,46 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * BREAKING CHANGE (PR #285): keychain key-ID width unified to 32 bytes.
+ *
+ * The keychain now uses 32-byte IDs uniformly for BOTH locally-generated
+ * keys (formerly 16-byte UUIDs via `uuid.v4`) and BeeKEM-derived epoch
+ * keys (already 32 bytes via `deriveEpochIdFromRootSecret`). The wire-
+ * format key-ID prefix, the BeeKEM `pathUpdateEpochId`, and the
+ * keychain's storage key are all the same 32 bytes -- no truncation
+ * step exists.
+ *
+ * This is an **intentional, on-disk-breaking change** from earlier
+ * shipped revisions of this library, which used 16-byte UUIDs. There
+ * are NO live users at the time of this change (project doctrine:
+ * see `CLAUDE.md`/`SPECS.md`), so no migration shim is provided. Any
+ * document state persisted with the old 16-byte UUID format will fail
+ * to load against this version because `cacheKeyToKeyId` only accepts
+ * even-length hex strings (no UUID/dashed format), and existing 16-byte
+ * key IDs would be looked up under a different cache-key format than
+ * they were stored under.
+ *
+ * If a future deployment ever needs migration, the recovery path is a
+ * fresh keychain via `add()` + a BeeKEM Welcome to redistribute
+ * material under the new ID width.
+ */
 export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
   private readonly _keyCache = new LRUCache<string, CryptoKey>(1000);
   private readonly _keychain = new Doc();
 
   async add(): Promise<[Uint8Array, CryptoKey, Uint8Array]> {
-    const keyID = uuid.v4();
-    const keyIDBytes = new Uint8Array(uuid.parse(keyID));
-
-    const keyIDBytesID = uuid.stringify(keyIDBytes);
-    if (keyID !== keyIDBytesID) {
-      console.error(`Key ID ${keyID} is not equal to ${keyIDBytesID}`);
-      throw new Error(`Key ID ${keyID} is not equal to ${keyIDBytesID}`);
-    }
+    // 32 random bytes match the width used by BeeKEM-derived epoch IDs
+    // (`deriveEpochIdFromRootSecret`), so the wire-format key-ID prefix
+    // is a single fixed width regardless of how the key was provisioned.
+    // Earlier revisions used a 16-byte UUID here, but that required the
+    // PathUpdate handler to truncate 32-byte BeeKEM epoch IDs down to 16
+    // bytes on install -- producing a deterministic cache-key-format
+    // mismatch with `getKey` (stored under hex, looked up under UUID
+    // format). Removing the size asymmetry removes the need for the
+    // truncation in the first place.
+    const keyIDBytes = crypto.getRandomValues(new Uint8Array(32));
+    const keyIDHex = toHex(keyIDBytes);
 
     const key = await crypto.subtle.generateKey(
       {
@@ -458,12 +537,12 @@ export class YjsKeychain implements Keychain<Uint8Array, CryptoKey> {
       ['encrypt', 'decrypt'],
     );
 
-    this._keyCache.set(keyID, key);
+    this._keyCache.set(keyIDHex, key);
     const serialized = await serializeKey(key);
     const beforeSV = encodeStateVector(this._keychain);
     this._keychain
       .getArray<[string, string]>('keys')
-      .push([[keyID, serialized]]);
+      .push([[keyIDHex, serialized]]);
     const keychainChanges = encodeStateAsUpdateV2(this._keychain, beforeSV);
     return [keyIDBytes, key, keychainChanges];
   }
@@ -604,8 +683,11 @@ export class YjsKeychainProvider
     return new YjsKeychain();
   }
 
-  // UUID v4 is 16 bytes. Epoch IDs are 32 bytes.
-  // Use 16 for backward compatibility; will be updated to 32 when
-  // epoch-based key management is fully activated.
-  keyIDLength = 16;
+  // 32 bytes: matches both `add()`'s random key-ID output and the
+  // BeeKEM-derived epoch ID width from `deriveEpochIdFromRootSecret`.
+  // Using one fixed width across the keychain's two key-provisioning
+  // paths means the on-wire key-ID prefix never needs to be truncated
+  // -- which is the failure mode that caused the post-rotation
+  // decryption regression fixed by PR #285 round 6.
+  keyIDLength = 32;
 }

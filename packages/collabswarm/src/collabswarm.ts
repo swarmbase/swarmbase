@@ -26,6 +26,7 @@ import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
 import {
+  beekemPathUpdateV1,
   beekemWelcomeV1,
   documentLoadV2,
   documentKeyUpdateV2,
@@ -527,6 +528,49 @@ export class Collabswarm<
       });
     };
 
+    // Handler for BeeKEM PathUpdate v1 (reader-revocation rotations).
+    // Wire format mirrors key-update v2 / BeeKEM Welcome v1: 4-byte
+    // big-endian path length, then UTF-8 path, then the serialized
+    // sync-message body carrying the `pathUpdate` /
+    // `pathUpdateEpochId` / `signature` fields. After routing by path
+    // the per-document handler verifies the writer signature, applies
+    // the PathUpdate via `BeeKEM.processPathUpdate`, and installs the
+    // freshly-derived document key in the keychain.
+    // See note on `docLoadHandler` above re: the v3 StreamHandler
+    // signature.
+    //
+    // Header parse shared with the key-update + Welcome handlers via
+    // `readPathPrefixedProtocolHeader`.
+    const beekemPathUpdateHandler = (rawStream: Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          try {
+            const header = await readPathPrefixedProtocolHeader(
+              source,
+              this._documentRegistry,
+              'beekem-pathupdate',
+              MAX_REQUEST_SIZE,
+              MAX_DOCUMENT_PATH_LENGTH,
+            );
+            if (header.kind !== 'ok') {
+              return [];
+            }
+            await header.doc.handleBeeKEMPathUpdateRequestData(header.payload);
+            return [];
+          } finally {
+            // PathUpdate is fire-and-forget (no response over
+            // stream.sink), but the inbound stream still needs to be
+            // closed to release resources.
+            await stream.close();
+          }
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared beekem-pathupdate handler:', err);
+      });
+    };
+
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
@@ -534,6 +578,7 @@ export class Collabswarm<
     this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
     this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
+    this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler);
   }
 
   /**
