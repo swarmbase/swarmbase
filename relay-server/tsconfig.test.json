@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // `module`/`moduleResolution` stay at Node16 (matching the base
+    // tsconfig) so the ESM-style `./foo.js` specifiers used in src/ and
+    // tests typecheck correctly. The Jest *runtime* is CommonJS — that
+    // CJS-ification happens at the ts-jest transformer level, where
+    // `jest.config.cjs` sets `useESM: false`. Keep this `module` value
+    // aligned with the base tsconfig; don't switch it to CommonJS just
+    // because the test runtime is CJS.
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "noEmit": true
+  },
+  // Override the base tsconfig's `exclude: ["src/**/*.test.ts"]` so
+  // ts-jest sees the test files. Without this, ts-jest can't typecheck
+  // them and (with diagnostics enabled) can fail outright.
+  "include": ["src"],
+  "exclude": []
+}
