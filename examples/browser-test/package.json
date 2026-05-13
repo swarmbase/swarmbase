@@ -19,7 +19,7 @@
     "jsondiffpatch": "^0.7.2",
     "jsoneditor": "^10",
     "jsoneditor-react": "^3.1.2",
-    "react": "^19.2.5",
+    "react": "^19.2.6",
     "react-dom": "^19.2.5",
     "react-redux": "^9.2.0",
     "react-scripts": "^5.0.1",
