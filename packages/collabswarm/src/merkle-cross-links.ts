@@ -426,3 +426,44 @@ export function trackTipInList<Tip extends { cid: string }>(
   }
   return recentTips;
 }
+
+/**
+ * Recursively strip inline `change` content from a `CRDTChangeNode` tree
+ * by setting `change: undefined` on every node, leaving the CID-keyed
+ * `children` structure intact. Mutates the passed tree in-place; returns
+ * the same root for chaining convenience.
+ *
+ * Used by `CollabswarmDocument._sendLoadRequestAndSync` on quorum-bound
+ * loads as a defense-in-depth against inline-content forgery (PR #284
+ * r17 Copilot review). The structural quorum bind proves Q peers agree
+ * on the FRONTIER CIDs, but a Byzantine peer that voted for the agreed
+ * frontier can still serve a tree whose `children` map uses those CIDs
+ * as keys but whose inline `change` values are forged. Stripping inline
+ * content forces each change to flow through Helia's CID-addressed
+ * blockstore (`_getBlock(cid) -> heliaNode.blockstore.get(cid)`), which
+ * content-validates the fetched bytes against the CID intrinsically.
+ * Bitswap retrieves from any peer in the swarm that holds the legitimate
+ * block, including honest peers in the agreeing cohort.
+ *
+ * Skips a deferred `children` sentinel (already empty by definition).
+ * Walks every other node so a partially-deferred tree is fully stripped.
+ *
+ * Pure (no I/O, no clock); the recursion is bounded by the tree size.
+ * Returned as a free function so the unit tests can exercise the helper
+ * without standing up a full `CollabswarmDocument` instance.
+ */
+export function stripInlineChanges<ChangesType>(
+  node: CRDTChangeNode<ChangesType> | undefined,
+): CRDTChangeNode<ChangesType> | undefined {
+  if (!node) return node;
+  node.change = undefined;
+  if (
+    node.children !== undefined &&
+    node.children !== crdtChangeNodeDeferred
+  ) {
+    for (const child of Object.values(node.children)) {
+      stripInlineChanges(child);
+    }
+  }
+  return node;
+}

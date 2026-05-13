@@ -28,6 +28,7 @@ import {
 import {
   collectReferencedAncestors,
   computeServedFrontier,
+  stripInlineChanges,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
@@ -1301,6 +1302,7 @@ export class CollabswarmDocument<
       }
     }
   }
+
 
   /**
    * Sanctioned wrapper around `_readers.merge` that also drains any
@@ -2702,6 +2704,59 @@ export class CollabswarmDocument<
                 `${servedHex.slice(0, 12)}...`,
             );
           }
+
+          // Content-address verification (PR #284 r17 Copilot review).
+          //
+          // The structural bind above proves Q peers agree on the
+          // FRONTIER CIDs and that those CIDs appear as keys in the
+          // served tree. It does NOT prove the inline `change` content
+          // for each CID actually hashes back to that CID -- a Byzantine
+          // peer could vote for the agreed frontier and then serve a
+          // tree whose `children` map uses the agreed CIDs as keys but
+          // whose inline `change` values are forged.
+          //
+          // On a FIRST load (`_writers` empty), per-change signature
+          // verification inside the CRDT merge cannot fire -- there are
+          // no writer keys to verify against -- so forged inline content
+          // would otherwise reach `_crdtProvider.remoteChange`/
+          // `_mergeWriters`/`_mergeReaders` unchecked.
+          //
+          // Defense: strip inline `change` content from every node in
+          // the served tree before applying. `sync()` then routes each
+          // CID through `missingDocumentHashes -> _getBlock(cid) ->
+          // helia.blockstore.get(cid)`, which content-validates the
+          // fetched bytes against the CID intrinsically (a Byzantine
+          // peer cannot serve bytes that hash to a CID they did not
+          // produce, and bitswap will retrieve from an honest peer in
+          // the agreeing cohort that does hold the legitimate block).
+          //
+          // Cost: N bitswap roundtrips instead of one inline load. Paid
+          // only on quorum-bound loads; the legacy `winningHashHex ===
+          // null` path is untouched.
+          //
+          // Snapshots: `CRDTSnapshotNode.state` is NOT CID-addressed --
+          // the snapshot's `lastChangeNodeCID` only identifies the
+          // boundary, not the snapshot bytes. Defense is the writer
+          // signature (`_verifySnapshotSignature`), which fails on
+          // first load (writers empty) and rejects the snapshot
+          // automatically. On subsequent loads writers are known and
+          // the signature is the source of truth. We drop the snapshot
+          // entirely on first load below so a malicious snapshot
+          // signature forged with an attacker-controlled key (which
+          // would be admitted if the inline ACL pre-pass were trusted)
+          // never reaches `applySnapshot`.
+          stripInlineChanges(message.changes);
+          const preLoadWriterCount = (await this._writers.users()).length;
+          if (preLoadWriterCount === 0 && message.snapshot) {
+            console.warn(
+              `[${this.documentPath}] Dropping snapshot from quorum-bound ` +
+                `first load: writers ACL is not yet populated so the ` +
+                `snapshot signature cannot be verified. The receiver will ` +
+                `rebuild state from individual change blocks via Helia ` +
+                `(each block content-validated against its CID).`,
+            );
+            message.snapshot = undefined;
+          }
         }
 
         const syncResult = await this.sync(message, false);
@@ -3247,6 +3302,21 @@ export class CollabswarmDocument<
       orderedPeers.push(...quorumResult.narrowedPeers);
     }
 
+    // Capture the post-narrow cohort size so the failure-reason decision
+    // below can distinguish "every agreeing peer bind-failed" (coordinated
+    // Byzantine equivocation on the load step -- the dedicated
+    // `bind-check-failed-all-agreeing-peers` reason) from "some agreeing
+    // peers bind-failed, others failed for transport/protocol reasons"
+    // (mixed failure -- caller should treat as transient and retry, the
+    // `agreeing-peers-unreachable` reason). The previous logic used
+    // `bind-check-failed-all-agreeing-peers` whenever ANY bind failure was
+    // recorded, which contradicted the reason's public name and could
+    // make callers treat a mixed transient retrieval failure as
+    // coordinated Byzantine behaviour. See PR #284 r17 Copilot review.
+    // For the legacy non-quorum path (`winningHashHex === null`), this
+    // value is unused -- the failure block guards on `winningHashHex`.
+    const narrowedCohortSize = orderedPeers.length;
+
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
@@ -3362,28 +3432,45 @@ export class CollabswarmDocument<
 
     // If quorum was actually run (`winningHashHex !== null`) but the
     // load loop is exhausted, the cohort agreed the document exists
-    // yet none of them could serve it. Two sub-cases:
+    // yet none of them could serve it. Three sub-cases:
     //
-    //   a) `agreeingPeerBindFailures.size > 0` -- at least one peer
-    //      voted for the agreed hash and then served a divergent
-    //      payload. Coordinated Byzantine behaviour is the simplest
-    //      explanation; we escalate with the dedicated reason.
+    //   a) `agreeingPeerBindFailures.size === narrowedCohortSize` --
+    //      EVERY peer in the agreeing cohort voted for the agreed
+    //      hash and then served a divergent payload. Coordinated
+    //      Byzantine behaviour is the only explanation; we escalate
+    //      with the dedicated `bind-check-failed-all-agreeing-peers`
+    //      reason whose public docs say exactly this.
     //
-    //   b) `agreeingPeerBindFailures.size === 0` -- every agreeing
-    //      peer failed for an OTHER reason (transport/protocol/etc.).
-    //      We cannot distinguish "all agreeing peers transiently
-    //      offline" from "all agreeing peers refusing to serve", but
-    //      we MUST NOT fall through to `return false` -- that would
-    //      let `open()` initialize a brand-new document despite
-    //      quorum just attesting that the document exists. Surface
+    //   b) `agreeingPeerBindFailures.size > 0` but less than the
+    //      cohort size -- MIXED failure: some peers bind-failed
+    //      (suspicious) and others failed for transport/protocol
+    //      reasons (likely transient). We can't conclude coordinated
+    //      Byzantine equivocation across the whole cohort, so we
+    //      report `'agreeing-peers-unreachable'` and let the caller
+    //      retry. Using `bind-check-failed-all-agreeing-peers` here
+    //      would contradict the reason's public name/docs and could
+    //      make callers wrongly treat a mixed transient failure as
+    //      coordinated Byzantine behaviour. The `agreeingPeerBindFailures`
+    //      map is still threaded through for diagnostics so operators
+    //      can see which peers in the cohort did bind-fail.
+    //      See PR #284 r17 Copilot review.
+    //
+    //   c) `agreeingPeerBindFailures.size === 0` -- every agreeing
+    //      peer failed for a transport/protocol reason; we surface
     //      the failure with `'agreeing-peers-unreachable'` so the
     //      caller decides whether to retry or surface to the user.
+    //      We MUST NOT fall through to `return false` -- that would
+    //      let `open()` initialize a brand-new document despite
+    //      quorum just attesting that the document exists.
     //
     // Only after a TRUE no-quorum-was-run outcome (winningHashHex
     // is null -- legacy non-quorum load or quorum disabled / no
     // peers / etc.) is `return false` the right answer.
     if (winningHashHex !== null) {
-      if (agreeingPeerBindFailures.size > 0) {
+      if (
+        narrowedCohortSize > 0 &&
+        agreeingPeerBindFailures.size === narrowedCohortSize
+      ) {
         throw new LoadQuorumFailedError({
           documentPath: this.documentPath,
           reason: 'bind-check-failed-all-agreeing-peers',
@@ -3399,6 +3486,7 @@ export class CollabswarmDocument<
         respondingCount: 0,
         requiredQ: 0,
         agreement: new Map([[winningHashHex, 0]]),
+        agreeingPeerBindFailures,
       });
     }
 

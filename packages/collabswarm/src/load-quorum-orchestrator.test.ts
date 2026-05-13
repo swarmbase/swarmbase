@@ -85,7 +85,7 @@ const peerIdOf = (p: TestPeer) => p;
 async function simulateFullLoad(opts: {
   narrowedPeers: TestPeer[];
   winningHashHex: string;
-  serveFn: (peer: TestPeer) => Promise<string>; // returns served-tips hash hex
+  serveFn: (peer: TestPeer) => Promise<string>; // returns served-tips hash hex; throw for transport failure
 }): Promise<{
   loadedFromPeer: TestPeer | null;
   attempts: TestPeer[];
@@ -94,7 +94,16 @@ async function simulateFullLoad(opts: {
   const agreeingPeerBindFailures = new Map<string, string>();
   for (const peer of opts.narrowedPeers) {
     attempts.push(peer);
-    const servedHashHex = await opts.serveFn(peer);
+    let servedHashHex: string;
+    try {
+      servedHashHex = await opts.serveFn(peer);
+    } catch {
+      // Transport/protocol failure: peer didn't even return a hash.
+      // Production `load()` catches transport errors inside the loop and
+      // continues to the next peer WITHOUT recording a bind failure.
+      // See PR #284 r17 Copilot review for the mixed-cohort distinction.
+      continue;
+    }
     if (servedHashHex === opts.winningHashHex) {
       return { loadedFromPeer: peer, attempts };
     }
@@ -105,10 +114,22 @@ async function simulateFullLoad(opts: {
     // for the harness.
     agreeingPeerBindFailures.set(peer, servedHashHex);
   }
-  // Loop exhausted with at least one bind failure recorded => every peer
-  // in the agreeing cohort equivocated between the probe round and the
-  // load round. Escalate with the dedicated reason.
-  if (agreeingPeerBindFailures.size > 0) {
+  // Loop exhausted. Failure-reason decision mirrors production
+  // `CollabswarmDocument.load()` post-r17:
+  //
+  //   - `bindFailures.size === cohortSize` -- EVERY peer bind-failed
+  //     (coordinated Byzantine equivocation). Escalate with the
+  //     dedicated reason.
+  //   - `bindFailures.size > 0 && < cohortSize` -- MIXED failure (some
+  //     bind-failed, others transport-failed). Surface as
+  //     `agreeing-peers-unreachable` so callers don't wrongly treat a
+  //     transient retrieval failure as coordinated Byzantine behaviour.
+  //   - `bindFailures.size === 0` -- all transport-failed; same
+  //     `agreeing-peers-unreachable` reason.
+  if (opts.narrowedPeers.length === 0) {
+    return { loadedFromPeer: null, attempts };
+  }
+  if (agreeingPeerBindFailures.size === opts.narrowedPeers.length) {
     throw new LoadQuorumFailedError({
       documentPath: '/test',
       reason: 'bind-check-failed-all-agreeing-peers',
@@ -118,7 +139,14 @@ async function simulateFullLoad(opts: {
       agreeingPeerBindFailures,
     });
   }
-  return { loadedFromPeer: null, attempts };
+  throw new LoadQuorumFailedError({
+    documentPath: '/test',
+    reason: 'agreeing-peers-unreachable',
+    respondingCount: 0,
+    requiredQ: 0,
+    agreement: new Map([[opts.winningHashHex, 0]]),
+    agreeingPeerBindFailures,
+  });
 }
 
 describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => {
@@ -1515,6 +1543,112 @@ describe('runLoadQuorum: production orchestration coverage (PR #284 r4)', () => 
       // 2 votes available but 3 required => insufficient-responses.
       expect((err as LoadQuorumFailedError).reason).toBe(
         'insufficient-responses',
+      );
+    });
+  });
+
+  // PR #284 r17: when the agreeing cohort partly bind-fails and partly
+  // transport-fails, the loader must NOT use the
+  // `bind-check-failed-all-agreeing-peers` reason -- that reason's public
+  // docs explicitly say EVERY peer in the cohort equivocated, and using
+  // it for mixed failure modes can make callers wrongly conclude
+  // coordinated Byzantine behaviour when the underlying cause was a
+  // mixture of one bad actor + transient network errors. Mixed failures
+  // surface as `agreeing-peers-unreachable` (still threading the per-peer
+  // bind-failure map through for diagnostics).
+  describe("mixed bind/transport failure cohort uses 'agreeing-peers-unreachable' (PR #284 r17)", () => {
+    test("(c-mixed-1) 1 bind-failure + 2 transport-failures => 'agreeing-peers-unreachable'", async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+      expect('ok' in result && result.ok).toBe(true);
+      if (!('ok' in result)) throw new Error('expected ok=true');
+
+      // p1 bind-fails (serves Y), p2/p3 transport-fail (throw).
+      const serveFn = jest.fn(async (peer: TestPeer) => {
+        if (peer === 'p1') return HASH_Y_HEX;
+        throw new Error('transport error');
+      });
+      const err = await simulateFullLoad({
+        narrowedPeers: result.narrowedPeers,
+        winningHashHex: result.winningHashHex,
+        serveFn,
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      // CRITICAL: mixed cohort failures must NOT use the
+      // bind-check-failed-all-agreeing-peers reason.
+      expect((err as LoadQuorumFailedError).reason).toBe(
+        'agreeing-peers-unreachable',
+      );
+      // Per-peer bind-failure map still surfaces for operator diagnostics.
+      expect(
+        (err as LoadQuorumFailedError).agreeingPeerBindFailures,
+      ).toEqual(new Map([['p1', HASH_Y_HEX]]));
+    });
+
+    test("(c-mixed-2) 2 bind-failures + 1 transport-failure => 'agreeing-peers-unreachable'", async () => {
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+      if (!('ok' in result)) throw new Error('expected ok=true');
+
+      // p1, p2 bind-fail; p3 transport-fails. Still mixed; reason stays
+      // `agreeing-peers-unreachable` (the bind-failure count < cohort size).
+      const serveFn = jest.fn(async (peer: TestPeer) => {
+        if (peer === 'p3') throw new Error('transport error');
+        return HASH_Y_HEX;
+      });
+      const err = await simulateFullLoad({
+        narrowedPeers: result.narrowedPeers,
+        winningHashHex: result.winningHashHex,
+        serveFn,
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe(
+        'agreeing-peers-unreachable',
+      );
+      expect(
+        (err as LoadQuorumFailedError).agreeingPeerBindFailures.size,
+      ).toBe(2);
+    });
+
+    test("(c-mixed-3) only when EVERY peer bind-fails does the dedicated reason fire", async () => {
+      // Sanity check: the dedicated reason is still reachable when the
+      // cohort is fully bind-failed. Regression guard so the fix for the
+      // mixed-cohort issue doesn't accidentally suppress the coordinated-
+      // Byzantine reason.
+      const peers: TestPeer[] = ['p1', 'p2', 'p3'];
+      probeMock.mockResolvedValue(HASH_X);
+      const result = await runLoadQuorum({
+        peers,
+        peerIdOf,
+        probeFn: probeMock,
+        documentPath: '/test',
+        config: { enabled: true, k: 3, q: 2 },
+      });
+      if (!('ok' in result)) throw new Error('expected ok=true');
+
+      const serveFn = jest.fn(async () => HASH_Y_HEX);
+      const err = await simulateFullLoad({
+        narrowedPeers: result.narrowedPeers,
+        winningHashHex: result.winningHashHex,
+        serveFn,
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(LoadQuorumFailedError);
+      expect((err as LoadQuorumFailedError).reason).toBe(
+        'bind-check-failed-all-agreeing-peers',
       );
     });
   });

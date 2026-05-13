@@ -6,12 +6,14 @@ import {
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
   selectCrossLinks,
+  stripInlineChanges,
   trackTipInList,
   treeContainsCid,
 } from './merkle-cross-links';
 import {
   CRDTChangeNode,
   CRDTChangeNodeKind,
+  crdtChangeNodeDeferred,
   crdtDocumentChangeNode,
   crdtWriterChangeNode,
 } from './crdt-change-node';
@@ -1587,5 +1589,128 @@ describe('relay-peer served-frontier (PR #284 r14: _lastSyncMessage refresh from
       loaderDerivedFromPayload.sort(),
     );
     expect(responderAdvertised).toEqual(['X']);
+  });
+});
+
+describe('stripInlineChanges (PR #284 r17 content-bind defense)', () => {
+  type Changes = { ops: string[] };
+
+  test('strips top-level inline change', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['a', 'b'] },
+    };
+    const result = stripInlineChanges(tree);
+    expect(result).toBe(tree); // mutated in-place, returned for chaining
+    expect(tree.change).toBeUndefined();
+    expect(tree.kind).toBe(crdtDocumentChangeNode);
+  });
+
+  test('strips recursively through nested children', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['root'] },
+      children: {
+        child1: {
+          kind: crdtDocumentChangeNode,
+          change: { ops: ['c1'] },
+          children: {
+            grandchild1: {
+              kind: crdtWriterChangeNode,
+              change: { ops: ['gc1'] },
+            },
+          },
+        },
+        child2: {
+          kind: crdtDocumentChangeNode,
+          change: { ops: ['c2'] },
+        },
+      },
+    };
+    stripInlineChanges(tree);
+    expect(tree.change).toBeUndefined();
+    const c1 = (tree.children as any).child1;
+    expect(c1.change).toBeUndefined();
+    expect(c1.kind).toBe(crdtDocumentChangeNode); // structure preserved
+    const gc1 = c1.children.grandchild1;
+    expect(gc1.change).toBeUndefined();
+    expect(gc1.kind).toBe(crdtWriterChangeNode);
+    const c2 = (tree.children as any).child2;
+    expect(c2.change).toBeUndefined();
+  });
+
+  test('preserves CID keys (the shape that drives Helia-fetch verification)', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['root'] },
+      children: {
+        'bafy-cid-1': {
+          kind: crdtDocumentChangeNode,
+          change: { ops: ['1'] },
+        },
+        'bafy-cid-2': {
+          kind: crdtDocumentChangeNode,
+          change: { ops: ['2'] },
+        },
+      },
+    };
+    stripInlineChanges(tree);
+    // The CID-keyed structure stays intact so sync()'s _getBlock(cid)
+    // path can fetch each block via Helia (content-validated against
+    // the CID by the blockstore).
+    expect(Object.keys(tree.children as any).sort()).toEqual([
+      'bafy-cid-1',
+      'bafy-cid-2',
+    ]);
+  });
+
+  test('skips a deferred children sentinel (already empty)', () => {
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['root'] },
+      children: crdtChangeNodeDeferred,
+    };
+    stripInlineChanges(tree);
+    expect(tree.change).toBeUndefined();
+    expect(tree.children).toBe(crdtChangeNodeDeferred);
+  });
+
+  test('handles undefined node (defensive guard)', () => {
+    expect(stripInlineChanges<Changes>(undefined)).toBeUndefined();
+  });
+
+  test('handles leaf node with no children', () => {
+    const leaf: CRDTChangeNode<Changes> = {
+      kind: crdtDocumentChangeNode,
+      change: { ops: ['leaf'] },
+    };
+    stripInlineChanges(leaf);
+    expect(leaf.change).toBeUndefined();
+    expect(leaf.children).toBeUndefined();
+  });
+
+  test('does not mutate the kind field of any node', () => {
+    // Defense-in-depth: stripInlineChanges must NOT alter the
+    // structural metadata (kind, keyID, children keys). Only `change`
+    // is reset; the rest must survive so the receive-side ACL pre-pass
+    // and CRDT type-routing in `sync()` still work after deferred fetch.
+    const tree: CRDTChangeNode<Changes> = {
+      kind: crdtWriterChangeNode,
+      keyID: 'k1',
+      change: { ops: ['acl-add-writer'] },
+      children: {
+        c1: {
+          kind: crdtDocumentChangeNode,
+          keyID: 'k1',
+          change: { ops: ['doc-change'] },
+        },
+      },
+    };
+    stripInlineChanges(tree);
+    expect(tree.kind).toBe(crdtWriterChangeNode);
+    expect(tree.keyID).toBe('k1');
+    const c1 = (tree.children as any).c1;
+    expect(c1.kind).toBe(crdtDocumentChangeNode);
+    expect(c1.keyID).toBe('k1');
   });
 });
