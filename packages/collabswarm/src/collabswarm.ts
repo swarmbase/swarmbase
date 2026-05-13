@@ -251,7 +251,16 @@ export class Collabswarm<
     // K let `peers.slice(0, 1.5)` slip through to a 1-peer probe, and
     // NaN Q propagated through `effectiveQ` so `bestPeers.length < NaN`
     // evaluated as false and the gate passed with a single responder.
-    validateLoadQuorumConfig(config);
+    //
+    // Skip validation when the feature is explicitly disabled -- a
+    // shared config object that carries leftover quorum knobs alongside
+    // `loadQuorumEnabled: false` should still initialize cleanly via
+    // the legacy load path. `runLoadQuorum` mirrors this early-exit
+    // ordering: `enabled === false` is checked before validation, so
+    // the two boundaries stay consistent.
+    if (config.loadQuorumEnabled !== false) {
+      validateLoadQuorumConfig(config);
+    }
 
     this._config = config;
 
