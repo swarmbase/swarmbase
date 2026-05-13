@@ -7,6 +7,7 @@ import {
   mergeRemoteSyncTree,
   selectCrossLinks,
   trackTipInList,
+  treeContainsCid,
 } from './merkle-cross-links';
 import {
   CRDTChangeNode,
@@ -1254,5 +1255,337 @@ describe('computeServedFrontier (PR #284 r7 served-payload frontier derivation)'
       );
       expect(servedFrontier.sort()).toEqual(['POST_SNAPSHOT_HEAD']);
     });
+  });
+});
+
+/**
+ * Tests for `treeContainsCid`, the subsumption-check helper used by
+ * `CollabswarmDocument._refreshLastSyncMessageFromSync` to decide
+ * whether an incoming remote sync tree subsumes the locally-cached
+ * `_lastSyncMessage`. The cached message is replaced only when the
+ * incoming tree contains the prior root's CID -- so the served-frontier
+ * coverage can only grow, never shrink.
+ *
+ * Closes the relay-peer empty-served-frontier bug (#284 r14): a peer
+ * that joined via `load()` and never made a local change previously
+ * left `_lastSyncMessage` undefined, advertised `tipsHash([])`, and
+ * served an empty load. Two such relay peers would agree on the empty
+ * hash, satisfy quorum, and let an honest newcomer accept an empty
+ * document while the mesh had data.
+ */
+describe('treeContainsCid (PR #284 r14 _lastSyncMessage subsumption check)', () => {
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+
+  test('returns false when target is undefined / empty', () => {
+    // Defensive: callers pass `_lastSyncMessage?.changeId`, which may be
+    // undefined or empty for a brand-new peer. Treat as "not contained"
+    // so the caller's no-prior-root branch handles the case.
+    const tree: CRDTChangeNode<unknown> = { kind: docKind };
+    expect(treeContainsCid('HEAD', tree, undefined)).toBe(false);
+    expect(treeContainsCid('HEAD', tree, '')).toBe(false);
+  });
+
+  test('returns false when tree is undefined', () => {
+    expect(treeContainsCid(undefined, undefined, 'TARGET')).toBe(false);
+  });
+
+  test('returns true when target equals the root CID', () => {
+    const tree: CRDTChangeNode<unknown> = { kind: docKind };
+    expect(treeContainsCid('HEAD', tree, 'HEAD')).toBe(true);
+  });
+
+  test('returns true when target is a direct child', () => {
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: { CHILD: { kind: docKind } },
+    };
+    expect(treeContainsCid('HEAD', tree, 'CHILD')).toBe(true);
+  });
+
+  test('returns true when target is a deep descendant', () => {
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        P1: {
+          kind: docKind,
+          children: {
+            P2: {
+              kind: docKind,
+              children: { P3: { kind: docKind } },
+            },
+          },
+        },
+      },
+    };
+    expect(treeContainsCid('HEAD', tree, 'P3')).toBe(true);
+  });
+
+  test('returns false when target is independent of the tree', () => {
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: { P1: { kind: docKind } },
+    };
+    expect(treeContainsCid('HEAD', tree, 'CONCURRENT_HEAD')).toBe(false);
+  });
+
+  test('returns true for cross-linked deferred-leaf children', () => {
+    // Cross-link entries appear as deferred leaves (no `change` payload,
+    // no `children`); the CID still counts as present in the tree.
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: {
+        PRIMARY_PARENT: {
+          kind: docKind,
+          children: { GRANDPARENT: { kind: docKind } },
+        },
+        CROSS_LINK_TIP: { kind: docKind }, // deferred leaf
+      },
+    };
+    expect(treeContainsCid('HEAD', tree, 'CROSS_LINK_TIP')).toBe(true);
+    expect(treeContainsCid('HEAD', tree, 'GRANDPARENT')).toBe(true);
+  });
+
+  test('stops at a deferred children sentinel (conservative)', () => {
+    // A `children === false` sentinel marks an IPLD-deferred subtree we
+    // cannot enumerate. The helper is conservative: targets only
+    // reachable via the deferred subtree are reported as "not contained"
+    // (the caller falls back to the concurrent-roots branch, which
+    // never shrinks served-frontier coverage).
+    const tree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: false as false,
+    };
+    expect(treeContainsCid('HEAD', tree, 'BURIED_CID')).toBe(false);
+    // Root is still found when targeted directly.
+    expect(treeContainsCid('HEAD', tree, 'HEAD')).toBe(true);
+  });
+
+  test('cycle defense: visited-set prevents infinite recursion', () => {
+    // Same defensive guard as the other walkers in this module.
+    const a: CRDTChangeNode<unknown> = { kind: docKind, children: {} };
+    const b: CRDTChangeNode<unknown> = { kind: docKind, children: { A: a } };
+    a.children = { B: b };
+    // Walk terminates and reports descendants correctly.
+    expect(treeContainsCid('A', a, 'B')).toBe(true);
+    expect(treeContainsCid('A', a, 'A')).toBe(true);
+    expect(treeContainsCid('A', a, 'UNKNOWN')).toBe(false);
+  });
+});
+
+/**
+ * Structural regression tests for the relay-peer empty-served-frontier
+ * bug (PR #284 r14 Copilot review). These tests don't instantiate
+ * `CollabswarmDocument` (the load-quorum test infra has the same ESM
+ * libp2p limitation flagged in `load-quorum-orchestrator.test.ts`);
+ * instead they verify the structural property the fix establishes:
+ * after a peer applies a remote sync tree and refreshes its
+ * `_lastSyncMessage` from it, `computeServedFrontier` over the refreshed
+ * cache yields the SAME frontier the loader would derive from the
+ * served payload -- never the empty set.
+ *
+ * The fix lives in `_refreshLastSyncMessageFromSync` (called by
+ * `_syncDocumentChanges`): the cache is updated when the incoming tree
+ * subsumes the prior root (or when there is no prior root), so a relay
+ * peer that never makes a local change still has a meaningful served
+ * frontier.
+ */
+describe('relay-peer served-frontier (PR #284 r14: _lastSyncMessage refresh from sync)', () => {
+  const docKind: CRDTChangeNodeKind = crdtDocumentChangeNode;
+
+  /**
+   * Mirror the production-side update policy:
+   *   - no prior root => adopt incoming
+   *   - same root => no-op
+   *   - prior root is in incoming tree => replace with incoming
+   *   - independent roots => keep prior (concurrent-heads tradeoff)
+   *
+   * Returns the resulting (changeId, changes) pair.
+   */
+  function refreshLastSync(
+    priorChangeId: string | undefined,
+    priorChanges: CRDTChangeNode<unknown> | undefined,
+    receivedChangeId: string | undefined,
+    receivedChanges: CRDTChangeNode<unknown>,
+  ): {
+    changeId: string | undefined;
+    changes: CRDTChangeNode<unknown> | undefined;
+  } {
+    if (!receivedChangeId) {
+      return { changeId: priorChangeId, changes: priorChanges };
+    }
+    if (!priorChangeId) {
+      return { changeId: receivedChangeId, changes: receivedChanges };
+    }
+    if (priorChangeId === receivedChangeId) {
+      return { changeId: priorChangeId, changes: priorChanges };
+    }
+    if (treeContainsCid(receivedChangeId, receivedChanges, priorChangeId)) {
+      return { changeId: receivedChangeId, changes: receivedChanges };
+    }
+    return { changeId: priorChangeId, changes: priorChanges };
+  }
+
+  test('relay peer (no prior _lastSyncMessage) advertises a non-empty served frontier after one remote sync', () => {
+    // Reproduce the round-14 bug pre-fix:
+    //   - Peer B has _lastSyncMessage = undefined (relay peer, no local
+    //     changes since open()/load()).
+    //   - B receives a sync tree from A rooted at X with a leaf body.
+    //   - With the fix, B's _lastSyncMessage adopts (X, treeX).
+    //   - B's served frontier = {X}, NOT [].
+    //
+    // Pre-fix: B's _lastSyncMessage stays undefined -> served frontier
+    // is []. If C opens, probes B alone (allowSinglePeer K=1), and B
+    // votes tipsHash([]), C accepts an empty document while the mesh
+    // had X. The fix forces B to advertise tipsHash({X}) and ship X's
+    // tree on the load.
+    const incoming: CRDTChangeNode<unknown> = { kind: docKind };
+    const after = refreshLastSync(undefined, undefined, 'X', incoming);
+    expect(after.changeId).toBe('X');
+    expect(after.changes).toBe(incoming);
+
+    const servedFrontier = computeServedFrontier(
+      after.changeId,
+      after.changes,
+      undefined,
+    );
+    expect(servedFrontier).toEqual(['X']);
+    // Counter-check: the pre-fix served frontier would have been [].
+    expect(servedFrontier).not.toEqual([]);
+  });
+
+  test('two relay peers that loaded the same state advertise byte-identical served frontiers (post-fix quorum bootstrap)', () => {
+    // Two peers B and C both `load()`-ed from A. With the fix, both
+    // have _lastSyncMessage = (X, treeX). Their served frontiers and
+    // hashes match, so a newcomer D probing {B, C} sees them agree on
+    // tipsHash({X}). Crucially: they no longer falsely agree on the
+    // EMPTY hash; they agree on the CORRECT non-empty hash.
+    const treeX: CRDTChangeNode<unknown> = { kind: docKind };
+    const bAfter = refreshLastSync(undefined, undefined, 'X', treeX);
+    const cAfter = refreshLastSync(undefined, undefined, 'X', treeX);
+    const bFrontier = computeServedFrontier(
+      bAfter.changeId,
+      bAfter.changes,
+      undefined,
+    );
+    const cFrontier = computeServedFrontier(
+      cAfter.changeId,
+      cAfter.changes,
+      undefined,
+    );
+    expect(bFrontier).toEqual(cFrontier);
+    expect(bFrontier).toEqual(['X']);
+  });
+
+  test('relay peer applies a follow-up gossipsub change Y (child of X): served frontier advances to {Y}', () => {
+    // Continuation of the relay-peer scenario:
+    //   - B already has _lastSyncMessage = (X, treeX) from a prior load.
+    //   - B receives a GossipSub message from A: Y is a new change with
+    //     primary parent X (treeY embeds X as a child).
+    //   - The incoming tree subsumes B's prior root (X appears as a
+    //     child of Y in treeY), so B's _lastSyncMessage advances to
+    //     (Y, treeY). Served frontier = {Y}.
+    const treeX: CRDTChangeNode<unknown> = { kind: docKind };
+    const treeY: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: { X: treeX },
+    };
+    const after = refreshLastSync('X', treeX, 'Y', treeY);
+    expect(after.changeId).toBe('Y');
+    expect(after.changes).toBe(treeY);
+    const frontier = computeServedFrontier(
+      after.changeId,
+      after.changes,
+      undefined,
+    );
+    expect(frontier.sort()).toEqual(['Y']);
+  });
+
+  test('concurrent independent roots: prior _lastSyncMessage is preserved (served-frontier coverage cannot shrink)', () => {
+    // The conservative branch: if the incoming root is INDEPENDENT of
+    // the prior cached root (neither subsumes the other), the cache is
+    // left alone. The next local `_makeChange()` will cross-link both
+    // heads via `_recentTips`; we do not need to widen the served
+    // frontier on the sync path to recover correctness.
+    //
+    // Critically: this branch does NOT shrink served-frontier coverage.
+    // The served frontier remains {priorHead} -- the loader would still
+    // be able to fully load the prior state from this responder.
+    const priorTree: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: { PRIOR_PARENT: { kind: docKind } },
+    };
+    const incomingIndependent: CRDTChangeNode<unknown> = {
+      kind: docKind,
+      children: { INDEPENDENT_PARENT: { kind: docKind } },
+    };
+    const after = refreshLastSync(
+      'PRIOR_HEAD',
+      priorTree,
+      'INDEPENDENT_HEAD',
+      incomingIndependent,
+    );
+    // Prior cache survives.
+    expect(after.changeId).toBe('PRIOR_HEAD');
+    expect(after.changes).toBe(priorTree);
+    const frontier = computeServedFrontier(
+      after.changeId,
+      after.changes,
+      undefined,
+    );
+    expect(frontier.sort()).toEqual(['PRIOR_HEAD']);
+  });
+
+  test('same root re-sent: no-op (idempotency)', () => {
+    const tree: CRDTChangeNode<unknown> = { kind: docKind };
+    const after = refreshLastSync('X', tree, 'X', tree);
+    expect(after.changeId).toBe('X');
+    expect(after.changes).toBe(tree);
+  });
+
+  test('empty sync (no changeId): cache untouched', () => {
+    // Defensive: an incoming sync with no root CID cannot meaningfully
+    // refresh the served frontier; the refresh helper short-circuits
+    // and leaves the cache untouched.
+    const priorTree: CRDTChangeNode<unknown> = { kind: docKind };
+    const emptyIncoming: CRDTChangeNode<unknown> = { kind: docKind };
+    const after = refreshLastSync('X', priorTree, undefined, emptyIncoming);
+    expect(after.changeId).toBe('X');
+    expect(after.changes).toBe(priorTree);
+  });
+
+  test('post-load loader derives the same frontier the refreshed cache advertises (binding symmetry)', () => {
+    // End-to-end structural property the fix establishes:
+    //   1. Relay peer B receives a sync tree (X, treeX). Refresh updates
+    //      _lastSyncMessage so the served frontier is {X}.
+    //   2. C opens, runs `tipAdvertiseV1` against B, gets tipsHash({X}).
+    //   3. C runs `documentLoadV3` against B. B ships (X, treeX) as the
+    //      load response.
+    //   4. C derives `computeServedFrontier(X, treeX)` over the
+    //      received payload, hashes it, compares to the agreed
+    //      tipsHash({X}). The two MATCH because both come from the
+    //      same payload structure.
+    //
+    // Without the fix, step 1 leaves _lastSyncMessage undefined, B
+    // advertises tipsHash([]), and step 3 ships an empty load. C
+    // accepts an empty document while the mesh had X (the bug).
+    const treeX: CRDTChangeNode<unknown> = { kind: docKind };
+    const refreshed = refreshLastSync(undefined, undefined, 'X', treeX);
+
+    // Step 2 + 4: responder advertised frontier == loader-derived
+    // frontier over the served payload.
+    const responderAdvertised = computeServedFrontier(
+      refreshed.changeId,
+      refreshed.changes,
+      undefined,
+    );
+    const loaderDerivedFromPayload = computeServedFrontier(
+      'X',
+      treeX,
+      undefined,
+    );
+    expect(responderAdvertised.sort()).toEqual(
+      loaderDerivedFromPayload.sort(),
+    );
+    expect(responderAdvertised).toEqual(['X']);
   });
 });

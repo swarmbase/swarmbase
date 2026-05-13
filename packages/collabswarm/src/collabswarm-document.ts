@@ -34,6 +34,7 @@ import {
   RecentTip,
   selectCrossLinks,
   trackTipInList,
+  treeContainsCid,
 } from './merkle-cross-links';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
@@ -933,13 +934,16 @@ export class CollabswarmDocument<
    * should I advertise in a `tipAdvertiseV1` probe?".
    *
    * A load response only carries ONE change tree (rooted at
-   * `_lastSyncMessage.changeId`), plus optionally `_latestSnapshot` --
-   * `_lastSyncMessage` is only refreshed by `_makeChange()`, so its tree
-   * is rooted at *this peer's* last locally-produced change. Remote
-   * changes broadcast over GossipSub are applied to local CRDT state and
-   * recorded in `_hashes`, but they do NOT become roots of
-   * `_lastSyncMessage.changes` until this peer makes its next local
-   * change (which cross-links them via `selectCrossLinks`).
+   * `_lastSyncMessage.changeId`), plus optionally `_latestSnapshot`.
+   * `_lastSyncMessage` is refreshed by `_makeChange()` (its tree is
+   * rooted at *this peer's* last locally-produced change) AND by
+   * `_syncDocumentChanges()` (when an incoming remote tree subsumes the
+   * cached root -- the round-14 fix for relay peers that never make
+   * local changes; see `_refreshLastSyncMessageFromSync()`). When the
+   * incoming root is concurrent with the cached root, the cache is left
+   * alone so served-frontier coverage cannot shrink; the next local
+   * change re-bundles concurrent heads via cross-links from
+   * `_recentTips` (`selectCrossLinks`).
    *
    * So when a peer has multiple concurrent heads (e.g. its own last local
    * change H1 plus remotely-applied changes H2, H3 that aren't yet
@@ -1164,7 +1168,115 @@ export class CollabswarmDocument<
     if (fetchPromises.length > 0) {
       await Promise.all(fetchPromises);
     }
+
+    // Refresh `_lastSyncMessage` so the served frontier reflects what we now
+    // hold. Without this, a relay peer that joined via `load()` (or that has
+    // only ever applied remote changes via GossipSub) would keep
+    // `_lastSyncMessage` undefined and `_servedFrontier()` would return `[]`,
+    // making the peer advertise `tipsHash([])` in the initial-load quorum
+    // probe AND ship an empty load response. Two such relay peers would
+    // agree on the empty-set hash, satisfying quorum, and an honest newcomer
+    // would accept an empty document while the mesh actually had data
+    // (#284 r14 Copilot review).
+    //
+    // We update only when the incoming tree subsumes our prior root --
+    // i.e., `_lastSyncMessage.changeId` appears as a CID somewhere in the
+    // received tree -- so the served-frontier coverage never shrinks. The
+    // undefined-prior and same-root cases are also "subsumes" (vacuously
+    // and trivially); concurrent independent roots are intentionally left
+    // alone (matches the existing single-tree load semantics documented on
+    // `_servedFrontier()`). The next local `_makeChange()` cross-links
+    // through `_recentTips` regardless, so concurrent heads are recovered
+    // on the next local write.
+    this._refreshLastSyncMessageFromSync(changeId, changes);
+
     await this._maybeCompact();
+  }
+
+  /**
+   * Update `_lastSyncMessage` so it reflects the served frontier of a
+   * just-applied remote sync tree. Called by `_syncDocumentChanges()`
+   * after the merge has succeeded.
+   *
+   * Replacement policy: only swap the cached message when the incoming
+   * tree *subsumes* the prior cached root, so the served frontier the
+   * loader binds against can only grow, never shrink:
+   *   - `_lastSyncMessage` is `undefined` (relay peer, no local change
+   *     yet): adopt the incoming directly. This is the round-14 bug case
+   *     -- prior to the fix the relay peer's served frontier was empty.
+   *   - prior `changeId` appears anywhere in the incoming tree (root or
+   *     descendant): the incoming tree includes the prior root's coverage
+   *     by construction, so it is safe to replace.
+   *   - prior `changeId` is independent of the incoming tree (concurrent
+   *     heads, neither subsumes the other): leave the cached message in
+   *     place. The next local `_makeChange()` will bundle both heads via
+   *     cross-links from `_recentTips`. This matches the trade-off
+   *     documented on `_servedFrontier()` -- a load response only ever
+   *     carries one tree, so accepting a single root is the existing
+   *     contract.
+   *
+   * The cached message's `documentId` / `keychainChanges` fields are
+   * preserved across the swap. Response-specific fields
+   * (`signature`, `tips`, `tipsHash`) are dropped because they are
+   * regenerated per-response by the load / tip-advertise handlers; leaving
+   * a stale value would be misleading at best, a wire-protocol violation
+   * at worst.
+   *
+   * Idempotent and inexpensive: the subsumption check walks the incoming
+   * tree once (bounded by sender compaction config); the field-level
+   * replacement is O(1) reference swaps.
+   *
+   * @internal
+   */
+  private _refreshLastSyncMessageFromSync(
+    receivedChangeId: string | undefined,
+    receivedChanges: CRDTChangeNode<ChangesType>,
+  ): void {
+    // Defensive: if the incoming carries no root CID we cannot meaningfully
+    // refresh the served frontier with it. (`computeServedFrontier` will
+    // produce `[]` for the resulting `_lastSyncMessage` and we would simply
+    // re-introduce the empty-served-frontier bug.)
+    if (!receivedChangeId) return;
+
+    const priorChangeId = this._lastSyncMessage?.changeId;
+
+    // Case 1: no prior cached message -- adopt the incoming. This is the
+    // round-14 fix path: a relay peer with no local changes was previously
+    // serving an empty payload because `_lastSyncMessage` was `undefined`.
+    if (!priorChangeId) {
+      this._lastSyncMessage = {
+        ...(this._lastSyncMessage || { documentId: this.documentPath }),
+        changeId: receivedChangeId,
+        changes: receivedChanges,
+        // Drop response-specific fields; they are regenerated per-response.
+        signature: undefined,
+        tips: undefined,
+        tipsHash: undefined,
+      };
+      return;
+    }
+
+    // Case 2: same root -- already up to date, nothing to do. (CIDs are
+    // content-addressed so equal `changeId` implies the same subtree.)
+    if (priorChangeId === receivedChangeId) return;
+
+    // Case 3: prior root is embedded in the incoming tree -- the incoming
+    // subsumes the prior. Replace.
+    if (treeContainsCid(receivedChangeId, receivedChanges, priorChangeId)) {
+      this._lastSyncMessage = {
+        ...this._lastSyncMessage!,
+        changeId: receivedChangeId,
+        changes: receivedChanges,
+        signature: undefined,
+        tips: undefined,
+        tipsHash: undefined,
+      };
+      return;
+    }
+
+    // Case 4: concurrent / independent roots. Leave the cached message
+    // alone so we do not shrink served-frontier coverage. The next local
+    // `_makeChange()` cross-links via `_recentTips`, recovering both heads.
   }
 
   /**

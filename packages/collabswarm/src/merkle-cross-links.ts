@@ -342,6 +342,56 @@ export function computeServedFrontier<ChangesType>(
 }
 
 /**
+ * Pure helper: walk a sync tree and report whether `targetCid` appears
+ * anywhere in it -- as the root CID, as a `children` map key, or as a
+ * descendant. Used by `CollabswarmDocument._refreshLastSyncMessageFromSync`
+ * to decide whether an incoming sync tree subsumes the locally-cached
+ * `_lastSyncMessage` (i.e. embeds its root), in which case the cache can
+ * be safely replaced without losing served-frontier coverage.
+ *
+ * Walks defensively:
+ *   - Skips a deferred `children` sentinel; we cannot enumerate descendants
+ *     of a deferred node, so we conservatively return `false` if the target
+ *     would only have been found beneath that sentinel.
+ *   - Tracks visited node CIDs so cycles do not recurse forever (content
+ *     addressing rules these out in practice; defensive nonetheless).
+ *
+ * Returns `true` if `targetCid` is found, `false` otherwise. Treats
+ * empty / undefined `targetCid` as "not found" so callers can pass an
+ * optional value without a separate guard.
+ */
+export function treeContainsCid<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType> | undefined,
+  targetCid: string | undefined,
+): boolean {
+  if (!targetCid) return false;
+  if (root === undefined) return false;
+  if (rootId === targetCid) return true;
+
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): boolean {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return false;
+      visited.add(nodeId);
+    }
+    if (node.children === undefined) return false;
+    if (node.children === crdtChangeNodeDeferred) return false;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      if (childId === targetCid) return true;
+      if (walk(childId, childNode)) return true;
+    }
+    return false;
+  }
+
+  return walk(rootId, root);
+}
+
+/**
  * Pure helper: append `entry` to `recentTips` with LRU semantics
  * (most-recently-used to the back), evicting the oldest entries when the
  * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is
