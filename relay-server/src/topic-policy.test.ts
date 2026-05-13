@@ -218,4 +218,64 @@ describe('shouldAutoSubscribe', () => {
       expect(decision).toEqual({ action: 'skip', reason: 'NotInAllowlist' })
     })
   })
+
+  describe('counter validation', () => {
+    // These are programming-error guards: the production caller wires
+    // autoTopics.size and the loaded config, so these inputs only show up
+    // when a caller has a bug. Throwing surfaces the bug instead of
+    // letting the cap arithmetic produce silently-wrong decisions.
+    const baseInput = {
+      allowlist: null,
+      isTracked: neverTracked,
+    } as const
+
+    it('throws when maxAutoTopics is negative', () => {
+      expect(() =>
+        shouldAutoSubscribe('/document/abc', {
+          ...baseInput,
+          maxAutoTopics: -1,
+          autoTopicCount: 0,
+        }),
+      ).toThrow(/finite, non-negative/)
+    })
+
+    it('throws when autoTopicCount is negative', () => {
+      expect(() =>
+        shouldAutoSubscribe('/document/abc', {
+          ...baseInput,
+          maxAutoTopics: 10,
+          autoTopicCount: -1,
+        }),
+      ).toThrow(/finite, non-negative/)
+    })
+
+    it('throws when maxAutoTopics is NaN', () => {
+      expect(() =>
+        shouldAutoSubscribe('/document/abc', {
+          ...baseInput,
+          maxAutoTopics: Number.NaN,
+          autoTopicCount: 0,
+        }),
+      ).toThrow(/finite, non-negative/)
+    })
+
+    it('throws when autoTopicCount is Infinity', () => {
+      expect(() =>
+        shouldAutoSubscribe('/document/abc', {
+          ...baseInput,
+          maxAutoTopics: 10,
+          autoTopicCount: Number.POSITIVE_INFINITY,
+        }),
+      ).toThrow(/finite, non-negative/)
+    })
+
+    it('accepts zero counters (cap-of-zero is a valid closed-mode config)', () => {
+      const decision = shouldAutoSubscribe('/document/abc', {
+        ...baseInput,
+        maxAutoTopics: 0,
+        autoTopicCount: 0,
+      })
+      expect(decision).toEqual({ action: 'skip', reason: 'CapReached' })
+    })
+  })
 })

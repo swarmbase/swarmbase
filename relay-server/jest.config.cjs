@@ -1,8 +1,14 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  // Match the collabswarm pattern: although package.json declares
-  // "type": "module", we compile TS down to CommonJS for tests via
-  // ts-jest. Real production builds still emit ESM (see tsconfig.json).
+  // relay-server intentionally uses a different Jest/ts-jest mode than
+  // the other workspaces in this repo. Most workspaces run ts-jest with
+  // `useESM: true` so the test runtime is true ESM; here we keep
+  // `useESM: false` so ts-jest transforms TS to CommonJS for the jest
+  // runtime, while the `module: Node16` in tsconfig.test.json keeps the
+  // ESM-style `./foo.js` specifiers typechecking. Real production builds
+  // of relay-server still emit ESM (see tsconfig.json). If you migrate
+  // this workspace to `useESM: true`, also flip the test tsconfig and
+  // drop the moduleNameMapper hack below.
   rootDir: __dirname,
   roots: ['<rootDir>/src'],
   testEnvironment: 'node',

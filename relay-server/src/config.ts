@@ -112,9 +112,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
   const tcpListen = env.TCP_LISTEN || `/ip4/0.0.0.0/tcp/${tcpPort}`
   const ipv6Enabled = env.ENABLE_IPV6 === '1'
   // ?? semantics matches the inline behaviour: empty string is treated as
-  // "user explicitly set it to empty", not "unset". This lets callers
-  // disable a specific IPv6 listener with an empty value while still
-  // enabling the other.
+  // "user explicitly set it to empty", not "unset". An empty string acts
+  // as an opt-out for that specific IPv6 listener — `listenAddresses()`
+  // filters empty entries out of the bind list so the libp2p node never
+  // sees an invalid multiaddr.
   const wsListenV6 = env.WS_LISTEN_V6 ?? `/ip6/::/tcp/${wsPort}/ws`
   const tcpListenV6 = env.TCP_LISTEN_V6 ?? `/ip6/::/tcp/${tcpPort}`
 
@@ -135,11 +136,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
 /**
  * Compute the actual list of listen multiaddrs the libp2p node should bind,
  * honouring the IPv6 gate. Pure function of a `RelayConfig`.
+ *
+ * Empty IPv6 listen strings are filtered out: operators can disable an
+ * individual IPv6 listener by setting `WS_LISTEN_V6=""` or
+ * `TCP_LISTEN_V6=""` (with `ENABLE_IPV6=1` still keeping the other one
+ * active). The IPv4 listeners always have a default fallback so they are
+ * unconditionally present.
  */
 export function listenAddresses(config: RelayConfig): string[] {
   return [
     config.wsListen,
     config.tcpListen,
-    ...(config.ipv6Enabled ? [config.wsListenV6, config.tcpListenV6] : []),
+    ...(config.ipv6Enabled
+      ? [config.wsListenV6, config.tcpListenV6].filter((addr) => addr !== '')
+      : []),
   ]
 }

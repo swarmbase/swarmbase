@@ -206,4 +206,23 @@ describe('listenAddresses', () => {
       '/ip6/::1/tcp/8888',
     ])
   })
+
+  it('drops an empty WS_LISTEN_V6 from the bind list', () => {
+    const cfg = loadConfig({ ENABLE_IPV6: '1', WS_LISTEN_V6: '' })
+    expect(listenAddresses(cfg)).toEqual([cfg.wsListen, cfg.tcpListen, cfg.tcpListenV6])
+  })
+
+  it('drops an empty TCP_LISTEN_V6 from the bind list', () => {
+    const cfg = loadConfig({ ENABLE_IPV6: '1', TCP_LISTEN_V6: '' })
+    expect(listenAddresses(cfg)).toEqual([cfg.wsListen, cfg.tcpListen, cfg.wsListenV6])
+  })
+
+  it('drops both empty IPv6 listeners (effectively IPv4-only)', () => {
+    const cfg = loadConfig({
+      ENABLE_IPV6: '1',
+      WS_LISTEN_V6: '',
+      TCP_LISTEN_V6: '',
+    })
+    expect(listenAddresses(cfg)).toEqual([cfg.wsListen, cfg.tcpListen])
+  })
 })

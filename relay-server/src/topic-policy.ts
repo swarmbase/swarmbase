@@ -71,6 +71,23 @@ export function shouldAutoSubscribe(
   topic: string,
   policy: AutoSubscribePolicy,
 ): AutoSubscribeDecision {
+  // Programming-error guard: negative / non-finite counters indicate a
+  // caller bug (the cap-arithmetic in index.ts would silently misbehave).
+  // Throw rather than return a misleading decision — these never happen
+  // at runtime from a correctly-wired relay.
+  if (
+    !Number.isFinite(policy.maxAutoTopics) ||
+    !Number.isFinite(policy.autoTopicCount) ||
+    policy.maxAutoTopics < 0 ||
+    policy.autoTopicCount < 0
+  ) {
+    throw new Error(
+      `AutoSubscribePolicy counters must be finite, non-negative numbers ` +
+        `(got maxAutoTopics=${policy.maxAutoTopics}, ` +
+        `autoTopicCount=${policy.autoTopicCount})`,
+    )
+  }
+
   if (policy.isTracked(topic)) {
     return { action: 'skip', reason: 'AlreadyTracked' }
   }
