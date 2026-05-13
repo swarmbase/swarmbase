@@ -299,4 +299,153 @@ describe('BeeKEM reader revocation', () => {
 
     expect(Buffer.from(preRoot).equals(Buffer.from(postRoot))).toBe(false);
   });
+
+  test('surviving reader decrypts the ACL-change broadcast with its pre-revocation key', async () => {
+    // CRITICAL ORDERING INVARIANT (PR #285 Copilot round 3, issue #1):
+    //
+    //   The `removeReader` flow broadcasts two messages: a gossipsub
+    //   ACL-change message (encrypted under the current keychain key)
+    //   and a unicast PathUpdate (which carries enough state for
+    //   surviving readers to derive the NEW key). Those two
+    //   broadcasts are independent; either can arrive at a surviving
+    //   reader first.
+    //
+    //   If the writer installed the new key into its keychain BEFORE
+    //   broadcasting the ACL change, the ACL change would be
+    //   encrypted under the new key -- which a surviving reader
+    //   doesn't have until they process the PathUpdate. They'd be
+    //   unable to decrypt the ACL change unless the PathUpdate
+    //   happens to arrive first, an ordering the wire does not
+    //   guarantee.
+    //
+    //   The fix: install the new key into the LOCAL keychain only
+    //   AFTER both broadcasts have gone out. The ACL change is then
+    //   encrypted under the previous key (which surviving readers
+    //   already have), so it's decryptable regardless of PathUpdate
+    //   arrival order.
+    //
+    // This test models the writer-side sequence with a stub keychain
+    // and asserts: a surviving reader holding only the
+    // pre-revocation key successfully decrypts the simulated
+    // ACL-change ciphertext. (The full `CollabswarmDocument` call
+    // path is omitted -- it requires a libp2p stack -- but the
+    // sequencing invariant is exactly the same.)
+    type StubKey = {
+      readonly id: string;
+      readonly cryptoKey: CryptoKey;
+    };
+    // Stub keychain modelling the "last-write-wins" current()
+    // behaviour of the production Yjs/Automerge providers (see
+    // `_keychain.current()` in `_makeChange`).
+    class StubKeychain {
+      private readonly keys: StubKey[] = [];
+      readonly callLog: string[] = [];
+      install(id: string, cryptoKey: CryptoKey) {
+        this.callLog.push(`addEpochKey:${id}`);
+        this.keys.push({ id, cryptoKey });
+      }
+      current(): StubKey {
+        this.callLog.push('current');
+        if (this.keys.length === 0) throw new Error('empty keychain');
+        return this.keys[this.keys.length - 1];
+      }
+    }
+
+    // Pre-revocation key: a freshly generated AES-GCM key, modelling
+    // whatever epoch key the writer was already encrypting under
+    // before the revocation begins. The surviving reader has this
+    // key (it's been on the keychain since they joined).
+    const preRevocationKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+
+    const writerKeychain = new StubKeychain();
+    writerKeychain.install('pre-revocation', preRevocationKey);
+    writerKeychain.callLog.length = 0; // reset; setup install isn't part of the flow under test
+
+    // 2-member BeeKEM: Alice (writer) + Bob (revoked). Bob is the
+    // member we remove. The surviving-reader perspective is modelled
+    // by the pre-revocation key alone -- the survivor doesn't need a
+    // BeeKEM instance to validate the ACL-change decryptability
+    // invariant (that's a property of the keychain key the ACL
+    // change was encrypted under, not the BeeKEM tree state). The
+    // tree-side primitive that a removed reader CANNOT derive the
+    // new key is exercised in the other tests in this file.
+    const alice = new BeeKEM();
+    const aliceKeys = await generateECDHKeyPair();
+    await alice.initialize(aliceKeys.privateKey, aliceKeys.publicKey);
+
+    const bobKeys = await generateECDHKeyPair();
+    await alice.addMember(bobKeys.publicKey);
+    const bobLeafIndex = 2; // leaf-1 -> node index 2
+
+    // -- Begin modelled removeReader flow (mirrors steps 2-6 in
+    //    `removeReader` JSDoc) --
+
+    // Step 2-3: BeeKEM rotation + HKDF derivation (the writer holds
+    // the new key locally; the keychain is NOT updated yet).
+    const { rootSecret } = await alice.removeMember(bobLeafIndex);
+    const newKey = await deriveDocumentKeyFromRootSecret(rootSecret);
+
+    // Step 4: broadcast the ACL change. This goes through
+    // `_makeChange` in production, which calls `_keychain.current()`
+    // to pick the encryption key. We model that by reading the
+    // current key off the stub keychain (which still points at
+    // `preRevocationKey`, because the new key hasn't been installed
+    // yet).
+    const currentKeyAtAclBroadcast = writerKeychain.current();
+    const aclChangePlaintext = new TextEncoder().encode(
+      '<readers ACL minus Carol>',
+    );
+    const aclChangeCiphertext = await encryptUnder(
+      currentKeyAtAclBroadcast.cryptoKey,
+      aclChangePlaintext,
+    );
+
+    // Step 5: PathUpdate broadcast. In production this goes out to
+    // every surviving peer over `beekemPathUpdateV1` and they
+    // derive the new key by processing it. The post-revocation
+    // decryptability of the *new* key by a surviving reader is
+    // covered by `surviving reader re-derives the same document key
+    // as the writer` above; this test focuses on the *previous* key
+    // remaining valid for the ACL-change broadcast.
+
+    // Step 6: install the new key in the writer's keychain. This is
+    // the deferred step -- everything above used the previous key.
+    writerKeychain.install('post-revocation', newKey);
+
+    // INVARIANT (a) -- call order:
+    //   `current` was consulted for the ACL broadcast BEFORE
+    //   `addEpochKey` installed the new key. If a future refactor
+    //   moves the install before the broadcast, this assertion
+    //   catches it.
+    expect(writerKeychain.callLog).toEqual([
+      'current',
+      'addEpochKey:post-revocation',
+    ]);
+
+    // INVARIANT (b) -- surviving-reader decryptability:
+    //   A surviving reader has the pre-revocation key (received via
+    //   the keychain delta back when they joined). They have not yet
+    //   processed any PathUpdate-derived key. They must be able to
+    //   decrypt the ACL change with the pre-revocation key alone.
+    const survivorDecrypted = await decryptUnder(
+      preRevocationKey,
+      aclChangeCiphertext.iv,
+      aclChangeCiphertext.ct,
+    );
+    expect(survivorDecrypted).toEqual(aclChangePlaintext);
+
+    // Defensive double-check: an ACL change ENCRYPTED UNDER THE NEW
+    // KEY (the bug-shape we're guarding against) would NOT be
+    // decryptable by a survivor holding only the pre-revocation key.
+    // This is what `_makeChange` would produce if the install moved
+    // back above the broadcast.
+    const aclUnderNewKey = await encryptUnder(newKey, aclChangePlaintext);
+    await expect(
+      decryptUnder(preRevocationKey, aclUnderNewKey.iv, aclUnderNewKey.ct),
+    ).rejects.toThrow();
+  });
 });

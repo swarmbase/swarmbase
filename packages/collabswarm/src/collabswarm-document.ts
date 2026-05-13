@@ -3926,8 +3926,21 @@ export class CollabswarmDocument<
    * Remove a user as a valid reader. Users are identified by their public keys.
    *
    * Revocation is performed via the BeeKEM ratchet tree, in an order
-   * chosen so that a failure in the cryptographic stage cannot leave
-   * the ACL change in flight without the corresponding key rotation:
+   * chosen to satisfy two distinct invariants:
+   *
+   *   (a) ATOMICITY: a failure in the cryptographic stage cannot leave
+   *       the ACL change in flight without the corresponding key
+   *       rotation.
+   *   (b) ORDERING ON THE WIRE: the ACL-change broadcast must be
+   *       encryptable by surviving readers using a key they ALREADY
+   *       have, not the post-rotation key (which they only learn about
+   *       once they process the PathUpdate). The ACL-change pubsub
+   *       message and the PathUpdate unicast stream are delivered
+   *       independently and can arrive in any order; each must be
+   *       independently decryptable to keep the receive path order-
+   *       insensitive.
+   *
+   * Steps:
    *
    *   1. Verify the caller is a writer and look up the BeeKEM leaf
    *      assigned to the removed reader. A missing leaf is a hard
@@ -3941,24 +3954,41 @@ export class CollabswarmDocument<
    *      favour of yet-another rotation, doubling the work without
    *      improving the cryptographic property.
    *   3. Derive the new document key + epoch ID from the root secret
-   *      via HKDF (see `derive-doc-key.ts`) and install in the
-   *      keychain. Installation is local: the BeeKEM PathUpdate is
-   *      the delivery mechanism, and surviving readers re-derive the
-   *      same ID + key locally.
-   *   4. Only after the rotation succeeds do we commit the ACL
-   *      removal and broadcast it.
+   *      via HKDF (see `derive-doc-key.ts`). **Hold locally; the
+   *      keychain is NOT updated yet.** This satisfies (b) -- the
+   *      ACL-change broadcast in step 4 still encrypts under the
+   *      previous keychain key, which surviving readers already
+   *      have. (a) is also satisfied: if step 2 or 3 throws, the ACL
+   *      is unchanged.
+   *   4. Commit the ACL removal and broadcast it via `_makeChange`.
+   *      Encryption uses `_keychain.current()` at the time of
+   *      `_makeChange` -- which is still the **previous** key,
+   *      because step 5 hasn't installed the new one yet.
    *   5. Broadcast the signed `PathUpdate` over
    *      `beekemPathUpdateV1` to every connected peer. Surviving
    *      readers feed it into `BeeKEM.processPathUpdate` and
-   *      re-derive the same document key.
+   *      re-derive the same document key + epoch ID, then install
+   *      it on their side via the keychain.
+   *   6. Install the new key into the LOCAL keychain. From this
+   *      point on every subsequent outgoing message is encrypted
+   *      under the new key.
    *
-   * Order matters: if steps 2 or 3 throw, the ACL is left unchanged
-   * and the caller sees a clear error pointing at the crypto stage.
-   * The removed reader retains read access at the ACL layer (the
-   * caller can retry once the underlying failure is fixed). The
-   * previous order -- ACL first, then rotation -- left the ACL
-   * change broadcast even when the rotation failed, an
-   * inconsistency that confused subsequent recovery flows.
+   * The revoked reader can still decrypt the step-4 ACL change (they
+   * have the previous key) -- which is fine: they just learn they've
+   * been removed. They CANNOT derive the new key from the step-5
+   * PathUpdate because their leaf is blanked, so all future writer-
+   * originated traffic remains opaque to them.
+   *
+   * If step 6 fails (local IO / WebCrypto error) the writer is in a
+   * partially-rotated state -- the ACL change and PathUpdate are out,
+   * but the local keychain still holds only the previous key. The
+   * call throws so the caller can recover (the simplest recovery is
+   * to re-open the document, which re-loads keychain state). We
+   * deliberately accept this edge case to preserve invariant (b):
+   * installing the key BEFORE the broadcasts would silently break
+   * the wire-ordering invariant for every revocation, while
+   * deferring it only matters in the rare case where the local
+   * keychain install fails.
    *
    * Unlike the previous "encrypt the new key under the old key" scheme,
    * the removed reader cannot derive the new key even if they were
@@ -4055,9 +4085,19 @@ export class CollabswarmDocument<
     const { pathUpdate, rootSecret } = await beekem.removeMember(leafIndex);
 
     // 2. Derive the new document key + 32-byte epoch ID from the root
-    //    secret. The 32-byte ID is what we put on the wire; the
-    //    keychain provider then truncates locally to `keyIDLength`
-    //    bytes when storing under its narrower keyspace.
+    //    secret. **Hold these locally; do NOT install in the keychain
+    //    yet.** Installing now would flip `_keychain.current()` to the
+    //    new key, and the ACL-change broadcast in step 3 (which goes
+    //    through `_makeChange`) would then encrypt the readers-ACL
+    //    removal under the **new** key. Surviving readers would not
+    //    yet have the new key (they get it from the PathUpdate in
+    //    step 4, delivered separately and possibly out of order
+    //    relative to the gossipsub-broadcast ACL change), and so
+    //    would be unable to decrypt the ACL change.
+    //
+    //    The 32-byte ID is what we put on the wire; the keychain
+    //    provider then truncates locally to `keyIDLength` bytes when
+    //    storing under its narrower keyspace.
     const [newKey, derivedEpochId32] = await Promise.all([
       deriveDocumentKeyFromRootSecret(rootSecret),
       deriveEpochIdFromRootSecret(rootSecret),
@@ -4073,26 +4113,25 @@ export class CollabswarmDocument<
       0,
       this._keychainProvider.keyIDLength,
     );
-    // `addEpochKey` is part of the Keychain interface in this codebase
-    // (both yjs and automerge providers implement it). It appends the
-    // key under the supplied ID and returns the keychain delta. We do
-    // NOT broadcast the delta here -- the BeeKEM PathUpdate is the
-    // delivery mechanism (and a surviving reader re-derives the same
-    // ID + key locally, so wire-side delivery of the delta is
-    // unnecessary). The delta is still installed locally so
-    // `_keychain.current()` advances for subsequent encrypts.
-    await this._keychain.addEpochKey(
-      localKeychainId,
-      newKey as unknown as DocumentKey,
-    );
 
-    // 3. Only AFTER the rotation succeeds do we commit the ACL
-    //    removal. If `removeMember` / key-derivation / keychain
-    //    install threw, the ACL is left untouched and the caller can
-    //    retry safely. Without this ordering a transient HKDF or
-    //    WebCrypto failure would leave the removed reader gone from
-    //    the ACL but the key un-rotated, a worse-than-broken
-    //    intermediate state.
+    // 3. Commit the ACL removal and broadcast it -- still encrypted
+    //    under the **previous** keychain key (the new key hasn't been
+    //    installed yet; see step 5). Surviving readers can decrypt
+    //    this with the key they already have, regardless of whether
+    //    the PathUpdate in step 4 arrives before or after the ACL
+    //    change. The revoked reader can also decrypt the ACL change
+    //    (they still hold the previous key), which is fine -- the
+    //    ACL change just tells them they've been removed. They can't
+    //    derive the **new** key from step 4's PathUpdate because
+    //    their leaf is blanked.
+    //
+    //    Atomicity guarantee from round 1 still holds: the rotation
+    //    (BeeKEM removeMember + HKDF derivations in steps 1-2) has
+    //    already SUCCEEDED before we commit the ACL change. If those
+    //    steps had thrown, the ACL would still be untouched and the
+    //    caller could retry. The keychain install is now deferred to
+    //    step 5 (publish-then-commit); see the failure-mode comment
+    //    there.
     const changes = await this._readers.remove(reader);
     await this._makeChange(changes, crdtReaderChangeNode);
 
@@ -4113,12 +4152,49 @@ export class CollabswarmDocument<
     this._readerKemPublicKeys.delete(serializedReader);
     this._beekemWelcomeByLeaf.delete(leafIndex);
 
-    // 5. Broadcast the PathUpdate to every connected peer. Carries
-    //    the full 32-byte epoch ID; the receiver matches it against
-    //    its own locally-derived 32-byte value, and only after that
-    //    succeeds truncates to the keychain's `keyIDLength` for
-    //    local install.
+    // Broadcast the PathUpdate to every connected peer. Carries
+    // the full 32-byte epoch ID; the receiver matches it against
+    // its own locally-derived 32-byte value, and only after that
+    // succeeds truncates to the keychain's `keyIDLength` for
+    // local install.
     await this._distributeBeeKEMPathUpdate(pathUpdate, derivedEpochId32);
+
+    // 5. Install the new key into our LOCAL keychain. From this
+    //    point on, `_keychain.current()` returns the new key and
+    //    every subsequent `_makeChange` encrypts under it.
+    //
+    //    Failure mode: if this throws (local IO / WebCrypto error),
+    //    the ACL change and PathUpdate have already been broadcast,
+    //    so surviving readers will install the new key on their side
+    //    while the writer is stuck on the old key for outgoing
+    //    encryption. That is a recoverable but visible inconsistency
+    //    -- subsequent local writes would encrypt under a key
+    //    surviving readers no longer accept. We surface the failure
+    //    loudly here so operators can intervene (re-open the
+    //    document to recover keychain state). `addEpochKey` is a
+    //    local-only call in both shipped keychain providers (no
+    //    pubsub side-effects, no remote IO), so this branch is rare
+    //    in practice; the publish-then-commit shape is deliberate
+    //    to keep the on-wire ordering correct.
+    try {
+      await this._keychain.addEpochKey(
+        localKeychainId,
+        newKey as unknown as DocumentKey,
+      );
+    } catch (err) {
+      // Don't suppress -- let the caller see the failure -- but
+      // log first so the operator-visible diagnostic doesn't get
+      // lost in the rethrow path.
+      console.error(
+        `[${this.documentPath}] removeReader: ACL change + PathUpdate broadcast succeeded, ` +
+          `but local keychain install of the new epoch key failed. The local writer cannot ` +
+          `encrypt under the new key until keychain state is recovered (e.g. re-open the ` +
+          `document). Surviving readers will have installed the new key from the PathUpdate. ` +
+          `Underlying error:`,
+        err,
+      );
+      throw err;
+    }
   }
 
   /**
