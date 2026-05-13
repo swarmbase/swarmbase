@@ -41,6 +41,9 @@
     "build:tsc": "yarn workspace @collabswarm/collabswarm tsc && yarn workspace @collabswarm/collabswarm-yjs tsc && yarn workspace @collabswarm/collabswarm-react tsc && yarn workspace @collabswarm/collabswarm-redux tsc && yarn install",
     "start": "react-scripts start"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
