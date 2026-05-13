@@ -1773,7 +1773,7 @@ __metadata:
     "@testing-library/react": "npm:^16.3.2"
     "@testing-library/user-event": "npm:^14.6.1"
     "@types/jest": "npm:^29.5.13"
-    "@types/jsoneditor": "npm:^9.9.5"
+    "@types/jsoneditor": "npm:^9.9.6"
     "@types/node": "npm:^22.7.5"
     "@types/react": "npm:^19.2.3"
     "@types/react-dom": "npm:^19.2.3"
@@ -5200,13 +5200,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jsoneditor@npm:^9.9.5":
-  version: 9.9.5
-  resolution: "@types/jsoneditor@npm:9.9.5"
+"@types/jsoneditor@npm:^9.9.6":
+  version: 9.9.6
+  resolution: "@types/jsoneditor@npm:9.9.6"
   dependencies:
     "@types/ace": "npm:*"
     ajv: "npm:^6.12.0"
-  checksum: 10/265996a2d409b4768a187e6ea60b02113609e1c571b502b20289f1d3ce0e73afaa864dcd3e3aa61e491d3d8c7c86061e75b09d8835147cb672c32a823523da9d
+  checksum: 10/d4bf791c0d4a14f3c151991ef4e8a7ccbc764ae620bd76cc67fb585f347ad9e49af734c75b8abe851d05cafbb1a1f426334bcd2146d0a72b0c688c50443c7391
   languageName: node
   linkType: hard
 
