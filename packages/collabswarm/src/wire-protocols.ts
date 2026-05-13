@@ -97,8 +97,14 @@ export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
 //
 // The sync message carries:
 //   - `pathUpdate`: the `PathUpdate` produced by
-//     `BeeKEM.removeMember(leafIdx)` + `BeeKEM.update()`, serialized via
-//     the `SerializedPathUpdate` wire shape (see `path-update-wire.ts`).
+//     `BeeKEM.removeMember(leafIdx)`, serialized via the
+//     `SerializedPathUpdate` wire shape (see `path-update-wire.ts`).
+//     `removeMember` itself blanks the removed leaf, blanks every
+//     internal node on the removed direct path, and re-derives fresh
+//     key material along the writer's own path to root -- the path
+//     re-derivation is part of `removeMember`, NOT a separate
+//     follow-up `BeeKEM.update()` call. (A redundant `update()` would
+//     only discard the fresh material `removeMember` just produced.)
 //   - `pathUpdateEpochId`: the FULL 32-byte HKDF-derived epoch
 //     identifier (output of `deriveEpochIdFromRootSecret`). Receivers
 //     compare the full 32 bytes against their locally-derived ID; only

@@ -122,12 +122,14 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
    * Optional BeeKEM ratchet-tree `PathUpdate` carried by the
    * `beekemPathUpdateV1` wire protocol. Populated when a writer revokes
    * a reader via `CollabswarmDocument.removeReader`: the writer calls
-   * `BeeKEM.removeMember(leafIdx)` + `BeeKEM.update()`, serializes the
-   * resulting `PathUpdate` via `serializePathUpdateForWire`, and
-   * broadcasts it here so surviving readers can re-derive the new
-   * document encryption key. Receivers feed the deserialized
-   * `PathUpdate` into `BeeKEM.processPathUpdate` to advance their
-   * local ratchet state.
+   * `BeeKEM.removeMember(leafIdx)`, serializes the resulting
+   * `PathUpdate` via `serializePathUpdateForWire`, and broadcasts it
+   * here so surviving readers can re-derive the new document
+   * encryption key. (`removeMember` already blanks the removed leaf
+   * and re-derives fresh key material along the writer's path to
+   * root; no follow-up `BeeKEM.update()` call is needed.) Receivers
+   * feed the deserialized `PathUpdate` into `BeeKEM.processPathUpdate`
+   * to advance their local ratchet state.
    *
    * Only populated on the BeeKEM PathUpdate v1 wire path; absent on
    * sync messages flowing over GossipSub / document-load / Welcome.
