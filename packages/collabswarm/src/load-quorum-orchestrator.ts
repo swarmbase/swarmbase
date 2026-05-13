@@ -173,17 +173,16 @@ export async function runLoadQuorum<T>(opts: {
       err instanceof LoadQuorumFailedError &&
       err.reason === 'invalid-config'
     ) {
-      // Re-extract the structured detail (everything between the
-      // documentPath prefix and the trailing operator-guidance trailer)
-      // so the rethrown error carries the validator's "<name> must be a
-      // positive integer; got <value>" wording without the
-      // `'<config>'` placeholder leaking through.
-      const detailMatch = err.message.match(
-        /^Initial-load quorum failed for "<config>": (.+?)\. Configure/,
-      );
-      const detail = detailMatch
-        ? detailMatch[1]
-        : 'invalid load-quorum configuration';
+      // Forward the validator's structured `detail` directly so the
+      // rethrown error carries the "<name> must be a positive integer;
+      // got <value>" wording without the `'<config>'` placeholder
+      // leaking through. The previous implementation regex-parsed
+      // `err.message`, which was brittle: any future change to the
+      // error-message format (e.g. moving the operator-guidance
+      // trailer) would silently degrade the surfaced config error to
+      // the generic fallback. The structured field is the load-bearing
+      // path now. See PR #284 r23 Copilot review.
+      const detail = err.detail ?? 'invalid load-quorum configuration';
       throw new LoadQuorumFailedError({
         documentPath,
         reason: 'invalid-config',

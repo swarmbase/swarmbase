@@ -114,9 +114,14 @@ import {
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
-  LoadQuorumFailedReason,
   validateLoadQuorumConfig,
 } from './load-quorum';
+// `LoadQuorumFailedReason` is a type alias (`export type` in `load-quorum.ts`);
+// re-exporting it through the value-side `export { ... }` block produces a
+// runtime-undefined export that breaks under stricter TS module settings
+// (`isolatedModules`, `verbatimModuleSyntax`). Keep the import/re-export
+// strictly type-only. See PR #284 r23 Copilot review.
+import type { LoadQuorumFailedReason } from './load-quorum';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -218,7 +223,6 @@ export {
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
-  LoadQuorumFailedReason,
   validateLoadQuorumConfig,
   // Compaction
   defaultCompactionConfig,
@@ -234,6 +238,7 @@ export type { NetworkStatsSnapshot } from './network-stats';
 export type {
   PeerTipAdvertisement,
   LoadQuorumDecision,
+  LoadQuorumFailedReason,
 } from './load-quorum';
 
 // Re-export types

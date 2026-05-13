@@ -634,6 +634,14 @@ export class LoadQuorumFailedError extends Error {
    *  they served instead. Empty for all other reasons. See PR #284 r6
    *  Copilot review. */
   public readonly agreeingPeerBindFailures: ReadonlyMap<string, string>;
+  /** Structured detail string for the `'invalid-config'` reason (e.g.
+   *  `loadQuorumK must be a positive integer; got NaN`). Exposed as a
+   *  field so callers (notably `runLoadQuorum`'s post-init guard) can
+   *  forward the validator's structured wording into a rethrown error
+   *  with a different `documentPath` WITHOUT regex-parsing
+   *  `error.message`. Empty/undefined for all other reasons. See PR
+   *  #284 r23 Copilot review. */
+  public readonly detail?: string;
 
   constructor(opts: {
     documentPath: string;
@@ -686,5 +694,11 @@ export class LoadQuorumFailedError extends Error {
     this.agreement = opts.agreement;
     this.agreeingPeerBindFailures =
       opts.agreeingPeerBindFailures ?? new Map();
+    // Persist the structured detail so callers can forward it across a
+    // rethrow without parsing the human-readable `error.message`. Only
+    // load-bearing for `reason === 'invalid-config'`; harmless for
+    // other reasons (where the constructor composes `detail` from the
+    // structured fields and `opts.detail` is ignored).
+    this.detail = opts.detail;
   }
 }
