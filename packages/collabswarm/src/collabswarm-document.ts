@@ -70,14 +70,10 @@ import {
 import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
 import {
   constantTimeHexEquals,
-  decideLoadQuorum,
   dedupePeersByPeerId,
-  defaultQuorumQ,
-  effectiveK,
-  effectiveQ,
   LoadQuorumFailedError,
-  PeerTipAdvertisement,
 } from './load-quorum';
+import { runLoadQuorum } from './load-quorum-orchestrator';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import {
@@ -188,6 +184,20 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  * @typeParam PublicKey The type of key used to identify a user publicly
  * @typeParam DocumentKey The type of key used to encrypt/decrypt document changes
  */
+
+/**
+ * Maximum size (in bytes) of a `tipAdvertiseV1` probe response read. A
+ * legitimate response is a single encrypted `CRDTSyncMessage` carrying
+ * only `documentId`, a 32-byte `tipsHash`, and an optional writer
+ * signature — a few hundred bytes at most after JSON framing plus the
+ * AES-GCM header/tag. 2 KiB is generous for honest peers (well above the
+ * realistic upper bound, even with longer document paths or larger
+ * signatures) while bounding what a malicious peer can force the loader
+ * to buffer before being rejected as a non-vote. See PR #284 r4 Copilot
+ * review.
+ */
+const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 2 * 1024;
+
 export class CollabswarmDocument<
   DocType,
   ChangesType,
@@ -2427,7 +2437,21 @@ export class CollabswarmDocument<
     }
     try {
       await pipe([serializedRequest], stream.sink);
-      const assembled = await readUint8Iterable(stream.source);
+      // Size-bound the tip-advertise response read. A `tipAdvertiseV1` body
+      // is an encrypted `CRDTSyncMessage` carrying only `documentId`, a
+      // 32-byte `tipsHash`, and (optionally) a writer signature — a few
+      // hundred bytes at most after JSON framing + AES-GCM header/tag. A
+      // 2 KiB cap is generous for legitimate peers but prevents a
+      // malicious peer from streaming an unbounded payload to force
+      // `load()` to buffer it all before returning a non-vote. If the
+      // read overruns the cap, `readUint8Iterable` throws a `RangeError`
+      // that is caught by the surrounding `try { ... } catch { return
+      // null; }` — surfacing as a non-vote (same outcome as a timeout),
+      // NOT a quorum disagreement. See PR #284 r4 Copilot review.
+      const assembled = await readUint8Iterable(
+        stream.source,
+        MAX_TIP_ADVERTISE_RESPONSE_SIZE,
+      );
       if (assembled.length === 0) {
         // Peer declined (unknown doc, unauthorized, etc.).
         return null;
@@ -2725,152 +2749,70 @@ export class CollabswarmDocument<
     // served state, the recomputed `tipsHash(this._hashes)` MUST equal
     // `winningHashHex`, otherwise an agreeing peer voted for one tip set and
     // served a different one (Byzantine equivocation).
-    const quorumEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
+    // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
+    // on the assumption it identified a "founding-member" brand-new document.
+    // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
+    // of an EXISTING document (before load populates it), which is exactly
+    // the case the gate is meant to protect. We no longer special-case empty
+    // local state; the gate runs uniformly. True founders (no peers in the
+    // mesh) are handled by the `peers.length === 0` short-circuit at the top
+    // of `load()` plus the `k === 0` branch inside `runLoadQuorum` (which
+    // returns `{ skipped: true }` → we fall through to the legacy "no peer
+    // could provide the document" path and return false).
+    //
+    // The K-of-Q decision logic itself lives in `runLoadQuorum`
+    // (`load-quorum-orchestrator.ts`) so the orchestration can be unit-tested
+    // without standing up a libp2p/Helia stack. The orchestrator is given a
+    // probe-fn closure that captures this document's `_raceTipAdvertiseProbe`
+    // (the only network-touching call); narrowing, agreement counting, and
+    // single-peer fallback all happen in pure code with the same control
+    // flow as before the extraction. See PR #284 r4 Copilot review for the
+    // test-coverage rationale.
+    const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
+    const quorumResult = await runLoadQuorum({
+      peers: orderedPeers,
+      peerIdOf: (p) => this._peerIdOf(p),
+      probeFn: (peer) =>
+        this._raceTipAdvertiseProbe(peer, serializedRequest, timeoutMs),
+      documentPath: this.documentPath,
+      config: {
+        enabled: this.swarm.config?.loadQuorumEnabled ?? true,
+        k: this.swarm.config?.loadQuorumK ?? 3,
+        q: this.swarm.config?.loadQuorumQ,
+        timeoutMs,
+        allowSinglePeer:
+          this.swarm.config?.loadQuorumAllowSinglePeer ?? false,
+      },
+    });
+
     let winningHashHex: string | null = null;
-    if (quorumEnabled) {
+    if ('skipped' in quorumResult) {
+      // `runLoadQuorum` returns `{ skipped: true }` in two cases: (a) the
+      // gate is disabled wholesale (`loadQuorumEnabled: false`), or (b) the
+      // effective K resolved to 0 (no peers OR misconfigured `loadQuorumK
+      // <= 0`). For (a) we want to fall through to the legacy single-peer
+      // load loop unchanged (no narrowing, no winningHashHex). For (b)
+      // there is nothing to load against — treat as new document. The
+      // peer-list empty short-circuit at the top of `load()` already
+      // covers the trivial "no peers" path; this branch handles the
+      // configuredK<=0 edge case so a misconfiguration cannot silently
+      // skip the gate against a populated peer list.
+      const quorumWasEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
       const configuredK = this.swarm.config?.loadQuorumK ?? 3;
-      // Strict-majority threshold: `Math.floor(K/2) + 1`. For K=3 this gives
-      // Q=2 (tolerating one fault), matching the BFT design note in #189
-      // §5.4.2. `Math.ceil(K/2) + 1` would yield Q=3 at K=3 (everyone must
-      // agree), defeating the fault-tolerance intent of the gate. The
-      // formula lives in `defaultQuorumQ` so the loader, the config
-      // docstring, and the test matrix all reference one source of truth.
-      const configuredQ =
-        this.swarm.config?.loadQuorumQ ?? defaultQuorumQ(configuredK);
-      const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
-      const allowSinglePeer =
-        this.swarm.config?.loadQuorumAllowSinglePeer ?? false;
-
-      const k = effectiveK(configuredK, orderedPeers.length);
-      const q = effectiveQ(configuredQ, k);
-
-      // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
-      // on the assumption it identified a "founding-member" brand-new document.
-      // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
-      // of an EXISTING document (before load populates it), which is exactly
-      // the case the gate is meant to protect. We no longer special-case empty
-      // local state; the gate runs uniformly. True founders (no peers in the
-      // mesh) are handled by the `peers.length === 0` short-circuit at the top
-      // of `load()` plus the `k === 0` branch below (which falls through to
-      // return false → caller treats as new document).
-
-      if (k === 0) {
-        // No peers known. Treat as "new document" — `open()` will run
-        // validateDocumentPath and create the document from scratch. This is
-        // the legitimate founder path: no remote peer exists to serve a
-        // mismatched view, so there is nothing for the quorum gate to defend.
+      if (quorumWasEnabled && configuredK > 0 && orderedPeers.length === 0) {
         return false;
-      } else if (k === 1 && !allowSinglePeer) {
-        // Only one peer reachable but quorum requires Q>=2 by default.
-        // Without a second opinion we cannot distinguish "honest solo peer"
-        // from "malicious peer serving a forged state". Refuse. Callers in
-        // genuine single-peer scenarios (tests, small private swarms,
-        // founding member with one known seed) must opt in explicitly via
-        // `loadQuorumAllowSinglePeer: true` or `loadQuorumEnabled: false`.
-        throw new LoadQuorumFailedError({
-          documentPath: this.documentPath,
-          reason: 'insufficient-responses',
-          respondingCount: 0,
-          requiredQ: q,
-          agreement: new Map(),
-        });
-      } else if (k === 1 && allowSinglePeer) {
-        // Single-peer pass-through. Probe the one known peer; if it
-        // responds at all we proceed with the legacy load. Warn loudly
-        // so operators can spot the regression. Q is forced to 1 here.
-        console.warn(
-          `[${this.documentPath}] Initial-load quorum: only one peer known; ` +
-            `proceeding under loadQuorumAllowSinglePeer (trust assumptions ` +
-            `degraded back to single-peer load). Configure additional peers ` +
-            `to restore Byzantine-fault-tolerant quorum semantics.`,
-        );
-        const probedPeer = orderedPeers[0];
-        const probe = await this._raceTipAdvertiseProbe(
-          probedPeer,
-          serializedRequest,
-          timeoutMs,
-        );
-        if (probe === null) {
-          throw new LoadQuorumFailedError({
-            documentPath: this.documentPath,
-            reason: 'insufficient-responses',
-            respondingCount: 0,
-            requiredQ: 1,
-            agreement: new Map(),
-          });
-        }
-        // Bind the single peer's advertised hash so the post-load check
-        // below still verifies that the served state matches what was
-        // advertised (defends against a malicious peer that decides what
-        // to serve only after seeing the advertise round-trip).
-        winningHashHex = tipsHashToHex(probe);
-        // Narrow `orderedPeers` to ONLY the probed peer. Without this,
-        // the subsequent snapshot/doc-load loop would also try the other
-        // peers in `orderedPeers` (which were never probed) and bind
-        // their served state against THIS peer's hash — a non-sequitur
-        // that could either: (a) pass the binding by coincidence and
-        // accept state from a peer that never voted for it, or (b) fail
-        // the binding and abort the load even though the single-peer
-        // path explicitly opted into single-peer trust. Restrict the
-        // load loop to the one peer whose hash we accepted. See PR #284
-        // r2 CodeRabbit comment on this block.
-        orderedPeers.length = 0;
-        orderedPeers.push(probedPeer);
-      } else {
-        // Standard K-of-Q quorum path. Take the first K peers from the
-        // already-ordered list (preferredPeer is at index 0, so it is
-        // always queried), probe in parallel, and decide.
-        const probedPeers = orderedPeers.slice(0, k);
-        const advertisements: PeerTipAdvertisement[] = await Promise.all(
-          probedPeers.map(async (peer) => {
-            const hash = await this._raceTipAdvertiseProbe(
-              peer,
-              serializedRequest,
-              timeoutMs,
-            );
-            return { peerId: this._peerIdOf(peer), hash };
-          }),
-        );
-        const decision = decideLoadQuorum(advertisements, q);
-        if (!decision.ok) {
-          console.warn(
-            `[${this.documentPath}] Initial-load quorum FAILED: ` +
-              `${decision.reason} (${decision.respondingCount} responses, ` +
-              `required ${decision.effectiveQ}). Aborting load.`,
-          );
-          throw new LoadQuorumFailedError({
-            documentPath: this.documentPath,
-            reason: decision.reason,
-            respondingCount: decision.respondingCount,
-            requiredQ: decision.effectiveQ,
-            agreement: decision.agreement,
-          });
-        }
-        console.log(
-          `[${this.documentPath}] Initial-load quorum passed: ` +
-            `${decision.agreeingPeerIds.length}/${decision.respondingCount} ` +
-            `peers agreed on tipsHash=${decision.winningHashHex.slice(0, 12)}...`,
-        );
-        winningHashHex = decision.winningHashHex;
-        // Narrow `orderedPeers` to only the agreeing cohort. The legacy
-        // snapshot/doc-load loop below then asks one of these peers for
-        // the full state; with quorum agreement, any single agreeing
-        // peer's load is defended by Q-1 other peers attesting to the
-        // same tip set. Order is preserved (preferredPeer first if it
-        // was among the agreeing cohort).
-        const agreeingSet = new Set(decision.agreeingPeerIds);
-        const narrowed = orderedPeers.filter((p) =>
-          agreeingSet.has(this._peerIdOf(p)),
-        );
-        // Defensive: at least one agreeing peer must remain. If
-        // peer-id extraction loses a peer (should never happen given
-        // we built the same set above), fall back to the full list so
-        // we don't accidentally degrade to "no peers to load from".
-        if (narrowed.length > 0) {
-          orderedPeers.length = 0;
-          orderedPeers.push(...narrowed);
-        }
       }
+      if (quorumWasEnabled && configuredK <= 0) {
+        // Defensive: misconfigured K. Honour the original behaviour
+        // (return false → caller treats as new document) rather than
+        // silently bypassing the gate against a populated peer list.
+        return false;
+      }
+      // Else: gate disabled OR peers list empty. Either way fall through.
+    } else {
+      winningHashHex = quorumResult.winningHashHex;
+      orderedPeers.length = 0;
+      orderedPeers.push(...quorumResult.narrowedPeers);
     }
 
     // Try snapshot-load first for faster initial sync.
