@@ -54,7 +54,6 @@ import {
 import { BeeKEM } from './beekem/beekem';
 import { BeeKEMWelcome, PathUpdate } from './beekem/types';
 import {
-  SerializedPathUpdate,
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
 } from './path-update-wire';
@@ -3087,6 +3086,24 @@ export class CollabswarmDocument<
   ) {
     await this._ensureCurrentUserCanWrite();
 
+    // Validate prerequisites BEFORE mutating any ACL state. The founder
+    // (writer who created the document) MUST have called `setKemKeyPair`
+    // before they can seed the BeeKEM tree. The leaf key pair must be a
+    // real ECDH key pair the founder controls so future joiners that
+    // decrypt path-key encryptions against this node land on consistent
+    // key material. A founder that calls `addReader` before
+    // `setKemKeyPair` is misconfigured -- surface the error before any
+    // ACL change is committed, so a half-applied state (ACL row added
+    // but no BeeKEM seeding / Welcome sent) is impossible.
+    if (!this._beekemInitialized && !this._kemKeyPair) {
+      throw new Error(
+        `[${this.documentPath}] addReader: cannot seed the BeeKEM ratchet ` +
+          `tree because the local user has not installed a KEM key pair ` +
+          `via setKemKeyPair. Call setKemKeyPair with a P-256 ECDH key ` +
+          `pair before adding readers.`,
+      );
+    }
+
     // Idempotent on the ACL side, but if the caller has only now obtained
     // the recipient's KEM public key (e.g. a previous `addReader` call
     // skipped the Welcome because the key was unknown), still emit the
@@ -3098,22 +3115,6 @@ export class CollabswarmDocument<
       // Send change over network.
       const changes = await this._readers.add(reader);
       await this._makeChange(changes, crdtReaderChangeNode);
-    }
-
-    // The founder (writer who created the document) MUST have called
-    // `setKemKeyPair` before they can seed the BeeKEM tree. The leaf
-    // key pair must be a real ECDH key pair the founder controls so
-    // future joiners that decrypt path-key encryptions against this
-    // node land on consistent key material. A founder that calls
-    // `addReader` before `setKemKeyPair` is misconfigured -- surface
-    // the error rather than silently seeding a throwaway key pair.
-    if (!this._beekemInitialized && !this._kemKeyPair) {
-      throw new Error(
-        `[${this.documentPath}] addReader: cannot seed the BeeKEM ratchet ` +
-          `tree because the local user has not installed a KEM key pair ` +
-          `via setKemKeyPair. Call setKemKeyPair with a P-256 ECDH key ` +
-          `pair before adding readers.`,
-      );
     }
 
     // Record the new reader in the BeeKEM ratchet tree so:
