@@ -44,9 +44,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "engines": {
-    "node": ">=20"
-  },
   "jest": {
     "roots": [
       "<rootDir>/src"
