@@ -88,7 +88,7 @@ describe('loadConfig', () => {
       expect(loadConfig({}).topicAllowlist).toBeNull()
     })
 
-    it('returns null when empty', () => {
+    it('returns null when empty (open mode)', () => {
       expect(loadConfig({ TOPIC_ALLOWLIST: '' }).topicAllowlist).toBeNull()
     })
 
@@ -116,8 +116,20 @@ describe('loadConfig', () => {
       ])
     })
 
-    it('returns null when every segment is empty or whitespace', () => {
-      expect(loadConfig({ TOPIC_ALLOWLIST: ',,, , ' }).topicAllowlist).toBeNull()
+    it('returns [] (closed mode) when set to "," — operator expressed intent, just no entries', () => {
+      // Distinguishes "unset" (null → open mode) from "set but parses to no
+      // entries" (empty array → closed mode, rejects everything). This
+      // matches the historical inline behaviour and protects a misconfigured
+      // relay from silently flipping open.
+      expect(loadConfig({ TOPIC_ALLOWLIST: ',' }).topicAllowlist).toEqual([])
+    })
+
+    it('returns [] (closed mode) when set to whitespace-only', () => {
+      expect(loadConfig({ TOPIC_ALLOWLIST: '   ' }).topicAllowlist).toEqual([])
+    })
+
+    it('returns [] (closed mode) when every segment is empty or whitespace', () => {
+      expect(loadConfig({ TOPIC_ALLOWLIST: ',,, , ' }).topicAllowlist).toEqual([])
     })
   })
 

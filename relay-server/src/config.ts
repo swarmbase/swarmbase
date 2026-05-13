@@ -22,8 +22,8 @@ export const DEFAULT_DOCUMENT_PUBLISH_PATH = '/documents'
 
 /**
  * Topic prefixes that are treated as system/internal and should never be
- * auto-subscribed. Currently mirrors the values in topic-policy.ts but is
- * exported here for clarity.
+ * auto-subscribed. This module is the canonical definition; `topic-policy.ts`
+ * imports this constant rather than redeclaring it, so there's no duplication.
  */
 export const SYSTEM_TOPIC_PREFIXES: readonly string[] = ['_', 'floodsub:']
 
@@ -63,18 +63,26 @@ export interface RelayConfig {
 
 /**
  * Parse a comma-separated env var into a trimmed, empty-segment-filtered
- * array. Returns null when the env var is unset/empty, so callers can
- * distinguish "no value" from "explicitly empty".
+ * array.
+ *
+ * Returns `null` only when the env var is truly unset or set to the empty
+ * string — i.e. the operator hasn't expressed an opinion, so callers should
+ * treat this as "open mode".
+ *
+ * Returns `[]` when the env var is set to a non-empty value that
+ * nonetheless parses to zero usable entries (e.g. "," or "   "). This
+ * matches the historical inline behaviour where any non-empty string
+ * produced an array (possibly empty), and crucially keeps a misconfigured
+ * allowlist in "closed mode" rather than silently flipping it open.
  */
 function parseCsv(value: string | undefined): string[] | null {
   if (value === undefined || value === '') {
     return null
   }
-  const parsed = value
+  return value
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean)
-  return parsed.length > 0 ? parsed : null
 }
 
 /**

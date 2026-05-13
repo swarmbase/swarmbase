@@ -69,7 +69,8 @@ async function main() {
   //     auto-subscribed. Unset = open mode (all non-system topics allowed).
   //     Example: TOPIC_ALLOWLIST="/document/,/documents"
   //   MAX_AUTO_TOPICS — hard cap on auto-subscribed topics (default 1000).
-  //     Once reached, new subscriptions are silently ignored.
+  //     Once reached, new subscriptions are skipped and a warning is logged
+  //     for each rejected topic (see CapReached handling below).
   // The actual policy decision lives in `topic-policy.ts` as a pure function
   // so it can be unit-tested without a libp2p stack.
   //
