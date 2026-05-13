@@ -135,14 +135,23 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   pathUpdate?: SerializedPathUpdate;
 
   /**
-   * Optional 32-byte epoch identifier paired with `pathUpdate`. The
-   * sender derives this from the new BeeKEM root secret via
-   * `deriveEpochIdFromRootSecret`; the receiver re-derives it after
-   * `BeeKEM.processPathUpdate` and validates that the two match
-   * before installing the new key. Mismatch means the receiver
-   * derived a different root than the sender (e.g. stale local tree
-   * state) and the PathUpdate is rejected rather than installing a
-   * key under the wrong epoch ID.
+   * Optional FULL-LENGTH (32-byte) epoch identifier paired with
+   * `pathUpdate`. The sender derives this from the new BeeKEM root
+   * secret via `deriveEpochIdFromRootSecret`; the receiver re-derives
+   * it after `BeeKEM.processPathUpdate` and validates that the two
+   * match at the full 32-byte width before installing the new key.
+   * Mismatch means the receiver derived a different root than the
+   * sender (e.g. stale local tree state) and the PathUpdate is
+   * rejected rather than installing a key under the wrong epoch ID.
+   *
+   * Comparison is performed at the full 32-byte width on purpose:
+   * truncating to the keychain's narrower key-ID size (`keyIDLength`,
+   * currently 16 bytes) would let a sender and receiver whose root
+   * secrets collide in the first 16 bytes -- but diverge after --
+   * slip through the gate. Only AFTER the full-length match
+   * succeeds is the ID truncated to `keyIDLength` for local install
+   * (the keychain wire-format reserves only that many bytes for the
+   * per-block key-ID prefix).
    *
    * Base64-encoded by the sync-message serializers (yjs / automerge)
    * for JSON-safe transport, mirroring `welcomeEpochId`.

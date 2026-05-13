@@ -99,11 +99,15 @@ export const beekemWelcomeV1 = '/collabswarm/beekem-welcome/1.0.0';
 //   - `pathUpdate`: the `PathUpdate` produced by
 //     `BeeKEM.removeMember(leafIdx)` + `BeeKEM.update()`, serialized via
 //     the `SerializedPathUpdate` wire shape (see `path-update-wire.ts`).
-//   - `pathUpdateEpochId`: the 32-byte epoch identifier the new document
-//     key will be installed under (derived from the new root secret via
-//     `deriveEpochIdFromRootSecret`). Receivers use this to install the
-//     derived key under a known ID, so cross-peer epoch IDs always agree
-//     without an explicit round-trip.
+//   - `pathUpdateEpochId`: the FULL 32-byte HKDF-derived epoch
+//     identifier (output of `deriveEpochIdFromRootSecret`). Receivers
+//     compare the full 32 bytes against their locally-derived ID; only
+//     after the full-length match do they truncate to the keychain
+//     provider's narrower key-ID width (`keyIDLength`, currently 16)
+//     for the local install. Sending the full 32 bytes avoids silent
+//     collisions where a sender and receiver agree on the truncated
+//     prefix but diverge on the un-truncated root, which would let a
+//     bogus PathUpdate slip through the epoch-ID gate.
 //   - `signature`: writer signature over the canonical
 //     (signature-stripped) serialization of the sync message.
 //
