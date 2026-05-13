@@ -1789,7 +1789,7 @@ __metadata:
     jsoneditor: "npm:^10"
     jsoneditor-react: "npm:^3.1.2"
     libp2p: "npm:^3.3.0"
-    react: "npm:^19.2.5"
+    react: "npm:^19.2.6"
     react-dom: "npm:^19.2.6"
     react-redux: "npm:^9.2.0"
     react-scripts: "npm:^5.0.1"
@@ -1854,7 +1854,7 @@ __metadata:
     eslint: "npm:^10.0.2"
     jest: "npm:^29.2.5"
     jest-environment-jsdom: "npm:^30.3.0"
-    react: "npm:^19.2.5"
+    react: "npm:^19.2.6"
     react-dom: "npm:^19.2.6"
     redux: "npm:^5.0.1"
     redux-thunk: "npm:^3.1.0"
@@ -1970,7 +1970,7 @@ __metadata:
     "@types/uuid": "npm:^10.0.0"
     bootstrap: "npm:^5.3.8"
     quill-delta: "npm:^5.1.0"
-    react: "npm:^19.2.5"
+    react: "npm:^19.2.6"
     react-bootstrap: "npm:^2.10.10"
     react-dom: "npm:^19.2.6"
     react-router-bootstrap: "npm:^0.26.3"
@@ -2007,7 +2007,7 @@ __metadata:
     "@types/slate": "npm:^0.47.16"
     bootstrap: "npm:^5.3.8"
     dayjs: "npm:^1.11.13"
-    react: "npm:^19.2.5"
+    react: "npm:^19.2.6"
     react-bootstrap: "npm:^2.10.10"
     react-bootstrap-icons: "npm:^1.11.6"
     react-dom: "npm:^19.2.6"
@@ -16337,10 +16337,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react@npm:^19.2.5":
-  version: 19.2.5
-  resolution: "react@npm:19.2.5"
-  checksum: 10/1c3c7ffecb90b7f89a5c3ef635e6811f3a84600097f203b918150cb7e6b0a52915e858e5b4c82317a520dffccfa46ee4819ccf92c59c5b2d6c25cffe258dd20c
+"react@npm:^19.2.6":
+  version: 19.2.6
+  resolution: "react@npm:19.2.6"
+  checksum: 10/205f0db93bd6c6485f94471d1c3437ae1d410f322297c76186fe4f658f88a6786bb0805e3cf8f330f24d1daa923b6b610ec63960d2461e9201bca64ca8361db9
   languageName: node
   linkType: hard
 
