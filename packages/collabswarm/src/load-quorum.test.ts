@@ -7,6 +7,7 @@ import {
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
+  validateLoadQuorumConfig,
 } from './load-quorum';
 
 function bytes(hex: string): Uint8Array {
@@ -167,6 +168,246 @@ describe('effectiveK / effectiveQ', () => {
     expect(effectiveQ(0, 3)).toBe(1); // Q < 1 -> 1
     expect(effectiveQ(-1, 3)).toBe(1);
     expect(effectiveQ(2, 0)).toBe(0); // no peers -> no quorum possible
+  });
+
+  // PR #284 r9 Copilot review (issue #2): a fractional `configuredK`
+  // previously slipped through `Math.min(...)` to produce a non-integer
+  // value (e.g. 1.5), which `peers.slice(0, 1.5)` collapsed to a 1-peer
+  // probe — silent single-peer load. The `k === 1 && !allowSinglePeer`
+  // guard did not fire because `1.5 !== 1`. The defensive `Math.floor`
+  // in `effectiveK` now collapses fractional K to an integer.
+  describe('effectiveK defensive guards (PR #284 r9)', () => {
+    test('fractional K is floored to an integer', () => {
+      expect(effectiveK(1.5, 3)).toBe(1);
+      expect(effectiveK(2.99, 5)).toBe(2);
+      expect(effectiveK(3.7, 5)).toBe(3);
+    });
+
+    test('NaN configuredK collapses to 0 (defends against missed startup validation)', () => {
+      expect(effectiveK(NaN, 3)).toBe(0);
+    });
+
+    test('Infinity configuredK collapses to 0', () => {
+      expect(effectiveK(Infinity, 3)).toBe(0);
+      expect(effectiveK(-Infinity, 3)).toBe(0);
+    });
+
+    test('integer K still flows through unchanged', () => {
+      expect(effectiveK(3, 5)).toBe(3);
+      expect(effectiveK(1, 5)).toBe(1);
+      expect(effectiveK(7, 10)).toBe(7);
+    });
+  });
+
+  // PR #284 r9 Copilot review (issue #3, suppressed): `effectiveQ(NaN, 3)`
+  // previously returned `NaN` because all comparisons against NaN are
+  // false (so `configuredQ < 1` and `configuredQ > k` both fell through
+  // to `return configuredQ`). `decideLoadQuorum` then evaluated
+  // `bestPeers.length < NaN` as false and quorum passed with a single
+  // responding peer. The defensive guard collapses NaN/Infinity to
+  // `defaultQuorumQ(k)`.
+  describe('effectiveQ defensive guards (PR #284 r9)', () => {
+    test('NaN configuredQ collapses to defaultQuorumQ(k) (was: returned NaN, gate silently passed)', () => {
+      expect(effectiveQ(NaN, 3)).toBe(defaultQuorumQ(3)); // 2
+      expect(effectiveQ(NaN, 5)).toBe(defaultQuorumQ(5)); // 3
+      expect(effectiveQ(NaN, 1)).toBe(defaultQuorumQ(1)); // 1
+    });
+
+    test('Infinity configuredQ collapses to defaultQuorumQ(k)', () => {
+      expect(effectiveQ(Infinity, 3)).toBe(defaultQuorumQ(3));
+      expect(effectiveQ(-Infinity, 5)).toBe(defaultQuorumQ(5));
+    });
+
+    test('fractional Q is floored', () => {
+      expect(effectiveQ(2.5, 3)).toBe(2);
+      expect(effectiveQ(1.9, 3)).toBe(1);
+    });
+
+    test('integer Q still flows through unchanged', () => {
+      expect(effectiveQ(2, 3)).toBe(2);
+      expect(effectiveQ(3, 3)).toBe(3);
+    });
+  });
+});
+
+describe('validateLoadQuorumConfig (startup input validation, PR #284 r9)', () => {
+  // The validator runs at `Collabswarm.initialize()` time so a
+  // misconfigured `loadQuorumK`/`loadQuorumQ` surfaces immediately
+  // rather than silently degrading every subsequent `load()` call.
+  // Must reject all non-finite-positive-integer values; must accept
+  // `undefined` (operator did not override; orchestrator defaults apply).
+
+  test('accepts undefined (no operator override)', () => {
+    expect(() => validateLoadQuorumConfig({})).not.toThrow();
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumK: undefined, loadQuorumQ: undefined }),
+    ).not.toThrow();
+  });
+
+  test('accepts positive integers', () => {
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumK: 1, loadQuorumQ: 1 }),
+    ).not.toThrow();
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumK: 3, loadQuorumQ: 2 }),
+    ).not.toThrow();
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumK: 7, loadQuorumQ: 4 }),
+    ).not.toThrow();
+  });
+
+  test('rejects fractional loadQuorumK with invalid-config error (issue #2)', () => {
+    // The exact bug: `loadQuorumK: 1.5` slipped through to
+    // `peers.slice(0, 1.5)` and silently probed only 1 peer.
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: 1.5 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be a positive integer/,
+    );
+    expect((err as LoadQuorumFailedError).message).toMatch(/1\.5/);
+  });
+
+  test('rejects NaN loadQuorumK', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: NaN });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be a positive integer/,
+    );
+  });
+
+  test('rejects Infinity loadQuorumK', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: Infinity });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+  });
+
+  test('rejects -Infinity loadQuorumK', () => {
+    expect(() =>
+      validateLoadQuorumConfig({ loadQuorumK: -Infinity }),
+    ).toThrow(LoadQuorumFailedError);
+  });
+
+  test('rejects loadQuorumK = 0', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: 0 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumK must be a positive integer/,
+    );
+  });
+
+  test('rejects negative loadQuorumK', () => {
+    expect(() => validateLoadQuorumConfig({ loadQuorumK: -1 })).toThrow(
+      LoadQuorumFailedError,
+    );
+  });
+
+  test('rejects fractional loadQuorumQ with invalid-config error (issue #3)', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumQ: 1.5 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumQ must be a positive integer/,
+    );
+  });
+
+  test('rejects NaN loadQuorumQ (was: silent single-peer quorum pass)', () => {
+    // The exact bug: `effectiveQ(NaN, k)` returned `NaN`,
+    // `decideLoadQuorum` evaluated `bestPeers.length < NaN` as false,
+    // and quorum passed with a single responder. Now refused at startup.
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumQ: NaN });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+    expect((err as LoadQuorumFailedError).message).toMatch(
+      /loadQuorumQ must be a positive integer/,
+    );
+  });
+
+  test('rejects Infinity loadQuorumQ', () => {
+    expect(() => validateLoadQuorumConfig({ loadQuorumQ: Infinity })).toThrow(
+      LoadQuorumFailedError,
+    );
+  });
+
+  test('rejects loadQuorumQ = 0', () => {
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumQ: 0 });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).reason).toBe('invalid-config');
+  });
+
+  test('rejects negative loadQuorumQ', () => {
+    expect(() => validateLoadQuorumConfig({ loadQuorumQ: -1 })).toThrow(
+      LoadQuorumFailedError,
+    );
+  });
+
+  test('only the FIRST offending knob is reported (K checked before Q)', () => {
+    // When both are invalid the validator throws on K first; the
+    // operator fixes K, re-runs, and then sees the Q error. Surfacing
+    // both at once would require an aggregate error which the existing
+    // LoadQuorumFailedError shape doesn't support.
+    const err = (() => {
+      try {
+        validateLoadQuorumConfig({ loadQuorumK: 0, loadQuorumQ: NaN });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(LoadQuorumFailedError);
+    expect((err as LoadQuorumFailedError).message).toMatch(/loadQuorumK/);
+    expect((err as LoadQuorumFailedError).message).not.toMatch(/loadQuorumQ/);
   });
 });
 

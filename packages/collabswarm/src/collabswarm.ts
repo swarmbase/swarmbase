@@ -25,6 +25,7 @@ import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { validateLoadQuorumConfig } from './load-quorum';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
@@ -240,6 +241,17 @@ export class Collabswarm<
     if (!config) {
       config = defaultConfig(defaultBootstrapConfig([]));
     }
+
+    // Validate the load-quorum tuning knobs at startup so an operator
+    // misconfiguration (e.g. `loadQuorumK: 1.5`, `loadQuorumQ: NaN`)
+    // surfaces immediately as a structured `LoadQuorumFailedError(
+    // invalid-config)` rather than silently degrading every subsequent
+    // `load()` to a single-peer probe. See PR #284 r9 Copilot review for
+    // the input-validation hardening rationale (issues #2/#3): fractional
+    // K let `peers.slice(0, 1.5)` slip through to a 1-peer probe, and
+    // NaN Q propagated through `effectiveQ` so `bestPeers.length < NaN`
+    // evaluated as false and the gate passed with a single responder.
+    validateLoadQuorumConfig(config);
 
     this._config = config;
 

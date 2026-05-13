@@ -251,6 +251,18 @@ export function constantTimeHexEquals(a: string, b: string): boolean {
  * upper bound and the number of currently-known peers. Pulled out so the
  * loader and the quorum decision can share a single source of truth and so
  * the clamp is unit-testable.
+ *
+ * Defensive against non-finite or fractional inputs as a second line of
+ * defence behind {@link validateLoadQuorumConfig} (which runs at
+ * `Collabswarm.initialize()` time). A misconfigured `loadQuorumK: 1.5`
+ * that bypassed startup validation would otherwise produce
+ * `peers.slice(0, 1.5)` — slicing only one peer and silently degrading
+ * the gate to a single-peer probe even though the `k === 1 && !allowSinglePeer`
+ * guard would not fire (`1.5 !== 1`). `NaN`/`Infinity` similarly would
+ * produce `Math.min(NaN, 3) === NaN` and a `peers.slice(0, NaN) === []`
+ * silent skip. Floor + finiteness guards collapse both classes to 0,
+ * which the orchestrator surfaces as `LoadQuorumFailedError(invalid-config)`.
+ * See PR #284 r9 Copilot review.
  */
 export function effectiveK(
   configuredK: number,
@@ -259,21 +271,98 @@ export function effectiveK(
   // K should be at least 1 (otherwise no probes happen) and at most the
   // number of peers we actually know about (otherwise we'd query the same
   // peer twice or fewer-than-K real peers).
+  if (!Number.isFinite(configuredK)) return 0;
   if (configuredK <= 0) return 0;
   if (knownPeersCount <= 0) return 0;
-  return Math.min(configuredK, knownPeersCount);
+  // Floor so a fractional configuredK (which `validateLoadQuorumConfig`
+  // rejects at startup) cannot escape as a non-integer slice index.
+  return Math.floor(Math.min(configuredK, knownPeersCount));
 }
 
 /**
  * Compute the effective `Q` (quorum threshold) given a configured value and
  * the effective K. Clamped to `[1, K]` so a misconfigured `Q > K` cannot
  * make quorum unreachable, and `Q <= 0` does not silently bypass the gate.
+ *
+ * Defensive against non-finite inputs as a second line of defence behind
+ * {@link validateLoadQuorumConfig}. Without the `Number.isFinite` guard,
+ * `effectiveQ(NaN, 3)` returned `NaN` (all comparisons against `NaN` are
+ * false), and `decideLoadQuorum` then evaluated `bestPeers.length < NaN`
+ * as false — so the gate passed with a single responding peer. We
+ * collapse NaN/Infinity to {@link defaultQuorumQ}(k) here as a fallback
+ * that mirrors the orchestrator's `?? defaultQuorumQ(k)` default. See
+ * PR #284 r9 Copilot review.
  */
 export function effectiveQ(configuredQ: number, k: number): number {
   if (k <= 0) return 0;
+  if (!Number.isFinite(configuredQ)) return defaultQuorumQ(k);
   if (configuredQ < 1) return 1;
   if (configuredQ > k) return k;
-  return configuredQ;
+  // Floor for the same reason as `effectiveK`: a fractional Q would
+  // otherwise produce a non-integer threshold that compares strangely
+  // against integer vote counts.
+  return Math.floor(configuredQ);
+}
+
+/**
+ * Validate the load-quorum tuning knobs from {@link CollabswarmConfig}.
+ *
+ * Runs at {@link Collabswarm.initialize} time so a misconfigured value is
+ * surfaced loudly at startup rather than silently degrading every
+ * subsequent `load()` call. Required behavior under PR #284 r9 Copilot
+ * review (issues #2/#3): `loadQuorumK: 1.5` previously slipped through
+ * `Math.min(configuredK, peersLen)` to produce `peers.slice(0, 1.5)`
+ * which probes only 1 peer (silent single-peer load); `loadQuorumQ: NaN`
+ * propagated through `effectiveQ` to make `bestPeers.length < NaN`
+ * evaluate as false (silent single-peer quorum pass). Both classes of
+ * misconfig are now rejected here with a clear operator-visible error.
+ *
+ * Both knobs MUST be finite positive integers (Number.isInteger(x) && x >= 1).
+ * Rejects:
+ *   - NaN / Infinity / -Infinity
+ *   - non-integers (e.g. 1.5, 2.7)
+ *   - zero and negative values (0, -1)
+ * Accepts:
+ *   - `undefined` (operator did not override; the orchestrator's defaults apply)
+ *   - any positive integer (1, 2, 3, ...)
+ *
+ * Throws {@link LoadQuorumFailedError} with `reason: 'invalid-config'` so
+ * the existing `instanceof`-based error handling in `CollabswarmDocument.load()`
+ * continues to work and operators see a structured failure with the
+ * offending value.
+ *
+ * @param config The {@link CollabswarmConfig} (or its load-quorum subset)
+ *   to validate. Pass-through fields (`enabled`, `timeoutMs`,
+ *   `allowSinglePeer`) are intentionally NOT validated here; only K and Q
+ *   are the load-bearing trust knobs.
+ */
+export function validateLoadQuorumConfig(config: {
+  loadQuorumK?: number;
+  loadQuorumQ?: number;
+}): void {
+  const checkPositiveInt = (name: string, value: number | undefined): void => {
+    if (value === undefined) return;
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      value < 1
+    ) {
+      throw new LoadQuorumFailedError({
+        // No document path is available at initialize() time; use a
+        // placeholder so the error message remains informative. Callers
+        // typically catch this at `initialize()` and surface it to the
+        // operator without needing the path.
+        documentPath: '<config>',
+        reason: 'invalid-config',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map(),
+        detail: `${name} must be a positive integer; got ${JSON.stringify(value)}`,
+      });
+    }
+  };
+  checkPositiveInt('loadQuorumK', config.loadQuorumK);
+  checkPositiveInt('loadQuorumQ', config.loadQuorumQ);
 }
 
 /**
