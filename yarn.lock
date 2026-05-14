@@ -1935,7 +1935,7 @@ __metadata:
     jest: "npm:^29.2.5"
     js-base64: "npm:^3.7.8"
     libp2p: "npm:^3.3.0"
-    multiformats: "npm:^13.4.2"
+    multiformats: "npm:^14.0.0"
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typedoc: "npm:^0.26.7"
