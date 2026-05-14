@@ -27,7 +27,7 @@
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
-    "eslint": "^10.0.2",
+    "eslint": "^10.3.0",
     "jest": "^29.2.5",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.1.0",
