@@ -2067,7 +2067,7 @@ __metadata:
     "@types/bootstrap": "npm:^5.2.10"
     "@types/node": "npm:^22.7.5"
     "@types/react": "npm:^19.2.3"
-    "@types/react-bootstrap": "npm:^0.32.37"
+    "@types/react-bootstrap": "npm:^1.1.0"
     "@types/react-dom": "npm:^19.2.3"
     "@types/react-router-bootstrap": "npm:^0.26.6"
     "@types/react-router-dom": "npm:^5.3.3"
@@ -2104,7 +2104,7 @@ __metadata:
     "@types/jest": "npm:^29.5.13"
     "@types/node": "npm:^22.7.5"
     "@types/react": "npm:^19.2.3"
-    "@types/react-bootstrap": "npm:^0.32.37"
+    "@types/react-bootstrap": "npm:^1.1.0"
     "@types/react-dom": "npm:^19.2.3"
     "@types/react-redux": "npm:^7.1.34"
     "@types/react-router-bootstrap": "npm:^0.26.6"
@@ -5491,12 +5491,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-bootstrap@npm:^0.32.37":
-  version: 0.32.37
-  resolution: "@types/react-bootstrap@npm:0.32.37"
+"@types/react-bootstrap@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@types/react-bootstrap@npm:1.1.0"
   dependencies:
-    "@types/react": "npm:*"
-  checksum: 10/9cb2aa6f4687f9649d46e0a4939c3c12a58609bf46849f44e7ef944580fba0e2d18375d660a819e41dc948ce80b9dff20616d75780f95ac42fd05139b46037fc
+    react-bootstrap: "npm:*"
+  checksum: 10/ba6b00ffc33f24919337b2b213532cb02d9e99dfcc2c349dfe2061a90b8bd3ffd6db54b5d29c7904407203e70b25473705c2dce6ff34347828d2bc74ab7fb849
   languageName: node
   linkType: hard
 
@@ -16277,7 +16277,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-bootstrap@npm:^2.10.10":
+"react-bootstrap@npm:*, react-bootstrap@npm:^2.10.10":
   version: 2.10.10
   resolution: "react-bootstrap@npm:2.10.10"
   dependencies:
