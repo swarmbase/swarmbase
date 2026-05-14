@@ -65,7 +65,7 @@
     "@libp2p/gossipsub": "^15.0.22",
     "@libp2p/identify": "^4.1.4",
     "@libp2p/interface": "^3.2.2",
-    "@libp2p/kad-dht": "^16.2.5",
+    "@libp2p/kad-dht": "^16.2.6",
     "@libp2p/mdns": "^12.0.21",
     "@libp2p/peer-id": "^6.0.9",
     "@libp2p/pubsub-peer-discovery": "^12.0.0",
