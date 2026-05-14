@@ -157,6 +157,131 @@ export type CRDTSyncMessage<ChangesType, PublicKey = unknown> = {
   pathUpdateEpochId?: Uint8Array;
 
   /**
+   * Optional canonical hash of the responder's served tip set, used by the
+   * initial-load quorum protocol (`tipAdvertiseV1`, see `wire-protocols.ts`
+   * and `tips-hash.ts`).
+   *
+   * When a new node opens a document it queries up to K peers in parallel
+   * via `tipAdvertiseV1`; each peer responds with a `CRDTSyncMessage` whose
+   * only populated payload field is `tipsHash`. The loader counts how many
+   * peers returned the same hash and proceeds with a full
+   * documentLoadV3/snapshotLoadV3 against one of the agreeing peers only
+   * when at least Q peers agree.
+   *
+   * # Protocol contract: WHAT to hash
+   *
+   * `tipsHash` is computed over the **served frontier** -- the heads of
+   * the change tree the responder would actually ship in a load response
+   * (NOT the full local DAG frontier). The reference implementation is
+   * `CollabswarmDocument._servedFrontier()` in `collabswarm-document.ts`,
+   * which computes this via `computeServedFrontier` over
+   * `_lastSyncMessage.changes` plus `_latestSnapshot?.lastChangeNodeCID`
+   * -- exactly the inputs `handleLoadRequestData` /
+   * `handleSnapshotLoadRequestData` populate into the load response.
+   *
+   * Hashing this set produces a value the loader can reproduce
+   * structurally from the served payload via `computeServedFrontier`,
+   * which is exactly the binding `_sendLoadRequestAndSync` uses.
+   *
+   * # Implementer warning: do NOT hash `_currentFrontier()` or `_hashes`
+   *
+   * Implementers **MUST NOT** hash `_currentFrontier()` (the full local
+   * DAG frontier). A peer that has remotely-applied heads not yet
+   * cross-linked into `_lastSyncMessage.changes` produces a
+   * `_currentFrontier()` larger than the served frontier, so the
+   * advertised hash would not match what the load response actually
+   * contains. The loader's structural bind check derives the served
+   * frontier from the received `changes` tree and rejects honest peers
+   * whose advertise hash disagrees. Round 8 of the PR #284 Copilot
+   * review caught this exact bug.
+   *
+   * Implementers **MUST NOT** hash the full `_hashes` set either. Two
+   * honest peers with the same logical document state can have DIFFERENT
+   * observed-CID sets when their history depths differ (history
+   * compaction, snapshot-loads that don't restore ancestors, different
+   * join times). Round 3 of the PR #284 Copilot review caught and fixed
+   * that earlier variant of the bug.
+   *
+   * Hashing the served frontier makes the hash deterministic across
+   * honest peers whose `_lastSyncMessage` / `_latestSnapshot` describe
+   * the same logical state.
+   *
+   * The field is also tolerated (but optional) on regular load responses,
+   * so a future optimization can fold quorum into the full load. It is
+   * base64-encoded for JSON-safe transport by the sync-message serializers
+   * (same pattern as `welcomeEpochId`).
+   *
+   * Closes the gap tracked under issue #189 §5.4 item 2.
+   */
+  tipsHash?: Uint8Array;
+
+  /**
+   * Explicit tip-set advertisement, populated by load responses
+   * (documentLoadV3 and snapshotLoadV3) to bind the served full state to
+   * the responder's served frontier. **Part of the signed payload** on v3
+   * load responses -- changing the wire shape from v2 is why the protocol
+   * id was bumped (see `wire-protocols.ts`).
+   *
+   * "Frontier" here means the **served frontier** -- the heads of the
+   * change tree this load response actually carries (computed by
+   * `CollabswarmDocument._servedFrontier()` via `computeServedFrontier`
+   * over `_lastSyncMessage.changes` plus `_latestSnapshot?.lastChangeNodeCID`).
+   * This is the set the responder attests it is shipping in THIS payload,
+   * not the full set of heads the responder has in its local DAG.
+   *
+   * # Why served frontier (not local DAG frontier)
+   *
+   * A load response only carries one change tree (rooted at
+   * `changeId`), plus an optional snapshot. A peer that has multiple
+   * concurrent heads -- e.g. one local head plus a remotely-applied head
+   * not yet cross-linked into `_lastSyncMessage.changes` -- can only
+   * serve one of them in a single load response. Advertising the full
+   * local DAG frontier in `tips` would not match the structurally-derived
+   * frontier of the served payload, so the loader's bind check would
+   * reject honest peers. Round 8 of the PR #284 Copilot review caught
+   * this; advertising the served frontier closes the gap.
+   *
+   * # Why this field exists at all (defense-in-depth)
+   *
+   * The loader's PRIMARY binding (PR #284 r7) is derived structurally
+   * from `message.changes` / `message.snapshot` via
+   * `computeServedFrontier`, so a malicious peer that lies in `tips`
+   * cannot bypass the gate by simply claiming the agreed CIDs. The
+   * `tips` field is verified as a defense-in-depth attestation: if
+   * present, it MUST hash to the same value as the
+   * structurally-derived served frontier -- catching responders that
+   * equivocate between their attested heads and the actual served
+   * payload (e.g. tampered `changes` with a still-correct-looking
+   * `tips` array).
+   *
+   * Recomputing `tipsHash(loader._hashes)` after sync is unreliable
+   * because:
+   *   - on a snapshot-load, only the snapshot boundary CID is added to
+   *     `_hashes` -- the ancestor CIDs the snapshot compacts away are NOT
+   *     restored, so `_hashes` does not represent the responder's full
+   *     history;
+   *   - on a regular doc-load, the loader's pre-existing local CIDs (if
+   *     any) inflate `_hashes` beyond what the responder advertised;
+   *   - on a compacted/pruned peer, the responder's `_hashes` includes
+   *     referenced ancestors which two honest peers can have differently
+   *     based on sync history -- which is exactly the bug round 3 of the
+   *     Copilot review flagged.
+   *
+   * Because the load response is signed by the responder, `tips` is a
+   * responder-signed attestation of "the heads of what I am serving";
+   * a peer that voted hash X but then serves a load with a `tips` array
+   * that hashes to anything other than the served-payload frontier is
+   * caught by the defense-in-depth check.
+   *
+   * `tips` is REQUIRED on v3 load responses (responder always populates,
+   * loader rejects absence when the quorum gate is enabled). The field
+   * remains optional in the TypeScript type because the same
+   * `CRDTSyncMessage` shape is also used for pubsub-broadcast change
+   * messages, which do not carry a frontier advertisement.
+   */
+  tips?: string[];
+
+  /**
    * Signature of the sync message.
    */
   signature?: string;

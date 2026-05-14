@@ -95,6 +95,7 @@ import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
   bloomFilterUpdateV1,
+  tipAdvertiseV1,
 } from './wire-protocols';
 import {
   DOC_KEY_INFO,
@@ -107,6 +108,14 @@ import {
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
 } from './path-update-wire';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
+import {
+  decideLoadQuorum,
+  effectiveK,
+  effectiveQ,
+  LoadQuorumFailedError,
+  validateLoadQuorumConfig,
+} from './load-quorum';
 import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
 import type { CRDTSnapshotNode } from './snapshot-node';
 import type { CompactionConfig } from './compaction-config';
@@ -192,6 +201,7 @@ export {
   bloomFilterUpdateV1,
   beekemWelcomeV1,
   beekemPathUpdateV1,
+  tipAdvertiseV1,
   // BeeKEM document-key derivation
   DOC_KEY_INFO,
   deriveDocumentKeyFromRootSecret,
@@ -199,6 +209,15 @@ export {
   // BeeKEM PathUpdate wire serialization
   serializePathUpdateForWire,
   deserializePathUpdateFromWire,
+  // Initial-load quorum (#189 §5.4.2)
+  tipsHash,
+  tipsHashToHex,
+  TIPS_HASH_LENGTH,
+  decideLoadQuorum,
+  effectiveK,
+  effectiveQ,
+  LoadQuorumFailedError,
+  validateLoadQuorumConfig,
   // Compaction
   defaultCompactionConfig,
   // Network statistics
@@ -210,6 +229,11 @@ export {
 };
 
 export type { NetworkStatsSnapshot } from './network-stats';
+export type {
+  PeerTipAdvertisement,
+  LoadQuorumDecision,
+  LoadQuorumFailedReason,
+} from './load-quorum';
 
 // Re-export types
 export type { AuthProvider, AesAlgorithmName } from './auth-provider';

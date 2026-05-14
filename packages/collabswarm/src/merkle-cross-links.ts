@@ -174,6 +174,224 @@ export function mergeRemoteSyncTree<ChangesType>(
 }
 
 /**
+ * Pure helper: walk a sync tree and record every CID that appears as a
+ * `children` key -- i.e. every CID that some node in the tree points to
+ * as a parent (or as a cross-link target, which is also a parent in the
+ * Merkle-CRDT DAG; cross-links reference *predecessor* CIDs).
+ *
+ * Used by `CollabswarmDocument._currentFrontier()` to compute the set of
+ * heads as `(all known CIDs) \ (referenced ancestors)`. A CID is a "head"
+ * iff no node we've ever seen references it as a parent. This gives the
+ * leaves of the merged DAG (the CIDs the responder would attest to as the
+ * current frontier), which is the correct semantic for the initial-load
+ * quorum binding -- two honest peers with the same logical state but
+ * different sync histories converge on the same head set even though
+ * their full `_hashes` cardinality differs.
+ *
+ * The root CID (`rootId`, if provided) is intentionally NOT added to the
+ * referenced set -- the root of a tree is the head, not a child of anything
+ * in this traversal. Descendants reached via `node.children` keys ARE
+ * referenced.
+ *
+ * Walks defensively:
+ *   - Skips a deferred `children` sentinel (`crdtChangeNodeDeferred`); IPLD
+ *     dereferencing happens elsewhere and isn't required to enumerate the
+ *     in-memory parent relationships we already have.
+ *   - Tracks visited node CIDs so cycles (shouldn't happen with content
+ *     addressing, but defensively) don't recurse forever.
+ *
+ * Mutates `out` in place and returns it for convenience.
+ */
+export function collectReferencedAncestors<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType>,
+  out: Set<string>,
+): Set<string> {
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+    }
+
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      // The `children` map keys are CIDs the current node references as
+      // parents (primary parent + cross-links). They are ancestors by
+      // definition -- record them as referenced.
+      out.add(childId);
+      walk(childId, childNode);
+    }
+  }
+
+  walk(rootId, root);
+  return out;
+}
+
+/**
+ * Pure helper: derive the served frontier of a load-response payload
+ * STRUCTURALLY, without applying any of it to local state.
+ *
+ * The initial-load quorum binding (#186 / #189 §5.4.2) needs to verify that
+ * the full-load response a peer serves actually corresponds to the
+ * tip-set hash that peer voted for in the probe round. Previously the
+ * loader hashed the responder-supplied `message.tips` array and compared
+ * to the quorum-agreed hash -- which trusted the responder's own
+ * attestation as the source of truth. A malicious peer could vote hash
+ * X, put X's tip CIDs in `message.tips`, and then serve a `changes`
+ * payload describing a completely different state; the binding would
+ * still pass.
+ *
+ * This helper closes that gap: given the served `changes` tree (rooted
+ * at `changeId`) plus an optional `snapshotBoundaryCid` from
+ * `message.snapshot.lastChangeNodeCID`, it computes the frontier as a
+ * function of the payload's structure -- the set of CIDs that appear in
+ * the served tree but are NOT referenced as a parent (child-key) of any
+ * node in the same tree. Hashing this set with `tipsHash` and comparing
+ * to `winningHashHex` produces a binding decision that does not depend
+ * on the responder's own attestation.
+ *
+ * Algorithm:
+ *   - Initialise `cids = {}` and `referenced = {}`.
+ *   - If `changes` is present, walk the tree:
+ *       - Record `changeId` (if defined) into `cids` (it is a node in
+ *         the served tree, even if it has no children).
+ *       - For every `(childId, childNode)` pair encountered in any
+ *         `children` map, record `childId` into BOTH `cids` (the child
+ *         is a node in the served tree) AND `referenced` (the child is
+ *         a parent of the current node, so it is NOT a head).
+ *       - Recurse into the child's own children (if not deferred).
+ *   - If `snapshotBoundaryCid` is provided and non-empty, record it
+ *     into `cids`. The snapshot boundary is a node the responder
+ *     attests to (post-sync the loader adds it to `_hashes`); whether
+ *     it ends up in the frontier depends on whether any post-snapshot
+ *     change in `changes` references it as a parent.
+ *   - Return `cids \ referenced` -- the heads (CIDs nobody points to).
+ *
+ * Edge cases:
+ *   - Both `changes` undefined AND `snapshotBoundaryCid` empty: the
+ *     responder is brand new / has no state. Returns `[]`. The loader
+ *     can compare against the canonical hash of `[]` to detect a
+ *     responder that voted for a non-empty state but serves nothing.
+ *   - `changeId === undefined` with `changes` defined: the served tree
+ *     is anonymous (no root CID). Pure helpers in this module already
+ *     tolerate `nodeId === undefined`; we record nothing for the
+ *     anonymous root, so an anonymous served tree contributes only its
+ *     children-keys to the analysis.
+ *   - Deferred children sentinel: treated identically to
+ *     `collectReferencedAncestors` -- the children of a deferred node
+ *     are unknown; we do not recurse. Any CIDs that appear as keys
+ *     leading INTO a deferred child are still recorded as referenced
+ *     (we saw them as a child-key before the deferred indicator).
+ *   - Cycles: defensively guarded by a `visited` set on node CIDs.
+ *
+ * This is structurally identical to applying the served payload and
+ * then computing `_hashes \ _referencedAncestors` on an EMPTY pre-sync
+ * loader, except it works in pure form (no I/O, no Helia blockstore
+ * fetch, no document state mutation). The returned array is unsorted;
+ * `tipsHash` performs its own canonical sort. See PR #284 r7 Copilot
+ * review for the design discussion.
+ */
+export function computeServedFrontier<ChangesType>(
+  changeId: string | undefined,
+  changes: CRDTChangeNode<ChangesType> | undefined,
+  snapshotBoundaryCid: string | undefined,
+): string[] {
+  const cids = new Set<string>();
+  const referenced = new Set<string>();
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      cids.add(nodeId);
+    }
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      cids.add(childId);
+      referenced.add(childId);
+      walk(childId, childNode);
+    }
+  }
+
+  if (changes !== undefined) {
+    walk(changeId, changes);
+  }
+  if (snapshotBoundaryCid) {
+    cids.add(snapshotBoundaryCid);
+  }
+
+  const frontier: string[] = [];
+  for (const cid of cids) {
+    if (!referenced.has(cid)) {
+      frontier.push(cid);
+    }
+  }
+  return frontier;
+}
+
+/**
+ * Pure helper: walk a sync tree and report whether `targetCid` appears
+ * anywhere in it -- as the root CID, as a `children` map key, or as a
+ * descendant. Used by `CollabswarmDocument._refreshLastSyncMessageFromSync`
+ * to decide whether an incoming sync tree subsumes the locally-cached
+ * `_lastSyncMessage` (i.e. embeds its root), in which case the cache can
+ * be safely replaced without losing served-frontier coverage.
+ *
+ * Walks defensively:
+ *   - Skips a deferred `children` sentinel; we cannot enumerate descendants
+ *     of a deferred node, so we conservatively return `false` if the target
+ *     would only have been found beneath that sentinel.
+ *   - Tracks visited node CIDs so cycles do not recurse forever (content
+ *     addressing rules these out in practice; defensive nonetheless).
+ *
+ * Returns `true` if `targetCid` is found, `false` otherwise. Treats
+ * empty / undefined `targetCid` as "not found" so callers can pass an
+ * optional value without a separate guard.
+ */
+export function treeContainsCid<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType> | undefined,
+  targetCid: string | undefined,
+): boolean {
+  if (!targetCid) return false;
+  if (root === undefined) return false;
+  if (rootId === targetCid) return true;
+
+  const visited = new Set<string>();
+
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): boolean {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return false;
+      visited.add(nodeId);
+    }
+    if (node.children === undefined) return false;
+    if (node.children === crdtChangeNodeDeferred) return false;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      if (childId === targetCid) return true;
+      if (walk(childId, childNode)) return true;
+    }
+    return false;
+  }
+
+  return walk(rootId, root);
+}
+
+/**
  * Pure helper: append `entry` to `recentTips` with LRU semantics
  * (most-recently-used to the back), evicting the oldest entries when the
  * list exceeds `maxRecentTips`. If `entry.cid` is already present, it is
@@ -207,4 +425,95 @@ export function trackTipInList<Tip extends { cid: string }>(
     recentTips.shift();
   }
   return recentTips;
+}
+
+/**
+ * Recursively strip inline `change` content from a `CRDTChangeNode` tree
+ * by setting `change: undefined` on every node, leaving the CID-keyed
+ * `children` structure intact. Mutates the passed tree in-place; returns
+ * the same root for chaining convenience.
+ *
+ * Used by `CollabswarmDocument._sendLoadRequestAndSync` on quorum-bound
+ * loads as a defense-in-depth against inline-content forgery (PR #284
+ * r17 Copilot review). The structural quorum bind proves Q peers agree
+ * on the FRONTIER CIDs, but a Byzantine peer that voted for the agreed
+ * frontier can still serve a tree whose `children` map uses those CIDs
+ * as keys but whose inline `change` values are forged. Stripping inline
+ * content forces each change to flow through Helia's CID-addressed
+ * blockstore (`_getBlock(cid) -> heliaNode.blockstore.get(cid)`), which
+ * content-validates the fetched bytes against the CID intrinsically.
+ * Bitswap retrieves from any peer in the swarm that holds the legitimate
+ * block, including honest peers in the agreeing cohort.
+ *
+ * Skips a deferred `children` sentinel (already empty by definition).
+ * Walks every other node so a partially-deferred tree is fully stripped.
+ *
+ * Pure (no I/O, no clock); the recursion is bounded by the tree size.
+ * Returned as a free function so the unit tests can exercise the helper
+ * without standing up a full `CollabswarmDocument` instance.
+ */
+export function stripInlineChanges<ChangesType>(
+  node: CRDTChangeNode<ChangesType> | undefined,
+): CRDTChangeNode<ChangesType> | undefined {
+  if (!node) return node;
+  node.change = undefined;
+  if (
+    node.children !== undefined &&
+    node.children !== crdtChangeNodeDeferred
+  ) {
+    for (const child of Object.values(node.children)) {
+      stripInlineChanges(child);
+    }
+  }
+  return node;
+}
+
+/**
+ * Recursively collect every CID that appears in a `CRDTChangeNode` tree
+ * (the optional root CID, every node-id appearing in any `children` map
+ * key). Returns the CIDs in insertion order, deduplicated via the
+ * underlying `Set`. Used by `CollabswarmDocument._sendLoadRequestAndSync`
+ * on quorum-bound loads as the basis for the post-`sync()` "did every
+ * stripped block actually arrive?" check (PR #284 r18 Copilot review):
+ *
+ *   1. Collect all CIDs from the served tree BEFORE `stripInlineChanges`
+ *      reduces it to a CID-keyed shell.
+ *   2. Strip inline content; call `sync()`.
+ *   3. Verify every collected CID is now in `_hashes`. If any is missing,
+ *      the load is reported as a per-peer bind failure so the loader can
+ *      retry the next peer in the agreeing cohort. Without this check, a
+ *      transient bitswap/blockstore miss would let `sync()` return `true`
+ *      with only a partially-applied document and `load()` report success.
+ *
+ * Skips a deferred `children` sentinel (we cannot enumerate descendants
+ * beneath a deferred node; defensively bounded by a `visited` set on
+ * node CIDs).
+ *
+ * Pure (no I/O); the recursion is bounded by the tree size.
+ */
+export function collectAllCidsInTree<ChangesType>(
+  rootId: string | undefined,
+  root: CRDTChangeNode<ChangesType> | undefined,
+): string[] {
+  if (!root) return rootId ? [rootId] : [];
+  const cids = new Set<string>();
+  const visited = new Set<string>();
+  function walk(
+    nodeId: string | undefined,
+    node: CRDTChangeNode<ChangesType>,
+  ): void {
+    if (nodeId !== undefined) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      cids.add(nodeId);
+    }
+    if (node.children === undefined) return;
+    if (node.children === crdtChangeNodeDeferred) return;
+    for (const [childId, childNode] of Object.entries(node.children)) {
+      cids.add(childId);
+      walk(childId, childNode);
+    }
+  }
+  walk(rootId, root);
+  return [...cids];
 }

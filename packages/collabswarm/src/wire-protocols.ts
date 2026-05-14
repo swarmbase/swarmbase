@@ -1,12 +1,82 @@
 export const bloomFilterUpdateV1 = '/collabswarm/bloom-index/1.0.0';
 
-// V2 doc-load, key-update, and snapshot-load handlers use a shared handler
-// model where a single handler serves all documents. The key-update wire
-// format prepends a length-prefixed document-path header so the shared
-// handler can route requests to the correct document.
-export const documentLoadV2 = '/collabswarm/doc-load/2.0.0';
+// V3 doc-load and snapshot-load handlers use a shared handler model where
+// a single handler serves all documents. They include an explicit `tips`
+// field in the SIGNED `CRDTSyncMessage` payload so the loader can bind the
+// served state to the responder's current frontier and complete the
+// initial-load quorum check (see `tipAdvertiseV1` and #189 §5.4.2).
+//
+// Why v3 (not "v2 with an extra optional field")? Including `tips` inside
+// the signed payload changes the bytes the signer authenticated. A
+// receiver whose serializer doesn't recognise `tips` would: (1) deserialize
+// the message dropping `tips`, (2) re-serialize for signature verification,
+// (3) get bytes that differ from what the sender signed -> signature check
+// fails. Versioning the protocol id forces incompatible peers to dial a
+// protocol they don't have a handler for and fail loudly instead of
+// silently dropping the binding. There are no live users of this project,
+// so we did NOT retain a v2 alias -- removing legacy handlers keeps the
+// codebase clean.
+//
+// `documentKeyUpdateV2` is intentionally NOT bumped: its wire shape is
+// unaffected by the load-quorum work (no `tips` field, no `tipsHash`).
+export const documentLoadV3 = '/collabswarm/doc-load/3.0.0';
 export const documentKeyUpdateV2 = '/collabswarm/key-update/2.0.0';
-export const snapshotLoadV2 = '/collabswarm/snapshot-load/2.0.0';
+export const snapshotLoadV3 = '/collabswarm/snapshot-load/3.0.0';
+
+// Tip-advertise v1: lightweight initial-load quorum probe.
+//
+// Closes the "no quorum protocol for verifying initial document state" gap
+// tracked under issue #189 §5.4 item 2 (also a bullet under #186). When a
+// node opens a document, it asks up to `loadQuorumK` peers in parallel for
+// a 32-byte SHA-256 digest of their current tip set (see `tips-hash.ts`)
+// and proceeds with a full document-load only if at least `loadQuorumQ`
+// peers agree on the same hash. This defends against a single malicious or
+// partitioned peer serving a stale/maliciously-crafted initial state.
+//
+// Wire format (request and response are length-delimited single frames):
+//
+//   Request:  serialized `CRDTLoadRequest` (same shape as documentLoadV3 --
+//             reuses the existing load-request serializer so a writer can
+//             sign just the document id and the responder can authorize
+//             via the standard ACL/signature check).
+//
+//   Response: ONE of three wire shapes -- the loader's probe distinguishes
+//             them by the first-byte and length of the response:
+//
+//               (a) Empty payload (zero bytes) -- the responder declines
+//                   without disclosing whether the document exists: the
+//                   request was unauthorized, the request's documentId
+//                   did not match (signing-on-one-side mismatch), the
+//                   responder threw on serialization, etc. The loader
+//                   records this as a generic non-vote (`null` from the
+//                   probe). NOT used for the "I genuinely don't have
+//                   this document" case -- see (b).
+//
+//               (b) Single-byte `0xff` sentinel (UNKNOWN_DOC) -- the
+//                   responder has NO document registered for this path.
+//                   Distinguished from (a) so the loader can tally
+//                   disclaim votes alongside tip-hash votes via
+//                   `decideLoadQuorum` (see `load-quorum.ts`). The
+//                   sentinel is intentionally unauthenticated (no
+//                   per-doc keychain to sign/encrypt with); the quorum
+//                   gate's Q-Byzantine threshold defends against
+//                   lying-disclaim attacks AND tip-hash votes are
+//                   given precedence over disclaim votes so peers WITH
+//                   the document outvote unrelated peers in the same
+//                   mesh that don't. See PR #284 r16 / r19.
+//
+//               (c) Serialized + encrypted `CRDTSyncMessage` whose
+//                   only populated payload field is `tipsHash` (plus
+//                   `documentId` and optionally `signature`). The
+//                   responder does NOT include `changes`, `snapshot`,
+//                   or `keychainChanges` -- the heavy state transfer
+//                   happens later via documentLoadV3/snapshotLoadV3
+//                   against an agreeing peer.
+//
+// Layered on documentLoadV3's transport semantics, but on a separate
+// protocol id so a slow/malicious peer that serves bogus full loads cannot
+// also cheaply poison every quorum vote at the same time.
+export const tipAdvertiseV1 = '/collabswarm/tip-advertise/1.0.0';
 
 // BeeKEM Welcome v1: onboards a new reader into a document. The inviting
 // writer sends a Welcome containing (a) the invitation epoch ID the

@@ -25,12 +25,14 @@ import { ChangesSerializer } from './changes-serializer';
 import { ACLProvider } from './acl-provider';
 import { KeychainProvider } from './keychain-provider';
 import { LoadMessageSerializer } from './load-request-serializer';
+import { validateLoadQuorumConfig } from './load-quorum';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
-  documentLoadV2,
+  documentLoadV3,
   documentKeyUpdateV2,
-  snapshotLoadV2,
+  snapshotLoadV3,
+  tipAdvertiseV1,
 } from './wire-protocols';
 import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils';
 import { wrapStream } from './stream-adapter';
@@ -238,6 +240,26 @@ export class Collabswarm<
 
     if (!config) {
       config = defaultConfig(defaultBootstrapConfig([]));
+    }
+
+    // Validate the load-quorum tuning knobs at startup so an operator
+    // misconfiguration (e.g. `loadQuorumK: 1.5`, `loadQuorumQ: NaN`)
+    // surfaces immediately as a structured `LoadQuorumFailedError(
+    // invalid-config)` rather than silently degrading every subsequent
+    // `load()` to a single-peer probe. See PR #284 r9 Copilot review for
+    // the input-validation hardening rationale (issues #2/#3): fractional
+    // K let `peers.slice(0, 1.5)` slip through to a 1-peer probe, and
+    // NaN Q propagated through `effectiveQ` so `bestPeers.length < NaN`
+    // evaluated as false and the gate passed with a single responder.
+    //
+    // Skip validation when the feature is explicitly disabled -- a
+    // shared config object that carries leftover quorum knobs alongside
+    // `loadQuorumEnabled: false` should still initialize cleanly via
+    // the legacy load path. `runLoadQuorum` mirrors this early-exit
+    // ordering: `enabled === false` is checked before validation, so
+    // the two boundaries stay consistent.
+    if (config.loadQuorumEnabled !== false) {
+      validateLoadQuorumConfig(config);
     }
 
     this._config = config;
@@ -571,14 +593,111 @@ export class Collabswarm<
       });
     };
 
+    // Handler implementation for tip-advertise requests (initial-load
+    // quorum probe; see `wire-protocols.ts::tipAdvertiseV1`). Wire format
+    // mirrors documentLoadV3: a single serialized CRDTLoadRequest in,
+    // a single (small) encrypted/serialized CRDTSyncMessage out (whose
+    // only populated payload field is `tipsHash`), or an empty response
+    // on decline.
+    // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
+    const tipAdvertiseHandler = (rawStream: Stream) => {
+      const stream: ProtocolStream = wrapStream(rawStream);
+      pipe(
+        stream.source,
+        async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
+          try {
+            let assembled: Uint8Array;
+            try {
+              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            } catch (err) {
+              const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
+              console.warn(`Shared tip-advertise handler: ${reason}, dropping`);
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            let request;
+            try {
+              request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
+            } catch (err) {
+              console.warn(
+                'Shared tip-advertise handler: failed to deserialize load request, dropping:',
+                err,
+              );
+              await stream.sink([] as Iterable<Uint8Array>);
+              return [];
+            }
+            const doc = this._documentRegistry.get(request.documentId);
+            if (!doc) {
+              // Unknown document -- respond with the 1-byte UNKNOWN_DOC
+              // sentinel (`0xFF`) so the loader can DISTINGUISH "I don't
+              // have this document" from generic probe failures (timeout,
+              // auth failure, decryption failure, malformed response). The
+              // loader uses this signal so that when EVERY queried peer in
+              // the swarm explicitly disclaims the document, `load()`
+              // returns `false` to let a fresh `open()` create the document
+              // on top of an existing swarm -- the previous empty-response
+              // decline was indistinguishable from a partition / timeout
+              // and made new-document creation in an existing mesh fail
+              // with `LoadQuorumFailedError`.
+              //
+              // Unauthenticated: this signal carries no signature. A
+              // Byzantine peer can lie and claim "unknown" even when other
+              // honest peers have the document. Defense: quorum tallies
+              // `'unknown-doc'` exactly like a tip-hash vote -- if Q of K
+              // peers all agree on `'unknown-doc'` the loader trusts the
+              // disclaimer, but a single lying peer in a 3-of-3 mesh whose
+              // other 2 peers have the doc cannot force new-doc creation
+              // (the honest hash X wins the tally). Worst case is the same
+              // Q-Byzantine threshold the rest of the quorum gate already
+              // tolerates. See `decideLoadQuorum` for the tally semantics
+              // and PR #284 r16 Copilot review for the original bug report.
+              //
+              // Information-disclosure tradeoff (PR #284 r27): replying with
+              // `0xff` lets any peer that can dial this node learn whether
+              // `documentId` is registered here. We accept this because the
+              // quorum protocol REQUIRES a distinguishable "unknown-doc"
+              // signal to allow new-document creation on an existing swarm;
+              // suppressing the signal would block legitimate `open()` calls
+              // for fresh paths. Two mitigations are wired in: (1) no
+              // unauthenticated-probe log line so attacker-controlled
+              // `documentId` values don't reach the host log, and (2) the
+              // sentinel is a single byte with no per-document content, so
+              // it leaks only the existence bit -- nothing about contents,
+              // membership, or history.
+              await stream.sink([
+                new Uint8Array([0xff]),
+              ] as Iterable<Uint8Array>);
+              return [];
+            }
+            await doc.handleTipAdvertiseRequestData(request, stream);
+            return [];
+          } finally {
+            // Tip-advertise runs on every `open()` quorum probe, so every
+            // connected peer hits this handler. Always close the inbound
+            // stream (even on the sink-already-completed happy path) so
+            // per-connection stream quota doesn't leak under load or when
+            // a downstream call throws after sink. Safe to call after
+            // `stream.sink`: libp2p stream.close() is idempotent on a
+            // already-half-closed stream.
+            await stream.close().catch(() => {
+              // swallow: close-after-error is best-effort cleanup
+            });
+          }
+        },
+      ).catch((err: unknown) => {
+        console.error('Error in shared tip-advertise handler:', err);
+      });
+    };
+
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
-    this.libp2p.handle(documentLoadV2, docLoadHandler);
-    this.libp2p.handle(snapshotLoadV2, snapshotLoadHandler);
+    this.libp2p.handle(documentLoadV3, docLoadHandler);
+    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler);
     this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
     this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
     this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler);
+    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler);
   }
 
   /**

@@ -26,12 +26,17 @@ import {
   crdtWriterChangeNode,
 } from './crdt-change-node';
 import {
+  collectReferencedAncestors,
+  collectAllCidsInTree,
+  computeServedFrontier,
+  stripInlineChanges,
   MAX_CROSS_LINKS,
   MAX_RECENT_TIPS,
   mergeRemoteSyncTree,
   RecentTip,
   selectCrossLinks,
   trackTipInList,
+  treeContainsCid,
 } from './merkle-cross-links';
 import { CRDTSyncMessage } from './crdt-sync-message';
 import { ChangesSerializer } from './changes-serializer';
@@ -48,8 +53,9 @@ import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
   documentKeyUpdateV2,
-  documentLoadV2,
-  snapshotLoadV2,
+  documentLoadV3,
+  snapshotLoadV3,
+  tipAdvertiseV1,
 } from './wire-protocols';
 import { BeeKEM } from './beekem/beekem';
 import { BeeKEMWelcome, PathUpdate } from './beekem/types';
@@ -65,6 +71,13 @@ import {
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
 } from './derive-doc-key';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
+import {
+  constantTimeHexEquals,
+  dedupePeersByPeerId,
+  LoadQuorumFailedError,
+} from './load-quorum';
+import { runLoadQuorum } from './load-quorum-orchestrator';
 import { CRDTSnapshotNode } from './snapshot-node';
 import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
 import {
@@ -175,6 +188,89 @@ export type CollabswarmDocumentChangeHandler<DocType, PublicKey> = (
  * @typeParam PublicKey The type of key used to identify a user publicly
  * @typeParam DocumentKey The type of key used to encrypt/decrypt document changes
  */
+
+/**
+ * Maximum size (in bytes) of a `tipAdvertiseV1` probe response read. A
+ * legitimate response is a single encrypted `CRDTSyncMessage` carrying
+ * the `documentId` (pre-encryption path of up to `MAX_DOCUMENT_PATH_LENGTH`
+ * bytes; this is BIGGER than the tipsHash + signature payload combined),
+ * a 32-byte `tipsHash`, and an optional writer signature.
+ *
+ * Bound derivation:
+ *   - documentId: up to `MAX_DOCUMENT_PATH_LENGTH` bytes UTF-8.
+ *   - JSON framing + Base64 expansion of the encrypted body: ~256 bytes.
+ *   - Writer signature: ECDSA P-384 ≈ 96 raw bytes, Base64 ≈ 128 bytes,
+ *     plus the field's JSON key/quotes — round to 256 bytes.
+ *   - tipsHash: 32 raw bytes → Base64 ≈ 44 bytes.
+ *   - AES-GCM nonce: 12 raw bytes → Base64 ≈ 16 bytes.
+ *   - AES-GCM auth tag: 16 bytes.
+ *   - Plus slack for the encrypted-payload header (keyID prefix) and any
+ *     additional JSON overhead.
+ *
+ * The previous 2 KiB cap was tighter than `MAX_DOCUMENT_PATH_LENGTH`
+ * alone, so a document opened at a maximal path would always blow the cap
+ * and be recorded as a non-vote — quorum would never pass for such
+ * documents. 6 KiB comfortably covers a maximum-length path plus all of
+ * the overheads above while still bounding what a malicious peer can
+ * force the loader to buffer before being rejected as a non-vote.
+ * See PR #284 r4/r5 Copilot review.
+ */
+const MAX_TIP_ADVERTISE_RESPONSE_SIZE = 6 * 1024;
+
+/**
+ * Bound on the number of parallel Helia `blockstore.get(cid)` fetches
+ * issued by the quorum-bound load pre-fetch (`_sendLoadRequestAndSync`).
+ *
+ * A bound is needed because the served `changes` tree can be large
+ * under an adversary-shaped response (the agreeing peer voted for the
+ * expected frontier but stuffed the tree with many additional CIDs that
+ * must still be retrieved to satisfy the post-sync coverage check).
+ * Without a cap, the prefetch would issue every fetch in parallel and
+ * each fetch holds a libp2p bitswap stream + buffers the retrieved
+ * payload via `readUint8Iterable`; for very large responses this can
+ * exhaust per-connection stream quotas and pressure memory. The cap is
+ * chosen large enough to overlap WAN-latency-bound bitswap fetches and
+ * keep the load fast (8 inflight is comfortably more than typical mesh
+ * peer counts) but small enough to bound peak resource use on the
+ * loader. See PR #284 r24 Copilot review.
+ */
+const LOAD_PREFETCH_MAX_CONCURRENCY = 8;
+
+/**
+ * Module-private sentinel thrown by `_sendLoadRequestAndSync` when the
+ * quorum frontier binding check fails on a single peer's load response
+ * (either the responder omitted `tips` or the served `tips` hashed to a
+ * value other than the agreed `winningHashHex`). Caught by the `load()`
+ * loop, which records the failure against the responsible peer and
+ * proceeds to the NEXT peer in the agreeing cohort.
+ *
+ * Critical to the DoS fix from PR #284 r6: previously
+ * `_sendLoadRequestAndSync` threw `LoadQuorumFailedError` on bind
+ * mismatch and `load()` re-raised it, aborting the entire load. A
+ * single malicious peer in the agreeing cohort could vote for the
+ * majority hash (passing quorum) and then serve a mismatched full load
+ * (failing the bind check), unilaterally preventing the loader from
+ * trying any other honest agreeing peer.
+ *
+ * Public callers never see this type; `load()` catches it internally
+ * and only escalates to `LoadQuorumFailedError(reason:
+ * 'bind-check-failed-all-agreeing-peers')` once EVERY peer in the
+ * narrowed cohort has bind-failed.
+ *
+ * The `advertisedHex` field carries the hash the responder's served
+ * `tips` actually hashed to (or the sentinel `'(missing tips)'` when the
+ * response omitted the `tips` field entirely) so the outer loop can
+ * thread it into the final error's `agreeingPeerBindFailures` map.
+ */
+class _QuorumBindCheckFailedError extends Error {
+  public readonly advertisedHex: string;
+  constructor(advertisedHex: string, message: string) {
+    super(message);
+    this.name = '_QuorumBindCheckFailedError';
+    this.advertisedHex = advertisedHex;
+  }
+}
+
 export class CollabswarmDocument<
   DocType,
   ChangesType,
@@ -459,6 +555,39 @@ export class CollabswarmDocument<
 
   // Set of already-merged change blocks.
   private _hashes = new Set<string>();
+
+  // Set of CIDs that have been seen as a `children` key in any sync tree we
+  // have processed (locally created or remotely received) -- i.e. every CID
+  // some node references as a parent / cross-link target. These are
+  // *referenced ancestors*: by definition they are NOT heads of the local
+  // DAG, because at least one node points to them as a predecessor.
+  //
+  // `_currentFrontier()` returns `_hashes \ _referencedAncestors` -- the set
+  // of CIDs that no node we've ever seen has referenced. That is the actual
+  // "frontier" / "heads" of the merged-changes DAG, which is what the
+  // initial-load quorum tip-set advertisement is supposed to attest to.
+  //
+  // Critically, this set converges across honest peers: two peers with the
+  // same logical state but different sync histories (e.g. one loaded from a
+  // snapshot, the other has been merging changes since founding) will have
+  // *different* `_hashes` cardinality but the same head set, hence the same
+  // `_hashes \ _referencedAncestors`. Drawing the quorum probe from
+  // `_hashes` alone (the prior buggy implementation) would have made the
+  // probe pessimistically diverge on irrelevant sync history.
+  //
+  // Populated in:
+  //   - `_makeChange()`: every newly-attached `changeNode.children` key
+  //     is recorded -- the new change references those parents.
+  //   - `_syncDocumentChanges()`: every received sync tree is walked once
+  //     and its `children` keys are recorded -- the receiver now knows the
+  //     same parent relationships the sender did.
+  //
+  // Snapshot boundaries: when a snapshot is applied, `lastChangeNodeCID` is
+  // added to `_hashes` as a sentinel for dedup, but its ancestor chain is
+  // pruned -- those ancestors are not added to `_referencedAncestors`,
+  // which is correct: the snapshot boundary IS the local "oldest" head
+  // from the loader's view of the DAG.
+  private _referencedAncestors = new Set<string>();
 
   // Bounded list of recently-known change CIDs paired with their node kind.
   // Used by `_makeChange()` to attach Merkle-CRDT cross-links (paper §VI.B.e)
@@ -757,6 +886,135 @@ export class CollabswarmDocument<
   }
 
   /**
+   * Returns this peer's structural local-DAG frontier as a plain
+   * string[] of CIDs -- the heads of EVERYTHING this peer has seen.
+   *
+   * NOTE: this is NOT the value advertised in a `tipAdvertiseV1` probe
+   * and NOT the value the responder commits to on a v3 load response.
+   * Both of those use `_servedFrontier()` instead -- the heads of the
+   * change tree this peer can actually ship in a single load round.
+   * See `_servedFrontier()`'s docstring for why the two differ (short
+   * version: a load response only carries the tree rooted at
+   * `_lastSyncMessage.changeId`, so concurrent local heads that aren't
+   * cross-linked into that tree don't appear in what's served).
+   *
+   * `_currentFrontier()` is retained for callers that need the
+   * structural truth of "what heads do I have locally?" rather than
+   * "what would I advertise / serve?":
+   *
+   *   - `_makeChange()` cross-link selection (so a new local change
+   *     can reference concurrent remote heads that landed since the
+   *     last cached sync message).
+   *   - Diagnostics / introspection paths.
+   *
+   * The frontier is the set of heads of the local merged-changes DAG:
+   * CIDs that this peer has seen but that no other change references
+   * as a parent or cross-link target. Computed as `_hashes \
+   * _referencedAncestors`. See the `_referencedAncestors` field
+   * docstring for why this matters: it is the part of the local DAG
+   * that converges across honest peers regardless of differing sync
+   * histories or pruning levels.
+   *
+   * Edge cases:
+   *   - Empty DAG (founding member, brand-new document): `_hashes` is
+   *     empty, the returned frontier is `[]`.
+   *   - Just-loaded from snapshot: `_hashes` holds the snapshot
+   *     boundary CID (and any post-snapshot changes). The boundary CID
+   *     is NOT in `_referencedAncestors`, so it correctly appears as a
+   *     head.
+   *   - Pruned ancestors: irrelevant. Pruning removes CIDs from the
+   *     in-memory change tree but leaves them in `_hashes` for dedup;
+   *     they were already in `_referencedAncestors`, so they remain
+   *     marked as non-heads.
+   *
+   * Returns a fresh array so callers can't mutate internal state;
+   * `tipsHash` sorts independently, so we don't sort here.
+   *
+   * @internal
+   */
+  private _currentFrontier(): string[] {
+    const out: string[] = [];
+    for (const cid of this._hashes) {
+      if (!this._referencedAncestors.has(cid)) {
+        out.push(cid);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Returns the frontier this peer would *advertise as part of a load
+   * response* -- the heads of the change tree this peer can actually ship
+   * in a single `documentLoadV3` / `snapshotLoadV3` round.
+   *
+   * # Why this is NOT the same as `_currentFrontier()`
+   *
+   * `_currentFrontier()` returns the heads of the local DAG (`_hashes \
+   * _referencedAncestors`) -- the structural truth of EVERYTHING this peer
+   * has seen. That set is the right answer for "what is the logical state
+   * of my local document?", but it is the WRONG answer for "what hash
+   * should I advertise in a `tipAdvertiseV1` probe?".
+   *
+   * A load response only carries ONE change tree (rooted at
+   * `_lastSyncMessage.changeId`), plus optionally `_latestSnapshot`.
+   * `_lastSyncMessage` is refreshed by `_makeChange()` (its tree is
+   * rooted at *this peer's* last locally-produced change) AND by
+   * `_syncDocumentChanges()` (when an incoming remote tree subsumes the
+   * cached root -- the round-14 fix for relay peers that never make
+   * local changes; see `_refreshLastSyncMessageFromSync()`). When the
+   * incoming root is concurrent with the cached root, the cache is left
+   * alone so served-frontier coverage cannot shrink; the next local
+   * change re-bundles concurrent heads via cross-links from
+   * `_recentTips` (`selectCrossLinks`).
+   *
+   * So when a peer has multiple concurrent heads (e.g. its own last local
+   * change H1 plus remotely-applied changes H2, H3 that aren't yet
+   * cross-linked from any local change), `_currentFrontier()` returns
+   * `{H1, H2, H3}` but the load response only contains H1's subtree.
+   * Round 8 of the PR #284 Copilot review caught the resulting
+   * inconsistency: the tip-advertise probe would hash `{H1, H2, H3}` and
+   * win the quorum vote, but the served payload's structural frontier
+   * (`computeServedFrontier(...)` on the loader side) hashes only `{H1}`,
+   * causing the loader's bind check to reject the honest peer.
+   *
+   * # What this returns
+   *
+   * The heads of the served payload, computed via `computeServedFrontier`
+   * over EXACTLY the same inputs the load response will carry:
+   *   - `_lastSyncMessage?.changeId` -- root CID of the served tree (if any);
+   *   - `_lastSyncMessage?.changes` -- the served tree itself (if any);
+   *   - `_latestSnapshot?.lastChangeNodeCID` -- snapshot boundary CID (if any).
+   *
+   * This mirrors the loader's `_sendLoadRequestAndSync` binding check:
+   * both sides hash the structurally-derived served frontier, so an
+   * honest responder advertises a hash the loader can reproduce from the
+   * payload it received. Two honest peers in the same logical state with
+   * the same `_lastSyncMessage` / `_latestSnapshot` advertise the same
+   * hash regardless of any unrelated concurrent heads they happen to be
+   * holding in `_currentFrontier()`.
+   *
+   * # Trade-off (acknowledged)
+   *
+   * The quorum no longer verifies that a responder has all of its
+   * logical heads -- only the ones it would actually serve. A peer with
+   * un-served concurrent heads can pass quorum on the subset it ships
+   * via load. This matches the existing load semantics (the load only
+   * ever ships what `_lastSyncMessage` covers anyway) and is reconciled
+   * by post-load GossipSub sync; the alternative (Option B in the design
+   * notes) would require the load response itself to carry every head's
+   * subtree, a larger protocol change. See PR #284 r8 review.
+   *
+   * @internal
+   */
+  private _servedFrontier(): string[] {
+    return computeServedFrontier(
+      this._lastSyncMessage?.changeId,
+      this._lastSyncMessage?.changes,
+      this._latestSnapshot?.lastChangeNodeCID,
+    );
+  }
+
+  /**
    * Record a CID as a recently-known tip for Merkle-CRDT cross-linking
    * (paper §VI.B.e). Called for both locally-generated and remote-applied
    * change nodes -- a peer A that just received B's change can cross-link
@@ -777,6 +1035,19 @@ export class CollabswarmDocument<
     changeId: string | undefined,
     changes: CRDTChangeNode<ChangesType>,
   ) {
+    // Walk the incoming sync tree once and record every CID that appears
+    // as a `children` key. Those CIDs are referenced ancestors -- by
+    // definition no longer heads of the local DAG. Doing this BEFORE the
+    // merge keeps `_currentFrontier()` correct regardless of whether the
+    // referenced parent ends up applied inline or fetched lazily from the
+    // blockstore: either way, the receiver now knows the parent relationship
+    // the sender had.
+    //
+    // Idempotent and inexpensive: the helper walks at most the size of the
+    // delivered tree (bounded by the sender's compaction config); duplicates
+    // are no-ops in a Set.
+    collectReferencedAncestors(changeId, changes, this._referencedAncestors);
+
     // Only process hashes that we haven't seen yet.
     const newChangeEntries = await this._mergeSyncTree(
       changeId,
@@ -919,7 +1190,115 @@ export class CollabswarmDocument<
     if (fetchPromises.length > 0) {
       await Promise.all(fetchPromises);
     }
+
+    // Refresh `_lastSyncMessage` so the served frontier reflects what we now
+    // hold. Without this, a relay peer that joined via `load()` (or that has
+    // only ever applied remote changes via GossipSub) would keep
+    // `_lastSyncMessage` undefined and `_servedFrontier()` would return `[]`,
+    // making the peer advertise `tipsHash([])` in the initial-load quorum
+    // probe AND ship an empty load response. Two such relay peers would
+    // agree on the empty-set hash, satisfying quorum, and an honest newcomer
+    // would accept an empty document while the mesh actually had data
+    // (#284 r14 Copilot review).
+    //
+    // We update only when the incoming tree subsumes our prior root --
+    // i.e., `_lastSyncMessage.changeId` appears as a CID somewhere in the
+    // received tree -- so the served-frontier coverage never shrinks. The
+    // undefined-prior and same-root cases are also "subsumes" (vacuously
+    // and trivially); concurrent independent roots are intentionally left
+    // alone (matches the existing single-tree load semantics documented on
+    // `_servedFrontier()`). The next local `_makeChange()` cross-links
+    // through `_recentTips` regardless, so concurrent heads are recovered
+    // on the next local write.
+    this._refreshLastSyncMessageFromSync(changeId, changes);
+
     await this._maybeCompact();
+  }
+
+  /**
+   * Update `_lastSyncMessage` so it reflects the served frontier of a
+   * just-applied remote sync tree. Called by `_syncDocumentChanges()`
+   * after the merge has succeeded.
+   *
+   * Replacement policy: only swap the cached message when the incoming
+   * tree *subsumes* the prior cached root, so the served frontier the
+   * loader binds against can only grow, never shrink:
+   *   - `_lastSyncMessage` is `undefined` (relay peer, no local change
+   *     yet): adopt the incoming directly. This is the round-14 bug case
+   *     -- prior to the fix the relay peer's served frontier was empty.
+   *   - prior `changeId` appears anywhere in the incoming tree (root or
+   *     descendant): the incoming tree includes the prior root's coverage
+   *     by construction, so it is safe to replace.
+   *   - prior `changeId` is independent of the incoming tree (concurrent
+   *     heads, neither subsumes the other): leave the cached message in
+   *     place. The next local `_makeChange()` will bundle both heads via
+   *     cross-links from `_recentTips`. This matches the trade-off
+   *     documented on `_servedFrontier()` -- a load response only ever
+   *     carries one tree, so accepting a single root is the existing
+   *     contract.
+   *
+   * The cached message's `documentId` / `keychainChanges` fields are
+   * preserved across the swap. Response-specific fields
+   * (`signature`, `tips`, `tipsHash`) are dropped because they are
+   * regenerated per-response by the load / tip-advertise handlers; leaving
+   * a stale value would be misleading at best, a wire-protocol violation
+   * at worst.
+   *
+   * Idempotent and inexpensive: the subsumption check walks the incoming
+   * tree once (bounded by sender compaction config); the field-level
+   * replacement is O(1) reference swaps.
+   *
+   * @internal
+   */
+  private _refreshLastSyncMessageFromSync(
+    receivedChangeId: string | undefined,
+    receivedChanges: CRDTChangeNode<ChangesType>,
+  ): void {
+    // Defensive: if the incoming carries no root CID we cannot meaningfully
+    // refresh the served frontier with it. (`computeServedFrontier` will
+    // produce `[]` for the resulting `_lastSyncMessage` and we would simply
+    // re-introduce the empty-served-frontier bug.)
+    if (!receivedChangeId) return;
+
+    const priorChangeId = this._lastSyncMessage?.changeId;
+
+    // Case 1: no prior cached message -- adopt the incoming. This is the
+    // round-14 fix path: a relay peer with no local changes was previously
+    // serving an empty payload because `_lastSyncMessage` was `undefined`.
+    if (!priorChangeId) {
+      this._lastSyncMessage = {
+        ...(this._lastSyncMessage || { documentId: this.documentPath }),
+        changeId: receivedChangeId,
+        changes: receivedChanges,
+        // Drop response-specific fields; they are regenerated per-response.
+        signature: undefined,
+        tips: undefined,
+        tipsHash: undefined,
+      };
+      return;
+    }
+
+    // Case 2: same root -- already up to date, nothing to do. (CIDs are
+    // content-addressed so equal `changeId` implies the same subtree.)
+    if (priorChangeId === receivedChangeId) return;
+
+    // Case 3: prior root is embedded in the incoming tree -- the incoming
+    // subsumes the prior. Replace.
+    if (treeContainsCid(receivedChangeId, receivedChanges, priorChangeId)) {
+      this._lastSyncMessage = {
+        ...this._lastSyncMessage!,
+        changeId: receivedChangeId,
+        changes: receivedChanges,
+        signature: undefined,
+        tips: undefined,
+        tipsHash: undefined,
+      };
+      return;
+    }
+
+    // Case 4: concurrent / independent roots. Leave the cached message
+    // alone so we do not shrink served-frontier coverage. The next local
+    // `_makeChange()` cross-links via `_recentTips`, recovering both heads.
   }
 
   /**
@@ -943,6 +1322,7 @@ export class CollabswarmDocument<
       }
     }
   }
+
 
   /**
    * Sanctioned wrapper around `_readers.merge` that also drains any
@@ -1280,6 +1660,18 @@ export class CollabswarmDocument<
     }
     updateMessage.changeId = hash;
     updateMessage.changes = changeNode;
+
+    // Record every CID this new change references as a parent / cross-link
+    // target. The primary parent and all cross-link tips become *referenced
+    // ancestors* and drop out of `_currentFrontier()`. Walks just the new
+    // `changeNode` (not the full inherited subtree below it) because the
+    // inherited subtree's ancestor relationships were already recorded
+    // when each of those nodes was created or applied.
+    if (changeNode.children) {
+      for (const childCid of Object.keys(changeNode.children)) {
+        this._referencedAncestors.add(childCid);
+      }
+    }
 
     // Track this new tip for future cross-linking. The primary parent is
     // also retained -- it's the immediate predecessor of *this* tip and may
@@ -1664,6 +2056,35 @@ export class CollabswarmDocument<
         loadMessage.snapshot = this._latestSnapshot;
       }
 
+      // Attach an explicit tip-set advertisement so the loader can apply
+      // a defense-in-depth consistency check against this responder's
+      // self-attested served frontier (issue #186 / #189 §5.4.2).
+      //
+      // NOTE: as of PR #284 r7, the loader's PRIMARY binding is derived
+      // STRUCTURALLY from the served `changes`/`snapshot` payload via
+      // `computeServedFrontier`; the responder's `tips` array is NOT
+      // trusted as the source of truth (a Byzantine peer can populate
+      // it with the agreed CIDs while serving a divergent payload).
+      // `tips` is still emitted by honest responders because the loader
+      // ALSO verifies that the responder's own attestation hashes to
+      // the same value as the structurally-derived served frontier --
+      // a peer whose `tips` contradicts their own served payload is
+      // caught at the secondary check.
+      //
+      // PR #284 r8: `tips` is now the *served* frontier
+      // (`_servedFrontier()`) -- i.e. the heads of the change tree this
+      // load response actually carries -- NOT the full local DAG
+      // frontier (`_currentFrontier()`). The two differ when this peer
+      // has multiple concurrent heads but `_lastSyncMessage` only roots
+      // at one of them (the load wire shape only ships a single tree).
+      // The tip-advertise handler hashes the same served frontier, so
+      // the probe and the load round bind against a byte-identical tip
+      // set even when the responder is holding remotely-applied heads
+      // that aren't yet cross-linked into `_lastSyncMessage.changes`.
+      // This field is part of the SIGNED v3 payload; see
+      // `wire-protocols.ts` for the version-bump rationale.
+      loadMessage.tips = this._servedFrontier();
+
       // Sign new message.
       loadMessage.signature = await this._signAsWriter(loadMessage);
 
@@ -1781,6 +2202,21 @@ export class CollabswarmDocument<
       const snapshotMessage = this._createSyncMessage();
       snapshotMessage.snapshot = this._latestSnapshot;
       snapshotMessage.keychainChanges = await this._keychainChangesForVisibility();
+      // Tip-set advertisement for the pre-apply structural binding check
+      // (see the doc-load handler above and the in-line check in
+      // `_sendLoadRequestAndSync` for the rationale).
+      //
+      // PR #284 r8: this is the *served* frontier (`_servedFrontier()`)
+      // -- the heads of the served payload (`_lastSyncMessage.changes`
+      // tree plus the snapshot boundary) -- NOT the full local DAG
+      // frontier (`_currentFrontier()`). When this peer holds concurrent
+      // heads that `_lastSyncMessage` does not yet root over, the
+      // load response only carries one head's subtree, so the
+      // advertised `tips` must match that subset to satisfy the
+      // loader's structural bind check. Part of the signed v3 payload
+      // -- the version bump (snapshotLoadV2 -> snapshotLoadV3) is
+      // required because `tips` is now covered by the writer signature.
+      snapshotMessage.tips = this._servedFrontier();
       snapshotMessage.signature = await this._signAsWriter(snapshotMessage);
 
       const serialized =
@@ -1807,6 +2243,163 @@ export class CollabswarmDocument<
     } catch (err: unknown) {
       console.error(
         `Error handling snapshot-load request for ${this.documentPath}:`,
+        err,
+      );
+      // Ensure the stream is closed so the requester doesn't hang.
+      try { await stream.sink([] as Iterable<Uint8Array>); } catch { /* already closed */ }
+    }
+  }
+
+  /**
+   * Handles an initial-load quorum tip-advertise request with pre-read
+   * stream data. Called by the shared protocol handler in Collabswarm
+   * after reading and routing.
+   *
+   * Closes the "no quorum protocol for verifying initial document state"
+   * gap tracked under issue #189 §5.4 item 2 (also bulleted in #186).
+   * The wire protocol is `tipAdvertiseV1` (see `wire-protocols.ts`);
+   * this method returns either an empty payload (decline) or an
+   * encrypted `CRDTSyncMessage` whose only populated payload field is
+   * `tipsHash`. The loader on the other side compares hashes across
+   * multiple peers and requires Q-of-K agreement before accepting any
+   * peer's full document state. See `load-quorum.ts` for the decision
+   * logic.
+   *
+   * Authorization mirrors the doc-load / snapshot-load handlers: when
+   * signing is enabled the requester must sign the document path with
+   * a key that appears in the readers or writers ACL. The response is
+   * encrypted under the document's current key so a peer that does
+   * not already possess the key cannot use the tip hash as an oracle
+   * (key delivery is handled by the BeeKEM Welcome path).
+   *
+   * @internal
+   * @param message The deserialized load request (already parsed by the shared handler).
+   * @param stream The stream object for sending the response.
+   */
+  public async handleTipAdvertiseRequestData(
+    message: CRDTLoadRequest,
+    stream: { sink: (data: Iterable<Uint8Array>) => Promise<void> },
+  ): Promise<void> {
+    try {
+      // Tip-advertise runs on every `open()` from every peer that opens
+      // this document, so a per-request log line scales with mesh size.
+      // Drop the unconditional log entirely; the only field the handler
+      // would have logged is attacker-controlled (`message`), and the
+      // mismatch/unauthorized branches below already emit targeted
+      // warnings when they fail. See PR #284 r27 Copilot review.
+
+      if (message.documentId !== this.documentPath) {
+        console.warn(
+          `Received a tip-advertise request for the wrong document (${message.documentId} !== ${this.documentPath})`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Authorize the requestor. When signing is disabled, skip ACL/signature
+      // checks entirely -- any peer is treated as authorized. Mirrors the
+      // load handlers above so the gate is symmetrical: a deployment that
+      // disables signing keeps the same trust posture across all protocols.
+      let authorized = false;
+      if (!this._isSigningEnabled()) {
+        authorized = true;
+      } else {
+        if (!message.signature) {
+          console.warn(
+            `Rejected tip-advertise request for ${message.documentId}: missing signature`,
+          );
+          await stream.sink([] as Iterable<Uint8Array>);
+          return;
+        }
+        const readers = (
+          await Promise.all([this._readers.users(), this._writers.users()])
+        ).flat();
+        for (const reader of readers) {
+          if (
+            await this._authProvider.verify(
+              this._encoder.encode(message.documentId),
+              reader,
+              this._deserializeSignature(message.signature),
+            )
+          ) {
+            authorized = true;
+            break;
+          }
+        }
+      }
+
+      if (!authorized) {
+        console.warn(
+          `Detected an unauthorized tip-advertise request for ${message.documentId}`,
+        );
+        await stream.sink([] as Iterable<Uint8Array>);
+        return;
+      }
+
+      // Compute the canonical tip-set hash from the document's *served*
+      // frontier — the heads of the payload this peer would actually ship
+      // in a `documentLoadV3` / `snapshotLoadV3` round (computed via
+      // `computeServedFrontier` over `_lastSyncMessage.changes` plus
+      // `_latestSnapshot?.lastChangeNodeCID`, the exact same sources
+      // `handleLoadRequestData` / `handleSnapshotLoadRequestData` populate
+      // into the load response).
+      //
+      // PR #284 r8: this used to hash `_currentFrontier()` -- the full
+      // local DAG frontier (`_hashes \ _referencedAncestors`). That
+      // produces a hash an honest peer cannot bind against if it holds
+      // multiple concurrent heads: `_currentFrontier()` returns every
+      // head (including remotely-applied tips not yet cross-linked into
+      // `_lastSyncMessage.changes`), but the load response only carries
+      // one head's tree, so the loader's structural derivation of the
+      // served frontier produces a different (smaller) set. Hashing the
+      // served frontier here closes that gap -- a probe-then-load
+      // round-trip from this responder always binds against a
+      // byte-identical tip set. See `_servedFrontier()` for the
+      // full rationale.
+      //
+      // Two peers with the same `_lastSyncMessage` / `_latestSnapshot`
+      // produce byte-identical hashes; see `tips-hash.ts` for the
+      // canonicalization (sort + `\n` separator + SHA-256).
+      const hash = await tipsHash(this._servedFrontier());
+
+      const advertisement: CRDTSyncMessage<ChangesType, PublicKey> = {
+        documentId: this.documentPath,
+        tipsHash: hash,
+      };
+
+      // Sign the advertisement so the loader can verify the responder is
+      // an authorized writer (the same trust bar applied to load responses
+      // above). `_signAsWriter` returns '' when signing is disabled, in
+      // which case the loader's pre-load verification block is also a
+      // no-op -- mirrors the doc-load / snapshot-load handlers' pattern.
+      advertisement.signature = await this._signAsWriter(advertisement);
+
+      const serialized =
+        this._syncMessageSerializer.serializeSyncMessage(advertisement);
+
+      // Encrypt the response with the document's current key so that an
+      // unauthorized peer that managed to connect to us but does not have
+      // the key cannot read (or use as an oracle) the tip hash.
+      const [documentKeyID, documentKey] = await this._keychain.current();
+      if (!documentKey) {
+        throw new Error(`Document ${this.documentPath} has an empty keychain!`);
+      }
+      const { nonce, data } = await this._authProvider.encrypt(
+        serialized,
+        documentKey,
+      );
+      if (!nonce) {
+        throw new Error(`Failed to encrypt tip-advertise response! Nonce cannot be empty`);
+      }
+      const assembled = concatUint8Arrays(documentKeyID, nonce, data);
+      console.log(
+        `sending tip-advertise response (encrypted) for ${this.documentPath}`,
+      );
+
+      await stream.sink([assembled] as Iterable<Uint8Array>);
+    } catch (err: unknown) {
+      console.error(
+        `Error handling tip-advertise request for ${this.documentPath}:`,
         err,
       );
       // Ensure the stream is closed so the requester doesn't hang.
@@ -1909,6 +2502,7 @@ export class CollabswarmDocument<
   private async _sendLoadRequestAndSync(
     stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> },
     serializedRequest: Uint8Array,
+    expectedTipsHashHex: string | null = null,
   ): Promise<boolean> {
     await pipe([serializedRequest], stream.sink);
     return await pipe(
@@ -2010,6 +2604,356 @@ export class CollabswarmDocument<
           }
         }
 
+        // Quorum frontier binding (#186 / #189 §5.4.2). When the loader
+        // ran a quorum probe round, the served full-load payload must
+        // structurally describe the same tip set the responder voted
+        // for. Done BEFORE `this.sync(...)` so a Byzantine peer that
+        // voted hash X but serves a load with a different frontier
+        // never gets to mutate the in-memory document.
+        //
+        // CRITICAL: the bind decision is derived from the ACTUAL served
+        // payload, NOT from the responder-supplied `message.tips`.
+        // Trusting `message.tips` -- as previous rounds did -- was a
+        // hole: a Byzantine peer could vote hash X, put the matching
+        // tip CIDs in `message.tips`, and then serve a `changes` /
+        // `snapshot` payload describing a completely different state.
+        // The advertised-vs-claimed check would pass even though the
+        // application would receive divergent content. PR #284 r7
+        // Copilot review caught this; the fix delegates frontier
+        // computation to the pure helper `computeServedFrontier`, which
+        // walks the served `changes` tree (plus the snapshot boundary
+        // CID) and returns the set of payload CIDs that no other node
+        // in the same payload references as a parent -- i.e. the heads
+        // of what was actually served. We then hash that frontier and
+        // compare to `winningHashHex`.
+        //
+        // We additionally REQUIRE `message.tips` on every v3 quorum-
+        // enabled load response (PR #284 r9 Copilot review, issue #1).
+        // The v3 load-response contract mandates the responder commit
+        // to an explicit frontier attestation; a responder that omits
+        // `tips` is recorded as a per-peer bind failure so the loader
+        // retries the next agreeing peer. The structural check above
+        // is the primary defense; the explicit `tips` requirement
+        // ensures protocol compliance AND that the defense-in-depth
+        // check below (verifying `tips` matches the structurally-
+        // derived served frontier) actually runs. Catches the
+        // responder-equivocation mode where `tips` and `changes` were
+        // assembled inconsistently — e.g. a peer that claims extra
+        // heads in `tips` that are not present in the served tree.
+        //
+        // Throws the module-private `_QuorumBindCheckFailedError` on
+        // mismatch so the surrounding `load()` loop can record this
+        // peer as a bind-failure and proceed to the NEXT peer in the
+        // agreeing cohort. Previously this site threw
+        // `LoadQuorumFailedError` directly, which `load()` re-raised --
+        // letting a single malicious peer in the agreeing cohort vote
+        // for the majority hash, serve a mismatched full load, and
+        // unilaterally DoS the entire load by aborting before the
+        // honest agreeing peers could be tried. See PR #284 r6 Copilot
+        // review. `load()` only escalates to a structured
+        // `LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)`
+        // when EVERY narrowed peer fails the bind step.
+        if (expectedTipsHashHex !== null) {
+          // Derive the served frontier STRUCTURALLY from the payload
+          // the responder is asking us to apply -- not from the
+          // responder's own `tips` attestation.
+          const servedFrontier = computeServedFrontier(
+            message.changeId,
+            message.changes,
+            message.snapshot?.lastChangeNodeCID,
+          );
+          const servedBytes = await tipsHash(servedFrontier);
+          const servedHex = tipsHashToHex(servedBytes);
+          if (!constantTimeHexEquals(expectedTipsHashHex, servedHex)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `expected tipsHash=${expectedTipsHashHex.slice(0, 12)}... but ` +
+                `served payload's frontier hashes to ${servedHex.slice(0, 12)}.... ` +
+                `An agreeing peer voted for one tip set and served a ` +
+                `different one; treating as Byzantine equivocation.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              servedHex,
+              `Quorum frontier binding mismatch (served payload): expected ` +
+                `${expectedTipsHashHex.slice(0, 12)}... got ${servedHex.slice(0, 12)}...`,
+            );
+          }
+          // Protocol compliance: under the v3 load-response contract,
+          // a quorum-enabled load REQUIRES `message.tips` to be present
+          // on the response so the responder commits to an explicit
+          // frontier attestation alongside the served payload. The
+          // structural-frontier check above is the primary defense; this
+          // explicit `Array.isArray(message.tips)` guard ensures a v3
+          // responder that omits `tips` is recorded as a per-peer bind
+          // failure (so the loader retries the NEXT agreeing peer)
+          // rather than silently passing on the structural-hash check
+          // alone. Without this guard, a responder could violate the
+          // protocol contract — and a defense-in-depth check that
+          // catches contradictions between `tips` and the served payload
+          // would never run because the `Array.isArray` branch would
+          // simply skip. See PR #284 r9 Copilot review (issue #1).
+          if (!Array.isArray(message.tips)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `quorum-enabled load response omitted required \`tips\` ` +
+                `attestation (v3 protocol violation). Recording peer as ` +
+                `bind-failed; loader will try the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(missing tips)',
+              `Quorum frontier binding: responder omitted required \`tips\` ` +
+                `attestation on v3 quorum-enabled load response.`,
+            );
+          }
+          // Defense-in-depth: the responder-supplied `tips` must hash
+          // to the same value as the structurally-derived served
+          // frontier. A peer whose attested `tips` contradicts their
+          // own served payload (e.g. claims extra heads that are not
+          // present in the served tree) is misbehaving.
+          const advertisedBytes = await tipsHash(message.tips);
+          const advertisedHex = tipsHashToHex(advertisedBytes);
+          if (!constantTimeHexEquals(servedHex, advertisedHex)) {
+            console.warn(
+              `[${this.documentPath}] Quorum frontier binding FAILED: ` +
+                `served payload frontier hashes to ${servedHex.slice(0, 12)}... ` +
+                `but responder advertised tips hashing to ${advertisedHex.slice(0, 12)}.... ` +
+                `Responder's own attestation contradicts the served payload.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              advertisedHex,
+              `Quorum frontier binding mismatch (advertised vs served): ` +
+                `advertised ${advertisedHex.slice(0, 12)}... served ` +
+                `${servedHex.slice(0, 12)}...`,
+            );
+          }
+
+          // Content-address verification (PR #284 r17 Copilot review).
+          //
+          // The structural bind above proves Q peers agree on the
+          // FRONTIER CIDs and that those CIDs appear as keys in the
+          // served tree. It does NOT prove the inline `change` content
+          // for each CID actually hashes back to that CID -- a Byzantine
+          // peer could vote for the agreed frontier and then serve a
+          // tree whose `children` map uses the agreed CIDs as keys but
+          // whose inline `change` values are forged.
+          //
+          // On a FIRST load (`_writers` empty), per-change signature
+          // verification inside the CRDT merge cannot fire -- there are
+          // no writer keys to verify against -- so forged inline content
+          // would otherwise reach `_crdtProvider.remoteChange`/
+          // `_mergeWriters`/`_mergeReaders` unchecked.
+          //
+          // Defense: strip inline `change` content from every node in
+          // the served tree before applying. `sync()` then routes each
+          // CID through `missingDocumentHashes -> _getBlock(cid) ->
+          // helia.blockstore.get(cid)`, which content-validates the
+          // fetched bytes against the CID intrinsically (a Byzantine
+          // peer cannot serve bytes that hash to a CID they did not
+          // produce, and bitswap will retrieve from an honest peer in
+          // the agreeing cohort that does hold the legitimate block).
+          //
+          // Cost: N bitswap roundtrips instead of one inline load. Paid
+          // only on quorum-bound loads; the legacy `winningHashHex ===
+          // null` path is untouched.
+          //
+          // Snapshots: `CRDTSnapshotNode.state` is NOT CID-addressed --
+          // the snapshot's `lastChangeNodeCID` only identifies the
+          // boundary, not the snapshot bytes. Defense is the writer
+          // signature (`_verifySnapshotSignature`), which fails on
+          // first load (writers empty) and rejects the snapshot
+          // automatically. On subsequent loads writers are known and
+          // the signature is the source of truth. We drop the snapshot
+          // entirely on first load below so a malicious snapshot
+          // signature forged with an attacker-controlled key (which
+          // would be admitted if the inline ACL pre-pass were trusted)
+          // never reaches `applySnapshot`.
+          // Capture every CID that appears in the served tree BEFORE
+          // stripping. `_syncDocumentChanges` swallows per-block fetch
+          // failures (logs + returns); without a post-sync verification
+          // step a transient bitswap/blockstore miss would let this
+          // method return `true` with only a partially-applied document
+          // and `load()` report success. After `sync()` we re-check that
+          // every captured CID is now in `_hashes`; any missing CID is
+          // surfaced as a per-peer bind failure so the loader can retry
+          // the next peer in the agreeing cohort. See PR #284 r18
+          // Copilot review.
+          const expectedCids = collectAllCidsInTree(
+            message.changeId,
+            message.changes,
+          );
+
+          stripInlineChanges(message.changes);
+          const preLoadWriterCount = (await this._writers.users()).length;
+          if (preLoadWriterCount === 0 && message.snapshot) {
+            console.warn(
+              `[${this.documentPath}] Dropping snapshot from quorum-bound ` +
+                `first load: writers ACL is not yet populated so the ` +
+                `snapshot signature cannot be verified. The receiver will ` +
+                `rebuild state from individual change blocks via Helia ` +
+                `(each block content-validated against its CID).`,
+            );
+            message.snapshot = undefined;
+          }
+
+          // Snapshot-only first-load detection: after the snapshot drop
+          // above, if the response now carries NO changes tree AND NO
+          // snapshot, the responder served us nothing usable. Without
+          // this guard the path falls through to `sync(message, false)`
+          // (which returns `true` for a vacuously-empty message because
+          // there is nothing to merge / reject) and this method reports
+          // success — `load()` then returns `true` with neither state
+          // applied nor an opportunity to retry. Treat as a per-peer
+          // bind failure so the agreeing-cohort load loop tries the
+          // next peer (which may serve a real changes tree). See
+          // PR #284 r18 Copilot review.
+          if (
+            message.changes === undefined &&
+            message.snapshot === undefined
+          ) {
+            console.warn(
+              `[${this.documentPath}] Quorum-bound first-load response ` +
+                `carries neither a changes tree nor a snapshot after the ` +
+                `defensive snapshot drop. Treating as bind failure so the ` +
+                `loader tries the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(snapshot-only first-load)',
+              `Quorum-bound first-load response had only a snapshot (now ` +
+                `dropped because writers are not yet populated) and no ` +
+                `changes tree; no state can be applied.`,
+            );
+          }
+
+          // PRE-FETCH gate (PR #284 r20 Copilot review).
+          //
+          // Round 19 added a POST-sync `_hashes`-coverage check, but
+          // `sync()` mutates the document as each fetched block lands
+          // -- so a missing CID would still leave the document
+          // partially mutated by the time the post-check threw a bind
+          // failure. To keep a failed quorum-bound load from altering
+          // local state at all, pull every required block from Helia
+          // here (BEFORE `sync()` is allowed to mutate). Helia's
+          // blockstore content-validates each fetch against its CID
+          // intrinsically; bitswap retrieves from any peer in the swarm
+          // that holds the legitimate block. If ANY fetch fails (CID
+          // not retrievable from any peer, content/CID mismatch, or
+          // timeout inside Helia), throw a per-peer bind failure with
+          // ZERO state mutation -- the load loop can cleanly retry the
+          // next peer in the agreeing cohort, or escalate to
+          // `bind-check-failed-all-agreeing-peers` if every peer
+          // exhausts.
+          //
+          // Run via a bounded worker pool so a single slow peer cannot
+          // pessimize the load AND a large load response (many CIDs)
+          // cannot trigger a burst of parallel `blockstore.get()` fetches
+          // that exhaust libp2p/Helia per-connection stream quotas or
+          // pressure memory by buffering N inline payloads at once. The
+          // previous implementation used `Promise.allSettled` over the
+          // full `expectedCids` list with no concurrency cap, which
+          // worked fine for typical loads but scaled linearly with the
+          // worst-case adversary-shaped response. `LOAD_PREFETCH_MAX_CONCURRENCY`
+          // (8) is a balance: large enough to overlap WAN-latency-bound
+          // bitswap fetches, small enough to bound peak resource use on
+          // the loader. Block bytes are cached locally on success; the
+          // subsequent `sync()` call only does local lookups for those
+          // CIDs and applies them. See PR #284 r24 Copilot review.
+          if (expectedCids.length > 0) {
+            const missingCids: string[] = [];
+            let nextIndex = 0;
+            const workerCount = Math.min(
+              LOAD_PREFETCH_MAX_CONCURRENCY,
+              expectedCids.length,
+            );
+            const worker = async (): Promise<void> => {
+              while (true) {
+                const i = nextIndex++;
+                if (i >= expectedCids.length) return;
+                const cidStr = expectedCids[i]!;
+                try {
+                  const cid = CID.parse(cidStr);
+                  // Force the blockstore to retrieve the block. Helia
+                  // validates content vs CID on `get`; draining the
+                  // returned async-iterable triggers the actual fetch.
+                  // Discard the chunks (no concat) — we only need
+                  // content-validation here, not the bytes.
+                  for await (const _chunk of this.swarm.heliaNode.blockstore.get(
+                    cid,
+                  )) {
+                    void _chunk;
+                  }
+                } catch {
+                  missingCids.push(cidStr);
+                }
+              }
+            };
+            await Promise.all(
+              Array.from({ length: workerCount }, () => worker()),
+            );
+            if (missingCids.length > 0) {
+              console.warn(
+                `[${this.documentPath}] Quorum-bound load pre-fetch ` +
+                  `failed: ${missingCids.length} of ${expectedCids.length} ` +
+                  `expected CIDs were not retrievable from Helia (e.g. ` +
+                  `${missingCids
+                    .slice(0, 3)
+                    .map((c) => c.slice(0, 12) + '...')
+                    .join(', ')}). Recording peer as bind-failed BEFORE ` +
+                  `any state mutation; the loader will try the next ` +
+                  `agreeing peer with a clean document.`,
+              );
+              throw new _QuorumBindCheckFailedError(
+                '(prefetch-missing-blocks)',
+                `Quorum-bound load pre-fetch could not retrieve ` +
+                  `${missingCids.length} of ${expectedCids.length} expected ` +
+                  `CIDs from Helia; aborting before sync() so document ` +
+                  `state is unchanged.`,
+              );
+            }
+          }
+
+          const syncResult = await this.sync(message, false);
+          if (!syncResult) {
+            console.warn(
+              `sync rejected message during load for ${this.documentPath}`,
+            );
+            // Return false so the caller tries the next peer.
+            return false;
+          }
+
+          // Post-sync verification (PR #284 r18 Copilot review): every
+          // CID we expected from the (stripped) served tree must have
+          // landed in `_hashes` via either inline application (for the
+          // non-stripped path this branch never reaches) or via the
+          // `_getBlock(cid)` Helia fetch path inside
+          // `_syncDocumentChanges`. A missing CID means bitswap could
+          // not retrieve that block; without surfacing this the load
+          // would silently report success with a partial document.
+          const missingCids: string[] = [];
+          for (const cid of expectedCids) {
+            if (!this._hashes.has(cid)) missingCids.push(cid);
+          }
+          if (missingCids.length > 0) {
+            console.warn(
+              `[${this.documentPath}] Quorum-bound load did not complete: ` +
+                `${missingCids.length} of ${expectedCids.length} expected ` +
+                `CIDs were not fetched from Helia (e.g. ${missingCids
+                  .slice(0, 3)
+                  .map((c) => c.slice(0, 12) + '...')
+                  .join(', ')}). Recording peer as bind-failed so the ` +
+                `loader tries the next agreeing peer.`,
+            );
+            throw new _QuorumBindCheckFailedError(
+              '(missing-blocks)',
+              `Quorum-bound load completed sync() but ${missingCids.length} ` +
+                `of ${expectedCids.length} expected CIDs were not retrievable; ` +
+                `served tree had stripped inline content and bitswap could ` +
+                `not retrieve the missing blocks.`,
+            );
+          }
+
+          return true;
+        }
+
         const syncResult = await this.sync(message, false);
         if (!syncResult) {
           console.warn(
@@ -2021,6 +2965,265 @@ export class CollabswarmDocument<
         return true;
       },
     );
+  }
+
+  /**
+   * Send a single `tipAdvertiseV1` probe to one peer and decrypt the
+   * response to extract the peer's `tipsHash`. Returns one of:
+   *
+   *   - `Uint8Array` -- the peer's advertised `tipsHash` (32 bytes).
+   *   - `'unknown-doc'` -- the peer explicitly disclaimed the document
+   *     (returned the 1-byte `0xFF` UNKNOWN_DOC sentinel). This is the
+   *     signal `Collabswarm.tipAdvertiseHandler` emits when no document
+   *     is registered for the requested path. Distinguishing this from
+   *     `null` lets the orchestrator tally `'unknown-doc'` exactly like
+   *     a tip-hash vote so that when a Q-of-K majority of peers all
+   *     disclaim the document, `load()` returns `false` to let a fresh
+   *     `open()` create the document on top of an existing swarm. The
+   *     previous design returned `null` for the unknown-doc case, which
+   *     was indistinguishable from a partition / timeout and made
+   *     new-document creation in an existing mesh fail with
+   *     `LoadQuorumFailedError`. See PR #284 r16 Copilot review.
+   *   - `null` -- any other non-vote outcome: empty response, decryption
+   *     failure with an unknown key (peer has a different keychain),
+   *     missing/invalid signature, deserialization failure, document-id
+   *     mismatch, missing/short tip hash, or thrown errors. Timeouts are
+   *     handled at the caller level via Promise.race.
+   *
+   * Returns rather than throws so the caller can record this peer as a
+   * non-vote (NOT a disagreement) and `decideLoadQuorum` can apply the
+   * correct quorum semantics. See `load-quorum.ts` for the
+   * timeout-vs-disagreement-vs-unknown-doc distinction.
+   *
+   * @internal
+   */
+  private async _probeTipAdvertise(
+    peer: import('@multiformats/multiaddr').Multiaddr,
+    serializedRequest: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array | 'unknown-doc' | null> {
+    // Capture the underlying v3 Stream so the abort path below can call
+    // `abort()` on it directly (the wrapped DuplexStream only exposes the
+    // write-side half-close via `close()`, not a full bidirectional tear-
+    // down). Without this, a probe that loses the Promise.race to the
+    // timeout would leak its stream until the libp2p connection itself
+    // closed -- on partitioned/slow peers, each `load()` could leak K
+    // streams, exhausting per-connection stream quotas. See PR #284 r2
+    // CodeRabbit comment on this method.
+    let rawStream: import('@libp2p/interface').Stream;
+    let stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> };
+    try {
+      rawStream = await this.libp2p.dialProtocol(peer, [tipAdvertiseV1]);
+      stream = wrapStream(rawStream);
+    } catch {
+      // Peer doesn't support tip-advertise or dial failed -- treat as non-vote.
+      return null;
+    }
+    // Abort handler: tear down the v3 stream bidirectionally so a timed-out
+    // probe doesn't strand the libp2p resource. `abort()` is the v3 full
+    // teardown ("close stream for reading and writing"); `close()` would
+    // only half-close the write side. Re-checking `signal?.aborted` after
+    // attaching handles the race where the signal fired between dial and
+    // listener attach. The handler also resolves `pipe()` / read promises
+    // below with `AbortError`, which we swallow in the outer catch.
+    const onAbort = () => {
+      try {
+        rawStream.abort(new Error('tip-advertise probe aborted'));
+      } catch {
+        // Already torn down -- nothing to do.
+      }
+    };
+    if (signal) {
+      if (signal.aborted) {
+        try {
+          rawStream.abort(new Error('tip-advertise probe aborted'));
+        } catch {
+          /* already torn down */
+        }
+        return null;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+    try {
+      await pipe([serializedRequest], stream.sink);
+      // Size-bound the tip-advertise response read. A `tipAdvertiseV1`
+      // body is an encrypted `CRDTSyncMessage` carrying the `documentId`
+      // (up to `MAX_DOCUMENT_PATH_LENGTH` bytes BEFORE encryption — this
+      // dominates the size), a 32-byte `tipsHash`, and (optionally) a
+      // writer signature. The cap is derived from
+      // `MAX_DOCUMENT_PATH_LENGTH` plus JSON / Base64 / AES-GCM / signature
+      // overheads (see `MAX_TIP_ADVERTISE_RESPONSE_SIZE` docstring above
+      // for the breakdown). The previous 2 KiB cap was smaller than the
+      // `documentId` field alone, so any document with a maximal path was
+      // surfaced as a non-vote and quorum could never pass for it. 6 KiB
+      // is generous for legitimate peers but prevents a malicious peer
+      // from streaming an unbounded payload to force `load()` to buffer
+      // it all before returning a non-vote. If the read overruns the cap,
+      // `readUint8Iterable` throws a `RangeError` that is caught by the
+      // surrounding `try { ... } catch { return null; }` — surfacing as a
+      // non-vote (same outcome as a timeout), NOT a quorum disagreement.
+      // See PR #284 r4/r5 Copilot review.
+      const assembled = await readUint8Iterable(
+        stream.source,
+        MAX_TIP_ADVERTISE_RESPONSE_SIZE,
+      );
+      if (assembled.length === 0) {
+        // Peer declined (unauthorized, decryption failure, document-id
+        // mismatch, etc.). Distinct from the 1-byte UNKNOWN_DOC sentinel
+        // handled below, which signals "I don't have this document at all"
+        // (a distinguishable case used to let new-doc creation succeed
+        // in an existing swarm; see method docstring).
+        return null;
+      }
+      // 1-byte UNKNOWN_DOC sentinel response: `Collabswarm.tipAdvertiseHandler`
+      // emits this when no document is registered for the requested path.
+      // The orchestrator counts these toward a separate "unknown-doc"
+      // tally so a Q-of-K majority of disclaims becomes a clean
+      // new-doc-creation signal rather than a `LoadQuorumFailedError`.
+      // See `_probeTipAdvertise`'s docstring and PR #284 r16 Copilot
+      // review for the rationale.
+      if (assembled.length === 1 && assembled[0] === 0xff) {
+        return 'unknown-doc';
+      }
+      const headerLength = this._keychainProvider.keyIDLength + this._authProvider.nonceBits;
+      if (assembled.length <= headerLength) {
+        // Too short to be a valid encrypted payload.
+        return null;
+      }
+      const blockKeyID = assembled.slice(0, this._keychainProvider.keyIDLength);
+      const key = this._keychain.getKey(blockKeyID);
+      if (!key) {
+        // Responder used a key we don't have. Treat as non-vote rather than
+        // an attack: a freshly-onboarded reader may legitimately not have
+        // every historical key yet. The decryption-side check on the full
+        // load that follows will still gate trust on the actual state.
+        return null;
+      }
+      const blockNonce = assembled.slice(this._keychainProvider.keyIDLength, headerLength);
+      const blockData = assembled.slice(headerLength);
+      const decrypted = await this._authProvider.decrypt(blockData, key, blockNonce);
+      if (!decrypted) {
+        return null;
+      }
+      let message: CRDTSyncMessage<ChangesType, PublicKey>;
+      try {
+        message = this._syncMessageSerializer.deserializeSyncMessage(decrypted);
+      } catch {
+        return null;
+      }
+      if (message.documentId !== this.documentPath) {
+        return null;
+      }
+      // Verify the writer signature on the advertisement when possible.
+      // On first load (_writers empty) we cannot verify -- trust falls
+      // back to the encryption envelope (only a peer that already holds
+      // the current key could produce this response) plus the quorum
+      // requirement that multiple such peers agree. This matches the
+      // bootstrapping behaviour of `_sendLoadRequestAndSync`.
+      if (this._isSigningEnabled()) {
+        const preLoadWriters = await this._getWriterKeys();
+        if (preLoadWriters.length > 0) {
+          if (!message.signature) {
+            return null;
+          }
+          const { signature, ...messageWithoutSignature } = message;
+          const raw = this._syncMessageSerializer.serializeSyncMessage(
+            messageWithoutSignature,
+          );
+          let signatureBytes: Uint8Array;
+          try {
+            signatureBytes = this._deserializeSignature(signature);
+          } catch {
+            return null;
+          }
+          const verifyTasks = preLoadWriters.map((writerKey) =>
+            this._authProvider.verify(raw, writerKey, signatureBytes),
+          );
+          if (!(await firstTrue(verifyTasks))) {
+            return null;
+          }
+        }
+      }
+      if (!(message.tipsHash instanceof Uint8Array) || message.tipsHash.length !== TIPS_HASH_LENGTH) {
+        return null;
+      }
+      return message.tipsHash;
+    } catch {
+      return null;
+    } finally {
+      // Always detach the abort listener and release the libp2p stream.
+      // The normal success path drops through to here after `return` runs,
+      // so we still need to close the stream to release per-connection
+      // stream quota (the response read consumed the read side but the
+      // write side is half-open until close() runs). On the abort path
+      // `rawStream.abort()` has already been called by `onAbort`; calling
+      // `close()` again is a no-op the libp2p impls tolerate.
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      try {
+        await rawStream.close();
+      } catch {
+        /* already torn down */
+      }
+    }
+  }
+
+  /**
+   * Run a single tip-advertise probe with a hard timeout. The probe itself
+   * never throws (`_probeTipAdvertise` returns `null` on any failure
+   * mode); a timeout also resolves to `null` so the caller can treat the
+   * peer as a non-vote rather than a disagreement.
+   *
+   * Stream cancellation: when the timeout wins the race, the underlying
+   * probe's libp2p stream is torn down via an AbortController so the
+   * pending probe doesn't keep the resource alive in the background. Prior
+   * to this fix, every timed-out probe leaked one libp2p stream per
+   * `load()` call; under partitions or slow peers, K such leaks per load
+   * could exhaust per-connection stream quotas. See PR #284 r2 review.
+   *
+   * @internal
+   */
+  private async _raceTipAdvertiseProbe(
+    peer: import('@multiformats/multiaddr').Multiaddr,
+    serializedRequest: Uint8Array,
+    timeoutMs: number,
+  ): Promise<Uint8Array | 'unknown-doc' | null> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        this._probeTipAdvertise(peer, serializedRequest, controller.signal),
+        timeout,
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      // Whether the probe won or the timeout won, abort the controller so
+      // any in-flight probe (loser of the race, still pending on the event
+      // loop) tears down its stream. Aborting AFTER the probe has already
+      // resolved is a no-op: the probe's finally block will have already
+      // detached the listener and closed the stream itself.
+      controller.abort();
+    }
+  }
+
+  /**
+   * Extract the remote peer-id portion of a Multiaddr in a form suitable
+   * for keying the quorum decision map. For relay-circuit multiaddrs (e.g.
+   * `.../p2p/<relay>/p2p-circuit/p2p/<remote>`), the remote peer-id is the
+   * LAST `/p2p/<id>` segment. Falls back to the full multiaddr string when
+   * no `/p2p/<id>` segment is present so two responses from the same peer
+   * always collide on the same map key.
+   *
+   * @internal
+   */
+  private _peerIdOf(peer: import('@multiformats/multiaddr').Multiaddr): string {
+    const str = peer.toString();
+    const matches = [...str.matchAll(/\/p2p\/([^/]+)/g)];
+    return matches.length > 0 ? matches[matches.length - 1][1] : str;
   }
 
   // API Methods --------------------------------------------------------------
@@ -2037,12 +3240,73 @@ export class CollabswarmDocument<
    *   substring from each peer's `Multiaddr.toString()` (the canonical string
    *   form), since `@multiformats/multiaddr` v13 dropped the `getPeerId()`
    *   helper and `getComponents()` may surface the `/p2p` value as bytes.
+   * **Initial-load quorum gate.** When
+   * `CollabswarmConfig.loadQuorumEnabled` is `true` (the default), `load()`
+   * first queries up to `loadQuorumK` peers in parallel via the
+   * `tipAdvertiseV1` protocol for a lightweight tip-set hash. The full
+   * document-load only proceeds against a peer that participated in a
+   * majority (`loadQuorumQ`-of-K) agreement on the tip set, defending
+   * against a single malicious or partitioned peer unilaterally serving a
+   * stale or maliciously-crafted initial state. The gate runs uniformly
+   * regardless of local `_hashes` state (an empty local `_hashes` is the
+   * exact state the gate must defend on first `open()` of an existing
+   * document — bypassing it then would be unsafe). If quorum is not met,
+   * `load()` rejects with a `LoadQuorumFailedError` (see
+   * `load-quorum.ts`). The gate can be disabled wholesale via
+   * `loadQuorumEnabled: false` for single-peer dev/test scenarios; the
+   * single-peer edge case is covered by `loadQuorumAllowSinglePeer`. Tip-
+   * advertise responses with an unknown encryption key, missing/invalid
+   * writer signature, document-id mismatch, or short/missing tip hash are
+   * recorded as non-votes (NOT disagreements) so a stale peer cache does
+   * not flip a partition into a Byzantine-failure verdict. The probe
+   * round dedupes peers by libp2p PeerId so a single peer with multiple
+   * open connections cannot cast multiple votes. The legacy load loop
+   * (when `loadQuorumEnabled: false`) keeps the ORIGINAL un-deduped
+   * peer list so it can retry across multiple multiaddrs for the same
+   * peer id (e.g. a direct connection + a relay-circuit fallback). See
+   * PR #284 r7 Copilot review for the dedup-scope rationale.
+   *
+   * After quorum passes, the served full state is bound to the agreed
+   * hash STRUCTURALLY -- the loader derives the responder's served
+   * frontier from the actual `changes`/`snapshot` payload via
+   * `computeServedFrontier`, hashes that, and verifies it equals
+   * `winningHashHex` BEFORE applying the response. The
+   * responder-supplied `message.tips` array is NO LONGER trusted as the
+   * source of truth (previous rounds did, which let a Byzantine peer
+   * vote hash X, put X's tips in `message.tips`, and serve a divergent
+   * payload). When present, `message.tips` is additionally checked to
+   * hash to the same value as the structurally-derived served
+   * frontier; this catches the responder-internal-equivocation case
+   * where the served `changes` and the advertised `tips` were
+   * assembled inconsistently. See PR #284 r7 Copilot review. An
+   * agreeing peer whose served payload's structural frontier hashes to
+   * something other than `winningHashHex` is treated as a PER-PEER bind
+   * failure: the loader records the offending peer in
+   * `agreeingPeerBindFailures`, skips it, and tries the next peer in
+   * the agreeing cohort. This prevents a single malicious peer in the
+   * agreeing cohort from DoS'ing the entire load by voting for the
+   * majority hash (passing quorum) and then serving a mismatched full
+   * load. Only after EVERY peer in the agreeing cohort has bind-failed
+   * does the loader throw `LoadQuorumFailedError(reason: 'bind-check-
+   * failed-all-agreeing-peers')`, with `agreeingPeerBindFailures`
+   * recording per-peer what each Byzantine peer served instead.
+   * Closes the gap tracked under issue #189 §5.4 item 2 (and bulleted
+   * in #186). See PR #284 r6 Copilot review for the DoS rationale on
+   * the per-peer retry.
+   *
    * @returns `true` if the document was successfully loaded from a peer.
    *   `false` if no peer could provide the document -- this is ambiguous: it
    *   may mean the document is brand new (no peers have it) OR that all peers
    *   failed to respond, failed to decrypt, or failed signature verification.
    *   Note: `open()` treats `false` as "new document" and initializes a fresh
    *   document with the current user as writer and a new encryption key.
+   * @throws {LoadQuorumFailedError} When the initial-load quorum gate is
+   *   enabled and fewer than `loadQuorumQ` peers agreed on the same tip
+   *   hash within the configured timeout. Callers can `instanceof`-check
+   *   this error to distinguish quorum failure from other I/O errors
+   *   raised inside `load()`. The original single-peer
+   *   "return false on no peers" behaviour is preserved when the quorum
+   *   gate is disabled (`loadQuorumEnabled: false`).
    */
   // Key exchange happens during:
   // - Load messages.
@@ -2104,10 +3368,187 @@ export class CollabswarmDocument<
     };
     const serializedRequest = this._loadMessageSerializer.serializeLoadRequest(loadRequest);
 
+    // Dedupe peers by peer id ONLY for the quorum probe round.
+    // `getConnections()` returns one entry per OPEN connection, and libp2p
+    // maintains separate connections per multiaddr / per transport — so a
+    // single remote peer with two open connections (e.g. direct +
+    // relay-circuit) shows up twice. Without dedup, that peer would cast
+    // two votes in the quorum tally, allowing a single malicious peer with
+    // multiple connections to dominate the agreement count. Dedup by
+    // `_peerIdOf` (which extracts the LAST `/p2p/<id>` segment, i.e. the
+    // remote peer's libp2p PeerId for both direct and circuit-relay
+    // multiaddrs). Preserves first-seen order so the preferredPeer (placed
+    // at index 0 above) remains first.
+    //
+    // IMPORTANT: dedup applies only to `quorumPeers`. The legacy
+    // single-peer load path (when `loadQuorumEnabled: false`) keeps the
+    // ORIGINAL `orderedPeers` so it can retry across multiple multiaddrs
+    // for the same peer id -- e.g. a direct connection + a relay-circuit
+    // fallback. Collapsing those to one entry pre-quorum would silently
+    // break the legacy fallback even when the quorum gate is off. See PR
+    // #284 r7 Copilot review.
+    const quorumPeers = dedupePeersByPeerId(
+      orderedPeers,
+      (p) => this._peerIdOf(p),
+    );
+
+    // Initial-load quorum gate (#189 §5.4.2 / #186).
+    //
+    // Run BEFORE the existing single-peer snapshot/doc-load loop so that a
+    // failed quorum aborts the load entirely (the caller cannot accidentally
+    // accept a single peer's response). When the gate is disabled we fall
+    // through to the legacy loop unchanged so existing callers see the same
+    // behaviour.
+    //
+    // `winningHashHex` (set when quorum passes) is also used below as the
+    // per-peer binding check inside `_sendLoadRequestAndSync`. The check
+    // is purely structural and runs BEFORE the served state is applied:
+    // the loader hashes `computeServedFrontier(message.changeId,
+    // message.changes, message.snapshot?.lastChangeNodeCID)` and compares
+    // to `winningHashHex`. If they disagree, an agreeing peer voted for
+    // one tip set and served a different one (Byzantine equivocation):
+    // the peer is recorded as a bind failure and the loader retries the
+    // next agreeing peer without ever mutating in-memory state. The
+    // pre-apply ordering is the load-bearing property -- a Byzantine peer
+    // cannot poison the in-memory document because the bind decision
+    // happens before `sync()` runs. See PR #284 r7 Copilot review.
+    // NOTE: previously this block bypassed the gate when `_hashes.size === 0`
+    // on the assumption it identified a "founding-member" brand-new document.
+    // That bypass was unsafe: `_hashes` is ALSO empty on the first `open()`
+    // of an EXISTING document (before load populates it), which is exactly
+    // the case the gate is meant to protect. We no longer special-case empty
+    // local state; the gate runs uniformly. New-document creation in an
+    // EXISTING swarm is handled by the `'unknown-doc'` probe sentinel: each
+    // peer that does not have the document responds with the 1-byte UNKNOWN_DOC
+    // marker (see `Collabswarm.tipAdvertiseHandler`), the orchestrator tallies
+    // these alongside tip-hash votes, and a Q-of-K majority of disclaims
+    // surfaces as `{ newDoc: true }` here -- the loader returns `false` and
+    // `open()` proceeds to create the doc fresh. True founders (no peers in
+    // the mesh) are still handled by the `peers.length === 0` short-circuit
+    // at the top of `load()` plus the `k === 0` branch inside `runLoadQuorum`
+    // (which returns `{ skipped: true }`). See PR #284 r16 Copilot review.
+    //
+    // The K-of-Q decision logic itself lives in `runLoadQuorum`
+    // (`load-quorum-orchestrator.ts`) so the orchestration can be unit-tested
+    // without standing up a libp2p/Helia stack. The orchestrator is given a
+    // probe-fn closure that captures this document's `_raceTipAdvertiseProbe`
+    // (the only network-touching call); narrowing, agreement counting, and
+    // single-peer fallback all happen in pure code with the same control
+    // flow as before the extraction. See PR #284 r4 Copilot review for the
+    // test-coverage rationale.
+    const timeoutMs = this.swarm.config?.loadQuorumTimeoutMs ?? 5000;
+    const quorumResult = await runLoadQuorum({
+      peers: quorumPeers,
+      peerIdOf: (p) => this._peerIdOf(p),
+      probeFn: (peer) =>
+        this._raceTipAdvertiseProbe(peer, serializedRequest, timeoutMs),
+      documentPath: this.documentPath,
+      config: {
+        enabled: this.swarm.config?.loadQuorumEnabled ?? true,
+        k: this.swarm.config?.loadQuorumK ?? 3,
+        q: this.swarm.config?.loadQuorumQ,
+        timeoutMs,
+        allowSinglePeer:
+          this.swarm.config?.loadQuorumAllowSinglePeer ?? false,
+      },
+    });
+
+    let winningHashHex: string | null = null;
+    if ('skipped' in quorumResult) {
+      // `runLoadQuorum` returns `{ skipped: true }` in two cases: (a) the
+      // gate is disabled wholesale (`loadQuorumEnabled: false`), or (b) the
+      // effective K resolved to 0 because no peers were known. For (a) we
+      // fall through to the legacy single-peer load loop unchanged --
+      // `orderedPeers` is intentionally NOT deduped here so the loop can
+      // retry across multiple multiaddrs for the same peer id (e.g. a
+      // direct connection + a relay-circuit fallback). For (b) there is
+      // nothing to load against — treat as new document. The peer-list
+      // empty short-circuit at the top of `load()` already covers the
+      // trivial "no peers" path; this branch is reached when quorum is
+      // enabled with a valid K but the post-dedup `quorumPeers` happens
+      // to be empty.
+      //
+      // Note: a misconfigured `loadQuorumK <= 0` no longer reaches this
+      // branch — `runLoadQuorum` throws `LoadQuorumFailedError(invalid-
+      // config)` for that case so the misconfiguration is loud at
+      // `open()` time instead of silently forking the document. See PR
+      // #284 r5 Copilot review.
+      const quorumWasEnabled = this.swarm.config?.loadQuorumEnabled ?? true;
+      if (quorumWasEnabled && quorumPeers.length === 0) {
+        return false;
+      }
+      // Else: gate disabled. Fall through with the original (un-deduped)
+      // `orderedPeers` so the legacy loop can retry per-multiaddr.
+    } else if ('newDoc' in quorumResult) {
+      // A Q-of-K majority of probed peers explicitly disclaimed the
+      // document via the `'unknown-doc'` sentinel. Return `false` so
+      // `open()` can create the document fresh on top of the existing
+      // swarm. Without this branch, the previous design conflated
+      // unknown-doc with partition / timeout and surfaced
+      // `LoadQuorumFailedError` -- preventing new-document creation in
+      // any swarm with online peers. See PR #284 r16 Copilot review.
+      return false;
+    } else {
+      winningHashHex = quorumResult.winningHashHex;
+      // Quorum succeeded: narrow the load loop to the agreeing cohort.
+      // The narrowed list is already deduped (it is a filter of
+      // `quorumPeers`), so we replace `orderedPeers` wholesale.
+      orderedPeers.length = 0;
+      orderedPeers.push(...quorumResult.narrowedPeers);
+    }
+
+    // Capture the post-narrow cohort size so the failure-reason decision
+    // below can distinguish "every agreeing peer bind-failed" (coordinated
+    // Byzantine equivocation on the load step -- the dedicated
+    // `bind-check-failed-all-agreeing-peers` reason) from "some agreeing
+    // peers bind-failed, others failed for transport/protocol reasons"
+    // (mixed failure -- caller should treat as transient and retry, the
+    // `agreeing-peers-unreachable` reason). The previous logic used
+    // `bind-check-failed-all-agreeing-peers` whenever ANY bind failure was
+    // recorded, which contradicted the reason's public name and could
+    // make callers treat a mixed transient retrieval failure as
+    // coordinated Byzantine behaviour. See PR #284 r17 Copilot review.
+    // For the legacy non-quorum path (`winningHashHex === null`), this
+    // value is unused -- the failure block guards on `winningHashHex`.
+    const narrowedCohortSize = orderedPeers.length;
+
     // Try snapshot-load first for faster initial sync.
     // If the peer returns an empty response (no snapshot available),
     // fall back to the regular doc-load protocol.
+    //
+    // Quorum frontier binding: when `winningHashHex` is non-null,
+    // `_sendLoadRequestAndSync` derives the responder's served frontier
+    // STRUCTURALLY from the actual `changes`/`snapshot` payload via
+    // `computeServedFrontier`, hashes that, and verifies it equals
+    // `winningHashHex` BEFORE applying the sync, so a Byzantine peer
+    // that voted for one tip set and serves a different one never gets
+    // to mutate in-memory document state. The responder-supplied
+    // `message.tips` is checked as a defense-in-depth consistency
+    // requirement but is NOT the source of truth -- previous rounds
+    // trusted it as such, which let a Byzantine peer game the binding
+    // by populating `tips` with the agreed CIDs while serving a
+    // divergent `changes` payload. See PR #284 r7 Copilot review.
+    //
+    // Per-peer bind failures (`_QuorumBindCheckFailedError`) are NOT
+    // fatal to the whole load -- they only disqualify the offending
+    // peer. The loop records the failure and continues to the NEXT
+    // peer in the agreeing cohort, so a single malicious peer that
+    // voted for the majority hash and then served a mismatched full
+    // load cannot DoS the entire load. Only after every peer in the
+    // narrowed cohort has bind-failed does `load()` escalate to
+    // `LoadQuorumFailedError(bind-check-failed-all-agreeing-peers)`.
+    // See PR #284 r6 Copilot review.
+    //
+    // The `agreeingPeerBindFailures` map records, per peer, the hex
+    // hash the served payload's structural frontier actually hashed to
+    // (or the hex of the responder's contradicting `tips` attestation
+    // when the defense-in-depth secondary check fails). This is
+    // threaded into the final error so callers / operators can see
+    // which peers in the agreeing cohort equivocated between the
+    // probe round and the load round and what they served instead.
+    const agreeingPeerBindFailures = new Map<string, string>();
     for (const peer of orderedPeers) {
+      let peerBindFailed = false;
       try {
         console.log('Trying snapshot-load from peer:', peer.toString());
         // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
@@ -2115,30 +3556,133 @@ export class CollabswarmDocument<
         // duplex shape that `_sendLoadRequestAndSync` (and the legacy
         // `it-pipe` calls inside it) still expects.
         const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
-          snapshotLoadV2,
+          snapshotLoadV3,
         ]));
-        const loaded = await this._sendLoadRequestAndSync(snapshotStream, serializedRequest);
-        if (loaded) return true;
+        const loaded = await this._sendLoadRequestAndSync(
+          snapshotStream,
+          serializedRequest,
+          winningHashHex,
+        );
+        if (loaded) {
+          return true;
+        }
         // Empty response -- peer has no snapshot, try doc-load below.
-      } catch {
-        // Peer doesn't support snapshot-load protocol.
+      } catch (err) {
+        if (err instanceof _QuorumBindCheckFailedError) {
+          // This peer voted hash X in the probe round but the structural
+          // frontier of their served payload hashes to something else
+          // (or their advertised `tips` contradicts the served payload).
+          // Record the failure and skip the doc-load fallback for this
+          // peer -- a peer that equivocated once is not given a second
+          // chance on the same load round.
+          console.warn(
+            `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
+              `quorum frontier bind on snapshot-load (offending hash ${err.advertisedHex}); ` +
+              `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+          );
+          agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
+          peerBindFailed = true;
+        }
+        // Else: peer doesn't support snapshot-load protocol, or some
+        // other transient error -- fall through to doc-load below.
+      }
+
+      if (peerBindFailed) {
+        // Don't retry doc-load against a peer that already equivocated
+        // on snapshot-load -- continue to the next peer in the cohort.
+        continue;
       }
 
       try {
         console.log('Trying doc-load from peer:', peer.toString());
         // See snapshot-load above for why we wrap the v3 Stream here.
         const docStream = wrapStream(await this.libp2p.dialProtocol(peer, [
-          documentLoadV2,
+          documentLoadV3,
         ]));
-        const loaded = await this._sendLoadRequestAndSync(docStream, serializedRequest);
-        if (loaded) return true;
+        const loaded = await this._sendLoadRequestAndSync(
+          docStream,
+          serializedRequest,
+          winningHashHex,
+        );
+        if (loaded) {
+          return true;
+        }
       } catch (err) {
+        if (err instanceof _QuorumBindCheckFailedError) {
+          console.warn(
+            `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
+              `quorum frontier bind on doc-load (offending hash ${err.advertisedHex}); ` +
+              `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+          );
+          agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
+          continue;
+        }
         console.warn(
-          `Failed to load document via ${documentLoadV2}:`,
+          `Failed to load document via ${documentLoadV3}:`,
           peer.toString(),
           err,
         );
       }
+    }
+
+    // If quorum was actually run (`winningHashHex !== null`) but the
+    // load loop is exhausted, the cohort agreed the document exists
+    // yet none of them could serve it. Three sub-cases:
+    //
+    //   a) `agreeingPeerBindFailures.size === narrowedCohortSize` --
+    //      EVERY peer in the agreeing cohort voted for the agreed
+    //      hash and then served a divergent payload. Coordinated
+    //      Byzantine behaviour is the only explanation; we escalate
+    //      with the dedicated `bind-check-failed-all-agreeing-peers`
+    //      reason whose public docs say exactly this.
+    //
+    //   b) `agreeingPeerBindFailures.size > 0` but less than the
+    //      cohort size -- MIXED failure: some peers bind-failed
+    //      (suspicious) and others failed for transport/protocol
+    //      reasons (likely transient). We can't conclude coordinated
+    //      Byzantine equivocation across the whole cohort, so we
+    //      report `'agreeing-peers-unreachable'` and let the caller
+    //      retry. Using `bind-check-failed-all-agreeing-peers` here
+    //      would contradict the reason's public name/docs and could
+    //      make callers wrongly treat a mixed transient failure as
+    //      coordinated Byzantine behaviour. The `agreeingPeerBindFailures`
+    //      map is still threaded through for diagnostics so operators
+    //      can see which peers in the cohort did bind-fail.
+    //      See PR #284 r17 Copilot review.
+    //
+    //   c) `agreeingPeerBindFailures.size === 0` -- every agreeing
+    //      peer failed for a transport/protocol reason; we surface
+    //      the failure with `'agreeing-peers-unreachable'` so the
+    //      caller decides whether to retry or surface to the user.
+    //      We MUST NOT fall through to `return false` -- that would
+    //      let `open()` initialize a brand-new document despite
+    //      quorum just attesting that the document exists.
+    //
+    // Only after a TRUE no-quorum-was-run outcome (winningHashHex
+    // is null -- legacy non-quorum load or quorum disabled / no
+    // peers / etc.) is `return false` the right answer.
+    if (winningHashHex !== null) {
+      if (
+        narrowedCohortSize > 0 &&
+        agreeingPeerBindFailures.size === narrowedCohortSize
+      ) {
+        throw new LoadQuorumFailedError({
+          documentPath: this.documentPath,
+          reason: 'bind-check-failed-all-agreeing-peers',
+          respondingCount: 0,
+          requiredQ: 0,
+          agreement: new Map([[winningHashHex, 0]]),
+          agreeingPeerBindFailures,
+        });
+      }
+      throw new LoadQuorumFailedError({
+        documentPath: this.documentPath,
+        reason: 'agreeing-peers-unreachable',
+        respondingCount: 0,
+        requiredQ: 0,
+        agreement: new Map([[winningHashHex, 0]]),
+        agreeingPeerBindFailures,
+      });
     }
 
     // No peer could provide the document -- assume new document.
@@ -2677,8 +4221,9 @@ export class CollabswarmDocument<
    * `_documentChangeCount`, `_changesSinceSnapshot`, and `_recentTips`
    * are restored from snapshots captured before `_makeChange()`.
    * (`_recentTips` is bounded to `MAX_RECENT_TIPS` entries so the snapshot
-   * is a cheap shallow array copy.) For `_hashes`, all entries added to
-   * the Set after `hashSizeBefore` are removed. Because the node remains
+   * is a cheap shallow array copy.) For `_hashes` and
+   * `_referencedAncestors`, all entries added to each Set after its
+   * pre-attempt size are removed. Because the node remains
    * subscribed to pubsub during the async transaction, this may include
    * CIDs appended by concurrent remote syncs, not just local ones.
    * This is acceptable because CRDT convergence guarantees those remote
@@ -2713,6 +4258,7 @@ export class CollabswarmDocument<
     // _makeChange adds at most one CID, and JS Sets iterate in insertion order,
     // so on rollback we remove only entries appended after this point.
     const hashSizeBefore = this._hashes.size;
+    const referencedAncestorsSizeBefore = this._referencedAncestors.size;
     const lastSyncSnapshot = this._lastSyncMessage;
     const changeCountSnapshot = this._documentChangeCount;
     const compactionCountSnapshot = this._changesSinceSnapshot;
@@ -2770,6 +4316,24 @@ export class CollabswarmDocument<
         }
         for (const hash of toRemove) {
           this._hashes.delete(hash);
+        }
+      }
+      // Mirror the `_hashes` rollback for `_referencedAncestors`: remove
+      // only entries appended past the pre-attempt size. Same rationale --
+      // insertion-ordered Set iteration plus O(delta) memory -- and same
+      // best-effort caveat for concurrent sync that may have inserted into
+      // either set in parallel.
+      if (this._referencedAncestors.size > referencedAncestorsSizeBefore) {
+        const toRemoveRefs: string[] = [];
+        let j = 0;
+        for (const cid of this._referencedAncestors) {
+          if (j >= referencedAncestorsSizeBefore) {
+            toRemoveRefs.push(cid);
+          }
+          j++;
+        }
+        for (const cid of toRemoveRefs) {
+          this._referencedAncestors.delete(cid);
         }
       }
       this._lastSyncMessage = lastSyncSnapshot;

@@ -28,6 +28,7 @@ import {
   KeychainProvider,
   LRUCache,
   serializeChangeNodeForJSON,
+  TIPS_HASH_LENGTH,
 } from '@collabswarm/collabswarm';
 import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
 import { Base64 } from 'js-base64';
@@ -575,6 +576,17 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
         pathUpdateEpochId:
           message.pathUpdateEpochId &&
           Base64.fromUint8Array(message.pathUpdateEpochId),
+        // Initial-load quorum tip-set hash (#189 §5.4.2). Base64-encoded
+        // for JSON-safe transport, mirrored on the deserialize path below.
+        // Only populated on tip-advertise responses.
+        tipsHash:
+          message.tipsHash &&
+          Base64.fromUint8Array(message.tipsHash),
+        // Explicit tip-set advertisement populated on load responses to
+        // bind the served state to the responder's frontier (see
+        // `CRDTSyncMessage.tips`). Plain string[] of CIDs; passes through
+        // JSON verbatim.
+        tips: message.tips,
         snapshot: snapshotForWire,
       }),
     );
@@ -607,6 +619,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       eciesSealed?: unknown;
       pathUpdate?: unknown;
       pathUpdateEpochId?: unknown;
+      tipsHash?: unknown;
+      tips?: unknown;
       snapshot?: unknown;
       signature?: unknown;
     };
@@ -757,6 +771,55 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
       }
       pathUpdateEpochId = Base64.toUint8Array(raw.pathUpdateEpochId);
     }
+    // Initial-load quorum tip-set hash (#189 §5.4.2). Decoded from base64
+    // on the way back to Uint8Array; mirrors the serializer above.
+    // Untrusted input -- reject anything that isn't a string AND enforce
+    // the fixed-width SHA-256 digest length (32 bytes) at the wire
+    // boundary so malformed values never reach the quorum decision
+    // logic. `tipsHash` is used as a Map key in `decideLoadQuorum`; a
+    // wrong-length value could either silently mis-bucket against
+    // legitimate votes or produce a partial-hash collision under a
+    // hostile peer. Reject on the way in. See PR #284 r24 Copilot review.
+    let tipsHash: Uint8Array | undefined;
+    if (raw.tipsHash !== undefined) {
+      if (typeof raw.tipsHash !== 'string') {
+        throw new Error(
+          `Invalid sync message: 'tipsHash' must be a string when present (got ${describeValue(
+            raw.tipsHash,
+          )})`,
+        );
+      }
+      tipsHash = Base64.toUint8Array(raw.tipsHash);
+      if (tipsHash.length !== TIPS_HASH_LENGTH) {
+        throw new Error(
+          `Invalid sync message: 'tipsHash' must decode to exactly ` +
+            `${TIPS_HASH_LENGTH} bytes (SHA-256 digest); got ${tipsHash.length} bytes`,
+        );
+      }
+    }
+    // Initial-load quorum frontier binding (#186 / #189 §5.4.2). Untrusted
+    // input -- reject non-arrays or arrays containing non-strings up front
+    // so the loader's binding check never has to defensively coerce.
+    let tips: string[] | undefined;
+    if (raw.tips !== undefined) {
+      if (!Array.isArray(raw.tips)) {
+        throw new Error(
+          `Invalid sync message: 'tips' must be an array when present (got ${describeValue(
+            raw.tips,
+          )})`,
+        );
+      }
+      for (const entry of raw.tips) {
+        if (typeof entry !== 'string') {
+          throw new Error(
+            `Invalid sync message: 'tips' entries must be strings (got ${describeValue(
+              entry,
+            )})`,
+          );
+        }
+      }
+      tips = raw.tips as string[];
+    }
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys (e.g. `__proto__`, `constructor`, or any
     // unrecognized field) don't leak into the deserialized sync message. Only
@@ -787,6 +850,8 @@ export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
     if (pathUpdate !== undefined)
       result.pathUpdate = pathUpdate as CRDTSyncMessage<BinaryChange[], CryptoKey>['pathUpdate'];
     if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
+    if (tipsHash !== undefined) result.tipsHash = tipsHash;
+    if (tips !== undefined) result.tips = tips;
     if (snapshot !== undefined) result.snapshot = snapshot;
     return result;
   }
