@@ -1915,7 +1915,7 @@ __metadata:
     "@libp2p/gossipsub": "npm:^15.0.22"
     "@libp2p/identify": "npm:^4.1.4"
     "@libp2p/interface": "npm:^3.2.2"
-    "@libp2p/kad-dht": "npm:^16.2.5"
+    "@libp2p/kad-dht": "npm:^16.2.6"
     "@libp2p/mdns": "npm:^12.0.21"
     "@libp2p/peer-id": "npm:^6.0.9"
     "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
@@ -3592,7 +3592,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/kad-dht@npm:^16.2.0, @libp2p/kad-dht@npm:^16.2.5":
+"@libp2p/kad-dht@npm:^16.2.0":
   version: 16.2.5
   resolution: "@libp2p/kad-dht@npm:16.2.5"
   dependencies:
@@ -3628,6 +3628,45 @@ __metadata:
     uint8arraylist: "npm:^2.4.8"
     uint8arrays: "npm:^5.1.0"
   checksum: 10/136e237fd08d90146edf2acbc5283c8ab69c6a9bdf5d54b411be2dfd4259672d1e7cedc67d42b5f71ae677243315b1c750e3fcbe18ba8a2a3a19504a3efe39ee
+  languageName: node
+  linkType: hard
+
+"@libp2p/kad-dht@npm:^16.2.6":
+  version: 16.2.6
+  resolution: "@libp2p/kad-dht@npm:16.2.6"
+  dependencies:
+    "@libp2p/crypto": "npm:^5.1.18"
+    "@libp2p/interface": "npm:^3.2.2"
+    "@libp2p/interface-internal": "npm:^3.1.4"
+    "@libp2p/peer-collections": "npm:^7.0.19"
+    "@libp2p/peer-id": "npm:^6.0.9"
+    "@libp2p/ping": "npm:^3.1.4"
+    "@libp2p/record": "npm:^4.0.12"
+    "@libp2p/utils": "npm:^7.2.0"
+    "@multiformats/multiaddr": "npm:^13.0.1"
+    "@multiformats/multiaddr-matcher": "npm:^3.0.1"
+    any-signal: "npm:^4.1.1"
+    interface-datastore: "npm:^9.0.1"
+    it-all: "npm:^3.0.9"
+    it-drain: "npm:^3.0.10"
+    it-length: "npm:^3.0.9"
+    it-map: "npm:^3.1.4"
+    it-merge: "npm:^3.0.12"
+    it-parallel: "npm:^3.0.13"
+    it-pipe: "npm:^3.0.1"
+    it-pushable: "npm:^3.2.3"
+    it-take: "npm:^3.0.9"
+    main-event: "npm:^1.0.1"
+    multiformats: "npm:^13.4.0"
+    p-defer: "npm:^4.0.1"
+    p-event: "npm:^7.0.0"
+    progress-events: "npm:^1.0.1"
+    protons-runtime: "npm:^6.0.1"
+    race-signal: "npm:^2.0.0"
+    uint8-varint: "npm:^2.0.4"
+    uint8arraylist: "npm:^2.4.8"
+    uint8arrays: "npm:^5.1.0"
+  checksum: 10/9c3fd312b77718866a256330fe577d85e34bb3464a2a92dea8de5900828fd6f483b6c62a167f747b9e36044292b59214d332bd7375db7c05534de00650e04272
   languageName: node
   linkType: hard
 
