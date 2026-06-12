@@ -2,7 +2,7 @@
   "name": "@collabswarm/wiki-swarm",
   "private": true,
   "dependencies": {
-    "@automerge/automerge": "^3.2.4",
+    "@automerge/automerge": "^3.2.6",
     "@collabswarm/collabswarm": "workspace:packages/collabswarm",
     "@collabswarm/collabswarm-automerge": "workspace:packages/collabswarm-automerge",
     "@collabswarm/collabswarm-redux": "workspace:packages/collabswarm-redux",
