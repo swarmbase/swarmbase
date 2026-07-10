@@ -12,7 +12,7 @@
     "@chainsafe/libp2p-yamux": "^8.0.1",
     "@libp2p/bootstrap": "^12.0.21",
     "@libp2p/circuit-relay-v2": "^4.2.4",
-    "@libp2p/gossipsub": "^15.0.22",
+    "@libp2p/gossipsub": "^16.0.0",
     "@libp2p/identify": "^4.1.4",
     "@libp2p/pubsub-peer-discovery": "^12.0.0",
     "@libp2p/webrtc": "^6.0.22",

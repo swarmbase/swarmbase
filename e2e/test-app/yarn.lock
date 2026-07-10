@@ -76,7 +76,7 @@ __metadata:
     "@chainsafe/libp2p-yamux": "npm:^8.0.1"
     "@libp2p/bootstrap": "npm:^12.0.21"
     "@libp2p/circuit-relay-v2": "npm:^4.2.4"
-    "@libp2p/gossipsub": "npm:^15.0.22"
+    "@libp2p/gossipsub": "npm:^16.0.0"
     "@libp2p/identify": "npm:^4.1.4"
     "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
     "@libp2p/webrtc": "npm:^6.0.22"
@@ -375,9 +375,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@libp2p/gossipsub@npm:^15.0.22":
-  version: 15.0.23
-  resolution: "@libp2p/gossipsub@npm:15.0.23"
+"@libp2p/gossipsub@npm:^16.0.0":
+  version: 16.0.0
+  resolution: "@libp2p/gossipsub@npm:16.0.0"
   dependencies:
     "@libp2p/crypto": "npm:^5.1.18"
     "@libp2p/interface": "npm:^3.2.2"
@@ -393,7 +393,7 @@ __metadata:
     protons-runtime: "npm:^6.0.1"
     uint8arraylist: "npm:^2.4.8"
     uint8arrays: "npm:^5.0.1"
-  checksum: 10/54c248526cae00282415a939379920c526b968b34293fbdd465b9d525a42e0c8a98448e1c2977b70eba6a9798c82d68329f6f550f49da2ec437aed1c92ef3055
+  checksum: 10/83c16f47211f7b779a86676275debc436d97302051e7d3b454396bbc5bcdfae5a18b66f2dae73f72b07e1fe67a39c0a68753af2ce85f10efd3c56ebc905e919c
   languageName: node
   linkType: hard
 
@@ -3019,15 +3019,15 @@ __metadata:
   linkType: hard
 
 "tar@npm:^7.5.4":
-  version: 7.5.11
-  resolution: "tar@npm:7.5.11"
+  version: 7.5.19
+  resolution: "tar@npm:7.5.19"
   dependencies:
     "@isaacs/fs-minipass": "npm:^4.0.0"
     chownr: "npm:^3.0.0"
     minipass: "npm:^7.1.2"
     minizlib: "npm:^3.1.0"
     yallist: "npm:^5.0.0"
-  checksum: 10/fb2e77ee858a73936c68e066f4a602d428d6f812e6da0cc1e14a41f99498e4f7fd3535e355fa15157240a5538aa416026cfa6306bb0d1d1c1abf314b1f878e9a
+  checksum: 10/0b06a0917fe68a4dff361e147db30fd67ae2ee85ab2863d62046a6ccef46f0d1906eed20f92277a436300eaaa0e3cd31d8763d7f02fa389f41d7966e58388db8
   languageName: node
   linkType: hard
 
@@ -3299,8 +3299,8 @@ __metadata:
   linkType: hard
 
 "ws@npm:^8.18.3":
-  version: 8.20.1
-  resolution: "ws@npm:8.20.1"
+  version: 8.21.0
+  resolution: "ws@npm:8.21.0"
   peerDependencies:
     bufferutil: ^4.0.1
     utf-8-validate: ">=5.0.2"
@@ -3309,7 +3309,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 10/8c4d2b06dc65381b6bfab1f2e584275dabd30a99a5ce058b4dc76f3d03fad1921cef3a21d8f53127d30a808cfd1864aa2fe6890a5d43359f682457315baec873
+  checksum: 10/088411956432c8f876158409d5a285cb9ad1382f593391f51d3a599bd0a5b277f876609ebd00fc3596321c4a4c9064d6fffe1ebad960e8ea7fd9ae25324f35c2
   languageName: node
   linkType: hard
 
