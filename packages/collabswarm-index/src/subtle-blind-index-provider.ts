@@ -1,4 +1,4 @@
-import { BlindIndexProvider } from './blind-index-provider';
+import { BlindIndexProvider } from './blind-index-provider.js';
 
 /**
  * WebCrypto-based BlindIndexProvider implementation.

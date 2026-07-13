@@ -9,8 +9,8 @@
  * - Memory footprint
  * - Merge (CRDT join) time
  */
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner';
-import { BloomFilterCRDT } from '../bloom-filter-crdt';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner.js';
+import { BloomFilterCRDT } from '../bloom-filter-crdt.js';
 
 const FILTER_SIZES = [
   { label: '1k-bits', bits: 1024 },

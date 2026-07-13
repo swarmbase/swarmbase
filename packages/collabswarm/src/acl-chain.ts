@@ -37,7 +37,7 @@
  * integrate it with `_mergeWriters` and the sync message verification path.
  */
 
-import type { AuthProvider } from './auth-provider';
+import type { AuthProvider } from './auth-provider.js';
 
 /**
  * Canonical serialization of a public key for use as a stable identifier.

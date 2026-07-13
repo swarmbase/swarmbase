@@ -1,5 +1,5 @@
-import { AuthProvider, AesAlgorithmName } from './auth-provider';
-import { concatUint8Arrays } from './utils';
+import { AuthProvider, AesAlgorithmName } from './auth-provider.js';
+import { concatUint8Arrays } from './utils.js';
 import { Base64 } from 'js-base64';
 
 /** HMAC-SHA256 tag length in bytes. */

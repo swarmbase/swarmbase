@@ -1,5 +1,5 @@
-import { IndexFieldDefinition, FieldFilter, SortClause } from './types';
-import { IndexStorage, IndexEntry } from './index-storage';
+import { IndexFieldDefinition, FieldFilter, SortClause } from './types.js';
+import { IndexStorage, IndexEntry } from './index-storage.js';
 
 /**
  * In-memory implementation of IndexStorage backed by nested Maps.

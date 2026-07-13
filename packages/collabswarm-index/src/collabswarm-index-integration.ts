@@ -1,4 +1,4 @@
-import { IndexManager } from './index-manager';
+import { IndexManager } from './index-manager.js';
 
 /**
  * Minimal document interface matching CollabswarmDocument's subscribe API.

@@ -16,7 +16,7 @@ import {
   BeeKEMWelcome,
   PathNodeUpdate,
   WelcomeNodePublicKey,
-} from './beekem/types';
+} from './beekem/types.js';
 
 /** JSON-safe encoding of `PathNodeUpdate` (mirrors path-update-wire). */
 export interface SerializedWelcomePathNodeUpdate {

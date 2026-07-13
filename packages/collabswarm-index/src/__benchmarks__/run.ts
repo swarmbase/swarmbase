@@ -14,10 +14,10 @@ if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle 
   (globalThis as any).crypto = new Crypto();
 }
 
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner';
-import { runIndexQueryScalingBenchmarks } from './index-query-scaling';
-import { runBlindIndexPerfBenchmarks } from './blind-index-perf';
-import { runBloomFilterScalingBenchmarks } from './bloom-filter-scaling';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner.js';
+import { runIndexQueryScalingBenchmarks } from './index-query-scaling.js';
+import { runBlindIndexPerfBenchmarks } from './blind-index-perf.js';
+import { runBloomFilterScalingBenchmarks } from './bloom-filter-scaling.js';
 
 function parseIterations(): number {
   const idx = process.argv.indexOf('--iterations');

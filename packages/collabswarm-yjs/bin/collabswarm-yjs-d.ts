@@ -13,7 +13,7 @@ import {
   YjsJSONSerializer,
   YjsKeychainProvider,
   YjsProvider,
-} from '../src';
+} from '../src/index.js';
 
 global.crypto = require('crypto').webcrypto;
 

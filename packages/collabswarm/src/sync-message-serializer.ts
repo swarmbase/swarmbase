@@ -1,4 +1,4 @@
-import { CRDTSyncMessage } from './crdt-sync-message';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
 
 /**
  * SyncMessageSerializer provides serialization/deserialization methods for `CRDTSyncMessage`s.

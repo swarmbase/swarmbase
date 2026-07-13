@@ -33,12 +33,12 @@
  * `processWelcome` step.
  */
 import { Base64 } from 'js-base64';
-import { BeeKEMWelcome } from './beekem/types';
+import { BeeKEMWelcome } from './beekem/types.js';
 import {
   SerializedBeeKEMWelcome,
   deserializeBeeKEMWelcomeFromWire,
   serializeBeeKEMWelcomeForWire,
-} from './beekem-welcome-wire';
+} from './beekem-welcome-wire.js';
 
 /** Parsed shape of the sealed-payload envelope. */
 export interface WelcomeSealedPayload {

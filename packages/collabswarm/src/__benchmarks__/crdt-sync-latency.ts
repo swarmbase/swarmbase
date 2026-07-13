@@ -8,14 +8,14 @@
  * - Combined sign+encrypt and decrypt+verify pipelines
  * - Serialize and deserialize change blocks (JSON wire format)
  */
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner';
-import { SubtleCrypto } from '../auth-subtlecrypto';
-import { JSONSerializer } from '../json-serializer';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner.js';
+import { SubtleCrypto } from '../auth-subtlecrypto.js';
+import { JSONSerializer } from '../json-serializer.js';
 import {
   generateSigningKeyPair,
   generateEncryptionKey,
   generatePayload,
-} from './crypto-setup';
+} from './crypto-setup.js';
 
 const PAYLOAD_SIZES: Array<{ label: string; bytes: number }> = [
   { label: '1kb', bytes: 1024 },

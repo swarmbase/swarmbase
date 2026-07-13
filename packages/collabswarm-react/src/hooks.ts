@@ -11,7 +11,7 @@ import {
   CollabswarmConfig,
 } from '@collabswarm/collabswarm';
 import { useEffect, useState, useContext, useRef, createContext } from 'react';
-import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
+import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache.js';
 
 export type CollabswarmContextOpenResult<
   DocType,

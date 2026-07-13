@@ -19,11 +19,11 @@ import {
   defaultConfig,
   defaultBootstrapConfig,
 } from '@collabswarm/collabswarm';
-import { Doc, BinaryChange } from '@automerge/automerge';
+import { Doc, Change } from '@automerge/automerge';
 
 export type AutomergeSwarm<T = any> = Collabswarm<
   Doc<T>,
-  BinaryChange[],
+  Change[],
   (doc: T) => void,
   CryptoKey,
   CryptoKey,
@@ -31,7 +31,7 @@ export type AutomergeSwarm<T = any> = Collabswarm<
 >;
 export type AutomergeSwarmDocument<T = any> = CollabswarmDocument<
   Doc<T>,
-  BinaryChange[],
+  Change[],
   (doc: T) => void,
   CryptoKey,
   CryptoKey,
@@ -162,9 +162,23 @@ class App extends React.Component<
       // Get relay/bootstrap address from env. The relay multiaddr
       // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
       // for libp2p peer discovery — NOT as a listen address.
-      const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
+      const relayAddr = import.meta.env.VITE_RELAY_MULTIADDR;
       const bootstrapPeers = relayAddr ? [relayAddr] : [];
       const config = defaultConfig(defaultBootstrapConfig(bootstrapPeers));
+      if (import.meta.env.VITE_CROSS_NAT_TEST === '1') {
+        config.loadQuorumEnabled = false;
+        config.compaction = { enabled: false };
+        const libp2p = config.helia!.libp2p as any;
+        // This suite proves the circuit-relay path specifically. Remove
+        // peer-discovery and direct/hole-punch transports that can race the
+        // explicit circuit dial or accidentally make the test pass via a
+        // different data plane.
+        libp2p.addresses.listen = ['/p2p-circuit'];
+        libp2p.transports = libp2p.transports.slice(0, 2);
+        libp2p.peerDiscovery = libp2p.peerDiscovery.slice(0, 1);
+        delete libp2p.services.dcutr;
+        delete libp2p.services.autoNAT;
+      }
       this.props.onInitialize(config);
     }
   }
@@ -326,7 +340,7 @@ function mapDispatchToProps(
       dispatch(
         initializeAsync<
           Doc<any>,
-          BinaryChange[],
+          Change[],
           (doc: any) => void,
           CryptoKey,
           CryptoKey,
@@ -337,7 +351,7 @@ function mapDispatchToProps(
       dispatch(
         connectAsync<
           Doc<any>,
-          BinaryChange[],
+          Change[],
           (doc: any) => void,
           CryptoKey,
           CryptoKey,
@@ -348,7 +362,7 @@ function mapDispatchToProps(
       dispatch(
         openDocumentAsync<
           Doc<any>,
-          BinaryChange[],
+          Change[],
           (doc: any) => void,
           CryptoKey,
           CryptoKey,
@@ -359,7 +373,7 @@ function mapDispatchToProps(
       dispatch(
         closeDocumentAsync<
           Doc<any>,
-          BinaryChange[],
+          Change[],
           (doc: any) => void,
           CryptoKey,
           CryptoKey,
@@ -374,7 +388,7 @@ function mapDispatchToProps(
       dispatch(
         changeDocumentAsync<
           Doc<any>,
-          BinaryChange[],
+          Change[],
           (doc: any) => void,
           CryptoKey,
           CryptoKey,

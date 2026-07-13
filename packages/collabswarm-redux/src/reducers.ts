@@ -8,7 +8,7 @@ import {
   CLOSE_DOCUMENT,
   PEER_CONNECT,
   PEER_DISCONNECT,
-} from './actions';
+} from './actions.js';
 import {
   ACLProvider,
   AuthProvider,

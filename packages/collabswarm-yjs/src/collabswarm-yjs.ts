@@ -24,7 +24,7 @@ import { Base64 } from 'js-base64';
 // binary data in JSON, so this is an acceptable trade-off.
 type iCRDTChangeNode = CRDTChangeNodeWire<string>;
 
-export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
+export class YjsJSONSerializer extends JSONSerializer<Uint8Array, CryptoKey> {
   serializeChanges(changes: Uint8Array): Uint8Array {
     return changes;
   }
@@ -58,7 +58,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     validateChangeBlockMetadata(deserialized, result);
     return result;
   }
-  serializeSyncMessage(message: CRDTSyncMessage<Uint8Array>): Uint8Array {
+  serializeSyncMessage(message: CRDTSyncMessage<Uint8Array, CryptoKey>): Uint8Array {
     // Encode snapshot Uint8Array fields (state, signature) as base64 for JSON safety.
     let snapshotForWire: any;
     if (message.snapshot) {
@@ -123,7 +123,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       }),
     );
   }
-  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array> {
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<Uint8Array, CryptoKey> {
     const decoded = this.deserialize(this.decode(message));
     // Wire input is untrusted: reject non-object payloads up front with a
     // descriptive error so the malformed payload can be attributed back to
@@ -346,7 +346,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
     // Build the returned object explicitly rather than spreading `...raw` so
     // that peer-supplied junk keys don't leak into the deserialized sync
     // message. Only fields declared on `CRDTSyncMessage` are propagated.
-    const result: CRDTSyncMessage<Uint8Array> = {
+    const result: CRDTSyncMessage<Uint8Array, CryptoKey> = {
       documentId: raw.documentId,
     };
     if (raw.changeId !== undefined) result.changeId = raw.changeId as string;
@@ -369,7 +369,7 @@ export class YjsJSONSerializer extends JSONSerializer<Uint8Array> {
       result.welcomeRecipientKemPublicKey = welcomeRecipientKemPublicKey;
     if (eciesSealed !== undefined) result.eciesSealed = eciesSealed;
     if (pathUpdate !== undefined)
-      result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array>['pathUpdate'];
+      result.pathUpdate = pathUpdate as CRDTSyncMessage<Uint8Array, CryptoKey>['pathUpdate'];
     if (pathUpdateEpochId !== undefined) result.pathUpdateEpochId = pathUpdateEpochId;
     if (tipsHash !== undefined) result.tipsHash = tipsHash;
     if (tips !== undefined) result.tips = tips;

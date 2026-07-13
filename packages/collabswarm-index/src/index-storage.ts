@@ -1,4 +1,4 @@
-import { IndexFieldDefinition, FieldFilter, SortClause } from './types';
+import { IndexFieldDefinition, FieldFilter, SortClause } from './types.js';
 
 /**
  * A single stored index entry: document path mapped to its indexed field values.

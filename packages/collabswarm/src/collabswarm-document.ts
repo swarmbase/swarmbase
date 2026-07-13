@@ -7,16 +7,16 @@
 
 import { pipe } from 'it-pipe';
 import { Libp2p } from 'libp2p';
-import { Collabswarm, MAX_DOCUMENT_PATH_LENGTH } from './collabswarm';
+import { Collabswarm, MAX_DOCUMENT_PATH_LENGTH } from './collabswarm.js';
 import {
   concatUint8Arrays,
   firstTrue,
   readUint8Iterable,
   shuffleArray,
-} from './utils';
-import { wrapStream } from './stream-adapter';
-import { CRDTProvider } from './crdt-provider';
-import { AuthProvider, requireSerializePublicKey } from './auth-provider';
+} from './utils.js';
+import { wrapStream } from './stream-adapter.js';
+import { CRDTProvider } from './crdt-provider.js';
+import { AuthProvider, requireSerializePublicKey } from './auth-provider.js';
 import {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
@@ -24,7 +24,7 @@ import {
   crdtDocumentChangeNode,
   crdtReaderChangeNode,
   crdtWriterChangeNode,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 import {
   collectReferencedAncestors,
   collectAllCidsInTree,
@@ -37,18 +37,18 @@ import {
   selectCrossLinks,
   trackTipInList,
   treeContainsCid,
-} from './merkle-cross-links';
-import { CRDTSyncMessage } from './crdt-sync-message';
-import { ChangesSerializer } from './changes-serializer';
-import { SyncMessageSerializer } from './sync-message-serializer';
-import { evaluateBeeKEMWelcome } from './beekem-welcome-handler';
-import { validateAndExportKemKeyPair } from './kem-key-pair';
+} from './merkle-cross-links.js';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
+import { ChangesSerializer } from './changes-serializer.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
+import { evaluateBeeKEMWelcome } from './beekem-welcome-handler.js';
+import { validateAndExportKemKeyPair } from './kem-key-pair.js';
 import {
   eciesSeal,
   eciesOpen,
   importEciesPublicKey,
   ECIES_P256_PUBLIC_KEY_LENGTH,
-} from './ecies';
+} from './ecies.js';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
@@ -56,40 +56,40 @@ import {
   documentLoadV3,
   snapshotLoadV3,
   tipAdvertiseV1,
-} from './wire-protocols';
-import { BeeKEM } from './beekem/beekem';
-import { BeeKEMWelcome, PathUpdate } from './beekem/types';
+} from './wire-protocols.js';
+import { BeeKEM } from './beekem/beekem.js';
+import { BeeKEMWelcome, PathUpdate } from './beekem/types.js';
 import {
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
-} from './path-update-wire';
+} from './path-update-wire.js';
 import {
   decodeWelcomeSealedPayload,
   encodeWelcomeSealedPayload,
-} from './welcome-sealed-payload';
+} from './welcome-sealed-payload.js';
 import {
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
-} from './derive-doc-key';
-import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
+} from './derive-doc-key.js';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash.js';
 import {
   constantTimeHexEquals,
   dedupePeersByPeerId,
   LoadQuorumFailedError,
-} from './load-quorum';
-import { runLoadQuorum } from './load-quorum-orchestrator';
-import { CRDTSnapshotNode } from './snapshot-node';
-import { CompactionConfig, defaultCompactionConfig } from './compaction-config';
+} from './load-quorum.js';
+import { runLoadQuorum } from './load-quorum-orchestrator.js';
+import { CRDTSnapshotNode } from './snapshot-node.js';
+import { CompactionConfig, defaultCompactionConfig } from './compaction-config.js';
 import {
   filterDeletableCIDs,
   loadChangeBlock as lazyLoadChangeBlock,
-} from './blockstore-gc';
-import { documentTopic } from './document-topic';
-import { ACLProvider } from './acl-provider';
-import { KeychainProvider } from './keychain-provider';
-import { keychainHistorySinceOrFull } from './keychain';
-import { LoadMessageSerializer } from './load-request-serializer';
-import { CRDTLoadRequest } from './crdt-load-request';
+} from './blockstore-gc.js';
+import { documentTopic } from './document-topic.js';
+import { ACLProvider } from './acl-provider.js';
+import { KeychainProvider } from './keychain-provider.js';
+import { keychainHistorySinceOrFull } from './keychain.js';
+import { LoadMessageSerializer } from './load-request-serializer.js';
+import { CRDTLoadRequest } from './crdt-load-request.js';
 import { Base64 } from 'js-base64';
 import BufferList from 'bl';
 import { Uint8ArrayList } from 'uint8arraylist';
@@ -3013,7 +3013,9 @@ export class CollabswarmDocument<
     let rawStream: import('@libp2p/interface').Stream;
     let stream: { sink: (data: Iterable<Uint8Array>) => Promise<void>; source: AsyncIterable<Uint8ArrayList | Uint8Array> };
     try {
-      rawStream = await this.libp2p.dialProtocol(peer, [tipAdvertiseV1]);
+      rawStream = await this.libp2p.dialProtocol(peer, [tipAdvertiseV1], {
+        runOnLimitedConnection: true,
+      });
       stream = wrapStream(rawStream);
     } catch {
       // Peer doesn't support tip-advertise or dial failed -- treat as non-vote.
@@ -3549,42 +3551,47 @@ export class CollabswarmDocument<
     const agreeingPeerBindFailures = new Map<string, string>();
     for (const peer of orderedPeers) {
       let peerBindFailed = false;
-      try {
-        console.log('Trying snapshot-load from peer:', peer.toString());
-        // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
-        // `send()`/iterator pair). Wrap it into the v2 `{ source, sink }`
-        // duplex shape that `_sendLoadRequestAndSync` (and the legacy
-        // `it-pipe` calls inside it) still expects.
-        const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
-          snapshotLoadV3,
-        ]));
-        const loaded = await this._sendLoadRequestAndSync(
-          snapshotStream,
-          serializedRequest,
-          winningHashHex,
-        );
-        if (loaded) {
-          return true;
-        }
-        // Empty response -- peer has no snapshot, try doc-load below.
-      } catch (err) {
-        if (err instanceof _QuorumBindCheckFailedError) {
-          // This peer voted hash X in the probe round but the structural
-          // frontier of their served payload hashes to something else
-          // (or their advertised `tips` contradicts the served payload).
-          // Record the failure and skip the doc-load fallback for this
-          // peer -- a peer that equivocated once is not given a second
-          // chance on the same load round.
-          console.warn(
-            `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
-              `quorum frontier bind on snapshot-load (offending hash ${err.advertisedHex}); ` +
-              `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+      // An explicitly disabled compaction policy cannot produce snapshots in
+      // this swarm. Avoid an empty request/response round-trip—especially on
+      // limited circuit-relay connections—before the real document load.
+      if (this.swarm.config?.compaction?.enabled !== false) {
+        try {
+          console.log('Trying snapshot-load from peer:', peer.toString());
+          // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
+          // `send()`/iterator pair). Wrap it into the v2 `{ source, sink }`
+          // duplex shape that `_sendLoadRequestAndSync` (and the legacy
+          // `it-pipe` calls inside it) still expects.
+          const snapshotStream = wrapStream(await this.libp2p.dialProtocol(peer, [
+            snapshotLoadV3,
+          ], { runOnLimitedConnection: true }));
+          const loaded = await this._sendLoadRequestAndSync(
+            snapshotStream,
+            serializedRequest,
+            winningHashHex,
           );
-          agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
-          peerBindFailed = true;
+          if (loaded) {
+            return true;
+          }
+          // Empty response -- peer has no snapshot, try doc-load below.
+        } catch (err) {
+          if (err instanceof _QuorumBindCheckFailedError) {
+            // This peer voted hash X in the probe round but the structural
+            // frontier of their served payload hashes to something else
+            // (or their advertised `tips` contradicts the served payload).
+            // Record the failure and skip the doc-load fallback for this
+            // peer -- a peer that equivocated once is not given a second
+            // chance on the same load round.
+            console.warn(
+              `[${this.documentPath}] Agreeing peer ${peer.toString()} failed ` +
+                `quorum frontier bind on snapshot-load (offending hash ${err.advertisedHex}); ` +
+                `marking peer as Byzantine for this load and trying next peer in agreeing cohort.`,
+            );
+            agreeingPeerBindFailures.set(this._peerIdOf(peer), err.advertisedHex);
+            peerBindFailed = true;
+          }
+          // Else: peer doesn't support snapshot-load protocol, or some
+          // other transient error -- fall through to doc-load below.
         }
-        // Else: peer doesn't support snapshot-load protocol, or some
-        // other transient error -- fall through to doc-load below.
       }
 
       if (peerBindFailed) {
@@ -3598,7 +3605,7 @@ export class CollabswarmDocument<
         // See snapshot-load above for why we wrap the v3 Stream here.
         const docStream = wrapStream(await this.libp2p.dialProtocol(peer, [
           documentLoadV3,
-        ]));
+        ], { runOnLimitedConnection: true }));
         const loaded = await this._sendLoadRequestAndSync(
           docStream,
           serializedRequest,
@@ -3879,11 +3886,17 @@ export class CollabswarmDocument<
 
       if (!isExisting) {
         // Add current user as a writer.
-        await this._addWriter(this._userPublicKey);
+        const founderWriterChanges = await this._addWriter(this._userPublicKey);
 
         // Add initial document key.
         console.log(`Adding a key to ${this.documentPath}`);
         await this._keychain.add();
+
+        // The founder ACL must be part of the replicated change DAG. Keeping
+        // it only in the creator's in-memory ACL lets first-load peers decrypt
+        // document state but leaves them unable to authenticate later writer
+        // updates (or write as the same restored identity).
+        await this._makeChange(founderWriterChanges, crdtWriterChangeNode);
       }
     } catch (err) {
       // Clean up any partially-registered state to avoid leaked handlers,
@@ -4997,7 +5010,9 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = wrapStream(
-          await this.libp2p.dialProtocol(peer, [beekemWelcomeV1]),
+          await this.libp2p.dialProtocol(peer, [beekemWelcomeV1], {
+            runOnLimitedConnection: true,
+          }),
         );
         await pipe([payload], stream.sink);
       } catch (err) {
@@ -6188,7 +6203,9 @@ export class CollabswarmDocument<
     for (const peer of peers) {
       try {
         const stream = wrapStream(
-          await this.libp2p.dialProtocol(peer, [beekemPathUpdateV1]),
+          await this.libp2p.dialProtocol(peer, [beekemPathUpdateV1], {
+            runOnLimitedConnection: true,
+          }),
         );
         await pipe([payload], stream.sink);
       } catch (err) {
@@ -6460,7 +6477,7 @@ export class CollabswarmDocument<
         // pattern below; see snapshot-load above for the rationale.
         const stream = wrapStream(await this.libp2p.dialProtocol(peer, [
           documentKeyUpdateV2,
-        ]));
+        ], { runOnLimitedConnection: true }));
         await pipe(
           [v2Payload],
           stream.sink,

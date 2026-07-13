@@ -67,6 +67,7 @@
       ".ts"
     ],
     "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
       "^@collabswarm/collabswarm$": "<rootDir>/src/__mocks__/@collabswarm/collabswarm.ts"
     }
   }
