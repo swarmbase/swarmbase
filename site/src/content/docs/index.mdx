@@ -3,19 +3,117 @@ title: Swarmbase
 description: An encrypted, serverless, local-first document database that syncs browser to browser.
 template: splash
 hero:
-  tagline: An encrypted, serverless, local-first document database that syncs browser to browser.
+  title: The database that syncs browser to browser
+  tagline: >-
+    Swarmbase is an open-source, end-to-end-encrypted, local-first document
+    database. Conflict-free collaboration over libp2p and IPFS — no backend
+    required.
   image:
     file: ../../assets/logo.svg
   actions:
     - text: Get started
       link: ./getting-started/quick-start/
-      icon: right-arrow
+      icon: rocket
     - text: Star on GitHub
       link: https://github.com/swarmbase/swarmbase
       icon: star
       variant: secondary
 ---
 
-The full homepage is under construction. In the meantime, head to the
-[quick start](./getting-started/quick-start/) or browse the
-[source on GitHub](https://github.com/swarmbase/swarmbase).
+import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Local-first" icon="laptop">
+    Reads and writes hit local storage first, so your UI is instant and works
+    offline. Peers sync opportunistically whenever they can reach each other.
+  </Card>
+  <Card title="End-to-end encrypted" icon="seti:lock">
+    Documents are encrypted with AES-GCM and guarded by access control lists.
+    Untrusted peers can relay and cache your data without ever reading it.
+  </Card>
+  <Card title="No backend" icon="setting">
+    Peers discover each other over libp2p and exchange changes via GossipSub.
+    The only infrastructure is a tiny relay node that helps browsers behind
+    NAT find each other.
+  </Card>
+  <Card title="Conflict-free" icon="puzzle">
+    Documents are CRDTs (Yjs first, Automerge supported), so concurrent edits
+    merge without a consensus protocol — strong eventual consistency, by
+    construction.
+  </Card>
+</CardGrid>
+
+## Collaboration in a few lines
+
+Open a document, subscribe to changes, edit it locally, and invite
+collaborators by public key — replication and encryption are handled for you.
+
+```ts
+const doc = swarm.doc('/todo-list');
+await doc.open();
+
+doc.subscribe('ui', (todos) => render(todos));
+
+await doc.change((todos) => {
+  todos.items.push('Ship it');
+});
+
+// Invite a collaborator: their key can now write changes.
+await doc.addWriter(alicePublicKey);
+```
+
+The full setup — providers, keys, and connecting to a swarm — takes a few
+more lines and is covered step by step in the
+[quick start](./getting-started/quick-start/).
+
+<Aside type="caution" title="Alpha software, honestly labeled">
+  Swarmbase is in active alpha development. It is great for prototypes,
+  side projects, and exploring local-first architecture — and not yet
+  appropriate for production or heavy usage. Read the
+  [current limitations](./concepts/limitations/) before betting on it; they
+  are stated plainly, not buried.
+</Aside>
+
+## How it works
+
+1. **Edit locally.** Changes apply to your local CRDT replica immediately —
+   no round trip, no spinner.
+2. **Sign, encrypt, gossip.** Each change is signed by your key, encrypted
+   for current readers, and propagated to connected peers over GossipSub.
+3. **Converge everywhere.** Peers verify, decrypt, and merge changes into
+   their replicas. CRDT semantics guarantee every replica reaches the same
+   state — even after going offline and back.
+
+Want the theory — CRDTs, strong eventual consistency, the security model, and
+the trade-offs we made? Start with [why local-first](./concepts/local-first/).
+
+## Built in the open
+
+Swarmbase is young, and that is exactly why contributing matters right now:
+the core API, encryption model, and tooling are all still shapeable. We want
+your issues, your PRs, and your weird network topologies.
+
+<CardGrid>
+  <Card title="Contribute" icon="pencil">
+    Set up a dev environment and land your first PR — the
+    [contributing guide](./community/contributing/) takes you from clone to
+    green tests.
+  </Card>
+  <Card title="Help wanted" icon="magnifier">
+    See [what we need help with](./community/help-wanted/) — from encryption
+    and pinning tooling to docs and testing on unusual networks.
+  </Card>
+</CardGrid>
+
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem;">
+  <LinkButton href="./getting-started/quick-start/" icon="rocket">
+    Build something with Swarmbase
+  </LinkButton>
+  <LinkButton
+    href="https://github.com/swarmbase/swarmbase"
+    icon="star"
+    variant="secondary"
+  >
+    Star the project on GitHub
+  </LinkButton>
+</div>
