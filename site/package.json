@@ -14,5 +14,11 @@
     "@swarmbase/collabswarm-yjs": "workspace:*",
     "astro": "^7.0.7",
     "yjs": "^13.6.30"
+  },
+  "devDependencies": {
+    "starlight-typedoc": "^0.23.0",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.6.0",
+    "typescript": "^5.3.3"
   }
 }

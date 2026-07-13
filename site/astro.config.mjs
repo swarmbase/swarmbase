@@ -2,6 +2,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
 
 // Served as a GitHub Pages project page until a custom domain is set up.
 export default defineConfig({
@@ -24,6 +25,26 @@ export default defineConfig({
   },
   integrations: [
     starlight({
+      plugins: [
+        starlightTypeDoc({
+          entryPoints: [
+            '../packages/collabswarm',
+            '../packages/collabswarm-yjs',
+            '../packages/collabswarm-automerge',
+            '../packages/collabswarm-react',
+            '../packages/collabswarm-redux',
+            '../packages/collabswarm-index',
+          ],
+          output: 'reference/api',
+          sidebar: { label: 'API reference', collapsed: true },
+          typeDoc: {
+            entryPointStrategy: 'packages',
+            excludePrivate: true,
+            excludeProtected: true,
+            excludeInternal: true,
+          },
+        }),
+      ],
       title: 'Swarmbase',
       description:
         'An encrypted, serverless, local-first document database that syncs browser to browser.',
@@ -73,7 +94,7 @@ export default defineConfig({
         },
         {
           label: 'Reference',
-          items: [{ autogenerate: { directory: 'reference' } }],
+          items: ['reference', typeDocSidebarGroup],
         },
         {
           label: 'Community',
