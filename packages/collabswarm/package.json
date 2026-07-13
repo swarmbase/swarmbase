@@ -72,7 +72,7 @@
     "@libp2p/topology": "^4.0.3",
     "@libp2p/webrtc": "^6.0.22",
     "@libp2p/websockets": "^10.1.12",
-    "@libp2p/webtransport": "^6.0.23",
+    "@libp2p/webtransport": "^6.0.31",
     "@multiformats/multiaddr": "^13.0.1",
     "bl": "^6.1.6",
     "blockstore-idb": "^3.0.1",
