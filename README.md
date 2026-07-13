@@ -1,6 +1,9 @@
-# SwarmDB
+# Swarmbase
 
 ## A distributed web document database with dynamic access control and strong eventual consistency.
+
+> Swarmbase was formerly known as SwarmDB; packages publish under the `@swarmbase/*` scope.
+> **Docs, quick start, and cookbook:** https://swarmbase.github.io/swarmbase/
 
 ![tsc workflow](https://github.com/collabswarm/collabswarm/actions/workflows/tsc.yml/badge.svg)
 ![test workflow](https://github.com/collabswarm/collabswarm/actions/workflows/test.yml/badge.svg)
@@ -16,7 +19,7 @@ SwarmDB is an open-source JavaScript language library that implements a distribu
 
 Designed as a dweb database means SwarmDB will work with data distributed over many nodes with varying connectivity, allow asynchronous updates without conflict, and be able to operate on untrusted networks or with the assistance of unknown or untrusted peers. It does not require centralized servers or a private intranet.
 
-SwarmDB source code is in the public domain and free for anyone to use for commercial or private use.
+Swarmbase source code is [MIT-licensed](LICENSE) and free for anyone to use for commercial or private use.
 
 ### Goals and benefits: Method of implementation
 
