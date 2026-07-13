@@ -1,0 +1,328 @@
+---
+title: "Quick start"
+description: Install Swarmbase and get two browser tabs syncing an end-to-end-encrypted document through a local relay.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Alpha software — not yet on npm">
+Swarmbase is in **alpha** and the `@swarmbase/*` packages are **not yet
+published to npm**. The install commands below show what setup will look like
+once they are published. Today, clone the
+[monorepo](https://github.com/swarmbase/swarmbase) and work inside it: the
+packages live in `packages/`, and the bundled examples
+(`examples/browser-test`, `examples/password-manager`) use exactly the APIs
+shown on this page via Yarn workspaces. You will need the cloned repo for the
+relay step below anyway.
+</Aside>
+
+In about five minutes you will have two browser tabs editing the same
+document: every change encrypted with AES-GCM before it leaves the tab,
+replicated over libp2p GossipSub, and merged conflict-free by a Yjs CRDT.
+There is no backend server — just a small relay node that helps browsers
+(which cannot accept incoming connections) find each other.
+
+## Prerequisites
+
+- Node.js 20 or newer
+- Docker (for the local relay node)
+- A bundler that targets modern browsers. This page assumes a
+  [Vite](https://vite.dev) vanilla-TypeScript project
+  (`npm create vite@latest swarmbase-demo -- --template vanilla-ts`); the
+  monorepo's own examples use Create React App and its e2e harness bundles
+  with esbuild — any of them work.
+
+<Steps>
+
+1. **Install the packages.**
+
+   <Tabs syncKey="pkg">
+   <TabItem label="npm">
+   ```sh
+   npm install @swarmbase/collabswarm @swarmbase/collabswarm-yjs yjs
+   ```
+   </TabItem>
+   <TabItem label="pnpm">
+   ```sh
+   pnpm add @swarmbase/collabswarm @swarmbase/collabswarm-yjs yjs
+   ```
+   </TabItem>
+   <TabItem label="Yarn">
+   ```sh
+   yarn add @swarmbase/collabswarm @swarmbase/collabswarm-yjs yjs
+   ```
+   </TabItem>
+   </Tabs>
+
+   `@swarmbase/collabswarm` is the core engine (networking, storage,
+   encryption, access control). `@swarmbase/collabswarm-yjs` plugs Yjs in as
+   the CRDT. If you use React, also add `@swarmbase/collabswarm-react` for
+   hooks (see the end of this page). Until the packages are on npm, work
+   inside the cloned monorepo instead — see the alpha note above.
+
+2. **Start a local relay node.**
+
+   Browsers cannot listen for incoming connections, so every Swarmbase
+   deployment needs at least one relay/bootstrap node. Peers dial it over
+   WebSocket, discover each other through it, and fall back to it for
+   message forwarding when a direct WebRTC connection is not possible. From
+   the root of the cloned repo:
+
+   ```sh
+   # Build the relay image
+   docker build -t swarmbase-relay relay-server/
+
+   # Run it
+   docker run -d \
+     --name swarmbase-relay \
+     -p 9001:9001 \
+     -p 9002:9002 \
+     -v relay-data:/shared \
+     swarmbase-relay
+   ```
+
+   Port 9001 serves WebSocket connections (browsers); port 9002 serves TCP
+   (Node.js peers). After startup the relay writes its peer ID and addresses
+   to `/shared/relay-info.json`:
+
+   ```sh
+   docker exec swarmbase-relay cat /shared/relay-info.json
+   ```
+
+   ```json
+   {
+     "peerId": "12D3KooW...",
+     "multiaddrs": [
+       "/ip4/0.0.0.0/tcp/9001/ws/p2p/12D3KooW...",
+       "/ip4/0.0.0.0/tcp/9002/p2p/12D3KooW..."
+     ],
+     "wsMultiaddr": "/ip4/0.0.0.0/tcp/9001/ws/p2p/12D3KooW..."
+   }
+   ```
+
+   The `wsMultiaddr` value contains the relay's *listen* address
+   (`0.0.0.0`), which is not directly dialable. Construct the multiaddr your
+   app will dial by substituting the host you reach the relay on — for local
+   development that is `127.0.0.1`:
+
+   ```text
+   /ip4/127.0.0.1/tcp/9001/ws/p2p/<peerId>
+   ```
+
+   Keep this string handy; it goes into your client config in the next step.
+
+3. **Create your swarm client.**
+
+   Swarmbase identifies users by a WebCrypto keypair, not by libp2p peer ID
+   (peer IDs change between restarts; your identity should not). Create
+   `src/identity.ts` to generate an ECDSA P-384 keypair once and persist it
+   in `localStorage`, so every tab on this origin acts as the same user:
+
+   ```ts
+   // src/identity.ts
+   const STORAGE_KEY = 'swarmbase-identity';
+   const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-384' } as const;
+
+   async function importKey(jwk: JsonWebKey, usages: KeyUsage[]): Promise<CryptoKey> {
+     return crypto.subtle.importKey('jwk', jwk, ALGORITHM, true, usages);
+   }
+
+   export async function loadOrCreateIdentity(): Promise<CryptoKeyPair> {
+     const stored = localStorage.getItem(STORAGE_KEY);
+     if (stored) {
+       const jwks = JSON.parse(stored);
+       return {
+         privateKey: await importKey(jwks.privateKey, ['sign']),
+         publicKey: await importKey(jwks.publicKey, ['verify']),
+       };
+     }
+
+     const keypair = await crypto.subtle.generateKey(ALGORITHM, true, [
+       'sign',
+       'verify',
+     ]);
+     localStorage.setItem(
+       STORAGE_KEY,
+       JSON.stringify({
+         privateKey: await crypto.subtle.exportKey('jwk', keypair.privateKey),
+         publicKey: await crypto.subtle.exportKey('jwk', keypair.publicKey),
+       }),
+     );
+     return keypair;
+   }
+   ```
+
+   Now wire the Yjs providers into a `Collabswarm` instance and start it.
+   Create `src/main.ts`:
+
+   ```ts
+   // src/main.ts
+   import {
+     Collabswarm,
+     SubtleCrypto,
+     defaultConfig,
+     defaultBootstrapConfig,
+   } from '@swarmbase/collabswarm';
+   import {
+     YjsProvider,
+     YjsJSONSerializer,
+     YjsACLProvider,
+     YjsKeychainProvider,
+   } from '@swarmbase/collabswarm-yjs';
+   import type * as Y from 'yjs';
+   import { loadOrCreateIdentity } from './identity';
+
+   // The dialable multiaddr you constructed in step 2.
+   const RELAY_MULTIADDR = '/ip4/127.0.0.1/tcp/9001/ws/p2p/<your-relay-peer-id>';
+
+   async function main() {
+     const identity = await loadOrCreateIdentity();
+
+     // YjsJSONSerializer implements all three serializer interfaces
+     // (changes, sync messages, load messages), so one instance covers all
+     // three constructor slots.
+     const serializer = new YjsJSONSerializer();
+     const collabswarm = new Collabswarm(
+       identity.privateKey,
+       identity.publicKey,
+       new YjsProvider(),      // CRDT provider (Yjs)
+       serializer,             // changes serializer
+       serializer,             // sync-message serializer
+       serializer,             // load-message serializer
+       new SubtleCrypto(),     // signing + AES-GCM encryption (WebCrypto)
+       new YjsACLProvider(),   // per-document reader/writer ACLs
+       new YjsKeychainProvider(), // per-document encryption keys
+     );
+
+     // Start the embedded Helia/libp2p node, bootstrapping off your relay.
+     const config = defaultConfig(defaultBootstrapConfig([RELAY_MULTIADDR]));
+     // The initial-load quorum gate requires at least two agreeing peers
+     // before trusting a document load. A two-tab dev swarm behind a single
+     // relay cannot satisfy it, so switch it off for local development.
+     config.loadQuorumEnabled = false;
+     await collabswarm.initialize(config);
+     console.log('Peer ID:', collabswarm.peerId.toString());
+
+     // ...continued in the next step
+   }
+
+   main().catch(console.error);
+   ```
+
+4. **Open a document, subscribe, and make changes.**
+
+   A document is addressed by a path string. Whoever opens a path first
+   creates the document — and becomes its first authorized writer, with a
+   fresh AES-GCM document key in its keychain. Add the following inside
+   `main()`:
+
+   ```ts
+   // Open a document by path.
+   const doc = collabswarm.doc('/quick-start-demo');
+   if (!doc) throw new Error('Failed to create a document reference');
+   await doc.open();
+
+   // Subscribe to updates. The handler fires for both local and remote
+   // changes (pass 'remote' or 'local' as a third argument to filter).
+   doc.subscribe('render', (current: Y.Doc) => {
+     const items = current.getArray<string>('messages').toArray();
+     const log = document.querySelector<HTMLUListElement>('#log')!;
+     log.replaceChildren(
+       ...items.map((text) => {
+         const li = document.createElement('li');
+         li.textContent = text;
+         return li;
+       }),
+     );
+   });
+
+   // Publish a change. The delta is computed by Yjs, encrypted with the
+   // document key, committed to the local content-addressed store, and
+   // broadcast on the document's GossipSub topic.
+   const input = document.querySelector<HTMLInputElement>('#message')!;
+   document.querySelector<HTMLButtonElement>('#send')!.onclick = async () => {
+     const text = input.value.trim();
+     if (!text) return;
+     await doc.change((current: Y.Doc) => {
+       current.getArray<string>('messages').push([text]);
+     });
+     input.value = '';
+   };
+   ```
+
+   And give it a minimal page in `index.html`:
+
+   ```html
+   <h1>Swarmbase quick start</h1>
+   <input id="message" placeholder="Say something" />
+   <button id="send">Send</button>
+   <ul id="log"></ul>
+   <script type="module" src="/src/main.ts"></script>
+   ```
+
+5. **Run it in two tabs.**
+
+   ```sh
+   npm run dev
+   ```
+
+   Open the dev server URL in **two browser tabs**. Each tab starts its own
+   libp2p node, dials the relay, and discovers the other through GossipSub
+   peer discovery — watch the browser console for the peer IDs connecting.
+   Type a message in one tab: it appears in the other. Both tabs share the
+   identity persisted in step 3, so the second tab is an authorized reader
+   and writer of the document.
+
+   What just happened on the wire: the change left the first tab as an
+   AES-GCM-encrypted Yjs delta, was forwarded via the relay (or a direct
+   WebRTC connection when one can be established), and was decrypted and
+   merged by the second tab. The relay only ever saw ciphertext.
+
+</Steps>
+
+<Aside type="note" title="Adding other people">
+Both tabs above share one identity, which sidesteps the interesting part:
+access control. A *different* user (or device with its own keypair) cannot
+read a document until an existing writer grants access through the
+document's ACL — `doc.addWriter(publicKey)` /
+`doc.addReader(publicKey, kemPublicKey)` — which rotates and delivers
+document keys to the new member over an encrypted channel. The
+`examples/password-manager` app in the monorepo demonstrates this invite
+flow end to end.
+</Aside>
+
+## Troubleshooting
+
+- **`LoadQuorumFailedError` when opening a document** — you are running a
+  swarm that is too small for the initial-load quorum gate. Make sure your
+  config sets `loadQuorumEnabled: false` (local development) before
+  `collabswarm.initialize(config)`.
+- **The tabs never see each other** — check that the relay container is
+  running (`docker ps`), and that your multiaddr uses `127.0.0.1` and the
+  relay's real `peerId`, not the `0.0.0.0` listen address from
+  `relay-info.json`. The relay logs `Auto-subscribed to topic` when peers
+  join a document topic.
+- **Console warns `Failed to find document key!`** — the tab received a
+  change encrypted with a key it does not hold yet, which triggers an
+  automatic re-load from the sending peer. If it persists, close both tabs
+  and start over with the tab that created the document opening first.
+  Cross-peer key delivery is one of the least-hardened parts of the alpha.
+
+## Using React?
+
+`@swarmbase/collabswarm-react` wraps the same objects in hooks:
+`useCollabswarm(...)` takes the same providers and config as the
+`Collabswarm` constructor and returns an initialized swarm, and
+`useCollabswarmDocumentState(collabswarm, '/quick-start-demo')` returns
+`[doc, changeDoc, aclOps]` — open/subscribe/close are managed for you.
+Wrap your tree in a `CollabswarmContext.Provider`; see
+`examples/password-manager` in the monorepo for a complete app.
+
+## Next steps
+
+- [How CRDTs make conflict-free sync possible](../../concepts/crdts/) — what
+  Yjs is doing under the hood, and when to pick Automerge instead.
+- [Build a collaborative wiki](../../cookbook/collaborative-wiki/) — a real
+  multi-user app with access control and React.
+- [Contributing to Swarmbase](../../community/contributing/) — it's alpha;
+  bug reports and PRs shape the roadmap right now.
