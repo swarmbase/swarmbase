@@ -21,6 +21,7 @@ hero:
 ---
 
 import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
+import SyncDemo from '../../components/SyncDemo.astro';
 
 <CardGrid>
   <Card title="Local-first" icon="laptop">
@@ -65,6 +66,14 @@ await doc.addWriter(alicePublicKey);
 The full setup — providers, keys, and connecting to a swarm — takes a few
 more lines and is covered step by step in the
 [quick start](./getting-started/quick-start/).
+
+## See it sync — right here
+
+Two independent replicas, one encrypted document. Add todos on either side,
+then take the peers offline, edit both concurrently, and reconnect to watch
+the changes merge without conflicts.
+
+<SyncDemo />
 
 <Aside type="caution" title="Alpha software, honestly labeled">
   Swarmbase is in active alpha development. It is great for prototypes,

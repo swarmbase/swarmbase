@@ -30,6 +30,10 @@ jobs:
           cache: 'yarn'
       - name: Install dependencies
         run: yarn install
+      - name: Build workspace packages used by the site
+        run: |
+          yarn workspace @swarmbase/collabswarm tsc
+          yarn workspace @swarmbase/collabswarm-yjs tsc
       - name: Build site
         run: yarn workspace @swarmbase/site build
       - uses: actions/upload-pages-artifact@v5

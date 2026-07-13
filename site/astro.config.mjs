@@ -1,4 +1,5 @@
 // @ts-check
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
@@ -6,6 +7,21 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   site: 'https://swarmbase.github.io',
   base: '/swarmbase',
+  vite: {
+    resolve: {
+      alias: [
+        {
+          // The core barrel drags in libp2p/Helia, which the browser bundle
+          // doesn't need. The sync demo only uses light modules, re-exported
+          // by the shim.
+          find: /^@swarmbase\/collabswarm$/,
+          replacement: fileURLToPath(
+            new URL('./src/lib/collabswarm-shim.ts', import.meta.url),
+          ),
+        },
+      ],
+    },
+  },
   integrations: [
     starlight({
       title: 'Swarmbase',
