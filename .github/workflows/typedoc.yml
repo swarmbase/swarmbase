@@ -18,7 +18,7 @@ jobs:
           node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - run: yarn install
-      - run: yarn workspace @collabswarm/collabswarm doc
+      - run: yarn workspace @swarmbase/collabswarm doc
       - uses: JamesIves/github-pages-deploy-action@v4.8.0
         with:
           branch: docs # The branch the action should deploy to.

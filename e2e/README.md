@@ -166,7 +166,7 @@ test.setTimeout(60000); // 60 seconds
 ### Application Not Starting
 Check Docker logs and ensure all dependencies are built:
 ```bash
-yarn workspace @collabswarm/collabswarm tsc
-yarn workspace @collabswarm/collabswarm-automerge tsc
+yarn workspace @swarmbase/collabswarm tsc
+yarn workspace @swarmbase/collabswarm-automerge tsc
 docker compose logs browser-test
 ```

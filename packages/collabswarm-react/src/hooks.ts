@@ -9,7 +9,7 @@ import {
   LoadMessageSerializer,
   CollabswarmDocument,
   CollabswarmConfig,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 import { useEffect, useState, useContext, useRef, createContext } from 'react';
 import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
 

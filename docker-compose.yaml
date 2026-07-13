@@ -47,7 +47,7 @@ services:
         REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
         export REACT_APP_RELAY_MULTIADDR
         echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/browser-test start
+        exec yarn workspace @swarmbase/browser-test start
 
   wiki-swarm:
     build:
@@ -79,7 +79,7 @@ services:
         REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
         export REACT_APP_RELAY_MULTIADDR
         echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/wiki-swarm start
+        exec yarn workspace @swarmbase/wiki-swarm start
 
   node:
     build:

@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/collabswarm-yjs",
+  "name": "@swarmbase/collabswarm-yjs",
   "description": "",
   "version": "0.1.0",
   "repository": {
@@ -35,7 +35,7 @@
     "yjs": "^13.6.30"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
   },
   "peerDependencies": {
     "yjs": "^13.6.30"

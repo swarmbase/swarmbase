@@ -1,7 +1,7 @@
 import {
   CollabswarmActions,
   CollabswarmState,
-} from '@collabswarm/collabswarm-redux';
+} from '@swarmbase/collabswarm-redux';
 import { Doc, BinaryChange } from '@automerge/automerge';
 
 export type AutomergeSwarmState<T = any> = CollabswarmState<

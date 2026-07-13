@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/collabswarm-automerge",
+  "name": "@swarmbase/collabswarm-automerge",
   "description": "",
   "version": "0.1.0",
   "repository": {
@@ -35,7 +35,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
   },
   "peerDependencies": {
     "@automerge/automerge": "^3.2.6"

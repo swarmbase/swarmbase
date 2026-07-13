@@ -178,7 +178,7 @@ The relay server will:
 After the relay starts, configure your SwarmDB client with the relay's multiaddress:
 
 ```typescript
-import { defaultNodeConfig } from '@collabswarm/collabswarm';
+import { defaultNodeConfig } from '@swarmbase/collabswarm';
 
 // The relay's multiaddress is printed on startup and written to relay-info.json
 const relayMultiaddr = '/ip4/<YOUR_SERVER_IP>/tcp/9001/ws/p2p/<RELAY_PEER_ID>';
@@ -606,13 +606,13 @@ The public multiaddr your clients should use is constructed from the Fly hostnam
 Once you have the multiaddr, configure your SwarmDB client.
 
 In a **browser** application, combine `defaultConfig` and
-`defaultBootstrapConfig` (both exported from `@collabswarm/collabswarm`):
+`defaultBootstrapConfig` (both exported from `@swarmbase/collabswarm`):
 
 ```typescript
 import {
   defaultConfig,
   defaultBootstrapConfig,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 
 const config = defaultConfig(
   defaultBootstrapConfig([
@@ -624,7 +624,7 @@ const config = defaultConfig(
 In a **Node** process, import the Node-only helper from the `/node` subpath:
 
 ```typescript
-import { defaultNodeConfig } from '@collabswarm/collabswarm/node';
+import { defaultNodeConfig } from '@swarmbase/collabswarm/node';
 
 const config = defaultNodeConfig({
   list: [

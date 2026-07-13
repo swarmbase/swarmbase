@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/collabswarm-redux",
+  "name": "@swarmbase/collabswarm-redux",
   "description": "Redux bindings for collabswarm",
   "version": "0.1.0",
   "repository": {
@@ -31,7 +31,7 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@collabswarm/collabswarm": "workspace:*",
+    "@swarmbase/collabswarm": "workspace:*",
     "redux": "^4.0.0 || ^5.0.0",
     "redux-thunk": "^2.0.0 || ^3.0.0"
   },
@@ -67,7 +67,7 @@
       ".ts"
     ],
     "moduleNameMapper": {
-      "^@collabswarm/collabswarm$": "<rootDir>/src/__mocks__/@collabswarm/collabswarm.ts"
+      "^@swarmbase/collabswarm$": "<rootDir>/src/__mocks__/@swarmbase/collabswarm.ts"
     }
   }
 }

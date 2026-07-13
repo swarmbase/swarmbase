@@ -14,17 +14,17 @@ import {
   defaultConfig,
   defaultBootstrapConfig,
   SubtleCrypto,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 import {
   CollabswarmContext,
   useCollabswarm,
-} from '@collabswarm/collabswarm-react';
+} from '@swarmbase/collabswarm-react';
 import {
   YjsProvider,
   YjsJSONSerializer,
   YjsKeychainProvider,
   YjsACLProvider,
-} from '@collabswarm/collabswarm-yjs';
+} from '@swarmbase/collabswarm-yjs';
 import { Login } from './Login';
 import { PasswordList } from './PasswordList';
 import { Settings } from './Settings';

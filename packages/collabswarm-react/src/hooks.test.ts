@@ -80,9 +80,9 @@ describe('CollabswarmContext defaults', () => {
 // useCollabswarm hook
 // ---------------------------------------------------------------------------
 
-// We need to mock the @collabswarm/collabswarm module so that `new Collabswarm(...)`
+// We need to mock the @swarmbase/collabswarm module so that `new Collabswarm(...)`
 // doesn't try to actually set up libp2p etc.
-jest.mock('@collabswarm/collabswarm', () => {
+jest.mock('@swarmbase/collabswarm', () => {
   const mockInitialize = jest.fn(() => Promise.resolve());
   class MockCollabswarm {
     initialize = mockInitialize;

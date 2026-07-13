@@ -1,6 +1,6 @@
 /**
  * Enhanced benchmark runner producing paper-quality statistical results.
- * Mirrors the version in @collabswarm/collabswarm but avoids cross-package import
+ * Mirrors the version in @swarmbase/collabswarm but avoids cross-package import
  * to keep the index benchmark suite self-contained.
  */
 

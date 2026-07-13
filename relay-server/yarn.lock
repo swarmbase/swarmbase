@@ -444,28 +444,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@collabswarm/relay-server@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "@collabswarm/relay-server@workspace:."
-  dependencies:
-    "@chainsafe/libp2p-noise": "npm:^17.0.0"
-    "@chainsafe/libp2p-yamux": "npm:^8.0.1"
-    "@libp2p/autonat": "npm:^3.0.19"
-    "@libp2p/circuit-relay-v2": "npm:^4.2.4"
-    "@libp2p/gossipsub": "npm:^15.0.23"
-    "@libp2p/identify": "npm:^4.1.4"
-    "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
-    "@libp2p/tcp": "npm:^11.0.19"
-    "@libp2p/websockets": "npm:^10.1.12"
-    "@types/jest": "npm:^29.5.12"
-    "@types/node": "npm:^25.3.0"
-    jest: "npm:^29.2.5"
-    libp2p: "npm:^3.3.0"
-    ts-jest: "npm:^29.2.5"
-    typescript: "npm:^5.3.3"
-  languageName: unknown
-  linkType: soft
-
 "@dnsquery/dns-packet@npm:^6.1.1":
   version: 6.1.1
   resolution: "@dnsquery/dns-packet@npm:6.1.1"
@@ -1285,6 +1263,28 @@ __metadata:
   checksum: 10/78155c7bd866a85df85e22028e046b8d46cf3e840f72260954f5e3ed5bd97d66c595524305a6841ffb3f681a08f6e5cef572a2cce5442a8a232dc29fb409b83e
   languageName: node
   linkType: hard
+
+"@swarmbase/relay-server@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@swarmbase/relay-server@workspace:."
+  dependencies:
+    "@chainsafe/libp2p-noise": "npm:^17.0.0"
+    "@chainsafe/libp2p-yamux": "npm:^8.0.1"
+    "@libp2p/autonat": "npm:^3.0.19"
+    "@libp2p/circuit-relay-v2": "npm:^4.2.4"
+    "@libp2p/gossipsub": "npm:^15.0.23"
+    "@libp2p/identify": "npm:^4.1.4"
+    "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
+    "@libp2p/tcp": "npm:^11.0.19"
+    "@libp2p/websockets": "npm:^10.1.12"
+    "@types/jest": "npm:^29.5.12"
+    "@types/node": "npm:^25.3.0"
+    jest: "npm:^29.2.5"
+    libp2p: "npm:^3.3.0"
+    ts-jest: "npm:^29.2.5"
+    typescript: "npm:^5.3.3"
+  languageName: unknown
+  linkType: soft
 
 "@types/babel__core@npm:^7.1.14":
   version: 7.20.5

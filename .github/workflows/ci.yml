@@ -45,7 +45,7 @@ jobs:
       - run: yarn install
       - name: Build workspace packages
         run: yarn build
-      - run: yarn workspace @collabswarm/${{ matrix.package }} test
+      - run: yarn workspace @swarmbase/${{ matrix.package }} test
 
   integration:
     runs-on: ubuntu-latest

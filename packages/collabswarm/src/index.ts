@@ -17,7 +17,7 @@ import { CRDTSyncMessage } from './crdt-sync-message';
 // It is a Node-only module (imports `fs`, `@libp2p/mdns` which depends on
 // `dgram`) and must not be bundled by browser consumers. Import it from the
 // dedicated Node subpath export:
-//   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
+//   import { CollabswarmNode, defaultNodeConfig } from '@swarmbase/collabswarm/node';
 import { CRDTProvider } from './crdt-provider';
 import { SyncMessageSerializer } from './sync-message-serializer';
 import { ChangesSerializer } from './changes-serializer';

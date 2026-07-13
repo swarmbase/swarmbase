@@ -1,4 +1,4 @@
-import { Collabswarm, CollabswarmDocument } from '@collabswarm/collabswarm';
+import { Collabswarm, CollabswarmDocument } from '@swarmbase/collabswarm';
 import * as Y from 'yjs';
 
 export type YjsCollabswarm = Collabswarm<

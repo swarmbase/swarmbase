@@ -6,7 +6,7 @@ import {
   closeDocumentAsync,
   changeDocumentAsync,
   initializeAsync,
-} from '@collabswarm/collabswarm-redux';
+} from '@swarmbase/collabswarm-redux';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { JsonEditor } from 'jsoneditor-react';
@@ -18,7 +18,7 @@ import {
   CollabswarmDocument,
   defaultConfig,
   defaultBootstrapConfig,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 import { Doc, BinaryChange } from '@automerge/automerge';
 
 export type AutomergeSwarm<T = any> = Collabswarm<
