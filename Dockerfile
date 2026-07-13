@@ -35,23 +35,23 @@ WORKDIR /app
 
 # Build all packages
 COPY packages/collabswarm/. /app/packages/collabswarm/
-RUN yarn workspace @collabswarm/collabswarm run tsc
+RUN yarn workspace @swarmbase/collabswarm run tsc
 
 COPY packages/collabswarm-automerge/. /app/packages/collabswarm-automerge/
-RUN yarn workspace @collabswarm/collabswarm-automerge run tsc
-# RUN yarn workspace @collabswarm/collabswarm-automerge link -A
+RUN yarn workspace @swarmbase/collabswarm-automerge run tsc
+# RUN yarn workspace @swarmbase/collabswarm-automerge link -A
 # RUN chmod +x /usr/local/bin/collabswarm-automerge-d
 
 COPY packages/collabswarm-yjs/. /app/packages/collabswarm-yjs/
-RUN yarn workspace @collabswarm/collabswarm-yjs run tsc
-# RUN yarn workspace @collabswarm/collabswarm-yjs link -A
+RUN yarn workspace @swarmbase/collabswarm-yjs run tsc
+# RUN yarn workspace @swarmbase/collabswarm-yjs link -A
 # RUN chmod +x /usr/local/bin/collabswarm-yjs-d
 
 COPY packages/collabswarm-react/. /app/packages/collabswarm-react/
-RUN yarn workspace @collabswarm/collabswarm-react run tsc
+RUN yarn workspace @swarmbase/collabswarm-react run tsc
 
 COPY packages/collabswarm-redux/. /app/packages/collabswarm-redux/
-RUN yarn workspace @collabswarm/collabswarm-redux run tsc
+RUN yarn workspace @swarmbase/collabswarm-redux run tsc
 
 COPY examples/browser-test/. /app/examples/browser-test/
 COPY examples/wiki-swarm/. /app/examples/wiki-swarm/
@@ -62,4 +62,4 @@ RUN dos2unix /app/wait-for-file.sh
 
 WORKDIR /app
 # CMD collabswarm-automerge-d
-CMD yarn workspace @collabswarm/collabswarm-automerge run collabswarm-automerge-d
+CMD yarn workspace @swarmbase/collabswarm-automerge run collabswarm-automerge-d

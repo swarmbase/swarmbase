@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, ListGroup, Container, Col, Row, Form } from 'react-bootstrap';
-import { useCollabswarmDocumentState } from '@collabswarm/collabswarm-react';
+import { useCollabswarmDocumentState } from '@swarmbase/collabswarm-react';
 import * as uuid from 'uuid';
 import { YjsCollabswarm } from './utils';
 import * as Y from 'yjs';

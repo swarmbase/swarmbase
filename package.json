@@ -18,11 +18,11 @@
     "@playwright/test": "^1.58.2"
   },
   "scripts": {
-    "build": "yarn workspaces foreach -Atpvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run tsc",
-    "test": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run test",
+    "build": "yarn workspaces foreach -Atpvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-automerge' --include '@swarmbase/collabswarm-yjs' --include '@swarmbase/collabswarm-react' --include '@swarmbase/collabswarm-redux' --include '@swarmbase/collabswarm-index' run tsc",
+    "test": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-yjs' --include '@swarmbase/collabswarm-react' --include '@swarmbase/collabswarm-automerge' --include '@swarmbase/collabswarm-redux' --include '@swarmbase/collabswarm-index' run test",
     "test:e2e": "playwright test",
     "test:integration": "playwright test --config=playwright.integration.config.ts",
     "test:nat": "playwright test --config=playwright.nat-test.config.ts",
-    "benchmark:all": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-index' run benchmark"
+    "benchmark:all": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-index' run benchmark"
   }
 }

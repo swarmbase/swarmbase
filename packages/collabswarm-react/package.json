@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/collabswarm-react",
+  "name": "@swarmbase/collabswarm-react",
   "description": "React hooks for collabswarm documents",
   "version": "0.1.0",
   "repository": {
@@ -43,7 +43,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm",
+    "@swarmbase/collabswarm": "workspace:packages/collabswarm",
     "react": "^19.2.6"
   },
   "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",

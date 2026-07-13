@@ -3,11 +3,11 @@
 import {
   defaultBootstrapConfig,
   SubtleCrypto,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 import {
   CollabswarmNode,
   defaultNodeConfig,
-} from '@collabswarm/collabswarm/src/collabswarm-node';
+} from '@swarmbase/collabswarm/src/collabswarm-node';
 import {
   YjsACLProvider,
   YjsJSONSerializer,

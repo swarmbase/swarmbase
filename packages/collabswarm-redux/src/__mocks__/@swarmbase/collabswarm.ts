@@ -1,4 +1,4 @@
-// Mock for @collabswarm/collabswarm - provides stub exports
+// Mock for @swarmbase/collabswarm - provides stub exports
 // so jest doesn't need to resolve the full libp2p dependency chain.
 
 export class Collabswarm {

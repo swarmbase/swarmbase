@@ -7,8 +7,8 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import { Provider } from 'react-redux';
 import { createStore, applyMiddleware, Middleware } from 'redux';
-import { collabswarmReducer } from '@collabswarm/collabswarm-redux';
-import { AutomergeJSONSerializer, AutomergeProvider } from '@collabswarm/collabswarm-automerge';
+import { collabswarmReducer } from '@swarmbase/collabswarm-redux';
+import { AutomergeJSONSerializer, AutomergeProvider } from '@swarmbase/collabswarm-automerge';
 import thunk from 'redux-thunk';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
 

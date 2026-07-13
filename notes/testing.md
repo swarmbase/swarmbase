@@ -9,9 +9,9 @@ yarn workspace {workspace_name} test
 
 Examples:
 ```bash
-yarn workspace @collabswarm/collabswarm test
-yarn workspace @collabswarm/collabswarm-yjs test
-yarn workspace @collabswarm/collabswarm-react test
+yarn workspace @swarmbase/collabswarm test
+yarn workspace @swarmbase/collabswarm-yjs test
+yarn workspace @swarmbase/collabswarm-react test
 ```
 
 ### End-to-End Tests
@@ -30,19 +30,19 @@ For more details, see `e2e/README.md`.
 
 ## Test Coverage Summary
 
-### Core Package (@collabswarm/collabswarm) - 32 tests
+### Core Package (@swarmbase/collabswarm) - 32 tests
 - Unit tests for JSON serialization/deserialization
 - Unit tests for authentication (sign/verify, encrypt/decrypt)
 - Unit tests for utility functions (arrays, promises, crypto keys)
 - Integration tests for multi-user crypto scenarios
 
-### Yjs Package (@collabswarm/collabswarm-yjs) - 7 tests
+### Yjs Package (@swarmbase/collabswarm-yjs) - 7 tests
 - Yjs document creation and management
 - Base64 serialization utilities
 - Document arrays and structures
 - Multi-document independence
 
-### React Package (@collabswarm/collabswarm-react) - 2 tests
+### React Package (@swarmbase/collabswarm-react) - 2 tests
 - React context creation and functionality
 - Provider and Consumer component verification
 
@@ -93,7 +93,7 @@ All tests run automatically on GitHub Actions:
 
 ### Unit Tests Workflow (`.github/workflows/test.yml`)
 - Runs on every push and pull request
-- Tests @collabswarm/collabswarm, collabswarm-yjs, and collabswarm-react
+- Tests @swarmbase/collabswarm, collabswarm-yjs, and collabswarm-react
 - Ensures code changes don't break existing functionality
 
 ### E2E Tests Workflow (`.github/workflows/e2e.yml`)

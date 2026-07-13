@@ -2,14 +2,14 @@ import { combineReducers, CombinedState } from 'redux';
 import { WikiSwarmArticle } from './models';
 import { WikiSwarmActions, SEARCH } from './actions';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
-import { collabswarmReducer } from '@collabswarm/collabswarm-redux';
+import { collabswarmReducer } from '@swarmbase/collabswarm-redux';
 import {
   AutomergeACLProvider,
   AutomergeJSONSerializer,
   AutomergeKeychainProvider,
   AutomergeProvider,
-} from '@collabswarm/collabswarm-automerge';
-import { SubtleCrypto } from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm-automerge';
+import { SubtleCrypto } from '@swarmbase/collabswarm';
 
 export interface WikiAppState {}
 

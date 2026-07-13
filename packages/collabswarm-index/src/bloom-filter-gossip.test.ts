@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, jest as jestFn } from '@jest/globals';
 import { BloomFilterGossip } from './bloom-filter-gossip';
-import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
+import { bloomFilterUpdateV1 } from '@swarmbase/collabswarm';
 
 type MockFn = ReturnType<typeof jestFn.fn>;
 

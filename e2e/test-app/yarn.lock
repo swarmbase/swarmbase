@@ -68,26 +68,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@collabswarm/integration-test-app@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "@collabswarm/integration-test-app@workspace:."
-  dependencies:
-    "@chainsafe/libp2p-noise": "npm:^17.0.0"
-    "@chainsafe/libp2p-yamux": "npm:^8.0.1"
-    "@libp2p/bootstrap": "npm:^12.0.21"
-    "@libp2p/circuit-relay-v2": "npm:^4.2.4"
-    "@libp2p/gossipsub": "npm:^15.0.22"
-    "@libp2p/identify": "npm:^4.1.4"
-    "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
-    "@libp2p/webrtc": "npm:^6.0.22"
-    "@libp2p/websockets": "npm:^10.1.12"
-    "@libp2p/webtransport": "npm:^6.0.23"
-    esbuild: "npm:^0.28.1"
-    libp2p: "npm:^3.3.0"
-    serve: "npm:^14.2.4"
-  languageName: unknown
-  linkType: soft
-
 "@dnsquery/dns-packet@npm:^6.1.1":
   version: 6.1.1
   resolution: "@dnsquery/dns-packet@npm:6.1.1"
@@ -965,6 +945,26 @@ __metadata:
   checksum: 10/9816f4382da21df562e9049bd40dca95bc952afbc5f2257750b1b537af0810850749ee113c8b97f0b4c49a2d82c225fc8e0e14fda191333de9e1f73730a428e3
   languageName: node
   linkType: hard
+
+"@swarmbase/integration-test-app@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@swarmbase/integration-test-app@workspace:."
+  dependencies:
+    "@chainsafe/libp2p-noise": "npm:^17.0.0"
+    "@chainsafe/libp2p-yamux": "npm:^8.0.1"
+    "@libp2p/bootstrap": "npm:^12.0.21"
+    "@libp2p/circuit-relay-v2": "npm:^4.2.4"
+    "@libp2p/gossipsub": "npm:^15.0.22"
+    "@libp2p/identify": "npm:^4.1.4"
+    "@libp2p/pubsub-peer-discovery": "npm:^12.0.0"
+    "@libp2p/webrtc": "npm:^6.0.22"
+    "@libp2p/websockets": "npm:^10.1.12"
+    "@libp2p/webtransport": "npm:^6.0.23"
+    esbuild: "npm:^0.28.1"
+    libp2p: "npm:^3.3.0"
+    serve: "npm:^14.2.4"
+  languageName: unknown
+  linkType: soft
 
 "@zeit/schemas@npm:2.36.0":
   version: 2.36.0

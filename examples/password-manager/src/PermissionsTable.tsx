@@ -1,5 +1,5 @@
-import { useCollabswarmDocumentState } from '@collabswarm/collabswarm-react';
-import { deserializeKey, serializeKey } from '@collabswarm/collabswarm-yjs';
+import { useCollabswarmDocumentState } from '@swarmbase/collabswarm-react';
+import { deserializeKey, serializeKey } from '@swarmbase/collabswarm-yjs';
 import { useEffect, useState } from 'react';
 import { Button, Form, Table } from 'react-bootstrap';
 import { YjsCollabswarm } from './utils';

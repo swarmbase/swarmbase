@@ -1,12 +1,12 @@
 {
-  "name": "@collabswarm/password-manager",
+  "name": "@swarmbase/password-manager",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm",
-    "@collabswarm/collabswarm-react": "workspace:packages/collabswarm-react",
-    "@collabswarm/collabswarm-yjs": "workspace:packages/collabswarm-yjs",
     "@popperjs/core": "^2.11.8",
+    "@swarmbase/collabswarm": "workspace:packages/collabswarm",
+    "@swarmbase/collabswarm-react": "workspace:packages/collabswarm-react",
+    "@swarmbase/collabswarm-yjs": "workspace:packages/collabswarm-yjs",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -38,7 +38,7 @@
   },
   "scripts": {
     "build": "yarn install && yarn build:tsc && yarn install",
-    "build:tsc": "yarn workspace @collabswarm/collabswarm tsc && yarn workspace @collabswarm/collabswarm-yjs tsc && yarn workspace @collabswarm/collabswarm-react tsc && yarn workspace @collabswarm/collabswarm-redux tsc && yarn install",
+    "build:tsc": "yarn workspace @swarmbase/collabswarm tsc && yarn workspace @swarmbase/collabswarm-yjs tsc && yarn workspace @swarmbase/collabswarm-react tsc && yarn workspace @swarmbase/collabswarm-redux tsc && yarn install",
     "start": "react-scripts start"
   },
   "engines": {

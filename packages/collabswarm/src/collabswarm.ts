@@ -76,8 +76,8 @@ export type CollabswarmPeersHandler = (
  * The collabswarm object is the main entry point for the collabswarm library.
  *
  * @example
- * import { Collabswarm } from '@collabswarm/collabswarm';
- * import { AutomergeJSONSerializer, AutomergeProvider } from '@collabswarm/collabswarm-automerge';
+ * import { Collabswarm } from '@swarmbase/collabswarm';
+ * import { AutomergeJSONSerializer, AutomergeProvider } from '@swarmbase/collabswarm-automerge';
  *
  * // Create the necessary providers and pass them to the collabswarm constructor.
  * const crdt = new AutomergeProvider();

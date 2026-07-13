@@ -2,17 +2,17 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
 import { Doc, Text } from '@automerge/automerge';
-import type { CollabswarmConfig } from '@collabswarm/collabswarm';
+import type { CollabswarmConfig } from '@swarmbase/collabswarm';
 import {
   defaultConfig,
   defaultBootstrapConfig,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 import {
   changeDocumentAsync,
   openDocumentAsync,
   closeDocumentAsync,
   initializeAsync,
-} from '@collabswarm/collabswarm-redux';
+} from '@swarmbase/collabswarm-redux';
 import { WikiSwarmArticle } from '../models';
 import { RootState, selectAutomergeSwarmState } from '../reducers';
 import dayjs from 'dayjs';

@@ -1,5 +1,5 @@
 import { BloomFilterCRDT } from './bloom-filter-crdt';
-import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
+import { bloomFilterUpdateV1 } from '@swarmbase/collabswarm';
 
 /**
  * Peer filter state tracked per remote peer.

@@ -7,7 +7,7 @@
  * index.
  */
 
-import type { CollabswarmDocument } from '@collabswarm/collabswarm';
+import type { CollabswarmDocument } from '@swarmbase/collabswarm';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type CollabswarmContextOpenResultAny = {

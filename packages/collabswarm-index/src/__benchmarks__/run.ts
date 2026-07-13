@@ -2,8 +2,8 @@
  * Entry point for running all index package benchmarks.
  *
  * Usage:
- *   yarn workspace @collabswarm/collabswarm-index benchmark
- *   yarn workspace @collabswarm/collabswarm-index benchmark --iterations 500
+ *   yarn workspace @swarmbase/collabswarm-index benchmark
+ *   yarn workspace @swarmbase/collabswarm-index benchmark --iterations 500
  */
 import * as fs from 'fs';
 import { join } from 'path';
