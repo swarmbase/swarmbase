@@ -2043,7 +2043,7 @@ __metadata:
     jest: "npm:^29.2.5"
     js-base64: "npm:^3.7.8"
     libp2p: "npm:^3.3.0"
-    multiformats: "npm:^13.4.2"
+    multiformats: "npm:^14.0.4"
     ts-jest: "npm:^29.2.5"
     ts-node: "npm:^10.1.0"
     typedoc: "npm:^0.28.19"
@@ -14093,6 +14093,13 @@ __metadata:
   version: 14.0.0
   resolution: "multiformats@npm:14.0.0"
   checksum: 10/7c41ff6ee40232a7f28314a1ad17d77c54b3bb99e6ff4748c133d7d843ab647fc6f734d731e03f8bef189e18e62e64ed1221728775ed30fe161beac92be6694c
+  languageName: node
+  linkType: hard
+
+"multiformats@npm:^14.0.4":
+  version: 14.0.4
+  resolution: "multiformats@npm:14.0.4"
+  checksum: 10/5b1862e5a5107675b15668d48577c5da17777b6c7d1afafdc481df3d4f759da4f1533804da1dbea6f95518463901059ce76ede08ea289a18e1fd57d06ac01926
   languageName: node
   linkType: hard
 
