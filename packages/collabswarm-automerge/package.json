@@ -23,7 +23,7 @@
   ],
   "type": "module",
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@automerge/automerge": "^3.2.6",
     "@peculiar/webcrypto": "^1.7.1",

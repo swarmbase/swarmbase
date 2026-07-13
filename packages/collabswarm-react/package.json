@@ -26,7 +26,7 @@
     "dist"
   ],
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
