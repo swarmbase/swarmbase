@@ -1,0 +1,407 @@
+---
+// Live two-pane sync demo. Runs the real Swarmbase CRDT provider (Yjs) and
+// crypto provider (AES-GCM + ECDSA via SubtleCrypto) in the visitor's
+// browser. The only simulated piece is transport: frames hop an in-page
+// channel instead of GossipSub over libp2p.
+---
+
+<section class="sync-demo not-content" aria-label="Live sync demo">
+  <div class="demo-fallback" data-demo-fallback>
+    This demo needs JavaScript and the Web Crypto API. You can still read the
+    <a href="./getting-started/quick-start/">quick start</a> to see the same
+    flow in code.
+  </div>
+  <div class="demo-grid" data-demo hidden>
+    <div class="peer-card">
+      <header>
+        <span class="peer-dot alice"></span> Alice&rsquo;s browser
+      </header>
+      <ul class="todo-list" data-list="alice"></ul>
+      <form data-form="alice">
+        <input
+          type="text"
+          maxlength="60"
+          placeholder="Add a todo as Alice…"
+          aria-label="Add a todo as Alice"
+        />
+        <button type="submit">Add</button>
+      </form>
+    </div>
+
+    <div class="wire-panel">
+      <header>The wire — what peers actually see</header>
+      <ol class="wire-log" data-wire aria-live="polite"></ol>
+      <button type="button" class="pause-btn" data-pause>
+        Go offline
+      </button>
+      <p class="wire-hint" data-hint>
+        Every frame is an encrypted, signed CRDT change. Peers that are not on
+        the readers list see exactly this: bytes.
+      </p>
+    </div>
+
+    <div class="peer-card">
+      <header>
+        <span class="peer-dot bob"></span> Bob&rsquo;s browser
+      </header>
+      <ul class="todo-list" data-list="bob"></ul>
+      <form data-form="bob">
+        <input
+          type="text"
+          maxlength="60"
+          placeholder="Add a todo as Bob…"
+          aria-label="Add a todo as Bob"
+        />
+        <button type="submit">Add</button>
+      </form>
+    </div>
+  </div>
+  <p class="demo-note">
+    This is Swarmbase&rsquo;s real CRDT pipeline (Yjs via
+    <code>YjsProvider</code>) and real crypto (AES&#8209;GCM encryption,
+    ECDSA&nbsp;P&#8209;384 signatures via the <code>SubtleCrypto</code>
+    provider) running in your browser. The one simulated part: frames travel
+    over an in-page channel instead of GossipSub on libp2p. The
+    <a href="./getting-started/quick-start/">quick start</a> runs the real
+    network.
+  </p>
+</section>
+
+<script>
+  import { YjsProvider } from '@swarmbase/collabswarm-yjs';
+  import { SubtleCrypto } from '@swarmbase/collabswarm';
+  import type { Doc } from 'yjs';
+
+  type Side = 'alice' | 'bob';
+  const OTHER: Record<Side, Side> = { alice: 'bob', bob: 'alice' };
+
+  interface Frame {
+    from: Side;
+    cipher: Uint8Array;
+    nonce: Uint8Array;
+    sig: Uint8Array;
+    entry: HTMLLIElement;
+  }
+
+  const root = document.querySelector('.sync-demo');
+
+  async function main() {
+    if (!root || !('crypto' in window) || !crypto.subtle) return;
+    const grid = root.querySelector<HTMLElement>('[data-demo]')!;
+    const fallback = root.querySelector<HTMLElement>('[data-demo-fallback]')!;
+
+    const provider = new YjsProvider();
+    const auth = new SubtleCrypto();
+
+    const signParams = { name: 'ECDSA', namedCurve: 'P-384' };
+    const keys: Record<Side, CryptoKeyPair> = {
+      alice: await crypto.subtle.generateKey(signParams, false, ['sign', 'verify']),
+      bob: await crypto.subtle.generateKey(signParams, false, ['sign', 'verify']),
+    };
+    // In the real stack this key is agreed via BeeKEM and rotated when
+    // readers are removed; here both peers hold the current epoch key.
+    const docKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+
+    const docs: Record<Side, Doc> = {
+      alice: provider.newDocument(),
+      bob: provider.newDocument(),
+    };
+
+    const wire = root.querySelector<HTMLOListElement>('[data-wire]')!;
+    const pauseBtn = root.querySelector<HTMLButtonElement>('[data-pause]')!;
+    const hint = root.querySelector<HTMLElement>('[data-hint]')!;
+    let paused = false;
+    const queue: Frame[] = [];
+
+    const hex = (b: Uint8Array, n = 10) =>
+      Array.from(b.slice(0, n), (x) => x.toString(16).padStart(2, '0')).join('');
+
+    function render(side: Side) {
+      const list = root!.querySelector<HTMLUListElement>(`[data-list="${side}"]`)!;
+      list.textContent = '';
+      const todos = docs[side].getArray<string>('todos');
+      todos.toArray().forEach((text, i) => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = text;
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = '×';
+        del.setAttribute('aria-label', `Remove "${text}"`);
+        del.addEventListener('click', () => {
+          void edit(side, (d) => d.getArray('todos').delete(i, 1));
+        });
+        li.append(span, del);
+        list.append(li);
+      });
+    }
+
+    function logFrame(frame: Frame, status: 'delivered' | 'queued') {
+      const li = document.createElement('li');
+      li.className = status;
+      const route = document.createElement('span');
+      route.className = 'route';
+      route.textContent = `${frame.from} → ${OTHER[frame.from]}`;
+      const bytes = document.createElement('code');
+      bytes.textContent = `${frame.cipher.length} B · ${hex(frame.cipher)}…`;
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = status === 'queued' ? 'queued (offline)' : 'sig ✓ writer ✓';
+      li.append(route, bytes, badge);
+      frame.entry = li;
+      wire.prepend(li);
+      while (wire.children.length > 8) wire.lastElementChild!.remove();
+    }
+
+    async function deliver(frame: Frame) {
+      const to = OTHER[frame.from];
+      const valid = await auth.verify(
+        frame.cipher,
+        keys[frame.from].publicKey,
+        frame.sig,
+      );
+      const badge = frame.entry.querySelector('.badge')!;
+      if (!valid) {
+        badge.textContent = 'sig ✗ rejected';
+        frame.entry.className = 'rejected';
+        return;
+      }
+      const plain = await auth.decrypt(frame.cipher, docKey, frame.nonce);
+      provider.remoteChange(docs[to], plain);
+      badge.textContent = 'sig ✓ writer ✓';
+      frame.entry.className = 'delivered';
+      render(to);
+    }
+
+    async function transmit(from: Side, update: Uint8Array) {
+      const { data: cipher, nonce } = await auth.encrypt(update, docKey);
+      const sig = await auth.sign(cipher, keys[from].privateKey);
+      const frame: Frame = { from, cipher, nonce, sig, entry: null! };
+      logFrame(frame, paused ? 'queued' : 'delivered');
+      if (paused) {
+        queue.push(frame);
+      } else {
+        await deliver(frame);
+      }
+    }
+
+    async function edit(side: Side, fn: (d: Doc) => void) {
+      const [, update] = provider.localChange(docs[side], 'edit', fn);
+      render(side);
+      await transmit(side, update);
+    }
+
+    pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Reconnect' : 'Go offline';
+      root!.classList.toggle('offline', paused);
+      hint.textContent = paused
+        ? 'Peers are disconnected. Keep editing both sides — changes queue up.'
+        : 'Every frame is an encrypted, signed CRDT change. Peers that are not on the readers list see exactly this: bytes.';
+      if (!paused) {
+        const pending = queue.splice(0);
+        void (async () => {
+          for (const frame of pending) await deliver(frame);
+        })();
+      }
+    });
+
+    for (const side of ['alice', 'bob'] as Side[]) {
+      const form = root.querySelector<HTMLFormElement>(`[data-form="${side}"]`)!;
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = form.querySelector('input')!;
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        void edit(side, (d) => d.getArray('todos').push([text]));
+      });
+    }
+
+    // Seed Alice with a starter list and hand Bob the full history, the same
+    // way a fresh peer receives it on join.
+    provider.localChange(docs.alice, 'seed', (d) => {
+      d.getArray('todos').push(['Try editing both sides', 'Click "Go offline", edit, reconnect']);
+    });
+    provider.remoteChange(docs.bob, provider.getHistory(docs.alice));
+    render('alice');
+    render('bob');
+
+    fallback.hidden = true;
+    grid.hidden = false;
+  }
+
+  void main();
+</script>
+
+<style>
+  .sync-demo {
+    margin-top: 2rem;
+  }
+  .demo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  @media (max-width: 72rem) {
+    .demo-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .peer-card,
+  .wire-panel {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    background: var(--sl-color-black);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .peer-card header,
+  .wire-panel header {
+    font-weight: 600;
+    color: var(--sl-color-white);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .peer-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .peer-dot.alice {
+    background: var(--sl-color-accent);
+  }
+  .peer-dot.bob {
+    background: var(--sw-color-teal, #2dd4bf);
+  }
+  .todo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    min-height: 7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .todo-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--sl-color-gray-6);
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.6rem;
+  }
+  .todo-list button {
+    background: none;
+    border: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .todo-list button:hover {
+    color: var(--sl-color-white);
+  }
+  .peer-card form {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .peer-card input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+    padding: 0.4rem 0.6rem;
+  }
+  .peer-card form button {
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--sl-color-accent);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .wire-panel {
+    background: var(--sl-color-gray-6);
+  }
+  .offline .wire-panel {
+    border-style: dashed;
+    border-color: var(--sl-color-orange, #e5850b);
+  }
+  .wire-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    min-height: 7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-xs);
+  }
+  .wire-log li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+    border-left: 3px solid var(--sl-color-accent);
+    padding-left: 0.5rem;
+  }
+  .wire-log li.queued {
+    border-left-color: var(--sl-color-orange, #e5850b);
+    opacity: 0.8;
+  }
+  .wire-log li.rejected {
+    border-left-color: var(--sl-color-red, #f43f5e);
+  }
+  .wire-log .route {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .wire-log code {
+    background: none;
+    padding: 0;
+    color: var(--sl-color-gray-2);
+    word-break: break-all;
+  }
+  .wire-log .badge {
+    color: var(--sl-color-gray-3);
+  }
+  .pause-btn {
+    align-self: flex-start;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.5rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .wire-hint,
+  .demo-note {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    margin: 0;
+  }
+  .demo-note {
+    margin-top: 0.75rem;
+  }
+  .demo-fallback {
+    border: 1px dashed var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    color: var(--sl-color-gray-3);
+  }
+</style>

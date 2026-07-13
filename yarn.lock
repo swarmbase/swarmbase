@@ -6087,7 +6087,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@swarmbase/collabswarm-yjs@workspace:packages/collabswarm-yjs":
+"@swarmbase/collabswarm-yjs@workspace:*, @swarmbase/collabswarm-yjs@workspace:packages/collabswarm-yjs":
   version: 0.0.0-use.local
   resolution: "@swarmbase/collabswarm-yjs@workspace:packages/collabswarm-yjs"
   dependencies:
@@ -6107,7 +6107,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@swarmbase/collabswarm@workspace:packages/collabswarm":
+"@swarmbase/collabswarm@workspace:*, @swarmbase/collabswarm@workspace:packages/collabswarm":
   version: 0.0.0-use.local
   resolution: "@swarmbase/collabswarm@workspace:packages/collabswarm"
   dependencies:
@@ -6193,7 +6193,10 @@ __metadata:
   resolution: "@swarmbase/site@workspace:site"
   dependencies:
     "@astrojs/starlight": "npm:^0.41.3"
+    "@swarmbase/collabswarm": "workspace:*"
+    "@swarmbase/collabswarm-yjs": "workspace:*"
     astro: "npm:^7.0.7"
+    yjs: "npm:^13.6.30"
   languageName: unknown
   linkType: soft
 
