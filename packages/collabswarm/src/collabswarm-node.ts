@@ -18,17 +18,17 @@ import {
   defaultBootstrapConfig,
   defaultConfig,
   resolveIceServers,
-} from './collabswarm-config';
-import { Collabswarm } from './collabswarm';
-import { CollabswarmDocument } from './collabswarm-document';
-import { CRDTProvider } from './crdt-provider';
-import { SyncMessageSerializer } from './sync-message-serializer';
-import { ChangesSerializer } from './changes-serializer';
-import { AuthProvider } from './auth-provider';
-import { ACLProvider } from './acl-provider';
-import { KeychainProvider } from './keychain-provider';
-import { LoadMessageSerializer } from './load-request-serializer';
-import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node';
+} from './collabswarm-config.js';
+import { Collabswarm } from './collabswarm.js';
+import { CollabswarmDocument } from './collabswarm-document.js';
+import { CRDTProvider } from './crdt-provider.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
+import { ChangesSerializer } from './changes-serializer.js';
+import { AuthProvider } from './auth-provider.js';
+import { ACLProvider } from './acl-provider.js';
+import { KeychainProvider } from './keychain-provider.js';
+import { LoadMessageSerializer } from './load-request-serializer.js';
+import { CRDTChangeNode, crdtChangeNodeDeferred } from './crdt-change-node.js';
 import { CID } from 'multiformats';
 import { EventHandler } from '@libp2p/interface';
 // libp2p v3 moved the GossipSub-specific `Message` type out of `@libp2p/interface`.
@@ -94,7 +94,7 @@ export const defaultNodeConfig = (
       libp2p: {
         // See: https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
         addresses: {
-          listen: ['/webrtc', '/wss', '/ws'],
+          listen: ['/p2p-circuit', '/webrtc', '/wss', '/ws'],
         },
         transports: [
           circuitRelayTransport({

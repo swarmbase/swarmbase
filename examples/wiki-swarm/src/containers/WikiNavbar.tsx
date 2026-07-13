@@ -9,9 +9,7 @@ export default function WikiNavbar() {
 
   return <div className="m-3">
     <InputGroup className="mb-3">
-      <InputGroup.Prepend>
-        <InputGroup.Text id="document-prefix">/documents/</InputGroup.Text>
-      </InputGroup.Prepend>
+      <InputGroup.Text id="document-prefix">/documents/</InputGroup.Text>
       <FormControl
         placeholder="Document ID"
         aria-label="Document ID"
@@ -19,11 +17,9 @@ export default function WikiNavbar() {
         value={currentSearch}
         onChange={e => setCurrentSearch(e.target.value)}
       />
-      <InputGroup.Append>
-        <LinkContainer to={`/document/${currentSearch}`}>
-          <Button variant="outline-secondary">Search</Button>
-        </LinkContainer>
-      </InputGroup.Append>
+      <LinkContainer to={`/document/${currentSearch}`}>
+        <Button variant="outline-secondary">Search</Button>
+      </LinkContainer>
     </InputGroup>
   </div>
 }

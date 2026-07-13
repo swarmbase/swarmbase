@@ -41,7 +41,7 @@ export function PasswordList({
             {passwords &&
               passwords
                 .getArray<Y.Map<Y.Text>>('passwords')
-                .map<Y.Map<Y.Text>, JSX.Element>((password) => {
+                .map((password) => {
                   const idRef = password.get('id');
                   const nameRef = password.get('name');
                   const id = idRef && idRef.toString();

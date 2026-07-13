@@ -2,11 +2,11 @@ import {
   CollabswarmActions,
   CollabswarmState,
 } from '@collabswarm/collabswarm-redux';
-import { Doc, BinaryChange } from '@automerge/automerge';
+import { Doc, Change } from '@automerge/automerge';
 
 export type AutomergeSwarmState<T = any> = CollabswarmState<
   Doc<T>,
-  BinaryChange[],
+  Change[],
   (doc: T) => void,
   CryptoKey,
   CryptoKey,
@@ -14,7 +14,7 @@ export type AutomergeSwarmState<T = any> = CollabswarmState<
 >;
 export type AutomergeSwarmActions<T = any> = CollabswarmActions<
   Doc<T>,
-  BinaryChange[],
+  Change[],
   (doc: T) => void,
   CryptoKey,
   CryptoKey,

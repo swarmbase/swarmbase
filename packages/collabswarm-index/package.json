@@ -87,6 +87,8 @@
       ".ts"
     ],
     "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^@collabswarm/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
       "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/gossipsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.cjs",
@@ -104,6 +106,7 @@
       "^@libp2p/pubsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/mdns$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/peer-id$": "<rootDir>/src/__mocks__/empty-module.cjs",
+      "^@libp2p/ping$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@helia/block-brokers$": "<rootDir>/src/__mocks__/empty-module.cjs",

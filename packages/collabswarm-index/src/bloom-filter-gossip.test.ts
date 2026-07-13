@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, jest as jestFn } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test, jest as jestFn } from '@jest/globals';
 import { BloomFilterGossip } from './bloom-filter-gossip';
 import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
 
@@ -24,6 +24,10 @@ describe('BloomFilterGossip', () => {
       subscribeFn as unknown as (topic: string, handler: (peerId: string, data: Uint8Array) => void) => void,
       unsubscribeFn as unknown as (topic: string) => void,
     );
+  });
+
+  afterEach(() => {
+    gossip.stop();
   });
 
   describe('addTerm and local filter', () => {

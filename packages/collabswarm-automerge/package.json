@@ -66,6 +66,8 @@
       "<rootDir>/jest.setup.js"
     ],
     "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^@collabswarm/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
       "^@chainsafe/(.*)$": "<rootDir>/jest.empty-mock.js",
       "^@libp2p/(.*)$": "<rootDir>/jest.empty-mock.js",
       "^@helia/(.*)$": "<rootDir>/jest.empty-mock.js",

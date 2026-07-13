@@ -1,6 +1,6 @@
 import BufferList from 'bl';
 import type { Uint8ArrayList } from 'uint8arraylist';
-import type { AesAlgorithmName } from './auth-provider';
+import type { AesAlgorithmName } from './auth-provider.js';
 
 /**
  * Outcome of parsing a path-prefixed protocol header off an inbound

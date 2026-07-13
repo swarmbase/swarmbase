@@ -57,7 +57,7 @@ function App() {
   // Get relay/bootstrap address from env. The relay multiaddr
   // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
   // for libp2p peer discovery — NOT as a listen address.
-  const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
+  const relayAddr = import.meta.env.VITE_RELAY_MULTIADDR;
   const relayPeers = relayAddr ? [relayAddr] : [];
   const config = defaultConfig(defaultBootstrapConfig(relayPeers));
   const collabswarm = useCollabswarm(

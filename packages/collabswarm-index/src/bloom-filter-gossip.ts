@@ -1,4 +1,4 @@
-import { BloomFilterCRDT } from './bloom-filter-crdt';
+import { BloomFilterCRDT } from './bloom-filter-crdt.js';
 import { bloomFilterUpdateV1 } from '@collabswarm/collabswarm';
 
 /**
@@ -103,6 +103,12 @@ export class BloomFilterGossip {
         console.warn('BloomFilterGossip: periodic publish failed', err);
       });
     }, this._config.republishIntervalMs);
+    // A background gossip timer should not keep a Node process alive on its
+    // own. Browser timers are numeric and do not expose `unref()`.
+    const timer = this._republishTimer as ReturnType<typeof setInterval> & {
+      unref?: () => void;
+    };
+    timer.unref?.();
   }
 
   /**
