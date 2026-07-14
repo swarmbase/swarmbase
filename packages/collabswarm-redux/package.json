@@ -19,7 +19,7 @@
     "dist"
   ],
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "devDependencies": {
     "@types/jest": "^29.5.14",

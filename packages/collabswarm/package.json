@@ -37,7 +37,7 @@
   ],
   "type": "module",
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
