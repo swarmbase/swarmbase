@@ -5,21 +5,29 @@ The `@swarmbase/*` packages are published to npm by the
 
 ## Cutting a release
 
-1. Bump the `version` field of every publishable workspace
-   (`packages/*/package.json`) to the same new version. The workflow refuses
-   to publish if any version disagrees with the tag.
-2. Land the bump on `main`, then tag and push:
+The package.json version is the single source of truth; the git tag is
+derived from it, never typed by hand.
+
+1. Bump every publishable workspace in lockstep and land it via PR:
 
    ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
+   yarn version:set 0.2.0
    ```
 
-   Prerelease tags (e.g. `v0.2.0-alpha.1`) publish under the `next` dist-tag;
+2. On the updated `main`, create and push the matching tag:
+
+   ```sh
+   scripts/tag-release.sh --push
+   ```
+
+   The script reads the version from the packages, refuses to run if any
+   workspace disagrees or the tree is dirty, and pushes `v0.2.0`. Prerelease
+   versions (e.g. `0.2.0-alpha.1`) publish under the `next` dist-tag;
    everything else publishes under `latest`.
 
 3. Watch the Release run. It installs, builds, runs the unit test suite,
-   verifies versions, packs each workspace with `yarn pack` (which rewrites
+   re-verifies that every workspace version matches the tag (the backstop for
+   hand-made tags), packs each workspace with `yarn pack` (which rewrites
    `workspace:` dependency ranges to real versions), and publishes the
    tarballs with npm provenance attestations.
 
