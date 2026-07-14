@@ -34,7 +34,11 @@ import {
   snapshotLoadV3,
   tipAdvertiseV1,
 } from './wire-protocols.js';
-import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils.js';
+import {
+  readFirstDeserializable,
+  readPathPrefixedProtocolHeader,
+  readUint8Iterable,
+} from './utils.js';
 import { wrapStream } from './stream-adapter.js';
 import {
   closeLegacyHeliaStores,
@@ -408,23 +412,16 @@ export class Collabswarm<
       return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
+          let request;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            request = await readFirstDeserializable(
+              source,
+              (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+              MAX_REQUEST_SIZE,
+            );
           } catch (err) {
             const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
             console.warn(`Shared doc-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared doc-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -451,23 +448,16 @@ export class Collabswarm<
       return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
+          let request;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            request = await readFirstDeserializable(
+              source,
+              (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+              MAX_REQUEST_SIZE,
+            );
           } catch (err) {
             const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
             console.warn(`Shared snapshot-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared snapshot-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -623,23 +613,16 @@ export class Collabswarm<
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
-            let assembled: Uint8Array;
+            let request;
             try {
-              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+              request = await readFirstDeserializable(
+                source,
+                (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+                MAX_REQUEST_SIZE,
+              );
             } catch (err) {
               const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
               console.warn(`Shared tip-advertise handler: ${reason}, dropping`);
-              await stream.sink([] as Iterable<Uint8Array>);
-              return [];
-            }
-            let request;
-            try {
-              request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-            } catch (err) {
-              console.warn(
-                'Shared tip-advertise handler: failed to deserialize load request, dropping:',
-                err,
-              );
               await stream.sink([] as Iterable<Uint8Array>);
               return [];
             }

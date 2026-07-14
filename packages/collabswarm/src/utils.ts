@@ -193,6 +193,52 @@ export async function readUint8Iterable(
   return assembled;
 }
 
+/**
+ * Read one serialized request without waiting for the remote write side to
+ * close. Request/response protocols must be able to reply while the stream is
+ * still writable; waiting for EOF can deadlock on relayed Yamux connections
+ * where the half-close is delayed until the connection timeout.
+ *
+ * The deserializer doubles as the message-completeness check. A fragmented
+ * request keeps accumulating until it can be decoded, while malformed or
+ * oversized input still fails once the source ends or crosses `maxSize`.
+ */
+export async function readFirstDeserializable<T>(
+  iterable: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,
+  deserialize: (data: Uint8Array) => T,
+  maxSize?: number,
+): Promise<T> {
+  let assembled = new Uint8Array(0);
+  let lastError: unknown = new Error('Stream ended before a complete message arrived');
+
+  for await (const chunk of iterable) {
+    if (!chunk) continue;
+    const bytes = isBufferList(chunk)
+      ? new Uint8Array(chunk.slice())
+      : chunk instanceof Uint8Array
+        ? chunk
+        : chunk.subarray();
+    const next = new Uint8Array(assembled.length + bytes.length);
+    next.set(assembled);
+    next.set(bytes, assembled.length);
+    assembled = next;
+
+    if (maxSize !== undefined && assembled.length > maxSize) {
+      throw new RangeError(
+        `Stream exceeded maximum allowed size of ${maxSize} bytes`,
+      );
+    }
+
+    try {
+      return deserialize(assembled);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
 // CryptoKey utils
 
 export async function generateAndExportHmacKey() {
