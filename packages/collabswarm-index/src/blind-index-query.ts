@@ -1,4 +1,4 @@
-import { BlindIndexProvider } from './blind-index-provider';
+import { BlindIndexProvider } from './blind-index-provider.js';
 
 /**
  * Entry with blind index tokens attached to a change block.

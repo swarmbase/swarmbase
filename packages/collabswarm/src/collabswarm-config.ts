@@ -14,13 +14,15 @@ import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
 import { gossipsub } from '@libp2p/gossipsub';
 import { kadDHT } from '@libp2p/kad-dht';
+import { ping } from '@libp2p/ping';
 import { ipnsSelector } from 'ipns/selector';
 import { ipnsValidator } from 'ipns/validator';
 import { bitswap } from '@helia/block-brokers';
 import { IDBDatastore } from 'datastore-idb';
 import { IDBBlockstore } from 'blockstore-idb';
-import { CompactionConfig } from './compaction-config';
-import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
+import { CompactionConfig } from './compaction-config.js';
+import { DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic.js';
+import { hasBootstrapPeers } from './bootstrap-config.js';
 
 /**
  * Project-local ICE-server interface used in place of the DOM lib's
@@ -183,7 +185,7 @@ export const defaultConfig = (
       libp2p: {
         // https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
         addresses: {
-          listen: ['/webrtc', '/wss', '/ws'],
+          listen: ['/p2p-circuit', '/webrtc', '/wss', '/ws'],
         },
         transports: [
           circuitRelayTransport({
@@ -202,11 +204,19 @@ export const defaultConfig = (
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery()],
+        // @libp2p/bootstrap rejects an empty list during construction. A
+        // brand-new/offline swarm is valid, so omit that discovery service
+        // until at least one bootstrap address is configured.
+        peerDiscovery: [
+          ...(hasBootstrapPeers(bootstrapConfig) ? [bootstrap(bootstrapConfig)] : []),
+          pubsubPeerDiscovery(),
+        ],
         services: {
           identify: identify(),
           dcutr: dcutr(),
           autoNAT: autoNAT(),
+          // Required capability for the Kademlia DHT service in libp2p v3.
+          ping: ping(),
           pubsub: gossipsub({
             allowPublishToZeroTopicPeers: true,
             emitSelf: false,

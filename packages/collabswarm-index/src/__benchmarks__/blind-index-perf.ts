@@ -14,8 +14,8 @@ if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle 
   (globalThis as any).crypto = new Crypto();
 }
 
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner';
-import { SubtleBlindIndexProvider } from '../subtle-blind-index-provider';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner.js';
+import { SubtleBlindIndexProvider } from '../subtle-blind-index-provider.js';
 
 const FIELD_COUNTS = [1, 2, 4, 8, 16];
 

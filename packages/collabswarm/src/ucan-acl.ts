@@ -1,7 +1,7 @@
-import { ACL } from './acl';
-import { ACLProvider } from './acl-provider';
-import { UCAN, createUCAN } from './ucan';
-import { DocumentCapability, capabilityImplies } from './capabilities';
+import { ACL } from './acl.js';
+import { ACLProvider } from './acl-provider.js';
+import { UCAN, createUCAN } from './ucan.js';
+import { DocumentCapability, capabilityImplies } from './capabilities.js';
 
 /**
  * An entry in the UCAN-based ACL.

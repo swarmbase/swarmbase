@@ -11,21 +11,21 @@
  */
 
 import { pipe } from 'it-pipe';
-import { AuthProvider } from './auth-provider';
-import { CRDTProvider } from './crdt-provider';
+import { AuthProvider } from './auth-provider.js';
+import { CRDTProvider } from './crdt-provider.js';
 import {
   CollabswarmConfig,
   defaultConfig,
   defaultBootstrapConfig,
-} from './collabswarm-config';
-import { CollabswarmDocument } from './collabswarm-document';
-import { NetworkStats } from './network-stats';
-import { SyncMessageSerializer } from './sync-message-serializer';
-import { ChangesSerializer } from './changes-serializer';
-import { ACLProvider } from './acl-provider';
-import { KeychainProvider } from './keychain-provider';
-import { LoadMessageSerializer } from './load-request-serializer';
-import { validateLoadQuorumConfig } from './load-quorum';
+} from './collabswarm-config.js';
+import { CollabswarmDocument } from './collabswarm-document.js';
+import { NetworkStats } from './network-stats.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
+import { ChangesSerializer } from './changes-serializer.js';
+import { ACLProvider } from './acl-provider.js';
+import { KeychainProvider } from './keychain-provider.js';
+import { LoadMessageSerializer } from './load-request-serializer.js';
+import { validateLoadQuorumConfig } from './load-quorum.js';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
@@ -33,9 +33,18 @@ import {
   documentKeyUpdateV2,
   snapshotLoadV3,
   tipAdvertiseV1,
-} from './wire-protocols';
-import { readPathPrefixedProtocolHeader, readUint8Iterable } from './utils';
-import { wrapStream } from './stream-adapter';
+} from './wire-protocols.js';
+import {
+  readFirstDeserializable,
+  readPathPrefixedProtocolHeader,
+  readUint8Iterable,
+} from './utils.js';
+import { wrapStream } from './stream-adapter.js';
+import {
+  closeLegacyHeliaStores,
+  OpenableStore,
+  openLegacyHeliaStores,
+} from './store-lifecycle.js';
 import { createHelia, DefaultLibp2pServices } from 'helia';
 import type { Helia } from '@helia/interface';
 import { Libp2p } from 'libp2p';
@@ -148,6 +157,7 @@ export class Collabswarm<
   // _registerSharedProtocolHandlers(). Prevents duplicate registration
   // if initialize() is called more than once.
   private _sharedHandlersRegistered = false;
+  private _openedLegacyStores: OpenableStore[] = [];
 
   // Registry of open documents keyed by document path. Shared protocol
   // handlers use this to route incoming stream requests to the correct
@@ -233,6 +243,8 @@ export class Collabswarm<
     // preventing leaked background resources (connections, timers, etc.).
     if (this._heliaNode) {
       try { await this._heliaNode.stop(); } catch { /* best-effort */ }
+      await closeLegacyHeliaStores(this._openedLegacyStores);
+      this._openedLegacyStores = [];
       this._heliaNode = undefined;
       this._peerId = undefined;
       this._peerIds = [];
@@ -272,17 +284,26 @@ export class Collabswarm<
 
     // Setup Helia node.
     const heliaInit = config.helia;
-    this._heliaNode = await (heliaInit
-      ? (createHelia(heliaInit) as Promise<
+    this._openedLegacyStores = heliaInit
+      ? await openLegacyHeliaStores(heliaInit.datastore, heliaInit.blockstore)
+      : [];
+    try {
+      this._heliaNode = await (heliaInit
+        ? (createHelia(heliaInit) as Promise<
           Helia<
             Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
           >
-        >)
-      : (createHelia() as Promise<
+          >)
+        : (createHelia() as Promise<
           Helia<
             Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
           >
-        >));
+          >));
+    } catch (error) {
+      await closeLegacyHeliaStores(this._openedLegacyStores);
+      this._openedLegacyStores = [];
+      throw error;
+    }
 
     // Runtime guard: ensure the Helia node was initialized with a pubsub service.
     if (!this._heliaNode.libp2p.services.pubsub) {
@@ -388,26 +409,19 @@ export class Collabswarm<
     // legacy pipe-based protocol logic below.
     const docLoadHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
+          let request;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            request = await readFirstDeserializable(
+              source,
+              (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+              MAX_REQUEST_SIZE,
+            );
           } catch (err) {
             const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
             console.warn(`Shared doc-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared doc-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -422,7 +436,7 @@ export class Collabswarm<
           await doc.handleLoadRequestData(request, stream);
           return [];
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared doc-load handler:', err);
       });
     };
@@ -431,26 +445,19 @@ export class Collabswarm<
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
     const snapshotLoadHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
-          let assembled: Uint8Array;
+          let request;
           try {
-            assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+            request = await readFirstDeserializable(
+              source,
+              (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+              MAX_REQUEST_SIZE,
+            );
           } catch (err) {
             const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
             console.warn(`Shared snapshot-load handler: ${reason}, dropping`);
-            await stream.sink([] as Iterable<Uint8Array>);
-            return [];
-          }
-          let request;
-          try {
-            request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-          } catch (err) {
-            console.warn(
-              'Shared snapshot-load handler: failed to deserialize load request, dropping:',
-              err,
-            );
             await stream.sink([] as Iterable<Uint8Array>);
             return [];
           }
@@ -465,7 +472,7 @@ export class Collabswarm<
           await doc.handleSnapshotLoadRequestData(request, stream);
           return [];
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared snapshot-load handler:', err);
       });
     };
@@ -484,7 +491,7 @@ export class Collabswarm<
     // tightened bound only needs to land once.
     const keyUpdateHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
@@ -506,7 +513,7 @@ export class Collabswarm<
             await stream.close();
           }
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared key-update handler:', err);
       });
     };
@@ -522,7 +529,7 @@ export class Collabswarm<
     // `readPathPrefixedProtocolHeader`.
     const beekemWelcomeHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
@@ -545,7 +552,7 @@ export class Collabswarm<
             await stream.close();
           }
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared beekem-welcome handler:', err);
       });
     };
@@ -565,7 +572,7 @@ export class Collabswarm<
     // `readPathPrefixedProtocolHeader`.
     const beekemPathUpdateHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
@@ -588,7 +595,7 @@ export class Collabswarm<
             await stream.close();
           }
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared beekem-pathupdate handler:', err);
       });
     };
@@ -602,27 +609,20 @@ export class Collabswarm<
     // See note on `docLoadHandler` above re: the v3 StreamHandler signature.
     const tipAdvertiseHandler = (rawStream: Stream) => {
       const stream: ProtocolStream = wrapStream(rawStream);
-      pipe(
+      return pipe(
         stream.source,
         async (source: AsyncIterable<Uint8ArrayList | Uint8Array>) => {
           try {
-            let assembled: Uint8Array;
+            let request;
             try {
-              assembled = await readUint8Iterable(source, MAX_REQUEST_SIZE);
+              request = await readFirstDeserializable(
+                source,
+                (data) => this._loadMessageSerializer.deserializeLoadRequest(data),
+                MAX_REQUEST_SIZE,
+              );
             } catch (err) {
               const reason = err instanceof RangeError ? 'request too large' : 'failed to read request';
               console.warn(`Shared tip-advertise handler: ${reason}, dropping`);
-              await stream.sink([] as Iterable<Uint8Array>);
-              return [];
-            }
-            let request;
-            try {
-              request = this._loadMessageSerializer.deserializeLoadRequest(assembled);
-            } catch (err) {
-              console.warn(
-                'Shared tip-advertise handler: failed to deserialize load request, dropping:',
-                err,
-              );
               await stream.sink([] as Iterable<Uint8Array>);
               return [];
             }
@@ -684,7 +684,7 @@ export class Collabswarm<
             });
           }
         },
-      ).catch((err: unknown) => {
+      ).then(() => undefined).catch((err: unknown) => {
         console.error('Error in shared tip-advertise handler:', err);
       });
     };
@@ -692,12 +692,13 @@ export class Collabswarm<
     // Register shared protocol handlers. Each protocol ID uses a single
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
-    this.libp2p.handle(documentLoadV3, docLoadHandler);
-    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler);
-    this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler);
-    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler);
-    this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler);
-    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler);
+    const relayProtocolOptions = { runOnLimitedConnection: true };
+    this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions);
+    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions);
+    this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions);
+    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions);
+    this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions);
+    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions);
   }
 
   /**

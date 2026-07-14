@@ -1,6 +1,12 @@
 import React from "react";
 import { createEditor, Descendant } from 'slate';
-import { Slate, Editable, withReact } from 'slate-react';
+import {
+  Slate,
+  Editable,
+  withReact,
+  type RenderElementProps,
+  type RenderLeafProps,
+} from 'slate-react';
 import { withHistory } from 'slate-history';
 import { Element, Leaf, onHotkeyDown, Toolbar } from './Slate';
 
@@ -11,13 +17,13 @@ export function SlateInput({placeholder, disabled, value, onChange}: {
     onChange: (description: Descendant[]) => void;
 }) {
     const editor = React.useMemo(() => withHistory(withReact(createEditor())), []);
-    const renderElement = React.useCallback(props => <Element {...props} />, []);
-    const renderLeaf = React.useCallback(props => <Leaf {...props} />, []);
+    const renderElement = React.useCallback((props: RenderElementProps) => <Element {...props} />, []);
+    const renderLeaf = React.useCallback((props: RenderLeafProps) => <Leaf {...props} />, []);
 
     return (
         <Slate
             editor={editor}
-            value={value}
+            initialValue={value}
             onChange={onChange}
         >
             <Toolbar className="mb-1" />

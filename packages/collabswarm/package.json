@@ -38,6 +38,9 @@
   "type": "module",
   "author": "allegrormc@gmail.com",
   "license": "ISC",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
@@ -68,6 +71,7 @@
     "@libp2p/kad-dht": "^16.2.6",
     "@libp2p/mdns": "^12.0.21",
     "@libp2p/peer-id": "^6.0.9",
+    "@libp2p/ping": "^3.1.4",
     "@libp2p/pubsub-peer-discovery": "^12.0.0",
     "@libp2p/topology": "^4.0.3",
     "@libp2p/webrtc": "^6.0.22",
@@ -110,6 +114,9 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
   }
 }

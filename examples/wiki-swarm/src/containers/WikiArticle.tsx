@@ -1,7 +1,7 @@
 import React from 'react';
 import { connect } from 'react-redux';
 import { ThunkDispatch } from 'redux-thunk';
-import { Doc, Text } from '@automerge/automerge';
+import { Doc } from '@automerge/automerge';
 import type { CollabswarmConfig } from '@collabswarm/collabswarm';
 import {
   defaultConfig,
@@ -116,11 +116,10 @@ class WikiArticle extends React.Component<
     // Load this article upon component mount.
     if (this.props.onDocumentOpen && this.props.match.params.documentId) {
       console.log('Loading article at:', this.props.match.params.documentId);
-      console.log('Env:', process.env);
       // Get relay/bootstrap address from env. The relay multiaddr
       // (e.g. /ip4/.../tcp/9001/ws/p2p/...) is used as a bootstrap peer
       // for libp2p peer discovery — NOT as a listen address.
-      const relayAddr = process.env.REACT_APP_RELAY_MULTIADDR;
+      const relayAddr = import.meta.env.VITE_RELAY_MULTIADDR;
       const bootstrapPeers = relayAddr ? [relayAddr] : [];
       const config = defaultConfig(defaultBootstrapConfig(bootstrapPeers));
       this.props
@@ -170,10 +169,10 @@ class WikiArticle extends React.Component<
               this.props.onDocumentChange(
                 this.props.match.params.documentId,
                 (currentDocument) => {
-                  // Replace the title `Text` CRDT with a new one. Simple and
-                  // sufficient for an example app; a production app would
-                  // splice character-level diffs to preserve concurrent edits.
-                  currentDocument.title = new Text(newTitle);
+                  // Automerge 3 models collaborative text with native strings.
+                  // This whole-value assignment matches the previous example's
+                  // replacement semantics; richer editors should use splice().
+                  currentDocument.title = newTitle;
                   stampTimestamps(currentDocument);
                 },
               );

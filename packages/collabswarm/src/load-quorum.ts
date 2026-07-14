@@ -21,7 +21,7 @@
  * audited as the trust-critical core of the gate.
  */
 
-import { tipsHashToHex } from './tips-hash';
+import { tipsHashToHex } from './tips-hash.js';
 
 /**
  * A single peer's response to a tip-advertise probe.

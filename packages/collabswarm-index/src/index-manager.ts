@@ -3,9 +3,9 @@ import {
   QueryOptions,
   QueryResult,
   DocumentSnapshotExtractor,
-} from './types';
-import { IndexStorage } from './index-storage';
-import { extractField } from './field-extractor';
+} from './types.js';
+import { IndexStorage } from './index-storage.js';
+import { extractField } from './field-extractor.js';
 
 /**
  * Manages index definitions, incremental updates, and queries over a local materialized index.

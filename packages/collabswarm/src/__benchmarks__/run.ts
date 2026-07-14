@@ -7,10 +7,10 @@
  */
 import * as fs from 'fs';
 import { join } from 'path';
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner';
-import { runCrdtSyncLatencyBenchmarks } from './crdt-sync-latency';
-import { runCryptoOverheadBenchmarks } from './crypto-overhead';
-import { runConvergenceSimulationBenchmarks } from './convergence-simulation';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner.js';
+import { runCrdtSyncLatencyBenchmarks } from './crdt-sync-latency.js';
+import { runCryptoOverheadBenchmarks } from './crypto-overhead.js';
+import { runConvergenceSimulationBenchmarks } from './convergence-simulation.js';
 
 function parseIterations(): number {
   const idx = process.argv.indexOf('--iterations');

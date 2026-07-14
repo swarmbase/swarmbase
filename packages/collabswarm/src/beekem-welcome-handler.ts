@@ -17,9 +17,9 @@
  * gate in the handler, mirror the change here.
  */
 
-import { CRDTSyncMessage } from './crdt-sync-message';
-import { ECIES_P256_PUBLIC_KEY_LENGTH } from './ecies';
-import { SyncMessageSerializer } from './sync-message-serializer';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
+import { ECIES_P256_PUBLIC_KEY_LENGTH } from './ecies.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
 
 /**
  * Outcome of validating an incoming Welcome.

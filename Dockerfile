@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22.19-alpine AS builder
 
 RUN apk update && apk add dos2unix
 
@@ -16,18 +16,22 @@ RUN mkdir -p /app/packages/collabswarm-automerge
 RUN mkdir -p /app/packages/collabswarm-yjs
 RUN mkdir -p /app/packages/collabswarm-react
 RUN mkdir -p /app/packages/collabswarm-redux
+RUN mkdir -p /app/packages/collabswarm-index
 RUN mkdir -p /app/examples/browser-test
 RUN mkdir -p /app/examples/wiki-swarm
+RUN mkdir -p /app/examples/password-manager
 COPY packages/collabswarm/package.json /app/packages/collabswarm/package.json
 COPY packages/collabswarm-automerge/package.json /app/packages/collabswarm-automerge/package.json
 COPY packages/collabswarm-yjs/package.json /app/packages/collabswarm-yjs/package.json
 COPY packages/collabswarm-react/package.json /app/packages/collabswarm-react/package.json
 COPY packages/collabswarm-redux/package.json /app/packages/collabswarm-redux/package.json
+COPY packages/collabswarm-index/package.json /app/packages/collabswarm-index/package.json
 COPY examples/browser-test/package.json /app/examples/browser-test/package.json
 COPY examples/wiki-swarm/package.json /app/examples/wiki-swarm/package.json
+COPY examples/password-manager/package.json /app/examples/password-manager/package.json
 RUN yarn install
 
-FROM node:20-alpine
+FROM node:22.19-alpine
 ENV SKIP_PREFLIGHT_CHECK=true
 RUN mkdir -p /app
 COPY --from=builder /app /app

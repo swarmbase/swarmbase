@@ -12,7 +12,7 @@
 import {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 
 /**
  * Walk a CRDTChangeNode tree (BFS) and collect the CID strings of every

@@ -3,7 +3,7 @@ import {
   useCollabswarmDocumentState,
   CollabswarmContext,
   CollabswarmContextOpenResult,
-} from './hooks';
+} from './hooks.js';
 
 export {
   useCollabswarm,

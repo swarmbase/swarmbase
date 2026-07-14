@@ -19,8 +19,6 @@ services:
       context: ./
       dockerfile: ./Dockerfile
     image: collabswarm-automerge:latest
-    environment:
-      - 'PORT=3000'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -38,24 +36,22 @@ services:
       relay:
         condition: service_healthy
     # Extract the relay's WebSocket multiaddr from shared relay-info.json
-    # and pass it via REACT_APP_RELAY_MULTIADDR so the CRA app can
+    # and pass it via VITE_RELAY_MULTIADDR so the Vite app can
     # use it as a bootstrap peer for libp2p peer discovery.
     command:
       - sh
       - -c
       - |
-        REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-        export REACT_APP_RELAY_MULTIADDR
-        echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/browser-test start
+        VITE_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        export VITE_RELAY_MULTIADDR
+        echo "Relay multiaddr: $$VITE_RELAY_MULTIADDR"
+        exec yarn workspace @collabswarm/browser-test start --host 0.0.0.0 --port 3000
 
   wiki-swarm:
     build:
       context: ./
       dockerfile: ./Dockerfile
     image: collabswarm-automerge:latest
-    environment:
-      - 'PORT=3000'
       # If rebuild-on-save is not working, try uncommenting the following (may increase CPU usage of system and prevent sleeping):
       # - "CHOKIDAR_USEPOLLING=true"
     ports:
@@ -76,10 +72,10 @@ services:
       - sh
       - -c
       - |
-        REACT_APP_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-        export REACT_APP_RELAY_MULTIADDR
-        echo "Relay multiaddr: $$REACT_APP_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/wiki-swarm start
+        VITE_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        export VITE_RELAY_MULTIADDR
+        echo "Relay multiaddr: $$VITE_RELAY_MULTIADDR"
+        exec yarn workspace @collabswarm/wiki-swarm start --host 0.0.0.0 --port 3000
 
   node:
     build:
