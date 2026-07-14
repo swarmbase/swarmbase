@@ -39,7 +39,6 @@ declare global {
       openWithDocumentKey: (
         path: string,
         saved: { id: number[]; key: JsonWebKey },
-        circuitAddress: string,
       ) => Promise<unknown>;
       exportDocumentKey: (path: string) => Promise<{ id: number[]; key: JsonWebKey }>;
       connect: (addresses: string[]) => Promise<unknown>;
@@ -91,7 +90,7 @@ const store = createStore(
 if (injectedIdentity) {
   window.__SWARMBASE_TEST__ = {
     open: (path) => store.dispatch<any>(openDocumentAsync(path)),
-    openWithDocumentKey: async (path, saved, circuitAddress) => {
+    openWithDocumentKey: async (path, saved) => {
       const node = store.getState().node;
       const documentRef = node?.doc(path);
       if (!documentRef) throw new Error('Swarmbase node is not ready');
@@ -113,20 +112,7 @@ if (injectedIdentity) {
       // into a false-positive "new document" on the restoring computer.
       for (let attempt = 0; !loaded && attempt < 10; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        try {
-          // A failed relayed stream can remove the remote peer from
-          // getConnections(), which is the source load() uses to choose
-          // responders. Re-dial the explicit circuit address before each
-          // retry so the next attempt uses a fresh stream over the same
-          // NAT-constrained path.
-          await node.connect([circuitAddress]);
-          loaded = await documentRef.load();
-        } catch (error) {
-          console.warn(
-            `Cross-NAT load attempt ${attempt + 1} failed; re-dialing`,
-            error,
-          );
-        }
+        loaded = await documentRef.load();
       }
       if (!loaded) {
         throw new Error(`No peer served the existing document: ${path}`);

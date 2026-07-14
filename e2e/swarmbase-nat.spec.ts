@@ -100,9 +100,8 @@ test('real Swarmbase document loads across two NAT-isolated Chromium processes',
         (p) => (window as any).__SWARMBASE_TEST__.exportDocumentKey(p), path,
       );
       await pages[1].evaluate(
-        ([p, saved, target]) =>
-          (window as any).__SWARMBASE_TEST__.openWithDocumentKey(p, saved, target),
-        [path, documentKey, address] as const,
+        ([p, saved]) => (window as any).__SWARMBASE_TEST__.openWithDocumentKey(p, saved),
+        [path, documentKey] as const,
       );
       await waitForDocument(pages[1], path, 'fromA', 'alice');
     } catch (error) {
