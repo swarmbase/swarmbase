@@ -25,7 +25,7 @@ VERSION="$(node -p "require('./packages/collabswarm/package.json').version")"
 
 MISMATCH=0
 while read -r line; do
-  location="$(echo "$line" | node -p "JSON.parse(require('fs').readFileSync(0)).location" 2>/dev/null || true)"
+  location="$(echo "$line" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).location" 2>/dev/null || true)"
   [[ -z "$location" ]] && continue
   name="$(node -p "require('./$location/package.json').name")"
   version="$(node -p "require('./$location/package.json').version")"
