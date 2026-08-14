@@ -25,6 +25,5 @@
     "test:integration": "playwright test --config=playwright.integration.config.ts",
     "test:nat": "playwright test --config=playwright.nat-test.config.ts",
     "benchmark:all": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-index' run benchmark",
-    "version:set": "yarn workspaces foreach -A --no-private version"
-  }
+    "version:set": "yarn workspaces foreach -A --no-private version set"
 }
