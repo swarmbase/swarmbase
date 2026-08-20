@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "build:dependencies": "yarn workspace @swarmbase/collabswarm tsc && yarn workspace @swarmbase/collabswarm-yjs tsc",
+    "dev": "yarn run build:dependencies && astro dev",
+    "build": "yarn run build:dependencies && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

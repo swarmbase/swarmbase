@@ -52,10 +52,6 @@ jobs:
           cache: 'yarn'
       - name: Install dependencies
         run: yarn install --immutable
-      - name: Build workspace packages used by the site
-        run: |
-          yarn workspace @swarmbase/collabswarm tsc
-          yarn workspace @swarmbase/collabswarm-yjs tsc
       - name: Build site
         run: yarn workspace @swarmbase/site build
       - uses: actions/configure-pages@v5

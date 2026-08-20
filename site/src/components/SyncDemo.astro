@@ -24,7 +24,7 @@
     <div class="wire-panel" data-wire-panel aria-busy="false">
       <header>Illustrative in-page channel</header>
       <ol class="wire-log" data-wire aria-label="Recent simulated ciphertext frames"></ol>
-      <button type="button" class="pause-btn" data-pause aria-pressed="false">
+      <button type="button" class="pause-btn" data-pause>
         Go offline
       </button>
       <p class="wire-hint" data-hint>
@@ -274,7 +274,6 @@
       if (!active()) return;
       root.classList.toggle('offline', offline);
       pauseButton.textContent = offline ? 'Reconnect' : 'Go offline';
-      pauseButton.setAttribute('aria-pressed', String(offline));
       hint.textContent = offline
         ? `Offline. ${pending.length} encrypted frame${pending.length === 1 ? '' : 's'} queued.`
         : 'Frames contain an encrypted, signed Yjs update in this simulation.';
