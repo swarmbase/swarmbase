@@ -98,7 +98,7 @@
     "ipns": "^11.0.0",
     "js-base64": "^3.7.8",
     "libp2p": "^3.3.8",
-    "multiformats": "^13.4.2",
+    "multiformats": "^14.0.5",
     "uint8arraylist": "^3.0.2"
   },
   "publishConfig": {
