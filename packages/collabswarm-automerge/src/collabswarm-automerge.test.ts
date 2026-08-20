@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll } from '@jest/globals';
+import { describe, expect, test, beforeAll, jest } from '@jest/globals';
 import {
   AutomergeProvider,
   AutomergeACL,
@@ -264,6 +264,25 @@ describe('AutomergeKeychain', () => {
     const ids = (await kc2.keys()).map(([id]) => Array.from(id));
     expect(ids).toContainEqual(Array.from(id1));
     expect(ids).toContainEqual(Array.from(id2));
+  });
+
+  test('seed history is deterministic across creation times', () => {
+    const now = jest.spyOn(Date, 'now');
+    try {
+      now.mockReturnValue(1_000);
+      const source = new AutomergeKeychain();
+
+      now.mockReturnValue(3_000);
+      const receiver = new AutomergeKeychain();
+
+      const sourceHistory = source.history();
+      const receiverHistory = receiver.history();
+      expect(sourceHistory).toHaveLength(1);
+      expect(receiverHistory).toEqual(sourceHistory);
+      expect(() => receiver.merge(sourceHistory)).not.toThrow();
+    } finally {
+      now.mockRestore();
+    }
   });
 
   test('getKey() retrieves a cached key by ID', async () => {

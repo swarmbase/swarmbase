@@ -244,7 +244,8 @@ function cacheKeyToKeyId(cacheKey: string): Uint8Array {
  *
  * Automerge resolves conflicting writes on a root array by actor ID; if
  * every keychain instance (source and receiver) seeds the empty array
- * with the same actor, the seed op is byte-identical and merges cleanly.
+ * with the same actor and timestamp, the seed op is byte-identical and
+ * merges cleanly.
  * Subsequent per-instance writes happen under a fresh random actor (via
  * `clone()`) so two keychains can independently append keys without
  * colliding op IDs.
@@ -265,7 +266,13 @@ const KEYCHAIN_SEED_ACTOR = 'ababababababababababababababababababababab';
  * receiver keychain without a root-array actor conflict.
  */
 function newKeychainDoc(): AutomergeKeychainDoc {
-  const seeded = from({ keys: [] as [string, string][] }, KEYCHAIN_SEED_ACTOR);
+  const seeded = change(
+    init<{ keys: [string, string][] }>(KEYCHAIN_SEED_ACTOR),
+    { time: 0 },
+    (doc) => {
+      doc.keys = [];
+    },
+  );
   // clone() with no actor argument assigns a random per-instance actor.
   return clone(seeded);
 }
