@@ -3941,7 +3941,7 @@ export class CollabswarmDocument<
       // Always attempt to remove the GossipSub topic validator. This is safe
       // even if none was registered (Map.delete is a no-op for missing keys),
       // and ensures cleanup regardless of config changes between open() and close().
-      pubsub.topicValidators.delete(topic);
+      pubsub.topicValidators?.delete(topic);
     }
 
     // Unregister this document from the shared V2 protocol handler registry.

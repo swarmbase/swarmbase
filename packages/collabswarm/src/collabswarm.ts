@@ -152,10 +152,7 @@ export class Collabswarm<
     new Map<string, CollabswarmPeersHandler>();
   private _networkStats?: NetworkStats;
 
-  // Whether shared protocol handlers have already been registered via
-  // _registerSharedProtocolHandlers(). Prevents duplicate registration
-  // if initialize() is called more than once.
-  private _sharedHandlersRegistered = false;
+  private _sharedHandlersRegistration: Promise<void> | undefined;
   private _openedLegacyStores: OpenableStore[] = [];
 
   // Registry of open documents keyed by document path. Shared protocol
@@ -275,9 +272,7 @@ export class Collabswarm<
 
     this._config = config;
 
-    // Reset shared handler flag so re-initialization registers handlers on
-    // the new libp2p node instance.
-    this._sharedHandlersRegistered = false;
+    this._sharedHandlersRegistration = undefined;
 
     this._networkStats = config.enableNetworkStats ? new NetworkStats() : undefined;
 
@@ -390,8 +385,8 @@ export class Collabswarm<
    * the encrypted payload.
    */
   private async _registerSharedProtocolHandlers(): Promise<void> {
-    if (this._sharedHandlersRegistered) {
-      return;
+    if (this._sharedHandlersRegistration) {
+      return this._sharedHandlersRegistration;
     }
 
     // Handler implementation for doc-load requests.
@@ -687,15 +682,24 @@ export class Collabswarm<
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
     const relayProtocolOptions = { runOnLimitedConnection: true };
-    await Promise.all([
+    const registration = Promise.all([
       this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions),
       this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions),
       this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions),
       this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions),
       this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions),
       this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions),
-    ]);
-    this._sharedHandlersRegistered = true;
+    ]).then(() => undefined);
+    this._sharedHandlersRegistration = registration;
+
+    try {
+      await registration;
+    } catch (error) {
+      if (this._sharedHandlersRegistration === registration) {
+        this._sharedHandlersRegistration = undefined;
+      }
+      throw error;
+    }
   }
 
   /**
