@@ -1,0 +1,161 @@
+---
+title: "Quick start from source"
+description: Build Swarmbase and open a real encrypted document in Chromium from a clean checkout.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Alpha packages are not published yet">
+The `@swarmbase/*` packages are not currently available from npm. This guide
+uses the repository workspaces and only includes commands that work today.
+Published-package installation and a standalone application template will be
+added before the first npm release.
+</Aside>
+
+In about five minutes, you will build the six Swarmbase library workspaces and
+run the real browser example in Chromium. The smoke test initializes Helia and
+libp2p, opens an Automerge document, and fails on browser runtime errors.
+
+## Prerequisites
+
+- Node.js **22.19.0**, matching the version pinned in `.tool-versions`
+- Corepack, included with Node.js 22.19.0
+- Git
+- A Chromium-compatible host for the browser smoke test
+
+Docker is not required for this quick start.
+
+<Steps>
+
+1. **Clone the repository and enable Yarn.**
+
+   ```sh
+   git clone https://github.com/swarmbase/swarmbase.git
+   cd swarmbase
+   corepack enable
+   ```
+
+   Confirm that the active Node.js version satisfies the repository requirement:
+
+   ```sh
+   node --version
+   ```
+
+2. **Install the locked dependency graph.**
+
+   ```sh
+   yarn install --immutable
+   ```
+
+   `--immutable` prevents Yarn from silently changing the lockfile, matching the
+   project&rsquo;s CI environment.
+
+3. **Build the library workspaces.**
+
+   ```sh
+   yarn build
+   ```
+
+   This typechecks and emits the core, Yjs, Automerge, React, Redux, and indexing
+   packages in dependency order.
+
+4. **Install Chromium and run the browser smoke test.**
+
+   ```sh
+   yarn exec playwright install chromium
+   yarn test:e2e:browser-test
+   ```
+
+   On Linux hosts that need browser system libraries, use:
+
+   ```sh
+   yarn exec playwright install chromium --with-deps
+   ```
+
+   A successful run ends with one passing Playwright test. It proves that the
+   Vite browser application starts without runtime errors and that a real
+   Swarmbase document opens using the configured Automerge, crypto, ACL, and
+   keychain providers.
+
+5. **Run the example interactively.**
+
+   ```sh
+   yarn workspace @swarmbase/browser-test start
+   ```
+
+   Open the URL printed by Vite. In the **Open Document** field, enter a path
+   such as `/quick-start/demo`, then open it. The page displays the document and
+   the local libp2p node addresses.
+
+</Steps>
+
+## What this verifies
+
+This quick start exercises a real Swarmbase document in one browser process:
+
+- workspace package compilation and TypeScript declarations;
+- browser initialization of Helia and libp2p;
+- document creation and local content-addressed storage;
+- Automerge provider, serializers, signing, encryption, ACL, and keychain setup;
+- browser runtime behavior checked by Playwright.
+
+It does **not** claim to demonstrate two-peer live synchronization, persistence
+across browser restarts, or invitation/key delivery to a different identity.
+Those flows require explicit document-key or KEM onboarding and need stronger
+system-level acceptance coverage before they belong in a copy-and-paste guide.
+Sharing an identity signing key between tabs is not sufficient to transfer a
+document encryption key.
+
+## Additional verified paths
+
+The repository also contains heavier acceptance suites:
+
+- `yarn test:e2e` builds and smoke-tests all three browser examples.
+- `yarn test:integration` exercises the integration topology after its Docker
+  Compose services are running.
+- `yarn test:nat` exercises NAT traversal after its Docker Compose topology is
+  running.
+- `yarn test:swarmbase-nat` verifies encrypted Automerge document retrieval
+  across two NAT-isolated Chromium processes. The test restores the document key
+  through a test-only bridge; it does not prove end-user invitation or live
+  post-load convergence.
+
+The Docker-backed suites are started and cleaned up by their corresponding CI
+jobs in [the repository workflow](https://github.com/swarmbase/swarmbase/blob/main/.github/workflows/ci.yml).
+Use that workflow as the canonical command sequence rather than running the test
+commands without their services.
+
+## Current package boundaries
+
+The source packages already expose ESM output and TypeScript declarations, but
+registry publication and clean external-consumer installation are not yet
+verified. Until that work lands:
+
+- use Yarn workspace package names such as `@swarmbase/collabswarm`;
+- do not copy future `npm install` commands from issues or old documentation;
+- treat private signing keys, KEM keys, and document keys as distinct persisted
+  data when designing an application;
+- consult the
+  [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md)
+  for the evidence behind capability claims.
+
+## Useful source examples
+
+- [`examples/browser-test`](https://github.com/swarmbase/swarmbase/tree/main/examples/browser-test)
+  shows the core Automerge and Redux stack.
+- [`examples/wiki-swarm`](https://github.com/swarmbase/swarmbase/tree/main/examples/wiki-swarm)
+  is a larger collaborative editor example.
+- [`examples/password-manager`](https://github.com/swarmbase/swarmbase/tree/main/examples/password-manager)
+  demonstrates the React and Yjs integrations, but should not yet be treated as
+  proof of distinct-identity invitation.
+
+For a change to these packages, the minimum completion commands are:
+
+```sh
+yarn build
+yarn test
+yarn workspace @swarmbase/site build
+```
+
+Run the focused browser or Docker-backed suite as well when changing the behavior
+it covers.
