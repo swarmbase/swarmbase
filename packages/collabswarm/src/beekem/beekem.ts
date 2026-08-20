@@ -6,9 +6,9 @@ import {
   PathNodeUpdate,
   BeeKEMWelcome,
   WelcomeNodePublicKey,
-} from './types';
-import * as TreeMath from './tree-math';
-import { eciesSeal, eciesOpen } from '../ecies';
+} from './types.js';
+import * as TreeMath from './tree-math.js';
+import { eciesSeal, eciesOpen } from '../ecies.js';
 
 /** ECDH curve used for tree key pairs. */
 const ECDH_CURVE = 'P-256';

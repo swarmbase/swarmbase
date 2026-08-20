@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 import React, { useState } from 'react';
-import { CollabswarmContext, useCollabswarmDocumentState } from './hooks';
-import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
+import { CollabswarmContext, useCollabswarmDocumentState } from './hooks.js';
+import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache.js';
 
 /** Reset all module-level caches. Test-only helper. */
 export function resetCaches() {

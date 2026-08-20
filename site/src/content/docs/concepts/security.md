@@ -1,65 +1,52 @@
 ---
 title: Security model
-description: How Swarmbase protects documents on untrusted networks — user keys, ACLs, change signing, AES-GCM encryption, and key rotation on revocation.
+description: Swarmbase identities, binary ACL enforcement, encryption, quorum loading, and revocation limits.
 ---
 
-Swarmbase is designed to operate on untrusted networks with the assistance of unknown or untrusted peers. That only works if the security model is explicit about who is trusted with what. This page describes that model as implemented today. One caveat up front: Swarmbase is **alpha software and has not had an independent security audit** — see [Limitations](../limitations/).
+Swarmbase is alpha software and has not had an independent security audit. Its cryptographic components have meaningful unit coverage, but the complete distributed security model is only partially verified.
 
-## Users are public keys — not peer IDs
+## Identity and trust roots
 
-Every user is identified by a **permanent signing key pair**. The public key *is* the identity: ACLs are lists of public keys, and every change is attributable to one.
+The application supplies the user's signing key pair and is responsible for persisting, recovering, and binding it to a human or account. Swarmbase does not provide a certificate authority, identity directory, custody service, or account recovery. The application must also persist any KEM keys and related membership state it needs.
 
-This is deliberately *not* the libp2p peer ID. A peer ID identifies a network endpoint, and it is not permanent — it can change when a node restarts, and one human may use many devices and browser sessions. Access control needs an identity that survives all of that, so Swarmbase keeps the two layers separate: [libp2p](../networking/) moves bytes between peer IDs; the security layer trusts only user keys.
+User signing keys are separate from libp2p peer IDs. ACLs use user public keys; peer IDs identify network participants and connections.
 
-Cryptography is pluggable through the `AuthProvider` interface (`sign`, `verify`, `encrypt`, `decrypt`), so applications control key types and algorithms. The shipped `SubtleCrypto` provider uses the browser's WebCrypto API, with ECDSA (SHA-384) signatures and AES-GCM encryption by default (AES-CTR and AES-CBC are supported with an encrypt-then-MAC HMAC-SHA256 construction, since only GCM is authenticated on its own).
+## Implemented authorization
 
-Key custody is the application's job: Swarmbase does not generate, store, or recover user keys for you. Lose the private key, lose the identity.
+The document's active enforcement uses binary **reader** and **writer** ACLs:
 
-## ACLs: who may read, who may write
+- writers may commit document and ACL changes;
+- readers receive or retain document encryption keys and can decrypt allowed epochs;
+- every writer can modify both ACLs, so writer access currently includes ACL administration.
 
-Each document carries two ACLs — **readers** and **writers** — plus a hierarchical capability model (`/doc/admin` > `/doc/write` > `/doc/read`, with `/doc/history` as a separate, orthogonal grant for access to historical epoch keys). ACL entries are public keys. Membership changes (`addWriter`, `removeWriter`, `addReader`, `removeReader`) are themselves changes in the document's [Merkle-DAG](../storage/), so the permission history is replicated, ordered, and tamper-evident alongside the data. Only current writers may modify ACLs.
+Normal sync-message signing and verification are enabled by default but can be disabled with `enableSigning: false`. When enabled, a receiver accepts a sync signature if it verifies under **some current writer key**. The message does not durably identify which writer signed it, so this is current-writer authorization, not explicit per-change authorship or a durable audit attribution record. Disabling signing removes the normal application-layer authentication and ACL enforcement described here; libp2p's transport signing is separate.
 
-Write access is enforced by verification, read access by encryption:
+Capability helpers, UCAN creation/validation, `UCANACL`, and the ACL chain have standalone implementations and tests. They are not integrated into the normal document mutation, sync, and load path. Do not document or depend on field capabilities, delegated UCAN authorization, or ACL-chain trust as active end-to-end enforcement.
 
-## Writes: signing and verification
+## Encryption and history visibility
 
-Every change follows the same path on the writer's side: check local write access, apply the change to the local CRDT, build the sync message (with its Merkle-DAG links), **sign it with the user's private key**, then **encrypt it with the current document key** and publish `keyID ‖ nonce ‖ ciphertext` to the document's [GossipSub topic](../networking/).
+Change blocks and sync envelopes use document-key encryption. Possessing a document key provides cryptographic read capability, but current protocol acceptance can also depend on ACL identity, writer signatures, Welcome recipient binding, and current membership state. “Reader” is therefore not reducible to either key possession or an ACL entry alone across every workflow.
 
-Receivers reverse it: decrypt with the document key (possible only for readers), then verify the signature against the public keys in the writer ACL. A message that fails to decrypt or verify is dropped with a warning — it never touches the document. An attacker without a writer's private key cannot fabricate a change that any honest peer will apply, no matter how many network nodes they control.
+History visibility is a local document setting controlling which epoch-key changes that peer sends: `current_only`, `since_invited`, or `full_history`. It is not a global policy that can erase keys another peer already retained, and peers configured differently can disclose different history.
 
-Initial document loads get an extra guard: before trusting a peer's copy of history, the loader probes several peers for a hash of their current document tips and requires a quorum to agree, so a single malicious or stale peer cannot quietly feed a joining peer a forked document.
+## Initial-load quorum
 
-## Reads: document encryption
+Initial loading enables a K-of-Q tip-hash gate by default. It asks multiple reachable peer identities to agree on the frontier they would serve, then binds the selected load response to that frontier. This is defense in depth against one stale or malicious responder, not consensus over the true document state.
 
-Every document is encrypted with its own symmetric **document key** (AES-GCM, 256-bit, 12-byte random nonce per operation). All change payloads and sync messages are encrypted before they leave the device; blocks in the [blockstore](../storage/) are stored encrypted too. Anyone may store, forward, or serve the ciphertext — being a reader means holding the document key, nothing else.
+The gate assumes sufficiently independent, reachable voters and is not Sybil-resistant. A party controlling enough peer identities can dominate the vote. Requiring agreement also reduces availability in small swarms, partitions, or after compaction and pruning. Snapshot loading requires writer verification when signing is enabled, but a first-time loader may not yet have the trusted writer ACL needed to accept that snapshot. The quorum covers the served frontier and can omit other locally known concurrent heads.
 
-Keys live in a per-document **keychain**, which is itself a small CRDT synchronized only to authorized readers. Because keys rotate over time (below), the keychain holds a history of keys, each identified by the key ID that prefixes encrypted blocks on the wire. How much key history a *new* member receives is configurable per document: only the current key (`current_only`, the default and most private), everything since they were invited (`since_invited`), or the full history (`full_history`, for audit use cases).
+## Revocation
 
-## Revocation and key rotation
+Removing a writer means future signed sync messages from that key no longer verify against the current writer ACL. It does not retract previously accepted changes or remove reader access the same identity may still hold.
 
-Removing a *writer* is straightforward: their key leaves the writer ACL and their future signatures stop verifying.
+Removing a reader requires both ACL change and future-key separation. Swarmbase includes a BeeKEM ratchet-tree cryptographic core, encrypted Welcomes, and a PathUpdate flow that derives a new epoch key for surviving readers. The cryptographic primitives and focused flows are tested, but the document integration keeps important BeeKEM membership mappings and tree state in memory. PathUpdate distribution is best effort, with no durable retry.
 
-Removing a *reader* is harder — they hold the document key. Swarmbase therefore **rotates the document key on read-permission revocation**, using BeeKEM, a TreeKEM-style group key-agreement tree: each reader occupies a leaf; removing a reader blanks their leaf and re-keys the path to the root; the writer broadcasts a path-update from which every *surviving* reader — and no one else — can compute the new root secret. Each peer independently derives the new document key from that secret (HKDF-SHA-256) and installs it in the keychain as a new epoch. All subsequent changes are encrypted under the new key. The removed reader can still see ciphertext on the network but can no longer derive the key that opens it.
+Restart, missed or out-of-order updates, concurrent/multiple writers, membership recovery, and complete multi-peer revocation are not solved or system-verified. A removed reader may retain old keys and plaintext, and failures can leave surviving peers on different epochs. Swarmbase therefore does not provide an absolute guarantee that revocation prevents all future decryption in the deployed system.
 
-Be precise about what revocation does **not** do: it protects *future* changes only. A revoked reader keeps whatever state their device already decrypted — no distributed system can reach into someone else's machine and delete data. This is fundamental, not a bug to be fixed later.
+## Metadata and hostile infrastructure
 
-## Out-of-band key sharing
+Relays and storage peers need not receive plaintext, but they can observe identifiers, addresses, topics, timing, sizes, and key-rotation metadata. They can censor, delay, or partition peers. Encryption and signatures do not provide availability or traffic-analysis resistance; see [Networking](../networking/).
 
-Two things must travel *outside* Swarmbase, over a channel you already trust — for example an end-to-end-encrypted messenger like Signal, or in person:
+## CI-backed evidence
 
-1. **Identity public keys.** When you add someone to an ACL you are naming their public key; you must obtain it in a way you trust, because Swarmbase has no certificate authority or identity directory to vouch for key ownership.
-2. **The invitee's KEM public key.** Joining a document's encrypted group requires the new reader to hold a KEM key pair (P-256 ECDH); the inviter needs its public half to call `addReader`. The actual document keys then travel *in-band*: the inviter sends a Welcome message whose key material is sealed with ECIES to the invitee's KEM public key, so even the Welcome is unreadable to the rest of the swarm.
-
-Get step 1 wrong — accept a key from an attacker claiming to be your collaborator — and you have granted the attacker access. The cryptography can only enforce the ACL you actually wrote.
-
-## What untrusted peers can and cannot learn
-
-Untrusted peers — relays, pinning nodes, strangers in the mesh — **cannot**: read document contents, forge or modify changes, grant themselves access, or usefully tamper with stored blocks (content addressing plus AES-GCM authentication makes substitution detectable).
-
-They **can** observe metadata: document topic names (which by default embed the document *path* — keep paths non-sensitive), which peer IDs/IP addresses participate in which documents, message sizes and timing, key IDs (revealing when rotations happen), and the total volume of activity. Swarmbase does not attempt to hide traffic patterns; if you need resistance to traffic analysis, you need additional layers it does not provide.
-
-## Where to go next
-
-- [Storage](../storage/) — why encrypted blocks on untrusted nodes are safe to replicate.
-- [Networking](../networking/) — the relay's role as an explicitly untrusted component.
-- [Limitations](../limitations/) — audit status and other honest caveats.
+Current CI verifies WebCrypto operations, encryption tamper failure, binary ACLs in both adapters, UCAN/capability/ACL-chain components, epoch/keychain code, BeeKEM trees, Welcomes, revocation helpers, and PathUpdates. Missing system evidence includes persistent identity UX, hostile multi-peer quorum, ACL forks, revoked-peer writes, restart and missed-update recovery, and proof that removed readers cannot decrypt post-removal content. See [Limitations](../limitations/).

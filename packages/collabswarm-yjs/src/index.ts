@@ -8,7 +8,7 @@ import {
   YjsKeychainProvider,
   serializeKey,
   deserializeKey,
-} from './collabswarm-yjs';
+} from './collabswarm-yjs.js';
 
 export {
   YjsSwarmDocumentChangeHandler,

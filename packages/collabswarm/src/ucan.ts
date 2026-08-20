@@ -9,7 +9,7 @@
  * - Revocation: revoking a token invalidates all downstream delegations
  */
 
-import { capabilityImplies } from './capabilities';
+import { capabilityImplies } from './capabilities.js';
 
 /**
  * A UCAN token for SwarmDB document authorization.

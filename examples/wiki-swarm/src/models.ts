@@ -1,8 +1,8 @@
-import { Text } from '@automerge/automerge';
 import { Descendant } from 'slate';
 
 export interface WikiSwarmArticle {
-  title: Text;
+  /** Automerge 3 represents collaborative text as a native string. */
+  title: string;
   content: Descendant[];
   tags: string[];
 

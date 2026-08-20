@@ -1,6 +1,6 @@
-import { CRDTChangeNode } from './crdt-change-node';
-import { SerializedPathUpdate } from './path-update-wire';
-import { CRDTSnapshotNode } from './snapshot-node';
+import { CRDTChangeNode } from './crdt-change-node.js';
+import { SerializedPathUpdate } from './path-update-wire.js';
+import { CRDTSnapshotNode } from './snapshot-node.js';
 
 /**
  * CRDTSyncMessage is the message sent over both GossipSub pubsub topics and in response to

@@ -2,11 +2,10 @@
 
 ## A distributed web document database with dynamic access control and strong eventual consistency.
 
-![tsc workflow](https://github.com/collabswarm/collabswarm/actions/workflows/tsc.yml/badge.svg)
-![test workflow](https://github.com/collabswarm/collabswarm/actions/workflows/test.yml/badge.svg)
-![docs workflow](https://github.com/collabswarm/collabswarm/actions/workflows/typedoc.yml/badge.svg)
+![CI workflow](https://github.com/swarmbase/swarmbase/actions/workflows/ci.yml/badge.svg)
+![site workflow](https://github.com/swarmbase/swarmbase/actions/workflows/site.yml/badge.svg)
 
-(for bookmarking please use: https://swarmdb.dev which we will keep up to date even if the repo name changes)
+Documentation: https://swarmbase.github.io/swarmbase/
 
 ---
 
@@ -92,7 +91,7 @@ These components work together to ensure that only authorized users have access 
 
 ## Docs
 
-Will be generated based on code comments, so that they are more likely to be current and we are encouraged to provide more detail.
+The active documentation is available at https://swarmbase.github.io/swarmbase/.
 
 ## Situations where SwarmDB may work well
 

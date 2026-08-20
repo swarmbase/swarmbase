@@ -2,7 +2,7 @@ import {
   CRDTChangeNode,
   CRDTChangeNodeKind,
   crdtChangeNodeDeferred,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 
 /**
  * Maximum number of recent tips to track for Merkle-CRDT cross-linking

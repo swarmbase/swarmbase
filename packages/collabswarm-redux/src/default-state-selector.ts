@@ -1,4 +1,4 @@
-import type { CollabswarmState } from './reducers';
+import type { CollabswarmState } from './reducers.js';
 
 /**
  * Local alias for the fully-parameterised `CollabswarmState` shape used by

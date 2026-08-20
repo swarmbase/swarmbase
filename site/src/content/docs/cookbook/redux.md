@@ -1,181 +1,108 @@
 ---
 title: Redux integration
-description: Wire Swarmbase into a Redux store with @swarmbase/collabswarm-redux reducers and thunk actions.
+description: Initialize and read Swarmbase state through Redux while accounting for the current local-change ordering bug.
 ---
 
-Your app already keeps state in Redux and you want Swarmbase documents to flow through the same store: dispatch an action to open a document, read it from state with selectors, and have remote changes arrive as ordinary actions. `@swarmbase/collabswarm-redux` provides a reducer factory and a set of thunk action creators that do this.
+**Status: Runnable from source for setup, open, read, and remote subscription; local editing is illustrative/deferred.**
 
-:::note
-The package targets classic Redux with `redux-thunk`. The in-repo examples (`examples/wiki-swarm`, `examples/browser-test`) demonstrate it with the Automerge CRDT backend; this recipe shows the same wiring with the golden-path Yjs backend and the reducer signature as currently implemented in `@swarmbase/collabswarm-redux`.
-:::
-
-## Install
-
-```sh
-npm install @swarmbase/collabswarm @swarmbase/collabswarm-yjs @swarmbase/collabswarm-redux redux redux-thunk react-redux yjs
-```
+The package is unpublished. Use repository workspaces and build them with `yarn build`. Unit tests cover Redux actions/reducers, and the Automerge examples build and smoke-test, but live multi-peer propagation is not asserted in a browser.
 
 ## Store setup
 
-`collabswarmReducer(...)` is a factory: it takes your identity keypair and the full provider stack, and returns a reducer whose initial state already contains a constructed (but uninitialized) `Collabswarm` node. That means you need the keypair *before* creating the store:
+The reducer factory needs a stable ECDSA P-384 identity before store creation. With redux-thunk 3, use its named export:
 
-```typescript
-// store.ts
-import { combineReducers, createStore, applyMiddleware } from 'redux';
-import thunk from 'redux-thunk';
-import * as Y from 'yjs';
-import { SubtleCrypto } from '@swarmbase/collabswarm';
+```ts
+import { applyMiddleware, combineReducers, createStore } from 'redux';
+import { thunk } from 'redux-thunk';
 import {
-  YjsProvider,
-  YjsJSONSerializer,
+  SubtleCrypto,
+  defaultBootstrapConfig,
+  defaultConfig,
+} from '@swarmbase/collabswarm';
+import {
   YjsACLProvider,
+  YjsJSONSerializer,
   YjsKeychainProvider,
+  YjsProvider,
 } from '@swarmbase/collabswarm-yjs';
-import { collabswarmReducer, CollabswarmState } from '@swarmbase/collabswarm-redux';
+import {
+  CollabswarmState,
+  closeDocumentAsync,
+  collabswarmReducer,
+  initializeAsync,
+  openDocumentAsync,
+} from '@swarmbase/collabswarm-redux';
+import * as Y from 'yjs';
 
-export type SwarmState = CollabswarmState<
-  Y.Doc,                 // DocType
-  Uint8Array,            // ChangesType
-  (doc: Y.Doc) => void,  // ChangeFnType
-  CryptoKey,             // PrivateKey
-  CryptoKey,             // PublicKey
-  CryptoKey              // DocumentKey
+type SwarmState = CollabswarmState<
+  Y.Doc,
+  Uint8Array,
+  (doc: Y.Doc) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
 >;
+type RootState = { swarm: SwarmState };
 
-export interface RootState {
-  swarm: SwarmState;
-  // ...your other slices
-}
+const selectSwarm = (state: RootState) => state.swarm;
 
-// The swarm slice can live anywhere in your store; the *Async thunks find it
-// through a selector you pass in.
-export const selectSwarmState = (root: RootState): SwarmState => root.swarm;
-
-export async function makeStore() {
-  const keypair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-384' },
-    true,
-    ['sign', 'verify'],
-  );
-
+function createSwarmStore(identity: CryptoKeyPair) {
   const serializer = new YjsJSONSerializer();
-  const rootReducer = combineReducers({
+  const reducer = combineReducers({
     swarm: collabswarmReducer(
-      keypair.privateKey,
-      keypair.publicKey,
+      identity.privateKey,
+      identity.publicKey,
       new YjsProvider(),
-      serializer,              // ChangesSerializer
-      serializer,              // SyncMessageSerializer
-      serializer,              // LoadMessageSerializer
-      new SubtleCrypto(),      // AuthProvider
+      serializer,
+      serializer,
+      serializer,
+      new SubtleCrypto(),
       new YjsACLProvider(),
       new YjsKeychainProvider(),
     ),
   });
-
-  return createStore(rootReducer, applyMiddleware(thunk));
+  return createStore(reducer, applyMiddleware(thunk));
 }
 ```
 
-## Dispatching document operations
+Persist `identity`; regenerating it changes ACL identity. The store intentionally contains non-serializable live node, document-ref, and Yjs values.
 
-Five thunk action creators cover the whole lifecycle. Each accepts your state selector as its final argument (omit it only if the collabswarm state *is* the store root):
+## Initialize once, then open and read
 
-```tsx
-// NoteEditor.tsx
-import React from 'react';
-import * as Y from 'yjs';
-import { useDispatch, useSelector } from 'react-redux';
-import { defaultConfig, defaultBootstrapConfig } from '@swarmbase/collabswarm';
-import {
-  initializeAsync,
-  connectAsync,
-  openDocumentAsync,
-  closeDocumentAsync,
-  changeDocumentAsync,
-} from '@swarmbase/collabswarm-redux';
-import { RootState, selectSwarmState } from './store';
+```ts
+async function openNote(identity: CryptoKeyPair) {
+  const store = createSwarmStore(identity);
+  const config = defaultConfig(defaultBootstrapConfig(
+    import.meta.env.VITE_RELAY_MULTIADDR
+      ? [import.meta.env.VITE_RELAY_MULTIADDR]
+      : [],
+  ));
 
-export function NoteEditor({ documentId }: { documentId: string }) {
-  const dispatch = useDispatch<any>();
-  const docState = useSelector(
-    (root: RootState) => root.swarm.documents[documentId],
-  );
-  const peers = useSelector((root: RootState) => root.swarm.peers);
+  await store.dispatch<any>(initializeAsync(config, selectSwarm));
+  await store.dispatch<any>(openDocumentAsync('/notes/hello', selectSwarm));
 
-  React.useEffect(() => {
-    const config = defaultConfig(
-      defaultBootstrapConfig([
-        // '/dns4/relay.example.com/tcp/443/wss/p2p/<relay-peer-id>',
-      ]),
-    );
-    dispatch(initializeAsync(config, selectSwarmState))
-      .then(() => dispatch(openDocumentAsync(documentId, selectSwarmState)));
-
-    return () => {
-      dispatch(closeDocumentAsync(documentId, selectSwarmState));
-    };
-  }, [documentId]);
-
-  if (!docState) return <p>Opening… ({peers.length} peers)</p>;
-
-  const doc: Y.Doc = docState.document;
-  return (
-    <div>
-      <pre>{doc.getText('content').toString()}</pre>
-      <button
-        onClick={() =>
-          dispatch(
-            changeDocumentAsync(
-              documentId,
-              (current: Y.Doc) => {
-                current.getText('content').insert(0, 'Hello from Redux! ');
-              },
-              undefined,          // optional change message
-              selectSwarmState,
-            ),
-          )
-        }
-      >
-        Edit
-      </button>
-    </div>
-  );
+  const opened = selectSwarm(store.getState()).documents['/notes/hello'];
+  const text = opened.document.getText('content').toString();
+  return { store, text };
 }
 ```
 
-`connectAsync(addresses, selector)` is available for dialing extra peers after initialization.
+Initialize the node once at application startup. `initializeAsync` installs peer listeners and has no matching Redux shutdown action; repeated component effects can duplicate initialization/listeners. `openDocumentAsync` subscribes with the `'remote'` filter and dispatches `SYNC_DOCUMENT` for subsequent remote events. Always pass the selector when the slice is nested.
 
-## How it works
+On teardown:
 
-The state shape is:
-
-```typescript
-interface CollabswarmState<...> {
-  node: Collabswarm<...>;                 // the swarm node itself
-  documents: {
-    [documentPath: string]: {
-      documentRef: CollabswarmDocument<...>;
-      document: DocType;                  // current CRDT value
-      peers?: string[];
-    };
-  };
-  peers: string[];                        // connected peer addresses
+```ts
+async function closeNote(store: ReturnType<typeof createSwarmStore>) {
+  await store.dispatch<any>(closeDocumentAsync('/notes/hello', selectSwarm));
 }
 ```
 
-- `initializeAsync` subscribes `peer-connect`/`peer-disconnect` handlers (dispatching `PEER_CONNECT`/`PEER_DISCONNECT`), calls `node.initialize(config)`, then dispatches `INITIALIZE`.
-- `openDocumentAsync` gets a document ref via `node.doc(id)`, subscribes with the `'remote'` origin filter so each incoming remote change dispatches `SYNC_DOCUMENT`, then awaits `open()` and dispatches `OPEN_DOCUMENT`. If `open()` returns `false` (nothing found on the network) the path is treated as a new document.
-- `changeDocumentAsync` calls `documentRef.change(fn, message)` and dispatches `CHANGE_DOCUMENT` with the updated document, so local edits update the store without a network round-trip.
-- `closeDocumentAsync` unsubscribes, closes the ref, and dispatches `CLOSE_DOCUMENT`, which removes the entry from `state.documents`.
-- The reducer handles `INITIALIZE`/`CONNECT` by shallow-copying state (the mutation happened inside the node — the copy forces subscribers to re-read), and `SYNC_DOCUMENT`/`CHANGE_DOCUMENT` by replacing the `document` value for that path.
+Cancellation is application-owned. If a component unmounts while initialization or open is pending, Redux does not abort that work; guard late continuations and avoid closing a newer open for the same path.
 
-All action type constants (`INITIALIZE`, `CONNECT`, `OPEN_DOCUMENT`, `CLOSE_DOCUMENT`, `SYNC_DOCUMENT`, `CHANGE_DOCUMENT`, `PEER_CONNECT`, `PEER_DISCONNECT`) and the plain action creators are exported if you need to reduce over them in your own slices.
+## Current local-edit bug
 
-## Pitfalls
+**Status: Deferred/incomplete integration for reliable local Yjs rendering.** `changeDocumentAsync` currently starts `documentRef.change(...)`, immediately dispatches `CHANGE_DOCUMENT` with `documentRef.document`, and only then awaits the change promise. The dispatched value can therefore be stale. Because the document subscription listens only for `'remote'` changes, no local subscription is guaranteed to repair the Redux state after the awaited mutation.
 
-- **The store holds non-serializable values by design.** `state.swarm.node` and each `documentRef` are live class instances, and Yjs mutates `document` in place. If you use Redux Toolkit, disable `serializableCheck` (and `immutableCheck`) for this slice; time-travel debugging will not faithfully replay swarm state.
-- **Keys before store.** Because the reducer factory takes the keypair, you must generate or load the user's keys before `createStore`. If your login flow produces keys later, create the store after login (or re-create it) — there is no built-in "set identity later" action.
-- **Always pass your selector.** The default selector assumes the collabswarm state is the *root* of the store. With `combineReducers` nesting, forgetting the selector argument on any `*Async` call reads `undefined` and logs "Node not initialized yet".
-- **Yjs identity vs. re-render.** `SYNC_DOCUMENT` replaces the `document` reference in the store, but for Yjs it's the same mutated `Y.Doc` object. Select derived values (e.g. `doc.getText('content').toString()`) in components rather than memoizing on the doc reference.
-- **Repo examples lag the package.** `examples/wiki-swarm` calls an older `collabswarmReducer` signature (no keypair, no load serializer). Follow the signature in this recipe, which matches the current package source.
+Yjs also mutates a `Y.Doc` in place, so selecting the document object does not guarantee a rerender from reference identity. Do not claim reliable local Yjs rerenders from the current thunk. Until the thunk dispatches after the awaited mutation (and has focused tests), perform local editing through an application layer that awaits the direct document ref, reports rejection, and explicitly publishes derived Redux state.
+
+Remote read state remains useful, but select derived primitives such as text strings rather than memoizing on the `Y.Doc` reference. See [Limitations](../../concepts/limitations/) for mutation and delivery semantics.

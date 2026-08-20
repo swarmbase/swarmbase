@@ -3,19 +3,17 @@ title: API reference
 description: Generated API documentation for the Swarmbase packages, straight from the source.
 ---
 
-The API reference is generated from doc comments in the source on every site
-build, so it always matches the code on `main`. Use the **API reference**
-group in the sidebar to browse by package:
+The package API reference is generated from source doc comments on every site build, so it matches the code on `main`. Use the **Packages** group in the sidebar to browse the supported package entry points:
 
-| Package | What it is |
-| --- | --- |
-| `@swarmbase/collabswarm` | The core engine: documents, networking, storage, encryption, ACLs. |
-| `@swarmbase/collabswarm-yjs` | Yjs CRDT provider — the recommended backend. |
-| `@swarmbase/collabswarm-automerge` | Automerge CRDT provider. |
-| `@swarmbase/collabswarm-react` | React hooks for loading and editing documents. |
-| `@swarmbase/collabswarm-redux` | Redux bindings (reducer, actions, selectors). |
-| `@swarmbase/collabswarm-index` | Encrypted search: blind indexing and bloom-filter gossip. |
+| Package | Supported entry points | What it is |
+| --- | --- | --- |
+| `@swarmbase/collabswarm` | package root, `/node` | Core documents, networking, storage, encryption, and access control; `/node` provides the Node-only runtime. |
+| `@swarmbase/collabswarm-yjs` | package root | Yjs CRDT provider. |
+| `@swarmbase/collabswarm-automerge` | package root | Automerge CRDT provider. |
+| `@swarmbase/collabswarm-react` | package root | React hooks for loading and editing documents. |
+| `@swarmbase/collabswarm-redux` | package root | Redux bindings, including actions, reducers, and selectors. |
+| `@swarmbase/collabswarm-index` | package root, `/react` | Indexing and querying, with React hooks in `/react`. |
 
-If a doc comment is missing, wrong, or unclear, that's a genuinely useful
-[first contribution](../community/contributing/) — the reference improves
-with every comment fixed.
+The core package currently also exposes `./src/*` paths for compatibility with the site browser shim. Those source paths are internal escape hatches rather than supported public API entry points and are not included in the generated reference.
+
+If a doc comment is missing, wrong, or unclear, improve it through a [contribution](../community/contributing/).
