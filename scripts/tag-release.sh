@@ -1,54 +1,54 @@
 #!/bin/bash
-# Create the release tag for the version currently in the package.json files.
-#
-# The package.json version is the single source of truth: this script reads
-# it, verifies every publishable workspace agrees, and creates the matching
-# v<version> tag at HEAD. Because the tag is derived rather than typed, it
-# cannot drift from the package versions. (The Release workflow re-checks the
-# same invariant as a backstop.)
-#
-# Usage:
-#   scripts/tag-release.sh          # create the tag locally
-#   scripts/tag-release.sh --push   # create the tag and push it (publishes!)
 set -euo pipefail
+
+if [[ $# -gt 1 ]] || [[ $# -eq 1 && "$1" != "--push" ]]; then
+  echo "usage: scripts/tag-release.sh [--push]" >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+if [[ "$(git branch --show-current)" != "main" ]]; then
+  echo "error: release tags must be created from main" >&2
+  exit 1
+fi
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "error: working tree is not clean" >&2
   exit 1
 fi
 
-VERSION="$(node -p "require('./packages/collabswarm/package.json').version")"
+git fetch --prune origin main --tags
+if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+  echo "error: local main must exactly match origin/main" >&2
+  exit 1
+fi
 
-MISMATCH=0
-while read -r line; do
-  location="$(echo "$line" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).location" 2>/dev/null || true)"
-  [[ -z "$location" ]] && continue
-  name="$(node -p "require('./$location/package.json').name")"
-  version="$(node -p "require('./$location/package.json').version")"
-  if [[ "$version" != "$VERSION" ]]; then
-    echo "error: $name is at $version, expected $VERSION" >&2
-    MISMATCH=1
-  fi
-done < <(yarn workspaces list --no-private --json)
-[[ "$MISMATCH" -ne 0 ]] && exit 1
-
+VERSION="$(node scripts/release-version.mjs)"
 TAG="v$VERSION"
-if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-  echo "error: tag $TAG already exists" >&2
+if git show-ref --verify --quiet "refs/tags/$TAG"; then
+  echo "error: local tag $TAG already exists" >&2
+  exit 1
+fi
+set +e
+REMOTE_TAG_RESULT="$(git ls-remote --exit-code --tags origin "refs/tags/$TAG" 2>&1)"
+REMOTE_TAG_STATUS=$?
+set -e
+if [[ $REMOTE_TAG_STATUS -eq 0 ]]; then
+  echo "error: remote tag $TAG already exists" >&2
+  exit 1
+fi
+if [[ $REMOTE_TAG_STATUS -ne 2 ]]; then
+  echo "error: remote tag check failed: $REMOTE_TAG_RESULT" >&2
   exit 1
 fi
 
 git tag -a "$TAG" -m "$TAG"
-echo "Created tag $TAG at $(git rev-parse --short HEAD)."
-
-if [[ "${1:-}" == "--push" ]]; then
-  git push origin "$TAG"
-  echo "Pushed $TAG — the Release workflow is publishing now."
+echo "Created annotated tag $TAG at $(git rev-parse --short HEAD)."
+if [[ $# -eq 1 ]]; then
+  git push origin "refs/tags/$TAG"
+  echo "Pushed $TAG. The gated release workflow will validate it before any publication."
 else
-  echo "Push it (this triggers the npm publish) with:"
-  echo "  git push origin $TAG"
+  echo "Push with: git push origin refs/tags/$TAG"
 fi

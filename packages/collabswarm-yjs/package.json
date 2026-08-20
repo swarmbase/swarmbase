@@ -1,10 +1,14 @@
 {
   "name": "@swarmbase/collabswarm-yjs",
-  "description": "",
+  "description": "Yjs adapter for Swarmbase collaborative documents",
   "version": "0.1.0",
+  "homepage": "https://swarmbase.github.io/swarmbase/",
+  "bugs": {
+    "url": "https://github.com/swarmbase/swarmbase/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/swarmbase/swarmbase.git",
+    "url": "git+https://github.com/swarmbase/swarmbase.git",
     "directory": "packages/collabswarm-yjs"
   },
   "scripts": {
@@ -18,12 +22,30 @@
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/__tests__/**",
+    "!dist/**/__benchmarks__/**",
+    "!dist/**/__mocks__/**",
+    "!dist/**/*.map",
+    "!dist/**/*.tsbuildinfo"
   ],
   "author": "allegrormc@gmail.com",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
@@ -35,12 +57,11 @@
     "yjs": "^13.6.30"
   },
   "dependencies": {
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:^"
   },
   "peerDependencies": {
     "yjs": "^13.6.30"
   },
-  "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
   },
@@ -74,6 +95,8 @@
       ".ts"
     ],
     "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^@swarmbase/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
       "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/gossipsub$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.js",
@@ -91,6 +114,7 @@
       "^@libp2p/pubsub$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/mdns$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/peer-id$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@libp2p/ping$": "<rootDir>/src/__mocks__/empty-module.js",
       "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.js",
       "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@helia/block-brokers$": "<rootDir>/src/__mocks__/empty-module.js",

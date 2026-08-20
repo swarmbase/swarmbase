@@ -1,10 +1,14 @@
 {
   "name": "@swarmbase/collabswarm",
-  "description": "",
+  "description": "Encrypted local-first CRDT documents over peer-to-peer networks",
   "version": "0.1.0",
+  "homepage": "https://swarmbase.github.io/swarmbase/",
+  "bugs": {
+    "url": "https://github.com/swarmbase/swarmbase/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/swarmbase/swarmbase.git",
+    "url": "git+https://github.com/swarmbase/swarmbase.git",
     "directory": "packages/collabswarm"
   },
   "scripts": {
@@ -20,24 +24,37 @@
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
     "./node": {
       "types": "./dist/src/collabswarm-node.d.ts",
+      "import": "./dist/src/collabswarm-node.js",
       "default": "./dist/src/collabswarm-node.js"
     },
-    "./src/*": {
-      "types": "./dist/src/*.d.ts",
-      "default": "./dist/src/*.js"
+    "./browser-primitives": {
+      "types": "./dist/src/browser-primitives.d.ts",
+      "import": "./dist/src/browser-primitives.js",
+      "default": "./dist/src/browser-primitives.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/__tests__/**",
+    "!dist/**/__benchmarks__/**",
+    "!dist/**/__mocks__/**",
+    "!dist/**/*.map",
+    "!dist/**/*.tsbuildinfo"
   ],
   "type": "module",
   "author": "allegrormc@gmail.com",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
@@ -68,6 +85,7 @@
     "@libp2p/kad-dht": "^16.2.6",
     "@libp2p/mdns": "^12.0.21",
     "@libp2p/peer-id": "^6.0.9",
+    "@libp2p/ping": "^3.1.4",
     "@libp2p/pubsub-peer-discovery": "^12.0.0",
     "@libp2p/topology": "^4.0.3",
     "@libp2p/webrtc": "^6.0.22",
@@ -84,7 +102,6 @@
     "multiformats": "^13.4.2",
     "uint8arraylist": "^2.4.8"
   },
-  "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
   },
@@ -110,6 +127,9 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { combineReducers, CombinedState } from 'redux';
+import { combineReducers } from 'redux';
 import { WikiSwarmArticle } from './models';
 import { WikiSwarmActions, SEARCH } from './actions';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
@@ -31,18 +31,26 @@ export function wikiAppReducer(
   }
 }
 
-export type RootState = CombinedState<{
+/** State managed by the wiki application and its Automerge integration. */
+export type RootState = {
   automergeSwarm: AutomergeSwarmState<WikiSwarmArticle>;
   wikiApp: WikiAppState;
-}>;
+};
 
-export const rootReducer: (
+/** Create the wiki reducer using the supplied signing key pair. */
+export const createRootReducer = (
+  privateKey: CryptoKey,
+  publicKey: CryptoKey,
+): (
   state: RootState | undefined,
   action: WikiSwarmActions,
-) => RootState = combineReducers({
+) => RootState => combineReducers({
   // automergeSwarm: collabswarmReducer(new AutomergeProvider<WikiSwarmArticle>()),
   automergeSwarm: collabswarmReducer(
+    privateKey,
+    publicKey,
     new AutomergeProvider(),
+    new AutomergeJSONSerializer(),
     new AutomergeJSONSerializer(),
     new AutomergeJSONSerializer(),
     new SubtleCrypto(),

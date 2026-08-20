@@ -1,99 +1,112 @@
-# Publishes the @swarmbase/* packages to npm.
-#
-# Triggers:
-#   - Pushing a version tag (e.g. v0.1.0) publishes that version. Every
-#     publishable workspace's package.json version must match the tag.
-#   - Manual runs (workflow_dispatch) default to a dry run that packs and
-#     validates everything without publishing — use this to test the setup.
-#
-# Auth: uses the NPM_TOKEN repository secret (a granular automation token
-# with publish access to the @swarmbase scope). Once the packages exist on
-# npm you can switch to tokenless trusted publishing and delete the secret —
-# see RELEASING.md.
-#
-# Tarballs are built with `yarn pack`, which rewrites `workspace:` ranges to
-# real versions, then uploaded with the npm CLI, which supports provenance
-# attestations (the pinned Yarn 4.5.0 does not).
 name: Release
 
 on:
   push:
-    tags: ['v*']
-  # PRs touching this workflow run the whole pipeline in dry-run mode, so the
-  # release path is CI-tested before it ever lands on main.
+    tags:
+      - 'v*'
   pull_request:
-    paths: ['.github/workflows/release.yml']
+    paths:
+      - '.github/workflows/release.yml'
+      - 'RELEASING.md'
+      - 'scripts/release-*.mjs'
+      - 'scripts/prepare-release.mjs'
+      - 'scripts/publish-release.mjs'
+      - 'scripts/set-version.mjs'
+      - 'scripts/tag-release.sh'
+      - 'scripts/validate-release-consumer.mjs'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'packages/*/package.json'
+      - 'packages/*/.npmignore'
+      - 'packages/*/README.md'
+      - 'packages/*/LICENSE'
+      - 'packages/*/src/**'
+      - 'packages/*/tsconfig*.json'
   workflow_dispatch:
-    inputs:
-      dist-tag:
-        description: npm dist-tag to publish under
-        type: string
-        default: latest
-      dry-run:
-        description: Pack and validate, but do not publish
-        type: boolean
-        default: true
-
-permissions:
-  contents: read
-  id-token: write # npm provenance attestations / trusted publishing
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  validate-artifacts:
     runs-on: ubuntu-latest
-    environment: npm-publish
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
-      - uses: actions/setup-node@v6
         with:
-          node-version: '22.19.0'
-          cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
-      - name: Update npm (trusted publishing needs >= 11.5.1)
-        # Pinned to the v11 line: npm 12 requires node >= 22.22, newer than
-        # the node version pinned above.
-        run: npm install -g npm@11
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git fetch --force --prune origin main
+          VERSION="$(node scripts/release-version.mjs)"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.nodeversion.outputs.version }}
+      - run: corepack enable
+      - run: npm install --global npm@11.19.0
       - run: yarn install --immutable
+      - run: yarn test:release
       - run: yarn build
       - run: yarn test
-      - name: Verify workspace versions match the tag
-        if: github.ref_type == 'tag'
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          yarn workspaces list --no-private --json | while read -r line; do
-            location=$(echo "$line" | jq -r .location)
-            name=$(echo "$line" | jq -r .name)
-            version=$(jq -r .version "$location/package.json")
-            if [ "$version" != "$TAG_VERSION" ]; then
-              echo "::error::$name is at $version but the tag is $TAG_VERSION"
-              exit 1
-            fi
-          done
-      - name: Pack workspaces
-        run: |
-          mkdir -p "$RUNNER_TEMP/tarballs"
-          yarn workspaces list --no-private --json | jq -r .name | while read -r name; do
-            out="$RUNNER_TEMP/tarballs/$(echo "$name" | tr '@/' '_-').tgz"
-            yarn workspace "$name" pack --out "$out"
-          done
-          ls -l "$RUNNER_TEMP/tarballs"
-      - name: Publish to npm
+      - name: Pack and inspect release artifacts
+        run: yarn release:prepare "$RUNNER_TEMP/swarmbase-release"
+      - name: Validate clean external consumer
+        run: yarn release:validate-consumer "$RUNNER_TEMP/swarmbase-release" "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-release-artifacts-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/swarmbase-release/*.tgz
+            ${{ runner.temp }}/swarmbase-release/release-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && vars.NPM_PUBLISH_ENABLED == 'true'
+    needs: validate-artifacts
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.nodeversion.outputs.version }}
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install --global npm@11.19.0
+      - uses: actions/download-artifact@v7
+        with:
+          name: npm-release-artifacts-${{ github.sha }}
+          path: ${{ runner.temp }}/swarmbase-release
+      - name: Authenticate bootstrap publisher
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Manual runs use the dist-tag input; tag pushes publish prereleases
-          # (v1.2.3-alpha.1) under `next` and releases under `latest`.
-          DIST_TAG: ${{ inputs.dist-tag || (contains(github.ref_name, '-') && 'next' || 'latest') }}
-          DRY_RUN: ${{ inputs.dry-run || github.event_name == 'pull_request' }}
         run: |
-          for tgz in "$RUNNER_TEMP"/tarballs/*.tgz; do
-            if [ "$DRY_RUN" = "true" ]; then
-              npm publish "$tgz" --access public --tag "$DIST_TAG" --dry-run
-            else
-              npm publish "$tgz" --access public --tag "$DIST_TAG" --provenance
-            fi
-          done
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          npm whoami
+      - name: Stage, verify, and promote packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          STAGING_TAG: swarmbase-stage-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node scripts/release-version.mjs)"
+          TARGET_TAG=latest
+          case "$VERSION" in *-*) TARGET_TAG=next ;; esac
+          node scripts/publish-release.mjs "$RUNNER_TEMP/swarmbase-release" "$STAGING_TAG" "$TARGET_TAG"

@@ -7,11 +7,9 @@ export {
   describeValue,
   serializeChangeNodeForJSON,
   deserializeChangeNodeFromJSON,
-} from '@swarmbase/collabswarm/src/merkle-dag-serialization';
-export {
   JSONSerializer,
   validateChangeBlockMetadata,
-} from '@swarmbase/collabswarm/src/json-serializer';
-export { LRUCache } from '@swarmbase/collabswarm/src/lru-cache';
-export { TIPS_HASH_LENGTH } from '@swarmbase/collabswarm/src/tips-hash';
-export { SubtleCrypto } from '@swarmbase/collabswarm/src/auth-subtlecrypto';
+  LRUCache,
+  TIPS_HASH_LENGTH,
+  SubtleCrypto,
+} from '@swarmbase/collabswarm/browser-primitives';

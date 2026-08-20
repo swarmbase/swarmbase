@@ -1,7 +1,7 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
-import { CollabswarmState } from './reducers';
-import { defaultStateSelector } from './default-state-selector';
+import { CollabswarmState } from './reducers.js';
+import { defaultStateSelector } from './default-state-selector.js';
 import {
   Collabswarm,
   CollabswarmDocument,

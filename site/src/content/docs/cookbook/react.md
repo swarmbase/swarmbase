@@ -1,170 +1,122 @@
 ---
 title: React integration
-description: Use the @swarmbase/collabswarm-react hooks to open, subscribe to, and edit documents from React components.
+description: Use the current React hooks for a basic, single-identity Yjs document from repository workspaces.
 ---
 
-You're building a React app and want Swarmbase documents to behave like React state: open on mount, re-render on remote changes, clean up on unmount, and share one connection across many components. `@swarmbase/collabswarm-react` provides two hooks and a context that do exactly that.
+**Status: Runnable from source for basic single-identity hooks; sharing is incomplete.**
 
-## Install
+The packages are unpublished. Build and consume the repository workspaces as shown in the [quick start](../../getting-started/quick-start/). The current password-manager source typechecks, builds, and passes a Chromium startup smoke test:
 
 ```sh
-npm install @swarmbase/collabswarm @swarmbase/collabswarm-yjs @swarmbase/collabswarm-react yjs
+yarn build
+yarn workspace @swarmbase/password-manager build
+yarn test:e2e:password-manager
 ```
 
-## Complete example
+This evidence covers startup, not sharing or cross-browser convergence.
+
+## Provide the current context shape
+
+`useCollabswarmDocumentState` requires four caches and four setters backed by React state:
 
 ```tsx
-import React from 'react';
-import * as Y from 'yjs';
-import {
-  Collabswarm,
-  CollabswarmDocument,
-  SubtleCrypto,
-  defaultConfig,
-  defaultBootstrapConfig,
-} from '@swarmbase/collabswarm';
-import {
-  YjsProvider,
-  YjsJSONSerializer,
-  YjsACLProvider,
-  YjsKeychainProvider,
-} from '@swarmbase/collabswarm-yjs';
-import {
-  CollabswarmContext,
-  useCollabswarm,
-  useCollabswarmDocumentState,
-} from '@swarmbase/collabswarm-react';
+function SwarmDocumentProvider({ children }: { children: React.ReactNode }) {
+  const [docCache, setDocCache] = React.useState<Record<string, any>>({});
+  const [docDataCache, setDocDataCache] = React.useState<Record<string, any>>({});
+  const [docReadersCache, setDocReadersCache] = React.useState<Record<string, any[]>>({});
+  const [docWritersCache, setDocWritersCache] = React.useState<Record<string, any[]>>({});
 
-// Providers are stateless factories — create them once, outside components.
+  return (
+    <CollabswarmContext.Provider value={{
+      docCache,
+      docDataCache,
+      docReadersCache,
+      docWritersCache,
+      setDocCache,
+      setDocDataCache,
+      setDocReadersCache,
+      setDocWritersCache,
+    }}>
+      {children}
+    </CollabswarmContext.Provider>
+  );
+}
+```
+
+The default context setters are no-ops; omitting this provider prevents cache updates from driving renders.
+
+## Initialize one identity
+
+Create provider instances outside render, then pass stable ECDSA P-384 signing keys to the current hook signature:
+
+```tsx
 const crdt = new YjsProvider();
 const serializer = new YjsJSONSerializer();
 const auth = new SubtleCrypto();
 const acl = new YjsACLProvider();
 const keychain = new YjsKeychainProvider();
 
-type YjsCollabswarm = Collabswarm<
-  Y.Doc, Uint8Array, (doc: Y.Doc) => void, CryptoKey, CryptoKey, CryptoKey
+const swarm = useCollabswarm(
+  privateKey,
+  publicKey,
+  crdt,
+  serializer,
+  serializer,
+  serializer,
+  auth,
+  acl,
+  keychain,
+  defaultConfig(defaultBootstrapConfig(
+    import.meta.env.VITE_RELAY_MULTIADDR
+      ? [import.meta.env.VITE_RELAY_MULTIADDR]
+      : [],
+  )),
+);
+```
+
+The application must persist and restore the signing keys. New keys mean a new ACL identity. `useCollabswarm` re-runs when key object identity changes, but it has no effect cleanup that stops the previous swarm; do not rotate or reconstruct keys during normal rendering.
+
+## Open and change one document
+
+```tsx
+import type { Collabswarm } from '@swarmbase/collabswarm';
+import type * as Y from 'yjs';
+
+type YjsSwarm = Collabswarm<
+  Y.Doc,
+  Uint8Array,
+  (doc: Y.Doc) => void,
+  CryptoKey,
+  CryptoKey,
+  CryptoKey
 >;
 
-// 1. Provide the shared document caches at the top of your tree.
-function SwarmProvider({ children }: { children: React.ReactNode }) {
-  const [docCache, setDocCache] = React.useState<{
-    [docPath: string]: CollabswarmDocument<any, any, any, any, any, any>;
-  }>({});
-  const [docDataCache, setDocDataCache] = React.useState<{ [docPath: string]: any }>({});
-  const [docReadersCache, setDocReadersCache] = React.useState<{ [docPath: string]: any[] }>({});
-  const [docWritersCache, setDocWritersCache] = React.useState<{ [docPath: string]: any[] }>({});
+function Note({ swarm }: { swarm: YjsSwarm }) {
+  const [doc, changeDoc, acl] = useCollabswarmDocumentState(
+    swarm,
+    '/notes/hello',
+  );
+
+  if (!doc) return <p>Opening…</p>;
 
   return (
-    <CollabswarmContext.Provider
-      value={{
-        docCache, docDataCache, docReadersCache, docWritersCache,
-        setDocCache, setDocDataCache, setDocReadersCache, setDocWritersCache,
-      }}
-    >
-      {children}
-    </CollabswarmContext.Provider>
-  );
-}
-
-// 2. Create the swarm once you have an identity keypair.
-function App({ privateKey, publicKey }: { privateKey?: CryptoKey; publicKey?: CryptoKey }) {
-  const config = defaultConfig(defaultBootstrapConfig([
-    // '/dns4/relay.example.com/tcp/443/wss/p2p/<relay-peer-id>',
-  ]));
-
-  const collabswarm = useCollabswarm(
-    privateKey,
-    publicKey,
-    crdt,
-    serializer,   // ChangesSerializer
-    serializer,   // SyncMessageSerializer
-    serializer,   // LoadMessageSerializer
-    auth,
-    acl,
-    keychain,
-    config,
-  );
-
-  if (!collabswarm) return <p>Starting swarm…</p>;
-
-  return (
-    <SwarmProvider>
-      <Note collabswarm={collabswarm} path="/notes/hello" />
-    </SwarmProvider>
-  );
-}
-
-// 3. Open a document and edit it.
-function Note({ collabswarm, path }: { collabswarm: YjsCollabswarm; path: string }) {
-  const [doc, changeDoc, aclControls] = useCollabswarmDocumentState(
-    collabswarm,
-    path,
-  );
-
-  if (!doc) return <p>Opening {path}…</p>; // still loading from peers
-
-  return (
-    <div>
-      <pre>{doc.getText('content').toString()}</pre>
-      <button
-        onClick={() =>
-          changeDoc((current: Y.Doc) => {
-            current.getText('content').insert(0, 'Hello! ');
-          })
-        }
-      >
-        Prepend greeting
-      </button>
-      <p>{aclControls.writers?.length ?? 0} writer(s)</p>
-    </div>
+    <button onClick={() => {
+      changeDoc((current: Y.Doc) => {
+        current.getText('content').insert(0, 'Hello ');
+      });
+    }}>
+      {doc.getText('content').toString()} ({acl.writers?.length ?? 0} writers)
+    </button>
   );
 }
 ```
 
-## The hooks
+The tuple is `[document | undefined, changeDoc, aclControls]`; `originFilter` is optionally `'all'`, `'remote'`, or `'local'`.
 
-### `useCollabswarm(privateKey, publicKey, provider, changesSerializer, syncMessageSerializer, loadMessageSerializer, authProvider, aclProvider, keychainProvider, config?)`
+`changeDoc` returns `void`. It fire-and-forgets `documentRef.change()` and does not return or catch its promise, so authorization, storage, encryption, or publication rejection is dropped by the wrapper. It is also a no-op before the document ref reaches the cache. Use the direct document API when the UI must await and report failures.
 
-Constructs a `Collabswarm` node and calls `initialize(config)` in an effect. Returns `undefined` until both keys are set and initialization completes — so you can start rendering before the user "logs in" and pass the keys in later. The effect re-runs if `privateKey`/`publicKey` change.
+## Lifecycle boundaries
 
-### `useCollabswarmDocumentState(collabswarm, documentPath, originFilter?)`
+Each document-hook instance unsubscribes on cleanup, and the last subscriber closes and evicts that document. The open-task map deduplicates an in-flight open, including a rapid StrictMode remount. That is the only StrictMode guarantee: it is not a guarantee for swarm initialization, networking, mutations, or every side effect.
 
-Returns a tuple:
-
-```typescript
-const [doc, changeDoc, aclControls] = useCollabswarmDocumentState(swarm, '/notes/hello');
-// doc:        DocType | undefined       — undefined until open() resolves
-// changeDoc:  (fn, message?) => void    — apply a local change
-// aclControls: {
-//   readers, addReader, removeReader,
-//   writers, addWriter, removeWriter,
-// }
-```
-
-`originFilter` (`'all' | 'remote' | 'local'`, default `'all'`) controls which change origins trigger re-renders.
-
-## Lifecycle: what the hook actually does
-
-- **First subscriber opens the document.** The hook calls `collabswarm.doc(path)` then `docRef.open()`, and records the in-flight promise in a module-level task map. A second component mounting with the same path *awaits the same open* instead of opening twice.
-- **Every hook instance gets its own subscription.** Each instance subscribes with a unique random ID, so multiple components watching one document don't clobber each other's handlers.
-- **Reference counting on unmount.** Each path keeps a subscriber count. Unmounting unsubscribes that instance; when the *last* subscriber for a path unmounts, the caches are evicted and the document is `close()`d to free pubsub/network resources.
-- **Strict-mode safe.** The open-task entry is only deleted after the open promise settles, so React 18 strict-mode's rapid unmount/remount doesn't call `open()` twice on the same document.
-- **ACL data comes along for free.** On open, the hook fetches `getReaders()`/`getWriters()` and keeps them updated from change notifications, exposing them via the third tuple element.
-
-## Loading states
-
-There is no Suspense integration — the pattern that exists is the `undefined` check:
-
-- `useCollabswarm(...)` returns `undefined` → swarm still initializing (or no keys yet).
-- `useCollabswarmDocumentState(...)[0]` is `undefined` → document still opening.
-
-Render spinners/placeholders on those, exactly as the wiki and password-manager examples do.
-
-## Pitfalls
-
-- **You must provide `CollabswarmContext` with real React state.** The context's default value has no-op setters — hooks will open documents but nothing will ever re-render. Wire all eight values (four caches + four setters) to `useState` as shown above.
-- **`changeDoc` is a no-op before the document opens.** It looks up the doc ref in the cache and does nothing if it isn't there yet. Disable edit controls until `doc` is defined.
-- **Don't rely on object identity for `Y.Doc`.** `YjsProvider` mutates the `Y.Doc` in place; the `doc` value's reference may not change between renders even though content did. Read values out (`doc.getText(...).toString()`) during render rather than memoizing on `doc`.
-- **Unstable keys re-create the swarm.** `useCollabswarm` re-initializes when `privateKey`/`publicKey` change identity. Keep them in state set once, not derived per-render.
-- **Alpha API.** The context-plus-module-cache design is explicitly acknowledged in the source as interim ("ew, global state"); expect this surface to change before 1.0.
+The ACL controls expose `addReader(user)` and cannot pass the recipient's raw P-256 ECDH KEM key or install a KEM key pair. They therefore cannot perform complete distinct-identity onboarding. Use the direct API and the sequence in [Encrypted shared secrets store](../password-manager/). See [Security](../../concepts/security/) for persistence and revocation limits.

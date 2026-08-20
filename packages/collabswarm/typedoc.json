@@ -1,6 +1,8 @@
 {
-  "entryPoints": ["src/index.ts"],
-  "readme": "README.md",
-  "out": "../../docs/",
-  "theme": "default"
+  "entryPoints": [
+    "src/index.ts",
+    "src/collabswarm-node.ts",
+    "src/browser-primitives.ts"
+  ],
+  "readme": "none"
 }

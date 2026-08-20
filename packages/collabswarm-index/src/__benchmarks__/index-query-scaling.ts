@@ -6,10 +6,10 @@
  * - Time exact match, range, and compound queries
  * - MemoryIndexStorage backend
  */
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner';
-import { MemoryIndexStorage } from '../memory-index-storage';
-import { IndexManager } from '../index-manager';
-import { generateDocuments } from './mock-data';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './paper-benchmark-runner.js';
+import { MemoryIndexStorage } from '../memory-index-storage.js';
+import { IndexManager } from '../index-manager.js';
+import { generateDocuments } from './mock-data.js';
 
 const SCALES = [100, 1_000, 10_000, 100_000];
 
