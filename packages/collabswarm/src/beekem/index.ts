@@ -1,3 +1,3 @@
-export * from './types';
-export * from './tree-math';
-export { BeeKEM } from './beekem';
+export * from './types.js';
+export * from './tree-math.js';
+export { BeeKEM } from './beekem.js';

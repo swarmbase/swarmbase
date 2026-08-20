@@ -1,10 +1,11 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 import BufferList from 'bl';
 import {
   shuffleArray,
   firstTrue,
   concatUint8Arrays,
   isBufferList,
+  readFirstDeserializable,
   readUint8Iterable,
   generateAndExportHmacKey,
   generateAndExportSymmetricKey,
@@ -222,6 +223,65 @@ describe('readUint8Iterable', () => {
       const result = await readUint8Iterable(toAsyncIterable(chunks));
       expect(result.length).toBe(1000);
     });
+  });
+});
+
+describe('readFirstDeserializable', () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const deserialize = (bytes: Uint8Array): { documentId: string } =>
+    JSON.parse(decoder.decode(bytes));
+
+  test('returns a complete request without waiting for stream EOF', async () => {
+    async function* sourceThatRemainsOpen() {
+      yield encoder.encode('{"documentId":');
+      yield encoder.encode('"/relay-test"}');
+      await new Promise<void>(() => {});
+    }
+
+    const result = await Promise.race([
+      readFirstDeserializable(sourceThatRemainsOpen(), deserialize, 1024),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('reader waited for EOF')), 100),
+      ),
+    ]);
+
+    expect(result).toEqual({ documentId: '/relay-test' });
+  });
+
+  test('rejects a request that exceeds the size limit before it is complete', async () => {
+    async function* oversizedSource() {
+      yield encoder.encode('{"documentId":"');
+      yield encoder.encode('too-large-to-accept');
+    }
+
+    await expect(
+      readFirstDeserializable(oversizedSource(), deserialize, 20),
+    ).rejects.toThrow(RangeError);
+  });
+
+  test('rejects an oversized BufferList before copying it', async () => {
+    const chunk = new BufferList(Buffer.alloc(1024));
+    const slice = jest.spyOn(chunk, 'slice');
+
+    async function* oversizedSource() {
+      yield chunk;
+    }
+
+    await expect(
+      readFirstDeserializable(oversizedSource(), deserialize, 20),
+    ).rejects.toThrow(RangeError);
+    expect(slice).not.toHaveBeenCalled();
+  });
+
+  test('surfaces the deserializer error when the stream ends incomplete', async () => {
+    async function* incompleteSource() {
+      yield encoder.encode('{"documentId":');
+    }
+
+    await expect(
+      readFirstDeserializable(incompleteSource(), deserialize),
+    ).rejects.toThrow();
   });
 });
 

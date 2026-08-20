@@ -1,4 +1,4 @@
-import { CRDTLoadRequest } from './crdt-load-request';
+import { CRDTLoadRequest } from './crdt-load-request.js';
 
 /**
  * LoadMessageSerializer provides serialization/deserialization methods for `CRDTLoadRequest`s.

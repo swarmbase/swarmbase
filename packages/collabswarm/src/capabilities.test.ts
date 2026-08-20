@@ -60,7 +60,7 @@ describe('getFieldPath', () => {
     ['/doc/admin', undefined, 'no field path in admin cap'],
   ])(
     '%s -> %s (%s)',
-    (capability: string, expected: string | undefined) => {
+    (capability: string, expected: string | undefined, _description: string) => {
       expect(getFieldPath(capability)).toBe(expected);
     },
   );

@@ -1,4 +1,4 @@
-import { Collabswarm, CollabswarmPeersHandler } from './collabswarm';
+import { Collabswarm, CollabswarmPeersHandler } from './collabswarm.js';
 import {
   CollabswarmConfig,
   DEFAULT_WEBRTC_ICE_SERVERS,
@@ -6,42 +6,42 @@ import {
   defaultConfig,
   defaultBootstrapConfig,
   getDefaultConfig,
-} from './collabswarm-config';
+} from './collabswarm-config.js';
 import {
   CollabswarmDocument,
   CollabswarmDocumentChangeHandler,
   HistoryVisibility,
-} from './collabswarm-document';
-import { CRDTSyncMessage } from './crdt-sync-message';
+} from './collabswarm-document.js';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
 // CollabswarmNode is intentionally excluded from this barrel export.
 // It is a Node-only module (imports `fs`, `@libp2p/mdns` which depends on
 // `dgram`) and must not be bundled by browser consumers. Import it from the
 // dedicated Node subpath export:
 //   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
-import { CRDTProvider } from './crdt-provider';
-import { SyncMessageSerializer } from './sync-message-serializer';
-import { ChangesSerializer } from './changes-serializer';
-import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer';
-import { SubtleCrypto } from './auth-subtlecrypto';
-import { ACLProvider } from './acl-provider';
-import { KeychainProvider } from './keychain-provider';
-import { ACL } from './acl';
-import { Keychain, keychainHistorySinceOrFull } from './keychain';
-import { requireSerializePublicKey } from './auth-provider';
-import { LoadMessageSerializer } from './load-request-serializer';
-import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTProvider } from './crdt-provider.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
+import { ChangesSerializer } from './changes-serializer.js';
+import { JSONSerializer, validateChangeBlockMetadata } from './json-serializer.js';
+import { SubtleCrypto } from './auth-subtlecrypto.js';
+import { ACLProvider } from './acl-provider.js';
+import { KeychainProvider } from './keychain-provider.js';
+import { ACL } from './acl.js';
+import { Keychain, keychainHistorySinceOrFull } from './keychain.js';
+import { requireSerializePublicKey } from './auth-provider.js';
+import { LoadMessageSerializer } from './load-request-serializer.js';
+import { CRDTChangeBlock } from './crdt-change-block.js';
 import {
   CRDTChangeNodeKind,
   CRDTChangeNodeDeferred,
   CRDTChangeNode,
   crdtChangeNodeDeferred,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 import {
   CRDTChangeNodeWire,
   describeValue,
   serializeChangeNodeForJSON,
   deserializeChangeNodeFromJSON,
-} from './merkle-dag-serialization';
+} from './merkle-dag-serialization.js';
 import {
   EPOCH_ID_LENGTH,
   GCM_NONCE_LENGTH,
@@ -55,13 +55,13 @@ import {
   deriveEncryptionKey,
   createEpoch,
   EpochManager,
-} from './epoch';
+} from './epoch.js';
 import {
   GroupKeyAgreementOutput,
   WelcomeMessage,
   MembershipProposal,
   GroupKeyProvider,
-} from './group-key-provider';
+} from './group-key-provider.js';
 import {
   CAP_DOC_ADMIN,
   CAP_DOC_WRITE,
@@ -72,56 +72,56 @@ import {
   capabilityImplies,
   isFieldCapability,
   getFieldPath,
-} from './capabilities';
+} from './capabilities.js';
 import {
   createUCAN,
   verifyUCANSignature,
   validateUCANChain,
   serializeUCAN,
   deserializeUCAN,
-} from './ucan';
+} from './ucan.js';
 import {
   UCANACL,
   UCANACLProvider,
-} from './ucan-acl';
+} from './ucan-acl.js';
 import {
   ACLChain,
   canonicalEntryPayload,
   computeEntryHash,
-} from './acl-chain';
-import { NetworkStats } from './network-stats';
-import { LRUCache } from './lru-cache';
+} from './acl-chain.js';
+import { NetworkStats } from './network-stats.js';
+import { LRUCache } from './lru-cache.js';
 import {
   beekemPathUpdateV1,
   beekemWelcomeV1,
   bloomFilterUpdateV1,
   tipAdvertiseV1,
-} from './wire-protocols';
+} from './wire-protocols.js';
 import {
   DOC_KEY_INFO,
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
-} from './derive-doc-key';
+} from './derive-doc-key.js';
 import {
   SerializedPathNodeUpdate,
   SerializedPathUpdate,
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
-} from './path-update-wire';
-import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
+} from './path-update-wire.js';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash.js';
 import {
   decideLoadQuorum,
   effectiveK,
   effectiveQ,
   LoadQuorumFailedError,
   validateLoadQuorumConfig,
-} from './load-quorum';
-import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
-import type { CRDTSnapshotNode } from './snapshot-node';
-import type { CompactionConfig } from './compaction-config';
-import { defaultCompactionConfig } from './compaction-config';
+} from './load-quorum.js';
+import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic.js';
+import type { CRDTSnapshotNode } from './snapshot-node.js';
+import type { CompactionConfig } from './compaction-config.js';
+import { defaultCompactionConfig } from './compaction-config.js';
 
-export * from './beekem';
+export * from './beekem/index.js';
 
 export {
   ACL,
@@ -228,21 +228,21 @@ export {
   LRUCache,
 };
 
-export type { NetworkStatsSnapshot } from './network-stats';
+export type { NetworkStatsSnapshot } from './network-stats.js';
 export type {
   PeerTipAdvertisement,
   LoadQuorumDecision,
   LoadQuorumFailedReason,
-} from './load-quorum';
+} from './load-quorum.js';
 
 // Re-export types
-export type { AuthProvider, AesAlgorithmName } from './auth-provider';
-export type { SerializedPathUpdate, SerializedPathNodeUpdate } from './path-update-wire';
-export type { DocumentCapability } from './capabilities';
-export type { UCAN, UCANCapability, UCANPayload } from './ucan';
-export type { UCANACLEntry } from './ucan-acl';
-export type { CRDTSnapshotNode } from './snapshot-node';
-export type { CompactionConfig } from './compaction-config';
+export type { AuthProvider, AesAlgorithmName } from './auth-provider.js';
+export type { SerializedPathUpdate, SerializedPathNodeUpdate } from './path-update-wire.js';
+export type { DocumentCapability } from './capabilities.js';
+export type { UCAN, UCANCapability, UCANPayload } from './ucan.js';
+export type { UCANACLEntry } from './ucan-acl.js';
+export type { CRDTSnapshotNode } from './snapshot-node.js';
+export type { CompactionConfig } from './compaction-config.js';
 export type {
   ACLChainConfig,
   ACLChainOps,
@@ -251,4 +251,4 @@ export type {
   ACLEntry,
   ACLState,
   SerializePublicKey,
-} from './acl-chain';
+} from './acl-chain.js';

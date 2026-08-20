@@ -6,7 +6,7 @@ import {
   AutomergeKeychainProvider,
   AutomergeACL,
   AutomergeKeychain,
-} from './collabswarm-automerge';
+} from './collabswarm-automerge.js';
 
 export {
   AutomergeACL,

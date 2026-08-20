@@ -10,13 +10,13 @@
  * without requiring actual network connections. Each "peer" maintains its own
  * document state and applies changes through the serialization pipeline.
  */
-import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner';
-import { SubtleCrypto } from '../auth-subtlecrypto';
-import { JSONSerializer } from '../json-serializer';
+import { PaperBenchmarkRunner, BenchmarkSuiteResult } from './benchmark-runner.js';
+import { SubtleCrypto } from '../auth-subtlecrypto.js';
+import { JSONSerializer } from '../json-serializer.js';
 import {
   generateSigningKeyPair,
   generateEncryptionKey,
-} from './crypto-setup';
+} from './crypto-setup.js';
 
 const PEER_COUNTS = [2, 4, 8, 16, 32];
 const EDITS_PER_PEER = 10;

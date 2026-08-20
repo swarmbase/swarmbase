@@ -17,12 +17,23 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2"
   },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
-    "build": "yarn workspaces foreach -Atpvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run tsc",
+    "build": "yarn workspaces foreach -Atvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run tsc",
+    "build:examples": "yarn build && yarn workspaces foreach -Avi --include '@collabswarm/browser-test' --include '@collabswarm/wiki-swarm' --include '@collabswarm/password-manager' run build",
     "test": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-yjs' --include '@collabswarm/collabswarm-react' --include '@collabswarm/collabswarm-automerge' --include '@collabswarm/collabswarm-redux' --include '@collabswarm/collabswarm-index' run test",
-    "test:e2e": "playwright test",
+    "test:e2e": "yarn test:e2e:examples",
+    "test:e2e:examples": "yarn test:e2e:password-manager && yarn test:e2e:wiki-swarm && yarn test:e2e:browser-test",
+    "test:e2e:password-manager": "yarn workspace @collabswarm/password-manager build && playwright test --config=playwright.password-manager.config.ts",
+    "test:e2e:wiki-swarm": "yarn workspace @collabswarm/wiki-swarm build && playwright test --config=playwright.wiki-swarm.config.ts",
+    "test:e2e:browser-test": "yarn workspace @collabswarm/browser-test build && playwright test --config=playwright.browser-test.config.ts",
     "test:integration": "playwright test --config=playwright.integration.config.ts",
     "test:nat": "playwright test --config=playwright.nat-test.config.ts",
+    "test:swarmbase-nat": "playwright test --config=playwright.swarmbase-nat.config.ts",
+    "test:relay": "yarn --cwd relay-server test",
     "benchmark:all": "yarn workspaces foreach -Apvi --include '@collabswarm/collabswarm' --include '@collabswarm/collabswarm-index' run benchmark"
-  }
+  },
+  "packageManager": "yarn@4.5.0"
 }
