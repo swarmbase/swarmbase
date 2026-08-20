@@ -1,3 +1,3 @@
 # `collabswarm-redux`
 
-See the main [collabswarm](https://github.com/collabswarm/collabswarm) README for more information.
+See the main [collabswarm](https://github.com/swarmbase/swarmbase) README for more information.

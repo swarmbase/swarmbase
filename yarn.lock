@@ -4717,6 +4717,10 @@ __metadata:
     "@swarmbase/collabswarm": "workspace:*"
     "@swarmbase/collabswarm-yjs": "workspace:*"
     astro: "npm:^7.0.7"
+    starlight-typedoc: "npm:^0.23.0"
+    typedoc: "npm:^0.28.19"
+    typedoc-plugin-markdown: "npm:^4.6.0"
+    typescript: "npm:^5.9.3"
     yjs: "npm:^13.6.30"
   languageName: unknown
   linkType: soft
@@ -14095,6 +14099,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"starlight-typedoc@npm:^0.23.0":
+  version: 0.23.1
+  resolution: "starlight-typedoc@npm:0.23.1"
+  dependencies:
+    github-slugger: "npm:^2.0.0"
+  peerDependencies:
+    "@astrojs/starlight": ">=0.39.0"
+    astro: ">=6.0.0"
+    typedoc: ">=0.28.0"
+    typedoc-plugin-markdown: ">=4.6.0"
+  checksum: 10/8e4318fff0ed929d04ec4bc6a06c2601ab9265a45bb84eff30f01e31e1a8fad99600810f64518250da2091d4ebf4ea37b37e247e767e12f1ad4adc5994ab23b6
+  languageName: node
+  linkType: hard
+
 "stream-replace-string@npm:^2.0.0":
   version: 2.0.0
   resolution: "stream-replace-string@npm:2.0.0"
@@ -14627,6 +14645,15 @@ __metadata:
   version: 0.21.3
   resolution: "type-fest@npm:0.21.3"
   checksum: 10/f4254070d9c3d83a6e573bcb95173008d73474ceadbbf620dd32d273940ca18734dff39c2b2480282df9afe5d1675ebed5499a00d791758748ea81f61a38961f
+  languageName: node
+  linkType: hard
+
+"typedoc-plugin-markdown@npm:^4.6.0":
+  version: 4.12.0
+  resolution: "typedoc-plugin-markdown@npm:4.12.0"
+  peerDependencies:
+    typedoc: 0.28.x
+  checksum: 10/218162f8d096dc46e47c6e841db1a978090fef644ccb7abbca69b7f9d367364592ac59b252a4e47340a2e9c6c433bf7d1287ed4c6be78188f8ba851560d74dc3
   languageName: node
   linkType: hard
 

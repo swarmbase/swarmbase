@@ -236,7 +236,18 @@ export type {
 } from './load-quorum.js';
 
 // Re-export types
-export type { AuthProvider, AesAlgorithmName } from './auth-provider.js';
+export type {
+  AuthProvider,
+  AesAlgorithmName,
+  EncryptionResult,
+} from './auth-provider.js';
+export type { SubtleCryptoEncryptionResult } from './auth-subtlecrypto.js';
+export type { CRDTLoadRequest } from './crdt-load-request.js';
+export type {
+  CRDTDocumentChangeNode,
+  CRDTWriterChangeNode,
+  CRDTReaderChangeNode,
+} from './crdt-change-node.js';
 export type { SerializedPathUpdate, SerializedPathNodeUpdate } from './path-update-wire.js';
 export type { DocumentCapability } from './capabilities.js';
 export type { UCAN, UCANCapability, UCANPayload } from './ucan.js';

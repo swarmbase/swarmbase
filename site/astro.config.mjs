@@ -1,7 +1,26 @@
 // @ts-check
+import { rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
+
+const removeGeneratedApiLanding = {
+  name: 'remove-generated-api-landing',
+  hooks: {
+    'astro:config:setup': () => {
+      rmSync(
+        fileURLToPath(
+          new URL(
+            './src/content/docs/reference/api/README.md',
+            import.meta.url,
+          ),
+        ),
+        { force: true },
+      );
+    },
+  },
+};
 
 // Served as a GitHub Pages project page until a custom domain is set up.
 export default defineConfig({
@@ -21,6 +40,27 @@ export default defineConfig({
   },
   integrations: [
     starlight({
+      plugins: [
+        starlightTypeDoc({
+          entryPoints: [
+            '../packages/collabswarm',
+            '../packages/collabswarm-yjs',
+            '../packages/collabswarm-automerge',
+            '../packages/collabswarm-react',
+            '../packages/collabswarm-redux',
+            '../packages/collabswarm-index',
+          ],
+          output: 'reference/api',
+          sidebar: { label: 'Packages', collapsed: true },
+          typeDoc: {
+            entryPointStrategy: 'packages',
+            excludePrivate: true,
+            excludeProtected: true,
+            excludeInternal: true,
+            treatWarningsAsErrors: true,
+          },
+        }),
+      ],
       title: 'Swarmbase',
       description:
         'Alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
@@ -70,7 +110,7 @@ export default defineConfig({
         },
         {
           label: 'Reference',
-          items: [{ autogenerate: { directory: 'reference' } }],
+          items: ['reference', typeDocSidebarGroup],
         },
         {
           label: 'Community',
@@ -82,5 +122,6 @@ export default defineConfig({
         },
       ],
     }),
+    removeGeneratedApiLanding,
   ],
 });
