@@ -178,7 +178,7 @@ The relay server will:
 After the relay starts, configure your SwarmDB client with the relay's multiaddress:
 
 ```typescript
-import { defaultNodeConfig } from '@swarmbase/collabswarm';
+import { defaultNodeConfig } from '@swarmbase/collabswarm/node';
 
 // The relay's multiaddress is printed on startup and written to relay-info.json
 const relayMultiaddr = '/ip4/<YOUR_SERVER_IP>/tcp/9001/ws/p2p/<RELAY_PEER_ID>';

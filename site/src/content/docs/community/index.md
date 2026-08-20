@@ -1,24 +1,25 @@
 ---
 title: Community
-description: How to get involved with Swarmbase — contribute code, docs, testing, or feedback to an open-source, local-first, end-to-end-encrypted document database in alpha.
+description: Where to ask questions, report actionable work, and contribute to Swarmbase.
 ---
 
-Swarmbase is an open-source (MIT-licensed), local-first, end-to-end-encrypted document database for the browser — and it's in alpha, which means it is actively looking for people to help build it.
+Swarmbase is an alpha project. APIs and behavior may change, data-loss risks remain, and documentation should distinguish implemented primitives from behavior verified end to end. Contributions that improve evidence, tests, and honest capability boundaries are especially valuable.
 
-## Why contribute
+## Choose the right channel
 
-Contributing to a young project is different from contributing to an established one. There is no thousand-page backlog to wade through and no ten-year-old architecture to tiptoe around. The core API is still being designed, so your feedback and code shape what Swarmbase becomes rather than patching what it already is.
+- Use [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions) for questions, use cases, design exploration, and ideas that are not yet actionable work.
+- Use [GitHub Issues](https://github.com/swarmbase/swarmbase/issues) for reproducible bugs and scoped, actionable work. Include versions, reproduction steps, expected behavior, actual behavior, and relevant sanitized logs.
+- Read the [contributing guide](contributing/) before preparing a pull request.
+- See [help wanted](help-wanted/) for current technical gaps. The issue tracker may not contain curated beginner tasks.
 
-It's also a chance to work on the interesting parts of the [local-first software](https://martin.kleppmann.com/papers/local-first.pdf) movement in one codebase: CRDTs, libp2p peer-to-peer networking, content-addressed storage, and end-to-end encryption with dynamic access control. If you want apps that work offline, sync without central servers, and keep data private from the infrastructure that carries it, this is a place to help make that real.
+Maintainers review contributions as availability permits. There is no response or review-time SLA.
 
-## Where to start
+## Security reports
 
-- **[Contributing guide](contributing/)** — dev setup, a map of the monorepo, the test matrix, and what we expect from pull requests.
-- **[What we need help with](help-wanted/)** — concrete contribution areas, from access control and encryption to tutorials, testing, and benchmarks. Includes plenty of ways to help without writing code.
+If you suspect a vulnerability, open this repository's **Security** tab and use GitHub private vulnerability reporting. Never disclose suspected vulnerabilities in public issues or discussions. Avoid including secrets, private keys, document keys, credentials, or sensitive user data in any report or log.
 
-## Talk to us
+## Evidence standards
 
-- **[GitHub issues](https://github.com/swarmbase/swarmbase/issues)** — bug reports, concrete proposals, and `good-first-issue` tasks.
-- **[GitHub discussions](https://github.com/swarmbase/swarmbase/discussions)** — questions, use-case reports, and ideas that aren't issue-shaped yet.
+State exactly what a change or test demonstrates. A unit test for a cryptographic or CRDT primitive does not by itself prove browser interoperability, persistence, multi-peer convergence, invitation acceptance, revocation under attack, or production suitability. Use the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) as the current evidence map.
 
-And if you're not ready to contribute but like where this is going, [starring the repo](https://github.com/swarmbase/swarmbase) takes two seconds and genuinely helps other people find the project.
+The root `LICENSE` is MIT, while package manifests currently declare ISC. That metadata must be reconciled before package publication.

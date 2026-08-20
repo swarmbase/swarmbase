@@ -1,81 +1,54 @@
 ---
-title: What we need help with
-description: Concrete areas where Swarmbase needs contributors right now — from access control and encryption to docs, testing, and benchmarks — and where each one lives in the code.
+title: Help wanted
+description: Concrete evidence, reliability, packaging, documentation, and integration gaps where Swarmbase needs contributors.
 ---
 
-Swarmbase is in active alpha development, and the roadmap is public: the README's "working on" list is, quite literally, this page. Below is each area translated into something you can actually pick up, with a pointer to where it lives in the repo. Setup instructions are in the [contributing guide](../contributing/).
+Swarmbase already contains substantial CRDT, storage, networking, encryption, ACL, key-management, framework, and indexing primitives. The highest-priority work is proving and completing the end-to-end paths that compose them. See the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) for current evidence and the [contributing guide](../contributing/) before starting.
 
-If you want a gentle entry point, look for issues tagged [`good-first-issue`](https://github.com/swarmbase/swarmbase/issues) on GitHub — those are scoped to be finishable without knowing the whole codebase. Not sure where you fit? [Open a discussion](https://github.com/swarmbase/swarmbase/discussions) and say what you're interested in.
+The issue tracker may not have curated beginner tasks. Use [Discussions](https://github.com/swarmbase/swarmbase/discussions) to scope an idea and [Issues](https://github.com/swarmbase/swarmbase/issues) for reproducible bugs or agreed actionable work. Security-sensitive findings must go through private vulnerability reporting from the repository **Security** tab.
 
-## Dynamic access control
+## Priority end-to-end gaps
 
-**Why it matters:** letting a changing group of people share encrypted documents — adding and removing readers and writers, rotating keys on revocation — is Swarmbase's central promise, and the part that most distinguishes it from plain CRDT sync. It is also the hardest part to get right.
+### Invitations, revocation, and key state
 
-**Where it lives:** `packages/collabswarm/src` — `acl.ts`, `acl-provider.ts`, `acl-chain.ts`, `capabilities.ts`, and `ucan.ts` for permissions; the `beekem/` directory plus the `beekem-*.ts` modules for group key management (welcomes, revocation, epochs); `keychain.ts` and `group-key-provider.ts` for key handling. Design notes in `notes/auth.md`.
+BeeKEM, encrypted welcome messages, ACLs, epochs, path updates, and revocation primitives have focused tests. What is missing is application-level invitation acceptance for a distinct identity, persisted KEM/BeeKEM state, offline/replayed invitation behavior, and multi-peer proof that a revoked member cannot read or write subsequent content.
 
-**Good contributions:** reviewing the security model, adding adversarial test cases, improving revocation edge-case handling, or just reading the design notes and filing sharp questions.
+Useful work includes deterministic acceptance tests, state migration design, adversarial cases, and safe UX that never logs keys or private payloads.
 
-## Document encryption and key management
+### Persistence and restart recovery
 
-**Why it matters:** Swarmbase stores data on untrusted peers, so every change is signed and encrypted end-to-end. Correctness here is non-negotiable, and more eyes on the crypto plumbing directly increases how much anyone can trust the project.
+Content-addressed blocks and IndexedDB-backed components exist, but document and identity recovery across browser/process restart needs executable coverage. Test key persistence separately from document blocks, include schema/version migrations, and verify explicit failure behavior when required state is absent.
 
-**Where it lives:** `packages/collabswarm/src` — `auth-provider.ts` (the signing/encryption interface), `auth-subtlecrypto.ts` (the WebCrypto implementation), `ecies.ts`, and `derive-doc-key.ts`.
+### Partition and live convergence
 
-**Good contributions:** test vectors, cross-browser WebCrypto quirks, performance work (see benchmarking below), and documentation of the threat model.
+CRDT adapters and isolated sync components are tested; current example tests are startup smoke suites. Add deterministic multi-peer mutation, partition, concurrent edit, rejoin, and convergence assertions. Extend the cross-NAT path from initial encrypted retrieval to live post-load synchronization without representing transport-only messaging as database convergence.
 
-## Nailing the core API
+### Pinning publisher and restore
 
-**Why it matters:** the alpha window is when API mistakes are still cheap to fix. Once people build on `Collabswarm` and `CollabswarmDocument`, every awkward signature becomes permanent. Real-world feedback now shapes the 1.0 surface.
+Storage and pinning concepts are documented, but a complete publisher, durable remote retention flow, and tested restore path are not established. Contributions should specify trust, authorization, retention, encryption, failure, and recovery boundaries.
 
-**Where it lives:** `packages/collabswarm/src` — `collabswarm.ts`, `collabswarm-document.ts`, `collabswarm-config.ts`, and the provider interfaces (`crdt-provider.ts`, `auth-provider.ts`, `acl-provider.ts`). The React (`packages/collabswarm-react`) and Redux (`packages/collabswarm-redux`) bindings are the API most app developers actually touch.
+### Relay identity, failover, and scale
 
-**Good contributions:** build a small app with Swarmbase and report every point of friction. "This method confused me" is a genuinely valuable issue.
+The relay has unit coverage and NAT acceptance paths. Needed work includes durable relay identity, deployment smoke tests, in-flight failover, multiple-relay selection, churn, abuse/resource limits, observability, and scale evidence.
 
-## Tutorials and working examples
+### External package publication
 
-**Why it matters:** local-first, peer-to-peer databases are a new mental model. Most developers' first ten minutes decide whether they stay. The three examples exist, but there's no guided path from zero to a working app.
+The six `@swarmbase/*` workspaces build, but they are unpublished. Prepare publication only with clean tarball inspection, external-consumer ESM and declaration tests on Node 22.19.0 and browsers, dependency/export verification, release automation, and reconciliation of the root MIT license with ISC package metadata.
 
-**Where it lives:** `examples/browser-test` (minimal JSON editor), `examples/wiki-swarm` (collaborative wiki), `examples/password-manager` (shared secrets with a permissions table — the best showcase of access control). Longer-form material belongs in `guides/` and on this site.
+### Documentation and snippet tests
 
-**Good contributions:** a step-by-step "build a shared todo list" tutorial, polishing an existing example, or a new small example that shows off a feature the current ones don't (e.g. the indexing package).
+The Site workflow generates TypeDoc Markdown from source during `yarn workspace @swarmbase/site build`; generated files are ignored. Improve source API comments or `site/astro.config.mjs`, not generated Markdown. Add executable snippet/link checks so quick-start and cookbook commands cannot silently drift. There is no legacy TypeDoc workflow.
 
-## Documentation
+### Benchmark runner and budgets
 
-**Why it matters:** API docs are generated from TSDoc comments (published via the `typedoc` workflow), so every comment you improve shows up in the docs automatically — and much of the codebase is still thinly commented.
+Core and index benchmark scenarios exist, but the runner currently has a module mismatch. Fix reproducible execution first, then establish representative datasets, environment reporting, baselines, variance handling, and regression budgets before publishing performance claims.
 
-**Where it lives:** doc comments throughout `packages/*/src`; the TypeDoc setup in `packages/collabswarm` (`yarn workspace @swarmbase/collabswarm doc`); design notes in `notes/`; this site itself.
+### Distributed search integration
 
-**Good contributions:** documenting one public class or interface well, fixing inaccuracies, or turning a `notes/*.md` design note into a proper guide.
+Blind indexes, local stores, Bloom-filter CRDT/gossip, query logic, and React bindings have isolated coverage. Build an integration path that indexes changing encrypted documents across peers, propagates query metadata, handles false positives and token rotation, and verifies restart and schema-evolution behavior. No current example demonstrates this end to end.
 
-## More testing
+## Examples and evidence
 
-**Why it matters:** a database people trust with their data needs far more coverage than an alpha typically has. The maintainers list "more testing" twice in the roadmap — once for now and once for the future. That's not an accident.
+`browser-test`, `wiki-swarm`, and `password-manager` build and pass Chromium startup smoke tests through `yarn test:e2e`. They are useful source examples, not complete showcases of invitations, persistence, convergence, pinning, or distributed search. Contributions should state precisely which boundary a new test crosses and avoid production-readiness claims.
 
-**Where it lives:** unit tests sit next to their modules in each package (`*.test.ts`); Playwright suites in `e2e/` and `e2e/integration/` cover multi-user sync, peer discovery, resilience, and NAT traversal (see the [test matrix](../contributing/#test-matrix)); `notes/testing.md` describes the approach.
-
-**Good contributions:** tests for uncovered modules, new integration scenarios (three-plus peers, churn, offline/rejoin), and making flaky tests deterministic.
-
-## Benchmarking
-
-**Why it matters:** the project's stated philosophy is to prioritize performance, reliability, and security over new features. That requires numbers. Benchmark suites exist but need more scenarios, more baselines, and tracking over time.
-
-**Where it lives:** `packages/collabswarm/src/__benchmarks__` (crypto overhead, CRDT sync latency, convergence simulation) and `packages/collabswarm-index/src/__benchmarks__` (blind-index performance, Bloom-filter and query scaling). Run everything with `yarn benchmark:all`.
-
-**Good contributions:** new benchmark scenarios, comparisons across document sizes and peer counts, or automation that surfaces regressions in CI.
-
-## Distributed indexing and queries
-
-**Why it matters:** querying encrypted documents without decrypting them everywhere is what makes Swarmbase a *database* rather than just a sync layer. The `collabswarm-index` package (blind indexes, Bloom-filter gossip) is young and has room for both correctness and performance work.
-
-**Where it lives:** `packages/collabswarm-index/src` — `index-manager.ts`, `blind-index-query.ts`, `bloom-filter-gossip.ts`, and the storage backends (`memory-index-storage.ts`, `idb-index-storage.ts`).
-
-## No code required
-
-Some of the most valuable contributions right now involve writing no code at all:
-
-- **Test on weird networks.** Run the examples across real NATs, corporate firewalls, mobile hotspots, flaky Wi-Fi, or between continents, and report what happens. The Docker NAT simulation is good; reality is better.
-- **Report your use case.** Tell us what you'd want to build with a local-first encrypted database — it directly shapes API priorities. [Discussions](https://github.com/swarmbase/swarmbase/discussions) is the place.
-- **Review the docs.** Read the README or this site as a newcomer and file an issue for everything that confused you.
-- **File great bug reports.** A reproducible bug report with steps and console output is a gift.
-
-Whatever you pick, say hello in an issue or discussion first — the maintainers are actively looking for contributors and will help you find the right-sized piece.
+Maintainer responses and reviews have no SLA. Small, focused proposals with a reproducible failing case or a clear acceptance criterion are easiest to evaluate.

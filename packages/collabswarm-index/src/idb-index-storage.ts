@@ -1,6 +1,6 @@
 import { openDB, IDBPDatabase } from 'idb';
-import { IndexFieldDefinition, FieldFilter, SortClause } from './types';
-import { IndexStorage, IndexEntry } from './index-storage';
+import { IndexFieldDefinition, FieldFilter, SortClause } from './types.js';
+import { IndexStorage, IndexEntry } from './index-storage.js';
 
 /**
  * IndexedDB-backed implementation of IndexStorage using the `idb` library.

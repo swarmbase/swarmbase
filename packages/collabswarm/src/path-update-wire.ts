@@ -15,7 +15,7 @@
  */
 
 import { Base64 } from 'js-base64';
-import { PathNodeUpdate, PathUpdate } from './beekem/types';
+import { PathNodeUpdate, PathUpdate } from './beekem/types.js';
 
 /** JSON-safe encoding of a single `PathNodeUpdate`. */
 export interface SerializedPathNodeUpdate {

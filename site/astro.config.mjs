@@ -1,8 +1,26 @@
 // @ts-check
+import { rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
+
+const removeGeneratedApiLanding = {
+  name: 'remove-generated-api-landing',
+  hooks: {
+    'astro:config:setup': () => {
+      rmSync(
+        fileURLToPath(
+          new URL(
+            './src/content/docs/reference/api/README.md',
+            import.meta.url,
+          ),
+        ),
+        { force: true },
+      );
+    },
+  },
+};
 
 // Served as a GitHub Pages project page until a custom domain is set up.
 export default defineConfig({
@@ -12,9 +30,6 @@ export default defineConfig({
     resolve: {
       alias: [
         {
-          // The core barrel drags in libp2p/Helia, which the browser bundle
-          // doesn't need. The sync demo only uses light modules, re-exported
-          // by the shim.
           find: /^@swarmbase\/collabswarm$/,
           replacement: fileURLToPath(
             new URL('./src/lib/collabswarm-shim.ts', import.meta.url),
@@ -36,18 +51,19 @@ export default defineConfig({
             '../packages/collabswarm-index',
           ],
           output: 'reference/api',
-          sidebar: { label: 'API reference', collapsed: true },
+          sidebar: { label: 'Packages', collapsed: true },
           typeDoc: {
             entryPointStrategy: 'packages',
             excludePrivate: true,
             excludeProtected: true,
             excludeInternal: true,
+            treatWarningsAsErrors: true,
           },
         }),
       ],
       title: 'Swarmbase',
       description:
-        'An encrypted, serverless, local-first document database that syncs browser to browser.',
+        'Alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'Swarmbase',
@@ -106,5 +122,6 @@ export default defineConfig({
         },
       ],
     }),
+    removeGeneratedApiLanding,
   ],
 });
