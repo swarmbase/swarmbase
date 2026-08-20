@@ -153,10 +153,12 @@
     let outstanding = 0;
     let drainPromise: Promise<void> | null = null;
     let preparation = Promise.resolve();
+    const busySides: Record<Side, boolean> = { alice: false, bob: false };
     const focusedControls: Record<
       Side,
       HTMLInputElement | HTMLButtonElement | null
     > = { alice: null, bob: null };
+    const pendingInputFocus: Record<Side, boolean> = { alice: false, bob: false };
 
     const setStatus = (message: string, error = false) => {
       if (!active()) return;
@@ -175,16 +177,26 @@
         focusedControls[side] =
           isFormControl && form.contains(focused) ? focused : null;
       }
+      busySides[side] = busy;
       form.setAttribute('aria-busy', String(busy));
       form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(
         (control) => {
           control.disabled = busy;
         },
       );
+      root
+        .querySelectorAll<HTMLButtonElement>(`[data-list="${side}"] button`)
+        .forEach((control) => control.setAttribute('aria-disabled', String(busy)));
       if (!busy) {
         const focused = focusedControls[side];
+        const restoreInput = pendingInputFocus[side];
         focusedControls[side] = null;
-        if (focused && document.activeElement === document.body) focused.focus();
+        pendingInputFocus[side] = false;
+        if (restoreInput && document.activeElement === document.body) {
+          form.querySelector<HTMLInputElement>('input')?.focus();
+        } else if (focused && document.activeElement === document.body) {
+          focused.focus();
+        }
       }
     };
 
@@ -214,6 +226,7 @@
         remove.textContent = '×';
         remove.dataset.deleteIndex = String(index);
         remove.setAttribute('aria-label', `Remove "${text}"`);
+        remove.setAttribute('aria-disabled', String(busySides[side]));
         remove.addEventListener(
           'click',
           () => {
@@ -230,6 +243,13 @@
           .querySelectorAll<HTMLButtonElement>('[data-delete-index]')
           .item(nextIndex)
           ?.focus();
+      } else if (focusedIndex !== null) {
+        const input = root.querySelector<HTMLInputElement>(`[data-form="${side}"] input`)!;
+        if (!input.disabled && document.activeElement === document.body) {
+          input.focus();
+        } else {
+          pendingInputFocus[side] = true;
+        }
       }
     };
 
@@ -383,6 +403,10 @@
 
     const edit = async (side: Side, change: (doc: Doc) => void) => {
       if (!active()) return;
+      if (busySides[side]) {
+        setStatus(`Wait for ${side}'s pending update before editing again.`, true);
+        return;
+      }
       if (outstanding >= MAX_PENDING) {
         setStatus(
           offline
@@ -533,7 +557,7 @@
     flex-direction: column;
     gap: 0.4rem;
   }
-  .todo-list li {
+  .todo-list :global(li) {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -542,7 +566,7 @@
     border-radius: 0.5rem;
     padding: 0.35rem 0.6rem;
   }
-  .todo-list button {
+  .todo-list :global(button) {
     background: none;
     border: none;
     color: var(--sl-color-gray-3);
@@ -550,8 +574,12 @@
     font-size: 1rem;
     line-height: 1;
   }
-  .todo-list button:hover {
+  .todo-list :global(button:hover) {
     color: var(--sl-color-white);
+  }
+  .todo-list :global(button[aria-disabled='true']) {
+    cursor: wait;
+    opacity: 0.65;
   }
   .peer-card form {
     display: flex;
@@ -612,7 +640,7 @@
     gap: 0.35rem;
     font-size: var(--sl-text-xs);
   }
-  .wire-log li {
+  .wire-log :global(li) {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -620,25 +648,25 @@
     border-left: 3px solid var(--sl-color-accent);
     padding-left: 0.5rem;
   }
-  .wire-log li.queued,
-  .wire-log li.delivering {
+  .wire-log :global(li.queued),
+  .wire-log :global(li.delivering) {
     border-left-color: var(--sl-color-orange, #e5850b);
     opacity: 0.8;
   }
-  .wire-log li.rejected {
+  .wire-log :global(li.rejected) {
     border-left-color: var(--sl-color-red, #f43f5e);
   }
-  .wire-log .route {
+  .wire-log :global(.route) {
     font-weight: 600;
     color: var(--sl-color-white);
   }
-  .wire-log code {
+  .wire-log :global(code) {
     background: none;
     padding: 0;
     color: var(--sl-color-gray-2);
     word-break: break-all;
   }
-  .wire-log .badge {
+  .wire-log :global(.badge) {
     color: var(--sl-color-gray-3);
   }
   .pause-btn {
