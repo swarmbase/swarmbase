@@ -9,7 +9,8 @@
     "packages/collabswarm-index",
     "examples/browser-test",
     "examples/wiki-swarm",
-    "examples/password-manager"
+    "examples/password-manager",
+    "site"
   ],
   "resolutions": {
     "@peculiar/asn1-schema": "^2.6.0"

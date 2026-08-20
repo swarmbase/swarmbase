@@ -1,0 +1,14 @@
+/* Swarmbase brand accents (indigo primary, teal secondary). */
+:root {
+  --sl-color-accent-low: #262367;
+  --sl-color-accent: #6366f1;
+  --sl-color-accent-high: #c7c9f8;
+  --sw-color-teal: #2dd4bf;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #e0e1fa;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #312c96;
+  --sw-color-teal: #0d9488;
+}
