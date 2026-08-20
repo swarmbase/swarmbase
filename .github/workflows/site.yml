@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'packages/collabswarm/**'
+      - 'packages/collabswarm-yjs/**'
       - '.github/workflows/site.yml'
       - 'package.json'
       - 'yarn.lock'
@@ -14,6 +16,8 @@ on:
   pull_request:
     paths:
       - 'site/**'
+      - 'packages/collabswarm/**'
+      - 'packages/collabswarm-yjs/**'
       - '.github/workflows/site.yml'
       - 'package.json'
       - 'yarn.lock'

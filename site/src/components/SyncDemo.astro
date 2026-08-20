@@ -147,6 +147,7 @@
       { once: true },
     );
     const pending: Frame[] = [];
+    const needsFullSync: Record<Side, boolean> = { alice: false, bob: false };
     let offline = false;
     let generation = 0;
     let outstanding = 0;
@@ -354,7 +355,11 @@
         startDrain();
       } catch {
         outstanding -= 1;
-        setStatus('Edit stayed local because encryption or signing failed.', true);
+        needsFullSync[from] = true;
+        setStatus(
+          'Edit stayed local after a crypto failure; the next edit will send full Yjs history.',
+          true,
+        );
       } finally {
         setFormBusy(from, false);
       }
@@ -371,6 +376,10 @@
       let update: Uint8Array;
       try {
         [, update] = provider.localChange(docs[side], 'illustrative edit', change);
+        if (needsFullSync[side]) {
+          update = provider.getHistory(docs[side]);
+          needsFullSync[side] = false;
+        }
         render(side);
       } catch {
         outstanding -= 1;
@@ -411,8 +420,10 @@
             setStatus('Enter a todo before adding it.', true);
             return;
           }
-          input.value = '';
-          void edit(side, (doc) => doc.getArray('todos').push([text]));
+          void edit(side, (doc) => {
+            doc.getArray('todos').push([text]);
+            input.value = '';
+          });
         },
         { signal },
       );
