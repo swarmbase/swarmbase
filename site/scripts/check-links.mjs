@@ -48,6 +48,48 @@ function attributesFor(tag) {
   return attributes;
 }
 
+function* tagsIn(html) {
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const start = html.indexOf('<', cursor);
+    if (start === -1) return;
+
+    if (html.startsWith('<!--', start)) {
+      const end = html.indexOf('-->', start + 4);
+      if (end === -1) return;
+      cursor = end + 3;
+      continue;
+    }
+
+    const name = /^<([a-z][\w:-]*)/i.exec(html.slice(start))?.[1];
+    if (!name) {
+      cursor = start + 1;
+      continue;
+    }
+
+    let quote = '';
+    let end = start + name.length + 1;
+    for (; end < html.length; end += 1) {
+      const character = html[end];
+      if (quote) {
+        if (character === quote) quote = '';
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === '>') {
+        break;
+      }
+    }
+
+    if (end === html.length) return;
+    yield {
+      name: name.toLowerCase(),
+      source: html.slice(start, end + 1),
+    };
+    cursor = end + 1;
+  }
+}
+
 function collectFiles(directory, relativeDirectory = '', files = new Set()) {
   const entries = readdirSync(resolve(directory, relativeDirectory), {
     withFileTypes: true,
@@ -68,10 +110,9 @@ function collectFiles(directory, relativeDirectory = '', files = new Set()) {
 }
 
 function findSiteRoot(indexHtml) {
-  const htmlWithoutComments = indexHtml.replace(/<!--[\s\S]*?-->/g, '');
-
-  for (const match of htmlWithoutComments.matchAll(/<link\b[^>]*>/gi)) {
-    const attributes = attributesFor(match[0]);
+  for (const tag of tagsIn(indexHtml)) {
+    if (tag.name !== 'link') continue;
+    const attributes = attributesFor(tag.source);
     const rel = attributes.get('rel')?.toLowerCase().split(/\s+/) ?? [];
     if (!rel.includes('canonical')) continue;
 
@@ -98,12 +139,11 @@ function pageUrl(relativePath, siteRoot) {
 }
 
 function anchorsFor(html, relativePath, diagnostics) {
-  const htmlWithoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
   const anchors = new Set();
   const ids = new Set();
 
-  for (const match of htmlWithoutComments.matchAll(/<[a-z][^>]*>/gi)) {
-    const attributes = attributesFor(match[0]);
+  for (const tag of tagsIn(html)) {
+    const attributes = attributesFor(tag.source);
     const id = attributes.get('id');
     if (id !== undefined) {
       if (ids.has(id)) {
@@ -113,7 +153,7 @@ function anchorsFor(html, relativePath, diagnostics) {
       anchors.add(id);
     }
 
-    if (/^<a\b/i.test(match[0])) {
+    if (tag.name === 'a') {
       const name = attributes.get('name');
       if (name !== undefined) anchors.add(name);
     }
@@ -204,14 +244,12 @@ function run() {
   let internalLinkCount = 0;
 
   for (const relativePath of htmlFiles) {
-    const html = (htmlByFile.get(relativePath) ?? '').replace(
-      /<!--[\s\S]*?-->/g,
-      '',
-    );
+    const html = htmlByFile.get(relativePath) ?? '';
     const sourceUrl = pageUrl(relativePath, siteRoot);
 
-    for (const match of html.matchAll(/<a\b[^>]*>/gi)) {
-      const href = attributesFor(match[0]).get('href');
+    for (const tag of tagsIn(html)) {
+      if (tag.name !== 'a') continue;
+      const href = attributesFor(tag.source).get('href');
       if (href === undefined) continue;
 
       let url;
