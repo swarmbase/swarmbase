@@ -1,6 +1,25 @@
 ---
 title: Community
-description: Where Swarmbase is discussed, and how to support the project.
+description: Where to ask questions, report actionable work, and contribute to Swarmbase.
 ---
 
-This page is being written. Until it lands, the [GitHub repository](https://github.com/swarmbase/swarmbase) is the best source.
+Swarmbase is an alpha project. APIs and behavior may change, data-loss risks remain, and documentation should distinguish implemented primitives from behavior verified end to end. Contributions that improve evidence, tests, and honest capability boundaries are especially valuable.
+
+## Choose the right channel
+
+- Use [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions) for questions, use cases, design exploration, and ideas that are not yet actionable work.
+- Use [GitHub Issues](https://github.com/swarmbase/swarmbase/issues) for reproducible bugs and scoped, actionable work. Include versions, reproduction steps, expected behavior, actual behavior, and relevant sanitized logs.
+- Read the [contributing guide](contributing/) before preparing a pull request.
+- See [help wanted](help-wanted/) for current technical gaps. The issue tracker may not contain curated beginner tasks.
+
+Maintainers review contributions as availability permits. There is no response or review-time SLA.
+
+## Security reports
+
+If you suspect a vulnerability, open this repository's **Security** tab and use GitHub private vulnerability reporting. Never disclose suspected vulnerabilities in public issues or discussions. Avoid including secrets, private keys, document keys, credentials, or sensitive user data in any report or log.
+
+## Evidence standards
+
+State exactly what a change or test demonstrates. A unit test for a cryptographic or CRDT primitive does not by itself prove browser interoperability, persistence, multi-peer convergence, invitation acceptance, revocation under attack, or production suitability. Use the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) as the current evidence map.
+
+The root `LICENSE` is MIT, while package manifests currently declare ISC. That metadata must be reconciled before package publication.
