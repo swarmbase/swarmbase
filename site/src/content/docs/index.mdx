@@ -1,18 +1,18 @@
 ---
-title: Swarmbase
-description: An encrypted, serverless, local-first document database that syncs browser to browser.
+title: Encrypted local-first database
+description: Swarmbase is alpha software for encrypted local-first documents synchronized over peer-to-peer networks.
 template: splash
 hero:
-  title: The database that syncs browser to browser
+  title: Local-first documents that sync peer to peer
   tagline: >-
-    Swarmbase is an open-source, end-to-end-encrypted, local-first document
-    database. Conflict-free collaboration over libp2p and IPFS — no backend
-    required.
+    Swarmbase is an open-source TypeScript toolkit for encrypted CRDT documents.
+    Build collaborative browser applications without operating an application
+    database server. Alpha software — ready to explore, not yet production-ready.
   image:
     file: ../../assets/logo.svg
   actions:
-    - text: Get started
-      link: ./getting-started/quick-start/
+    - text: Explore examples
+      link: https://github.com/swarmbase/swarmbase/tree/main/examples
       icon: rocket
     - text: Star on GitHub
       link: https://github.com/swarmbase/swarmbase
@@ -22,98 +22,98 @@ hero:
 
 import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="Alpha software, honestly labeled">
+  Swarmbase is under active development. It is suitable for experiments,
+  prototypes, and learning about local-first systems, but not yet for production
+  or irreplaceable data. See the current
+  [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md)
+  before choosing it for a project.
+</Aside>
+
 <CardGrid>
   <Card title="Local-first" icon="laptop">
-    Reads and writes hit local storage first, so your UI is instant and works
-    offline. Peers sync opportunistically whenever they can reach each other.
+    Changes apply to the local CRDT replica immediately. Peers exchange updates
+    when they can reach one another, while persistence and restart recovery
+    continue to mature.
   </Card>
-  <Card title="End-to-end encrypted" icon="seti:lock">
-    Documents are encrypted with AES-GCM and guarded by access control lists.
-    Untrusted peers can relay and cache your data without ever reading it.
+  <Card title="Encrypted by default" icon="seti:lock">
+    Swarmbase signs changes and encrypts document traffic with AES-GCM by
+    default. Relays and remote stores can carry ciphertext without receiving
+    document plaintext.
   </Card>
-  <Card title="No backend" icon="setting">
-    Peers discover each other over libp2p and exchange changes via GossipSub.
-    The only infrastructure is a tiny relay node that helps browsers behind
-    NAT find each other.
+  <Card title="No application database server" icon="setting">
+    Helia and libp2p provide storage and peer-to-peer transport. Browser
+    deployments may still use bootstrap peers, STUN/TURN, Circuit Relay, or
+    remote pinning infrastructure.
   </Card>
-  <Card title="Conflict-free" icon="puzzle">
-    Documents are CRDTs (Yjs first, Automerge supported), so concurrent edits
-    merge without a consensus protocol — strong eventual consistency, by
-    construction.
+  <Card title="CRDT adapters" icon="puzzle">
+    Use Yjs or Automerge documents. Replicas are designed to converge after
+    valid updates are delivered, without a central consensus service.
   </Card>
 </CardGrid>
 
-## Collaboration in a few lines
+## A Yjs document in a few lines
 
-Open a document, subscribe to changes, edit it locally, and invite
-collaborators by public key — replication and encryption are handled for you.
+Once a Swarmbase node is configured with the Yjs adapter, document changes use
+Yjs shared types directly:
 
 ```ts
-const doc = swarm.doc('/todo-list');
-await doc.open();
+const todos = swarm.doc('/todo-list');
+if (!todos) throw new Error('Swarmbase is not initialized');
 
-doc.subscribe('ui', (todos) => render(todos));
+await todos.open();
 
-await doc.change((todos) => {
-  todos.items.push('Ship it');
+todos.subscribe('ui', (state) => {
+  render(state.getArray<string>('items').toArray());
 });
 
-// Invite a collaborator: their key can now write changes.
-await doc.addWriter(alicePublicKey);
+await todos.change((state) => {
+  state.getArray<string>('items').push(['Ship it']);
+});
 ```
 
-The full setup — providers, keys, and connecting to a swarm — takes a few
-more lines and is covered step by step in the
-[quick start](./getting-started/quick-start/).
-
-<Aside type="caution" title="Alpha software, honestly labeled">
-  Swarmbase is in active alpha development. It is great for prototypes,
-  side projects, and exploring local-first architecture — and not yet
-  appropriate for production or heavy usage. Read the
-  [current limitations](./concepts/limitations/) before betting on it; they
-  are stated plainly, not buried.
-</Aside>
+The repository contains runnable browser, wiki, and password-manager examples
+that show provider setup, identity creation, and connecting peers.
 
 ## How it works
 
-1. **Edit locally.** Changes apply to your local CRDT replica immediately —
-   no round trip, no spinner.
-2. **Sign, encrypt, gossip.** Each change is signed by your key, encrypted
-   for current readers, and propagated to connected peers over GossipSub.
-3. **Converge everywhere.** Peers verify, decrypt, and merge changes into
-   their replicas. CRDT semantics guarantee every replica reaches the same
-   state — even after going offline and back.
+1. **Edit locally.** A provider applies each change to the local CRDT replica.
+2. **Sign, encrypt, publish.** By default, Swarmbase signs the sync message,
+   encrypts the serialized envelope, and publishes it to connected peers.
+3. **Verify and merge.** Recipients verify, decrypt, and apply valid updates.
+   CRDT semantics are designed to reconcile concurrent edits after delivery.
 
-Want the theory — CRDTs, strong eventual consistency, the security model, and
-the trade-offs we made? Start with [why local-first](./concepts/local-first/).
+Swarmbase currently verifies real encrypted document retrieval across a
+Circuit Relay boundary in CI. Broader partition/rejoin, persistence, and
+production deployment coverage remains active work.
 
 ## Built in the open
 
-Swarmbase is young, and that is exactly why contributing matters right now:
-the core API, encryption model, and tooling are all still shapeable. We want
-your issues, your PRs, and your weird network topologies.
+Swarmbase is young enough that careful bug reports, API feedback, documentation,
+and unusual network tests can materially shape the project.
 
 <CardGrid>
-  <Card title="Contribute" icon="pencil">
-    Set up a dev environment and land your first PR — the
-    [contributing guide](./community/contributing/) takes you from clone to
-    green tests.
+  <Card title="Run the examples" icon="rocket">
+    Start with the
+    [browser applications](https://github.com/swarmbase/swarmbase/tree/main/examples)
+    and inspect the matching Playwright acceptance tests.
   </Card>
-  <Card title="Help wanted" icon="magnifier">
-    See [what we need help with](./community/help-wanted/) — from encryption
-    and pinning tooling to docs and testing on unusual networks.
+  <Card title="Join the project" icon="pencil">
+    Browse [open issues](https://github.com/swarmbase/swarmbase/issues) or ask a
+    question in [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions).
   </Card>
 </CardGrid>
 
-<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem;">
-  <LinkButton href="./getting-started/quick-start/" icon="rocket">
-    Build something with Swarmbase
-  </LinkButton>
-  <LinkButton
-    href="https://github.com/swarmbase/swarmbase"
-    icon="star"
-    variant="secondary"
-  >
-    Star the project on GitHub
-  </LinkButton>
-</div>
+<LinkButton
+  href="https://github.com/swarmbase/swarmbase/tree/main/examples"
+  icon="rocket"
+>
+  Explore runnable examples
+</LinkButton>{' '}
+<LinkButton
+  href="https://github.com/swarmbase/swarmbase"
+  icon="star"
+  variant="secondary"
+>
+  View Swarmbase on GitHub
+</LinkButton>
