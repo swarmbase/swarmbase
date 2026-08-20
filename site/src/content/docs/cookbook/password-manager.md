@@ -50,8 +50,8 @@ const kemKeyPair = await crypto.subtle.generateKey(
   ['deriveBits'],
 );
 
-await documentRef.setKemKeyPair(kemKeyPair);
-const kemRaw = documentRef.getKemPublicKeyRaw();
+await recipientDocumentRef.setKemKeyPair(kemKeyPair);
+const recipientKemRaw = recipientDocumentRef.getKemPublicKeyRaw();
 
 await ownerDocumentRef.addReader(recipientIdentityPublicKey, recipientKemRaw);
 await ownerDocumentRef.addWriter(recipientIdentityPublicKey);

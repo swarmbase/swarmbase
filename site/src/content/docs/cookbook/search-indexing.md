@@ -5,7 +5,7 @@ description: Use tested local index primitives and assess incomplete blind-index
 
 ## Local materialized indexes
 
-**Status: Runnable from source.** `IndexManager`, memory/IndexedDB storage, field extraction, and React query bindings have focused tests. They index decrypted documents already available to the local application; they are not a network crawler.
+**Status: Runnable from source for the local manager APIs.** `IndexManager`, memory/IndexedDB storage, and field extraction have focused tests. React query bindings are exported, but their effects and cleanup are not render-tested; the current React tests exercise backing manager primitives. These APIs index decrypted documents already available to the local application; they are not a network crawler.
 
 Packages are unpublished. Use the repository workspace after following the [quick start](../../getting-started/quick-start/).
 
@@ -50,12 +50,12 @@ const result = await manager.query({
 Do not call the query hook in the same component before asynchronous definitions are ready. Gate a child component instead:
 
 ```tsx
-function SearchRoot({ manager }: { manager: IndexManager<unknown> }) {
+function SearchRoot({ manager }: { manager: IndexManager<Y.Doc> }) {
   const ready = useDefineIndexes(manager, [definition]);
   return ready ? <ReadySearch manager={manager} /> : <p>Preparing index…</p>;
 }
 
-function ReadySearch({ manager }: { manager: IndexManager<unknown> }) {
+function ReadySearch({ manager }: { manager: IndexManager<Y.Doc> }) {
   const result = useIndexQuery(manager, {
     indexName: 'articles',
     filters: [{ path: 'author', operator: 'eq', value: 'Alice' }],
