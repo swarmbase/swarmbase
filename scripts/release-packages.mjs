@@ -9,6 +9,9 @@ export const packages = [
 
 export const strictSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
+export const stagingPattern = /^[a-z][a-z0-9._-]*$/;
+export const RESERVED_TAGS = ['latest', 'next'];
+
 export function assertStrictSemver(version) {
   if (typeof version !== 'string' || !strictSemver.test(version)) {
     throw new Error(`Invalid strict SemVer: ${String(version)}`);

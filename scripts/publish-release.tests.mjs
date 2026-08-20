@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertStrictSemver, packages } from './release-packages.mjs';
+import { assertStrictSemver, packages, stagingPattern, RESERVED_TAGS } from './release-packages.mjs';
 
 test('staging dist-tag rejects latest and next', () => {
-  const stagingPattern = /^[a-z][a-z0-9._-]*$/;
   for (const tag of ['latest', 'next', 'Latest']) {
-    assert.ok(!stagingPattern.test(tag) || ['latest', 'next'].includes(tag) === true, `${tag} should not be a valid staging tag`);
+    assert.ok(!stagingPattern.test(tag) || RESERVED_TAGS.includes(tag), `${tag} should not be a valid staging tag`);
   }
   for (const tag of ['release-1', 'tmp.abc', 'swarmbase-stage']) {
-    assert.ok(stagingPattern.test(tag) && !['latest', 'next'].includes(tag), `${tag} should be an allowed staging tag`);
+    assert.ok(stagingPattern.test(tag) && !RESERVED_TAGS.includes(tag), `${tag} should be an allowed staging tag`);
   }
 });
 

@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
-import { assertStrictSemver, packages } from './release-packages.mjs';
+import { assertStrictSemver, packages, stagingPattern, RESERVED_TAGS } from './release-packages.mjs';
 
 const args = process.argv.slice(2);
 if (args.length !== 3) throw new Error('Usage: node scripts/publish-release.mjs <artifact-directory> <staging-tag> <target-tag>');
 const [artifactDirectory, stagingTag, targetTag] = args;
-if (!/^[a-z][a-z0-9._-]*$/.test(stagingTag) || ['latest', 'next'].includes(stagingTag)) throw new Error('Invalid staging dist-tag');
-if (!['latest', 'next'].includes(targetTag)) throw new Error('Target dist-tag must be latest or next');
+if (!stagingPattern.test(stagingTag) || RESERVED_TAGS.includes(stagingTag)) throw new Error('Invalid staging dist-tag');
+if (!RESERVED_TAGS.includes(targetTag)) throw new Error('Target dist-tag must be latest or next');
 if (!process.env.NODE_AUTH_TOKEN) throw new Error('NODE_AUTH_TOKEN is required');
 
 const release = JSON.parse(await readFile(resolve(artifactDirectory, 'release-manifest.json'), 'utf8'));
