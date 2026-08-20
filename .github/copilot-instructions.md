@@ -67,11 +67,11 @@ This installs all dependencies for all workspaces.
 Build a specific workspace:
 
 ```bash
-yarn workspace @collabswarm/collabswarm tsc
-yarn workspace @collabswarm/collabswarm-automerge tsc
-yarn workspace @collabswarm/collabswarm-yjs tsc
-yarn workspace @collabswarm/collabswarm-react tsc
-yarn workspace @collabswarm/collabswarm-redux tsc
+yarn workspace @swarmbase/collabswarm tsc
+yarn workspace @swarmbase/collabswarm-automerge tsc
+yarn workspace @swarmbase/collabswarm-yjs tsc
+yarn workspace @swarmbase/collabswarm-react tsc
+yarn workspace @swarmbase/collabswarm-redux tsc
 ```
 
 ### Testing
@@ -79,7 +79,7 @@ yarn workspace @collabswarm/collabswarm-redux tsc
 Run tests for a specific workspace:
 
 ```bash
-yarn workspace @collabswarm/collabswarm test
+yarn workspace @swarmbase/collabswarm test
 ```
 
 **Testing Philosophy**: Use table-driven testing with Jest for better coverage and maintainability. See `notes/testing.md` for reference.
@@ -98,7 +98,7 @@ docker-compose up
 Generate TypeDoc documentation:
 
 ```bash
-yarn workspace @collabswarm/collabswarm doc
+yarn workspace @swarmbase/collabswarm doc
 ```
 
 ## Code Style and Conventions
@@ -359,7 +359,7 @@ When implementing new protocols:
 libp2p has debug logging:
 
 ```bash
-DEBUG=libp2p:* yarn workspace @collabswarm/browser-test start
+DEBUG=libp2p:* yarn workspace @swarmbase/browser-test start
 ```
 
 ### Common Issues
@@ -419,20 +419,20 @@ Use multiple browser windows/tabs to test peer discovery and sync. For better te
 yarn install
 
 # Build specific package
-yarn workspace @collabswarm/collabswarm tsc
+yarn workspace @swarmbase/collabswarm tsc
 
 # Run tests
-yarn workspace @collabswarm/collabswarm test
+yarn workspace @swarmbase/collabswarm test
 
 # Generate docs
-yarn workspace @collabswarm/collabswarm doc
+yarn workspace @swarmbase/collabswarm doc
 
 # Run example via Docker
 docker-compose build
 docker-compose up
 
 # Watch mode for development
-yarn workspace @collabswarm/collabswarm tsc-watch
+yarn workspace @swarmbase/collabswarm tsc-watch
 ```
 
 ## When Contributing Code

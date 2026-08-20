@@ -45,7 +45,7 @@ services:
         VITE_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
         export VITE_RELAY_MULTIADDR
         echo "Relay multiaddr: $$VITE_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/browser-test start --host 0.0.0.0 --port 3000
+        exec yarn workspace @swarmbase/browser-test start --host 0.0.0.0 --port 3000
 
   wiki-swarm:
     build:
@@ -75,7 +75,7 @@ services:
         VITE_RELAY_MULTIADDR=$$(cat /shared/relay-info.json | sed -n 's/.*"wsMultiaddr"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
         export VITE_RELAY_MULTIADDR
         echo "Relay multiaddr: $$VITE_RELAY_MULTIADDR"
-        exec yarn workspace @collabswarm/wiki-swarm start --host 0.0.0.0 --port 3000
+        exec yarn workspace @swarmbase/wiki-swarm start --host 0.0.0.0 --port 3000
 
   node:
     build:

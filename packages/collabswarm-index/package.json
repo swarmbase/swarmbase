@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/collabswarm-index",
+  "name": "@swarmbase/collabswarm-index",
   "description": "Distributed indexing and query engine for SwarmDB",
   "version": "0.1.0",
   "repository": {
@@ -42,7 +42,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@collabswarm/collabswarm": "workspace:packages/collabswarm",
+    "@swarmbase/collabswarm": "workspace:packages/collabswarm",
     "idb": "^8.0.0"
   },
   "peerDependencies": {
@@ -88,7 +88,7 @@
     ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1",
-      "^@collabswarm/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
+      "^@swarmbase/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
       "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/gossipsub$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.cjs",

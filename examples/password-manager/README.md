@@ -13,13 +13,13 @@ First, setup node modules and typescript:
 
 ```sh
 yarn install
-yarn workspace @collabswarm/password-manager build
+yarn workspace @swarmbase/password-manager build
 ```
 
 Then, start a local web server:
 
 ```sh
-yarn workspace @collabswarm/password-manager start
+yarn workspace @swarmbase/password-manager start
 ```
 
 _Make sure to 'allow' network connections if asked._

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Table, Row, Container } from 'react-bootstrap';
 import { YjsCollabswarm } from './utils';
-import { serializeKey } from '@collabswarm/collabswarm-yjs';
+import { serializeKey } from '@swarmbase/collabswarm-yjs';
 
 function KeyCell({children}: {children?: React.ReactNode}) {
   return <td>

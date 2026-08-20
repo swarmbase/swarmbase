@@ -13,14 +13,14 @@ import {
   openDocument,
   openDocumentAsync,
   syncDocument,
-} from '@collabswarm/collabswarm-redux';
+} from '@swarmbase/collabswarm-redux';
 import {
   AutomergeACLProvider,
   AutomergeJSONSerializer,
   AutomergeKeychainProvider,
   AutomergeProvider,
-} from '@collabswarm/collabswarm-automerge';
-import { SubtleCrypto } from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm-automerge';
+import { SubtleCrypto } from '@swarmbase/collabswarm';
 import { thunk } from 'redux-thunk';
 import { AutomergeSwarmActions, AutomergeSwarmState } from './utils';
 

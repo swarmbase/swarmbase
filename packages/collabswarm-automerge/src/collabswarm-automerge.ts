@@ -29,8 +29,8 @@ import {
   LRUCache,
   serializeChangeNodeForJSON,
   TIPS_HASH_LENGTH,
-} from '@collabswarm/collabswarm';
-import { validateChangeBlockMetadata } from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
+import { validateChangeBlockMetadata } from '@swarmbase/collabswarm';
 import { Base64 } from 'js-base64';
 
 export type AutomergeSwarmDocumentChangeHandler<T = any> =

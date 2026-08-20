@@ -8,7 +8,7 @@ import {
   CollabswarmConfig,
   defaultConfig,
   defaultBootstrapConfig,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 
 /**
  * Captures the current call stack for debugging when in development mode.

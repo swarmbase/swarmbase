@@ -1396,8 +1396,8 @@ function migrateFlatten(doc: Y.Doc): void {
 SwarmDB's `YjsProvider` wraps `Y.Doc` operations. Your schema defines the structure of each document's `Y.Doc`:
 
 ```typescript
-import { Collabswarm, CollabswarmDocument, SubtleCrypto } from '@collabswarm/collabswarm';
-import { YjsProvider, YjsJSONSerializer, YjsACLProvider, YjsKeychainProvider } from '@collabswarm/collabswarm-yjs';
+import { Collabswarm, CollabswarmDocument, SubtleCrypto } from '@swarmbase/collabswarm';
+import { YjsProvider, YjsJSONSerializer, YjsACLProvider, YjsKeychainProvider } from '@swarmbase/collabswarm-yjs';
 import * as Y from 'yjs';
 
 // Initialize SwarmDB with Yjs provider

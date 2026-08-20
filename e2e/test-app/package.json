@@ -1,5 +1,5 @@
 {
-  "name": "@collabswarm/integration-test-app",
+  "name": "@swarmbase/integration-test-app",
   "version": "0.1.0",
   "private": true,
   "type": "module",

@@ -2,8 +2,8 @@
  * Entry point for running all core package benchmarks.
  *
  * Usage:
- *   yarn workspace @collabswarm/collabswarm benchmark
- *   yarn workspace @collabswarm/collabswarm benchmark --iterations 500
+ *   yarn workspace @swarmbase/collabswarm benchmark
+ *   yarn workspace @swarmbase/collabswarm benchmark --iterations 500
  */
 import * as fs from 'fs';
 import { join } from 'path';

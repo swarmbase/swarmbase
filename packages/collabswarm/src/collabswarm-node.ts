@@ -8,7 +8,7 @@
  * barrel export in `index.ts` to keep the main entry point browser-compatible.
  *
  * Import from the dedicated `/node` subpath export when running in Node.js:
- *   import { CollabswarmNode, defaultNodeConfig } from '@collabswarm/collabswarm/node';
+ *   import { CollabswarmNode, defaultNodeConfig } from '@swarmbase/collabswarm/node';
  */
 import * as fs from 'fs';
 import {

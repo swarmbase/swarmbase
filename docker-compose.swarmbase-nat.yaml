@@ -25,7 +25,7 @@ services:
         PEER_ID=$$(sed -n 's/.*"peerId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /shared/relay-info.json)
         export VITE_RELAY_MULTIADDR="/dns4/relay/tcp/9001/ws/p2p/$$PEER_ID"
         export VITE_CROSS_NAT_TEST=1
-        exec yarn workspace @collabswarm/browser-test start --host 0.0.0.0 --port 3000
+        exec yarn workspace @swarmbase/browser-test start --host 0.0.0.0 --port 3000
 
   app-b:
     <<: *app

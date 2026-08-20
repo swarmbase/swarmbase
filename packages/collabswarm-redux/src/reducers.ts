@@ -19,7 +19,7 @@ import {
   KeychainProvider,
   LoadMessageSerializer,
   SyncMessageSerializer,
-} from '@collabswarm/collabswarm';
+} from '@swarmbase/collabswarm';
 
 export interface CollabswarmDocumentState<
   DocType,

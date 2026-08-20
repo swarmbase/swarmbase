@@ -1,4 +1,4 @@
-import { useCollabswarmDocumentState } from '@collabswarm/collabswarm-react';
+import { useCollabswarmDocumentState } from '@swarmbase/collabswarm-react';
 import { Form } from 'react-bootstrap';
 import { PermissionsTable } from './PermissionsTable';
 import { YjsCollabswarm } from './utils';
