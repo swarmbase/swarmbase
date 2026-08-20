@@ -3300,8 +3300,8 @@ export class CollabswarmDocument<
    *   `false` if no peer could provide the document -- this is ambiguous: it
    *   may mean the document is brand new (no peers have it) OR that all peers
    *   failed to respond, failed to decrypt, or failed signature verification.
-   *   Note: `open()` treats `false` as "new document" and initializes a fresh
-   *   document with the current user as writer and a new encryption key.
+   *   Note: `open()` treats `false` as "new document" only when no existing
+   *   document state has already been loaded.
    * @throws {LoadQuorumFailedError} When the initial-load quorum gate is
    *   enabled and fewer than `loadQuorumQ` peers agreed on the same tip
    *   hash within the configured timeout. Callers can `instanceof`-check
@@ -3554,7 +3554,7 @@ export class CollabswarmDocument<
       // An explicitly disabled compaction policy cannot produce snapshots in
       // this swarm. Avoid an empty request/response round-trip—especially on
       // limited circuit-relay connections—before the real document load.
-      if (this.swarm.config?.compaction?.enabled !== false) {
+      if (this._compactionConfig.enabled) {
         try {
           console.log('Trying snapshot-load from peer:', peer.toString());
           // dialProtocol returns a libp2p v3 `Stream` (event-driven, with a
@@ -3728,10 +3728,11 @@ export class CollabswarmDocument<
    * were missed should call `load()` again after `open()` resolves to re-sync
    * the latest state from a peer.
    *
-   * @returns `false` if `load()` returned `false` -- which `open()` treats as
-   *   "new document" by adding the current user as a writer and generating an
-   *   initial encryption key. Note that `load()` returning `false` is ambiguous:
-   *   it may also mean all peers failed (see `load()` docs for details).
+   * @returns `false` when `load()` returned `false` and no existing state had
+   *   already been loaded. In that case `open()` treats the document as new by
+   *   adding the current user as a writer and generating an initial encryption
+   *   key. Note that `load()` returning `false` is ambiguous: it may also mean
+   *   all peers failed (see `load()` docs for details).
    * @throws {Error} If `validateDocumentPath` is configured and rejects the path
    *   for a new document. Validation runs before subscribing to pubsub or
    *   registering protocol handlers, so no cleanup is needed on rejection.
@@ -3742,7 +3743,8 @@ export class CollabswarmDocument<
     this._topic = this._computeTopic();
 
     // Load initial document from peers via direct dial (no subscription needed).
-    const isExisting = await this.load();
+    const loadedFromPeer = await this.load();
+    const isExisting = loadedFromPeer || this._hashes.size > 0;
 
     // Validate document path BEFORE subscribing to pubsub or registering
     // protocol handlers. This prevents temporarily joining an unauthorized topic.

@@ -16,6 +16,12 @@ const logger: Middleware = store => next => action => {
   return result;
 }
 
+if (!window.crypto?.subtle) {
+  const message = 'Web Crypto requires HTTPS or localhost';
+  console.warn(message);
+  throw new Error(message);
+}
+
 const userKeyPair = (await crypto.subtle.generateKey(
   { name: 'ECDSA', namedCurve: 'P-384' },
   true,

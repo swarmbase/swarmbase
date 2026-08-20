@@ -65,5 +65,7 @@ RUN chmod +x /app/wait-for-file.sh
 RUN dos2unix /app/wait-for-file.sh
 
 WORKDIR /app
+RUN chown -R node:node /app
+USER node
 # CMD collabswarm-automerge-d
 CMD yarn workspace @collabswarm/collabswarm-automerge run collabswarm-automerge-d

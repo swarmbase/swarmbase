@@ -106,17 +106,20 @@ if (injectedIdentity) {
         (document) => store.dispatch(syncDocument(path, document)),
         'remote',
       );
-      let loaded = await documentRef.open();
+      let loaded = false;
       // Circuit-relay reservations and streams can be renewed while the two
       // peers connect. Do not let a transient closed stream turn this test
       // into a false-positive "new document" on the restoring computer.
       for (let attempt = 0; !loaded && attempt < 10; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
         loaded = await documentRef.load();
       }
       if (!loaded) {
         throw new Error(`No peer served the existing document: ${path}`);
       }
+      await documentRef.open();
       store.dispatch(openDocument(path, documentRef));
       return documentRef;
     },
@@ -135,7 +138,8 @@ if (injectedIdentity) {
         return store.getState().node?.libp2p.getMultiaddrs().map(
           (address: { toString(): string }) => address.toString(),
         ) ?? [];
-      } catch {
+      } catch (error) {
+        console.warn('Unable to read Swarmbase peer addresses', error);
         return [];
       }
     },
@@ -146,7 +150,8 @@ if (injectedIdentity) {
         return relay && peerId
           ? `${relay}/p2p-circuit/p2p/${peerId}`
           : undefined;
-      } catch {
+      } catch (error) {
+        console.warn('Unable to construct the Swarmbase circuit address', error);
         return undefined;
       }
     },

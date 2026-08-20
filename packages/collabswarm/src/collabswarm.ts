@@ -37,7 +37,6 @@ import {
 import {
   readFirstDeserializable,
   readPathPrefixedProtocolHeader,
-  readUint8Iterable,
 } from './utils.js';
 import { wrapStream } from './stream-adapter.js';
 import {

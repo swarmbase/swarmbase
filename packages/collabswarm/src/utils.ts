@@ -209,6 +209,7 @@ export async function readFirstDeserializable<T>(
   maxSize?: number,
 ): Promise<T> {
   let assembled = new Uint8Array(0);
+  let length = 0;
   let lastError: unknown = new Error('Stream ended before a complete message arrived');
 
   for await (const chunk of iterable) {
@@ -218,19 +219,31 @@ export async function readFirstDeserializable<T>(
       : chunk instanceof Uint8Array
         ? chunk
         : chunk.subarray();
-    const next = new Uint8Array(assembled.length + bytes.length);
-    next.set(assembled);
-    next.set(bytes, assembled.length);
-    assembled = next;
+    const nextLength = length + bytes.length;
 
-    if (maxSize !== undefined && assembled.length > maxSize) {
+    if (maxSize !== undefined && nextLength > maxSize) {
       throw new RangeError(
         `Stream exceeded maximum allowed size of ${maxSize} bytes`,
       );
     }
 
+    if (nextLength > assembled.length) {
+      const grownCapacity = Math.max(
+        nextLength,
+        Math.max(1, assembled.length * 2),
+      );
+      const nextCapacity = maxSize === undefined
+        ? grownCapacity
+        : Math.min(grownCapacity, maxSize);
+      const next = new Uint8Array(nextCapacity);
+      next.set(assembled.subarray(0, length));
+      assembled = next;
+    }
+    assembled.set(bytes, length);
+    length = nextLength;
+
     try {
-      return deserialize(assembled);
+      return deserialize(assembled.subarray(0, length));
     } catch (error) {
       lastError = error;
     }

@@ -2,11 +2,18 @@ import { describe, expect, test } from '@jest/globals';
 import { hasBootstrapPeers } from './bootstrap-config';
 
 describe('bootstrap configuration', () => {
-  test('omits bootstrap discovery for a valid standalone swarm', () => {
-    expect(hasBootstrapPeers({ list: [] })).toBe(false);
-  });
-
-  test('enables bootstrap discovery when an address is configured', () => {
-    expect(hasBootstrapPeers({ list: ['/ip4/127.0.0.1/tcp/9001/ws'] })).toBe(true);
+  test.each<{ name: string; list: string[]; expected: boolean }>([
+    {
+      name: 'omits bootstrap discovery for a valid standalone swarm',
+      list: [],
+      expected: false,
+    },
+    {
+      name: 'enables bootstrap discovery when an address is configured',
+      list: ['/ip4/127.0.0.1/tcp/9001/ws'],
+      expected: true,
+    },
+  ])('$name', ({ list, expected }) => {
+    expect(hasBootstrapPeers({ list })).toBe(expected);
   });
 });

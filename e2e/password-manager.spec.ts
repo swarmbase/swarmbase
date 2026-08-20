@@ -14,7 +14,7 @@ test('password-manager loads the packaged Swarmbase stack without runtime errors
   await page.goto('/');
   await expect(page).toHaveTitle('Swarmbase Password Manager');
   await page.waitForTimeout(1_000);
-  expect(errors, 'application startup errors').toEqual([]);
   await expect(page.locator('#root')).not.toBeEmpty();
   await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
+  expect(errors, 'application startup errors').toEqual([]);
 });

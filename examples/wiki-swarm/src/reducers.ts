@@ -31,11 +31,13 @@ export function wikiAppReducer(
   }
 }
 
+/** State managed by the wiki application and its Automerge integration. */
 export type RootState = {
   automergeSwarm: AutomergeSwarmState<WikiSwarmArticle>;
   wikiApp: WikiAppState;
 };
 
+/** Create the wiki reducer using the supplied signing key pair. */
 export const createRootReducer = (
   privateKey: CryptoKey,
   publicKey: CryptoKey,

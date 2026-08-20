@@ -42,7 +42,11 @@ export async function openLegacyHeliaStores(
 export async function closeLegacyHeliaStores(
   stores: OpenableStore[],
 ): Promise<void> {
-  await Promise.allSettled(
-    [...stores].reverse().map(async (store) => store.close?.()),
-  );
+  for (const store of [...stores].reverse()) {
+    try {
+      await store.close?.();
+    } catch {
+      continue;
+    }
+  }
 }
