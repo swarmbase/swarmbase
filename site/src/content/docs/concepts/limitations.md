@@ -15,7 +15,7 @@ Swarmbase is **alpha software**. It has no independent security audit, productio
 
 - Offline changes apply only to an already-loaded replica with the necessary local state and keys.
 - A change promise includes authorization, storage, optional signing, encryption, publication, handlers, and possible compaction; it is not merely an in-memory UI edit.
-- There is no durable outbox, publish acknowledgement, automatic retry, or guaranteed automatic reconnect. Failed commits can leave provider-dependent local state, especially with in-place Yjs mutation.
+- There is no durable outbox, publish acknowledgement, automatic retry, or guaranteed automatic reconnect. A direct `change()` can reject after leaving local Automerge or Yjs state modified. Transaction rollback restores immutable document references but is only best effort for in-place Yjs mutation.
 - Browser defaults use IndexedDB-backed stores, but complete document recovery after close/restart is not verified. Browsers may evict or clear storage.
 - Recovery requires discoverable CIDs/graph state, retained blocks, epoch keys, identity and KEM material, compatible configuration, and reachable peers. Loss of keys or identity may be unrecoverable.
 

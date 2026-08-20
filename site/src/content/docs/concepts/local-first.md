@@ -13,7 +13,7 @@ Swarmbase uses [CRDT adapters](../crdts/) to merge committed changes, [libp2p](.
 
 ## Implemented and default behavior
 
-An already-loaded replica can be read and changed without a working peer connection. A committed `change()` or transaction updates the local CRDT, but its returned promise also covers authorization, block storage, signing when enabled, encryption, publication, handlers, and possible compaction. Publication failure can therefore reject the operation after local mutation; rollback is provider-dependent and is only best effort for in-place Yjs state.
+An already-loaded replica can be read and changed without a working peer connection. A committed `change()` or transaction updates the local CRDT, but its returned promise also covers authorization, block storage, signing when enabled, encryption, publication, handlers, and possible compaction. A direct `change()` mutates or replaces the local document before that later work and has no rollback path, so rejection can leave the local mutation for both Automerge and Yjs. Transaction rollback restores a saved document reference for immutable providers such as Automerge, but remains best effort for in-place Yjs state.
 
 There is no durable outbox, delivery acknowledgement, or retry queue for unpublished changes. A later peer connection does not by itself guarantee that every missed publication is replayed, and Swarmbase does not promise automatic reconnection. Applications must expose failures and design explicit recovery or resynchronization.
 
