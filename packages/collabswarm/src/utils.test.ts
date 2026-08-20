@@ -1,4 +1,4 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 import BufferList from 'bl';
 import {
   shuffleArray,
@@ -258,6 +258,20 @@ describe('readFirstDeserializable', () => {
     await expect(
       readFirstDeserializable(oversizedSource(), deserialize, 20),
     ).rejects.toThrow(RangeError);
+  });
+
+  test('rejects an oversized BufferList before copying it', async () => {
+    const chunk = new BufferList(Buffer.alloc(1024));
+    const slice = jest.spyOn(chunk, 'slice');
+
+    async function* oversizedSource() {
+      yield chunk;
+    }
+
+    await expect(
+      readFirstDeserializable(oversizedSource(), deserialize, 20),
+    ).rejects.toThrow(RangeError);
+    expect(slice).not.toHaveBeenCalled();
   });
 
   test('surfaces the deserializer error when the stream ends incomplete', async () => {

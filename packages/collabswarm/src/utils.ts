@@ -214,6 +214,11 @@ export async function readFirstDeserializable<T>(
 
   for await (const chunk of iterable) {
     if (!chunk) continue;
+    if (maxSize !== undefined && length + chunk.length > maxSize) {
+      throw new RangeError(
+        `Stream exceeded maximum allowed size of ${maxSize} bytes`,
+      );
+    }
     const bytes = isBufferList(chunk)
       ? new Uint8Array(chunk.slice())
       : chunk instanceof Uint8Array

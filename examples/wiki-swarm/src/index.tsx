@@ -16,33 +16,33 @@ const logger: Middleware = store => next => action => {
   return result;
 }
 
-if (!window.crypto?.subtle) {
-  const message = 'Web Crypto requires HTTPS or localhost';
-  console.warn(message);
-  throw new Error(message);
-}
-
-const userKeyPair = (await crypto.subtle.generateKey(
-  { name: 'ECDSA', namedCurve: 'P-384' },
-  true,
-  ['sign', 'verify'],
-)) as CryptoKeyPair;
-const store = createStore(
-  createRootReducer(userKeyPair.privateKey, userKeyPair.publicKey),
-  applyMiddleware(thunk, logger),
-);
-
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Missing #root element');
 }
 
-createRoot(rootElement).render(
-  <Provider store={store}>
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>
-  </Provider>,
-);
+if (!window.crypto?.subtle) {
+  const message = 'Web Crypto requires HTTPS or localhost';
+  console.warn(message);
+  rootElement.textContent = message;
+} else {
+  const userKeyPair = (await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-384' },
+    true,
+    ['sign', 'verify'],
+  )) as CryptoKeyPair;
+  const store = createStore(
+    createRootReducer(userKeyPair.privateKey, userKeyPair.publicKey),
+    applyMiddleware(thunk, logger),
+  );
+
+  createRoot(rootElement).render(
+    <Provider store={store}>
+      <React.StrictMode>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </React.StrictMode>
+    </Provider>,
+  );
+}
