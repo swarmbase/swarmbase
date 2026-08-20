@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { hasBootstrapPeers } from './bootstrap-config';
+import { hasBootstrapPeers } from './bootstrap-config.js';
 
 describe('bootstrap configuration', () => {
   test.each<{ name: string; list: string[]; expected: boolean }>([

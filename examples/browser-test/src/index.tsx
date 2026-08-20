@@ -50,7 +50,10 @@ declare global {
   }
 }
 
-const injectedIdentity = window.__SWARMBASE_TEST_IDENTITY__;
+const crossNatTest = import.meta.env.VITE_CROSS_NAT_TEST === '1';
+const injectedIdentity = crossNatTest
+  ? window.__SWARMBASE_TEST_IDENTITY__
+  : undefined;
 const userKeyPair = injectedIdentity
   ? {
       privateKey: await crypto.subtle.importKey(
@@ -87,7 +90,7 @@ const store = createStore(
 // Deliberately test-only: Playwright uses this narrow bridge to exercise the
 // real Redux -> Swarmbase -> Automerge path without coupling assertions to
 // jsoneditor's implementation details.
-if (injectedIdentity) {
+if (crossNatTest && injectedIdentity) {
   window.__SWARMBASE_TEST__ = {
     open: (path) => store.dispatch<any>(openDocumentAsync(path)),
     openWithDocumentKey: async (path, saved) => {
