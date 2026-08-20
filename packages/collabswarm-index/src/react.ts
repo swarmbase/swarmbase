@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IndexManager } from './index-manager';
-import { IndexDefinition, QueryOptions, QueryResult } from './types';
+import { IndexManager } from './index-manager.js';
+import { IndexDefinition, QueryOptions, QueryResult } from './types.js';
 
 /**
  * React hook that subscribes to live index query results.
