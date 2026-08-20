@@ -13,7 +13,8 @@
     "site"
   ],
   "resolutions": {
-    "@peculiar/asn1-schema": "^2.6.0"
+    "@peculiar/asn1-schema": "^2.6.0",
+    "uint8arraylist": "^3.0.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2"

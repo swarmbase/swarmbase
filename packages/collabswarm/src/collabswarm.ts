@@ -152,10 +152,7 @@ export class Collabswarm<
     new Map<string, CollabswarmPeersHandler>();
   private _networkStats?: NetworkStats;
 
-  // Whether shared protocol handlers have already been registered via
-  // _registerSharedProtocolHandlers(). Prevents duplicate registration
-  // if initialize() is called more than once.
-  private _sharedHandlersRegistered = false;
+  private _sharedHandlersRegistration: Promise<void> | undefined;
   private _openedLegacyStores: OpenableStore[] = [];
 
   // Registry of open documents keyed by document path. Shared protocol
@@ -275,9 +272,7 @@ export class Collabswarm<
 
     this._config = config;
 
-    // Reset shared handler flag so re-initialization registers handlers on
-    // the new libp2p node instance.
-    this._sharedHandlersRegistered = false;
+    this._sharedHandlersRegistration = undefined;
 
     this._networkStats = config.enableNetworkStats ? new NetworkStats() : undefined;
 
@@ -309,10 +304,6 @@ export class Collabswarm<
       throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
     }
 
-    // In libp2p v2, 'peer:connect'/'peer:disconnect' emit CustomEvent<PeerId>.
-    // event.detail is a PeerId whose toString() returns the peer ID string.
-    // Note: libp2p v3 changed this to emit Connection objects -- this must be
-    // updated if libp2p is upgraded past v2.x.
     this.libp2p.addEventListener('peer:connect', (event) => {
       const peerId = event.detail.toString();
       this._peerIds.push(peerId);
@@ -336,7 +327,7 @@ export class Collabswarm<
     // the appropriate document via the document registry. This replaces
     // per-document protocol handler registration, reducing protocol
     // handler overhead for multi-document applications.
-    this._registerSharedProtocolHandlers();
+    await this._registerSharedProtocolHandlers();
 
     console.log('Helia node initialized:', this._peerId);
   }
@@ -393,11 +384,10 @@ export class Collabswarm<
    * key-update, a 4-byte length-prefixed document path header precedes
    * the encrypted payload.
    */
-  private _registerSharedProtocolHandlers(): void {
-    if (this._sharedHandlersRegistered) {
-      return;
+  private async _registerSharedProtocolHandlers(): Promise<void> {
+    if (this._sharedHandlersRegistration) {
+      return this._sharedHandlersRegistration;
     }
-    this._sharedHandlersRegistered = true;
 
     // Handler implementation for doc-load requests.
     //
@@ -692,12 +682,24 @@ export class Collabswarm<
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
     const relayProtocolOptions = { runOnLimitedConnection: true };
-    this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions);
-    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions);
-    this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions);
-    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions);
-    this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions);
-    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions);
+    const registration = Promise.all([
+      this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions),
+      this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions),
+      this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions),
+      this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions),
+      this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions),
+      this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions),
+    ]).then(() => undefined);
+    this._sharedHandlersRegistration = registration;
+
+    try {
+      await registration;
+    } catch (error) {
+      if (this._sharedHandlersRegistration === registration) {
+        this._sharedHandlersRegistration = undefined;
+      }
+      throw error;
+    }
   }
 
   /**
