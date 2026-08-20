@@ -76,7 +76,7 @@ Status meanings:
 
 | Feature | Status | Current evidence | Missing or adversarial case |
 | --- | --- | --- | --- |
-| Published ESM library packages | Verified | Topological TypeScript build and full unit suite pass | Package tarball installation in a clean external consumer is not yet tested. |
+| Buildable ESM workspace packages | Verified | Topological TypeScript build and full unit suite pass | Packages are not yet published; tarball installation in a clean external consumer is not yet tested. |
 | Node entry point | Partial | TypeScript build passes; repository now requires Node >=22.19 because of the Undici dependency graph | A clean-package runtime import on the declared minimum Node version is not yet automated. |
 | Password-manager reference app | Partial | Vite production build and strict Chromium startup smoke test pass | No two-browser synchronization test; bundle is about 2.0 MB minified. |
 | Wiki reference app | Partial | Vite production build and strict Automerge-WASM Chromium startup test pass | Article mutation and cross-browser convergence are not yet asserted. |
