@@ -1,0 +1,704 @@
+<section class="sync-demo not-content" aria-label="Illustrative encrypted Yjs sync simulation">
+  <div class="demo-fallback" data-demo-fallback>
+    This simulation needs JavaScript and the Web Crypto API. See the
+    <a href="https://github.com/swarmbase/swarmbase/tree/main/examples"
+      >runnable repository examples</a
+    > instead.
+  </div>
+  <div class="demo-grid" data-demo hidden>
+    <div class="peer-card">
+      <header>
+        <span class="peer-dot alice" aria-hidden="true"></span>
+        Alice&rsquo;s in-page replica
+      </header>
+      <ul class="todo-list" data-list="alice"></ul>
+      <form data-form="alice">
+        <label>
+          <span>New todo as Alice</span>
+          <input type="text" maxlength="60" autocomplete="off" />
+        </label>
+        <button type="submit">Add</button>
+      </form>
+    </div>
+
+    <div class="wire-panel" data-wire-panel aria-busy="false">
+      <header>Illustrative in-page channel</header>
+      <ol class="wire-log" data-wire aria-label="Recent simulated ciphertext frames"></ol>
+      <button type="button" class="pause-btn" data-pause>
+        Go offline
+      </button>
+      <p class="wire-hint" data-hint>
+        Frames contain an encrypted, signed Yjs update in this simulation.
+      </p>
+    </div>
+
+    <div class="peer-card">
+      <header>
+        <span class="peer-dot bob" aria-hidden="true"></span>
+        Bob&rsquo;s in-page replica
+      </header>
+      <ul class="todo-list" data-list="bob"></ul>
+      <form data-form="bob">
+        <label>
+          <span>New todo as Bob</span>
+          <input type="text" maxlength="60" autocomplete="off" />
+        </label>
+        <button type="submit">Add</button>
+      </form>
+    </div>
+  </div>
+  <p class="demo-status" data-status role="status" aria-live="polite" aria-atomic="true">
+    Initializing simulation…
+  </p>
+  <p class="demo-note">
+    <strong>Illustrative simulation:</strong> this runs real Yjs delta/merge via
+    Swarmbase&rsquo;s <code>YjsProvider</code> and uses its <code>SubtleCrypto</code>
+    helper for AES&#8209;GCM encryption and ECDSA&nbsp;P&#8209;384 signatures. It is
+    not protocol-equivalent to Swarmbase networking and does not exercise
+    <code>CollabswarmDocument</code>, ACL or key onboarding, Helia or a
+    blockstore, libp2p or GossipSub, or any real transport. See the
+    <a href="https://github.com/swarmbase/swarmbase/tree/main/examples"
+      >runnable examples</a
+    > for full application setups.
+  </p>
+</section>
+
+<script>
+  import { YjsProvider } from '@swarmbase/collabswarm-yjs';
+  import { SubtleCrypto } from '@swarmbase/collabswarm';
+  import type { Doc } from 'yjs';
+
+  type Side = 'alice' | 'bob';
+  type DeliveryResult = 'delivered' | 'interrupted' | 'rejected';
+
+  interface Frame {
+    from: Side;
+    cipher: Uint8Array;
+    nonce: Uint8Array;
+    signature: Uint8Array;
+    entry: HTMLLIElement;
+  }
+
+  type DemoRoot = HTMLElement & { syncDemoController?: AbortController };
+
+  const OTHER: Record<Side, Side> = { alice: 'bob', bob: 'alice' };
+  const MAX_PENDING = 24;
+
+  function initializeDemos() {
+    document.querySelectorAll<DemoRoot>('.sync-demo').forEach((root) => {
+      if (root.dataset.initialized === 'true') return;
+      root.dataset.initialized = 'true';
+      const controller = new AbortController();
+      root.syncDemoController = controller;
+      void initializeDemo(root, controller).catch(() => {
+        if (root.isConnected && !controller.signal.aborted) {
+          const status = root.querySelector<HTMLElement>('[data-status]');
+          if (status) {
+            status.textContent = 'Simulation initialization failed.';
+            status.dataset.error = 'true';
+          }
+        }
+      });
+    });
+  }
+
+  async function initializeDemo(root: HTMLElement, controller: AbortController) {
+    const { signal } = controller;
+    const active = () => !signal.aborted && root.isConnected;
+    const grid = root.querySelector<HTMLElement>('[data-demo]')!;
+    const fallback = root.querySelector<HTMLElement>('[data-demo-fallback]')!;
+    const status = root.querySelector<HTMLElement>('[data-status]')!;
+    const wire = root.querySelector<HTMLOListElement>('[data-wire]')!;
+    const wirePanel = root.querySelector<HTMLElement>('[data-wire-panel]')!;
+    const pauseButton = root.querySelector<HTMLButtonElement>('[data-pause]')!;
+    const hint = root.querySelector<HTMLElement>('[data-hint]')!;
+
+    if (!('crypto' in window) || !crypto.subtle) {
+      status.textContent = 'Web Crypto is unavailable; the simulation cannot start.';
+      status.dataset.error = 'true';
+      return;
+    }
+
+    const provider = new YjsProvider();
+    const auth = new SubtleCrypto();
+    const signParams = { name: 'ECDSA', namedCurve: 'P-384' };
+    const keys: Record<Side, CryptoKeyPair> = {
+      alice: await crypto.subtle.generateKey(signParams, false, ['sign', 'verify']),
+      bob: await crypto.subtle.generateKey(signParams, false, ['sign', 'verify']),
+    };
+    if (!active()) return;
+    const documentKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    if (!active()) return;
+
+    const docs: Record<Side, Doc> = {
+      alice: provider.newDocument(),
+      bob: provider.newDocument(),
+    };
+    signal.addEventListener(
+      'abort',
+      () => {
+        docs.alice.destroy();
+        docs.bob.destroy();
+      },
+      { once: true },
+    );
+    const pending: Frame[] = [];
+    const needsFullSync: Record<Side, boolean> = { alice: false, bob: false };
+    let offline = false;
+    let generation = 0;
+    let outstanding = 0;
+    let drainPromise: Promise<void> | null = null;
+    let preparation = Promise.resolve();
+    const busySides: Record<Side, boolean> = { alice: false, bob: false };
+    const focusedControls: Record<
+      Side,
+      HTMLInputElement | HTMLButtonElement | null
+    > = { alice: null, bob: null };
+    const pendingInputFocus: Record<Side, boolean> = { alice: false, bob: false };
+
+    const setStatus = (message: string, error = false) => {
+      if (!active()) return;
+      status.textContent = message;
+      if (error) status.dataset.error = 'true';
+      else delete status.dataset.error;
+    };
+
+    const setFormBusy = (side: Side, busy: boolean) => {
+      if (!active()) return;
+      const form = root.querySelector<HTMLFormElement>(`[data-form="${side}"]`)!;
+      if (busy) {
+        const focused = document.activeElement;
+        const isFormControl =
+          focused instanceof HTMLInputElement || focused instanceof HTMLButtonElement;
+        focusedControls[side] =
+          isFormControl && form.contains(focused) ? focused : null;
+      }
+      busySides[side] = busy;
+      form.setAttribute('aria-busy', String(busy));
+      form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(
+        (control) => {
+          control.disabled = busy;
+        },
+      );
+      root
+        .querySelectorAll<HTMLButtonElement>(`[data-list="${side}"] button`)
+        .forEach((control) => control.setAttribute('aria-disabled', String(busy)));
+      if (!busy) {
+        const focused = focusedControls[side];
+        const restoreInput = pendingInputFocus[side];
+        focusedControls[side] = null;
+        pendingInputFocus[side] = false;
+        if (restoreInput && document.activeElement === document.body) {
+          form.querySelector<HTMLInputElement>('input')?.focus();
+        } else if (focused && document.activeElement === document.body) {
+          focused.focus();
+        }
+      }
+    };
+
+    const hex = (bytes: Uint8Array, length = 10) =>
+      Array.from(bytes.slice(0, length), (value) =>
+        value.toString(16).padStart(2, '0'),
+      ).join('');
+
+    const render = (side: Side) => {
+      if (!active()) return;
+      const list = root.querySelector<HTMLUListElement>(`[data-list="${side}"]`)!;
+      const focused = document.activeElement;
+      const focusedIndex =
+        focused instanceof HTMLButtonElement &&
+        list.contains(focused) &&
+        focused.dataset.deleteIndex !== undefined
+          ? Number(focused.dataset.deleteIndex)
+          : null;
+      list.textContent = '';
+      const todos = docs[side].getArray<string>('todos');
+      todos.toArray().forEach((text, index) => {
+        const item = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = text;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.dataset.deleteIndex = String(index);
+        remove.setAttribute('aria-label', `Remove "${text}"`);
+        remove.setAttribute('aria-disabled', String(busySides[side]));
+        remove.addEventListener(
+          'click',
+          () => {
+            void edit(side, (doc) => doc.getArray('todos').delete(index, 1));
+          },
+          { signal },
+        );
+        item.append(label, remove);
+        list.append(item);
+      });
+      if (focusedIndex !== null && list.children.length > 0) {
+        const nextIndex = Math.min(focusedIndex, list.children.length - 1);
+        list
+          .querySelectorAll<HTMLButtonElement>('[data-delete-index]')
+          .item(nextIndex)
+          ?.focus();
+      } else if (focusedIndex !== null) {
+        const input = root.querySelector<HTMLInputElement>(`[data-form="${side}"] input`)!;
+        if (!input.disabled && document.activeElement === document.body) {
+          input.focus();
+        } else {
+          pendingInputFocus[side] = true;
+        }
+      }
+    };
+
+    const logFrame = (frame: Omit<Frame, 'entry'>) => {
+      const item = document.createElement('li');
+      item.className = 'queued';
+      const route = document.createElement('span');
+      route.className = 'route';
+      route.textContent = `${frame.from} → ${OTHER[frame.from]}`;
+      const bytes = document.createElement('code');
+      bytes.textContent = `${frame.cipher.length} B · ${hex(frame.cipher)}…`;
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = offline ? 'queued offline' : 'queued';
+      item.append(route, bytes, badge);
+      wire.prepend(item);
+      while (wire.children.length > 8) wire.lastElementChild?.remove();
+      return item;
+    };
+
+    const updateConnectionUi = () => {
+      if (!active()) return;
+      root.classList.toggle('offline', offline);
+      pauseButton.textContent = offline ? 'Reconnect' : 'Go offline';
+      hint.textContent = offline
+        ? `Offline. ${pending.length} encrypted frame${pending.length === 1 ? '' : 's'} queued.`
+        : 'Frames contain an encrypted, signed Yjs update in this simulation.';
+    };
+
+    const connectedFor = (startedAt: number) =>
+      active() && !offline && generation === startedAt;
+
+    const deliver = async (frame: Frame, startedAt: number): Promise<DeliveryResult> => {
+      const verified = await auth.verify(
+        frame.cipher,
+        keys[frame.from].publicKey,
+        frame.signature,
+      );
+      if (!connectedFor(startedAt)) return 'interrupted';
+      const badge = frame.entry.querySelector<HTMLElement>('.badge')!;
+      if (!verified) {
+        badge.textContent = 'signature rejected';
+        frame.entry.className = 'rejected';
+        return 'rejected';
+      }
+      const plain = await auth.decrypt(frame.cipher, documentKey, frame.nonce);
+      if (!connectedFor(startedAt)) return 'interrupted';
+      provider.remoteChange(docs[OTHER[frame.from]], plain);
+      badge.textContent = 'signature verified';
+      frame.entry.className = 'delivered';
+      render(OTHER[frame.from]);
+      return 'delivered';
+    };
+
+    const drain = async () => {
+      if (!active()) return;
+      wirePanel.setAttribute('aria-busy', 'true');
+      try {
+        while (pending.length > 0 && active() && !offline) {
+          const frame = pending[0];
+          const badge = frame.entry.querySelector<HTMLElement>('.badge')!;
+          badge.textContent = 'verifying…';
+          frame.entry.className = 'delivering';
+          const startedAt = generation;
+          let result: DeliveryResult;
+          try {
+            result = await deliver(frame, startedAt);
+          } catch {
+            if (!active()) return;
+            badge.textContent = 'queued after error';
+            frame.entry.className = 'queued';
+            offline = true;
+            generation += 1;
+            updateConnectionUi();
+            setStatus('Delivery failed; the frame remains queued. Reconnect to retry.', true);
+            return;
+          }
+          if (result === 'interrupted') {
+            badge.textContent = 'queued offline';
+            frame.entry.className = 'queued';
+            updateConnectionUi();
+            setStatus('Delivery paused; the undelivered frame was requeued.');
+            return;
+          }
+          pending.shift();
+          outstanding -= 1;
+          updateConnectionUi();
+          setStatus(
+            result === 'delivered'
+              ? `Delivered update; signature verified. ${pending.length} queued.`
+              : `Rejected an update with an invalid signature. ${pending.length} queued.`,
+            result === 'rejected',
+          );
+        }
+      } finally {
+        if (active()) wirePanel.setAttribute('aria-busy', 'false');
+      }
+    };
+
+    const startDrain = () => {
+      if (!active() || offline || drainPromise) return;
+      drainPromise = drain()
+        .catch(() => {
+          if (!active()) return;
+          offline = true;
+          generation += 1;
+          updateConnectionUi();
+          setStatus('Queue processing failed. Reconnect to retry.', true);
+        })
+        .finally(() => {
+          const restart = active() && !offline && pending.length > 0;
+          drainPromise = null;
+          if (restart) startDrain();
+        });
+    };
+
+    const prepareFrame = async (from: Side, update: Uint8Array) => {
+      try {
+        const { data: cipher, nonce } = await auth.encrypt(update, documentKey);
+        if (!active()) {
+          outstanding -= 1;
+          return;
+        }
+        const signature = await auth.sign(cipher, keys[from].privateKey);
+        if (!active()) {
+          outstanding -= 1;
+          return;
+        }
+        const partial = { from, cipher, nonce, signature };
+        const frame: Frame = { ...partial, entry: logFrame(partial) };
+        pending.push(frame);
+        updateConnectionUi();
+        setStatus(
+          offline
+            ? `Update encrypted and queued offline. ${pending.length} queued.`
+            : `Update encrypted and queued for delivery. ${pending.length} queued.`,
+        );
+        startDrain();
+      } catch {
+        outstanding -= 1;
+        needsFullSync[from] = true;
+        setStatus(
+          'Edit stayed local after a crypto failure; the next edit will send full Yjs history.',
+          true,
+        );
+      } finally {
+        setFormBusy(from, false);
+      }
+    };
+
+    const edit = async (side: Side, change: (doc: Doc) => void) => {
+      if (!active()) return;
+      if (busySides[side]) {
+        setStatus(`Wait for ${side}'s pending update before editing again.`, true);
+        return;
+      }
+      if (outstanding >= MAX_PENDING) {
+        setStatus(
+          offline
+            ? `Queue limit reached (${MAX_PENDING}); reconnect before editing again.`
+            : `Queue limit reached (${MAX_PENDING}); wait for pending updates to finish.`,
+          true,
+        );
+        return;
+      }
+      outstanding += 1;
+      setFormBusy(side, true);
+      let update: Uint8Array;
+      try {
+        [, update] = provider.localChange(docs[side], 'illustrative edit', change);
+        if (needsFullSync[side]) {
+          update = provider.getHistory(docs[side]);
+          needsFullSync[side] = false;
+        }
+        render(side);
+      } catch {
+        outstanding -= 1;
+        setFormBusy(side, false);
+        setStatus('The local edit could not be applied.', true);
+        return;
+      }
+      const scheduled = preparation.then(() => prepareFrame(side, update));
+      preparation = scheduled.catch(() => undefined);
+      await scheduled;
+    };
+
+    pauseButton.addEventListener(
+      'click',
+      () => {
+        offline = !offline;
+        generation += 1;
+        updateConnectionUi();
+        if (offline) {
+          setStatus(`Offline; ${pending.length} frame${pending.length === 1 ? '' : 's'} queued.`);
+        } else {
+          setStatus(`Reconnected; delivering ${pending.length} queued frame${pending.length === 1 ? '' : 's'}.`);
+          startDrain();
+        }
+      },
+      { signal },
+    );
+
+    for (const side of ['alice', 'bob'] as Side[]) {
+      const form = root.querySelector<HTMLFormElement>(`[data-form="${side}"]`)!;
+      form.addEventListener(
+        'submit',
+        (event) => {
+          event.preventDefault();
+          const input = form.querySelector<HTMLInputElement>('input')!;
+          const text = input.value.trim();
+          if (!text) {
+            setStatus('Enter a todo before adding it.', true);
+            return;
+          }
+          void edit(side, (doc) => {
+            doc.getArray('todos').push([text]);
+            input.value = '';
+          });
+        },
+        { signal },
+      );
+    }
+
+    try {
+      provider.localChange(docs.alice, 'seed', (doc) => {
+        doc
+          .getArray('todos')
+          .push(['Try editing both sides', 'Go offline, edit, then reconnect']);
+      });
+      provider.remoteChange(docs.bob, provider.getHistory(docs.alice));
+      render('alice');
+      render('bob');
+    } catch {
+      setStatus('The initial Yjs replicas could not be created.', true);
+      return;
+    }
+
+    if (!active()) return;
+    fallback.hidden = true;
+    grid.hidden = false;
+    setStatus('Simulation ready. Both in-page replicas match.');
+  }
+
+  document.addEventListener('astro:before-swap', () => {
+    document.querySelectorAll<DemoRoot>('.sync-demo').forEach((root) => {
+      root.syncDemoController?.abort();
+    });
+  });
+  document.addEventListener('astro:page-load', initializeDemos);
+  initializeDemos();
+</script>
+
+<style>
+  .sync-demo {
+    margin-top: 2rem;
+  }
+  .demo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  @media (max-width: 72rem) {
+    .demo-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .peer-card,
+  .wire-panel {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    background: var(--sl-color-black);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .peer-card header,
+  .wire-panel header {
+    font-weight: 600;
+    color: var(--sl-color-white);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .peer-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .peer-dot.alice {
+    background: var(--sl-color-accent);
+  }
+  .peer-dot.bob {
+    background: var(--sw-color-teal, #2dd4bf);
+  }
+  .todo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    min-height: 7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .todo-list :global(li) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--sl-color-gray-6);
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.6rem;
+  }
+  .todo-list :global(button) {
+    background: none;
+    border: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .todo-list :global(button:hover) {
+    color: var(--sl-color-white);
+  }
+  .todo-list :global(button[aria-disabled='true']) {
+    cursor: wait;
+    opacity: 0.65;
+  }
+  .peer-card form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: end;
+  }
+  .peer-card label {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 0.25rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+  }
+  .peer-card input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+    padding: 0.4rem 0.6rem;
+  }
+  .peer-card form button {
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--sl-color-accent);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:disabled,
+  input:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  a:focus-visible {
+    outline: 3px solid var(--sl-color-accent-high);
+    outline-offset: 2px;
+  }
+  .wire-panel {
+    background: var(--sl-color-gray-6);
+  }
+  .offline .wire-panel {
+    border-style: dashed;
+    border-color: var(--sl-color-orange, #e5850b);
+  }
+  .wire-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    min-height: 7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-xs);
+  }
+  .wire-log :global(li) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+    border-left: 3px solid var(--sl-color-accent);
+    padding-left: 0.5rem;
+  }
+  .wire-log :global(li.queued),
+  .wire-log :global(li.delivering) {
+    border-left-color: var(--sl-color-orange, #e5850b);
+    opacity: 0.8;
+  }
+  .wire-log :global(li.rejected) {
+    border-left-color: var(--sl-color-red, #f43f5e);
+  }
+  .wire-log :global(.route) {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .wire-log :global(code) {
+    background: none;
+    padding: 0;
+    color: var(--sl-color-gray-2);
+    word-break: break-all;
+  }
+  .wire-log :global(.badge) {
+    color: var(--sl-color-gray-3);
+  }
+  .pause-btn {
+    align-self: flex-start;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.5rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .wire-hint,
+  .demo-note,
+  .demo-status {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    margin: 0;
+  }
+  .demo-note,
+  .demo-status {
+    margin-top: 0.75rem;
+  }
+  .demo-status {
+    min-height: 1.5em;
+  }
+  .demo-status[data-error='true'] {
+    color: var(--sl-color-red-high, #fb7185);
+  }
+  .demo-fallback {
+    border: 1px dashed var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    color: var(--sl-color-gray-3);
+  }
+</style>

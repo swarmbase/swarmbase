@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "build:dependencies": "yarn workspace @swarmbase/collabswarm tsc && yarn workspace @swarmbase/collabswarm-yjs tsc",
+    "dev": "yarn run build:dependencies && astro dev",
+    "build": "yarn run build:dependencies && astro build",
     "preview": "astro preview"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.3",
-    "astro": "^7.0.7"
+    "@swarmbase/collabswarm": "workspace:*",
+    "@swarmbase/collabswarm-yjs": "workspace:*",
+    "astro": "^7.0.7",
+    "yjs": "^13.6.30"
   }
 }

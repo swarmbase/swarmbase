@@ -21,6 +21,7 @@ hero:
 ---
 
 import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
+import SyncDemo from '../../components/SyncDemo.astro';
 
 <Aside type="caution" title="Alpha software, honestly labeled">
   Swarmbase is under active development. It is suitable for experiments,
@@ -74,6 +75,14 @@ await todos.change((state) => {
 
 The repository contains runnable browser, wiki, and password-manager examples
 that show provider setup, identity creation, and connecting peers.
+
+## Illustrative encrypted Yjs sync
+
+Try edits on either in-page replica, disconnect them, and reconnect to merge the
+queued Yjs updates. The simulation boundary and omitted Swarmbase subsystems are
+listed directly below the demo.
+
+<SyncDemo />
 
 ## How it works
 
