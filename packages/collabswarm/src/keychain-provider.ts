@@ -1,4 +1,4 @@
-import { Keychain } from './keychain';
+import { Keychain } from './keychain.js';
 
 /**
  * Factory for Keychain objects.

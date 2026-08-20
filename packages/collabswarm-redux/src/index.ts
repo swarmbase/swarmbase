@@ -36,11 +36,11 @@ export {
   changeDocument,
   peerConnect,
   peerDisconnect,
-} from './actions';
+} from './actions.js';
 
 export {
   type CollabswarmState,
   type CollabswarmDocumentState,
   initialState,
   collabswarmReducer,
-} from './reducers';
+} from './reducers.js';

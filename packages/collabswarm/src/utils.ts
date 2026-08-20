@@ -1,6 +1,6 @@
 import BufferList from 'bl';
 import type { Uint8ArrayList } from 'uint8arraylist';
-import type { AesAlgorithmName } from './auth-provider';
+import type { AesAlgorithmName } from './auth-provider.js';
 
 /**
  * Outcome of parsing a path-prefixed protocol header off an inbound
@@ -191,6 +191,70 @@ export async function readUint8Iterable(
   }
 
   return assembled;
+}
+
+/**
+ * Read one serialized request without waiting for the remote write side to
+ * close. Request/response protocols must be able to reply while the stream is
+ * still writable; waiting for EOF can deadlock on relayed Yamux connections
+ * where the half-close is delayed until the connection timeout.
+ *
+ * The deserializer doubles as the message-completeness check. A fragmented
+ * request keeps accumulating until it can be decoded, while malformed or
+ * oversized input still fails once the source ends or crosses `maxSize`.
+ */
+export async function readFirstDeserializable<T>(
+  iterable: AsyncIterable<Uint8Array | Uint8ArrayList | BufferList>,
+  deserialize: (data: Uint8Array) => T,
+  maxSize?: number,
+): Promise<T> {
+  let assembled = new Uint8Array(0);
+  let length = 0;
+  let lastError: unknown = new Error('Stream ended before a complete message arrived');
+
+  for await (const chunk of iterable) {
+    if (!chunk) continue;
+    if (maxSize !== undefined && length + chunk.length > maxSize) {
+      throw new RangeError(
+        `Stream exceeded maximum allowed size of ${maxSize} bytes`,
+      );
+    }
+    const bytes = isBufferList(chunk)
+      ? new Uint8Array(chunk.slice())
+      : chunk instanceof Uint8Array
+        ? chunk
+        : chunk.subarray();
+    const nextLength = length + bytes.length;
+
+    if (maxSize !== undefined && nextLength > maxSize) {
+      throw new RangeError(
+        `Stream exceeded maximum allowed size of ${maxSize} bytes`,
+      );
+    }
+
+    if (nextLength > assembled.length) {
+      const grownCapacity = Math.max(
+        nextLength,
+        Math.max(1, assembled.length * 2),
+      );
+      const nextCapacity = maxSize === undefined
+        ? grownCapacity
+        : Math.min(grownCapacity, maxSize);
+      const next = new Uint8Array(nextCapacity);
+      next.set(assembled.subarray(0, length));
+      assembled = next;
+    }
+    assembled.set(bytes, length);
+    length = nextLength;
+
+    try {
+      return deserialize(assembled.subarray(0, length));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 // CryptoKey utils

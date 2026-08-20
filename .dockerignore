@@ -9,3 +9,7 @@ examples/wiki-swarm/node_modules
 .git/
 .gitignore
 .vscode/
+.yarn/cache/
+**/dist/
+playwright-report/
+test-results/

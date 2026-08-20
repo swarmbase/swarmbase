@@ -1,10 +1,10 @@
 import { Base64 } from 'js-base64';
-import { ChangesSerializer } from './changes-serializer';
-import { CRDTChangeBlock } from './crdt-change-block';
-import { CRDTLoadRequest } from './crdt-load-request';
-import { CRDTSyncMessage } from './crdt-sync-message';
-import { LoadMessageSerializer } from './load-request-serializer';
-import { SyncMessageSerializer } from './sync-message-serializer';
+import { ChangesSerializer } from './changes-serializer.js';
+import { CRDTChangeBlock } from './crdt-change-block.js';
+import { CRDTLoadRequest } from './crdt-load-request.js';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
+import { LoadMessageSerializer } from './load-request-serializer.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
 
 /**
  * Dangerous property keys that should be stripped from deserialized objects
@@ -58,10 +58,10 @@ export function validateChangeBlockMetadata<ChangesType>(
   }
 }
 
-export class JSONSerializer<ChangesType>
+export class JSONSerializer<ChangesType, PublicKey = unknown>
   implements
     ChangesSerializer<ChangesType>,
-    SyncMessageSerializer<ChangesType>,
+    SyncMessageSerializer<ChangesType, PublicKey>,
     LoadMessageSerializer
 {
   serialize(message: unknown): string {
@@ -118,12 +118,12 @@ export class JSONSerializer<ChangesType>
     validateChangeBlockMetadata(deserialized, result);
     return result;
   }
-  serializeSyncMessage(message: CRDTSyncMessage<ChangesType>): Uint8Array {
+  serializeSyncMessage(message: CRDTSyncMessage<ChangesType, PublicKey>): Uint8Array {
     return this.encode(this.serialize(message));
   }
-  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<ChangesType> {
+  deserializeSyncMessage(message: Uint8Array): CRDTSyncMessage<ChangesType, PublicKey> {
     // Shape validated by subclass overrides; base class trusts JSON.parse output matches CRDTSyncMessage
-    return this.deserialize(this.decode(message)) as CRDTSyncMessage<ChangesType>;
+    return this.deserialize(this.decode(message)) as CRDTSyncMessage<ChangesType, PublicKey>;
   }
   serializeLoadRequest(message: CRDTLoadRequest): Uint8Array {
     return this.encode(this.serialize(message));
