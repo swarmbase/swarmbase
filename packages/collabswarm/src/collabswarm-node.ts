@@ -40,6 +40,7 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
 import { dcutr } from '@libp2p/dcutr';
 import { kadDHT } from '@libp2p/kad-dht';
+import { ping } from '@libp2p/ping';
 // mDNS is Node-only: it depends on the `dgram` built-in for UDP multicast,
 // which is unavailable in browsers. The browser-compatible default config in
 // collabswarm-config.ts intentionally omits it.
@@ -58,6 +59,7 @@ import { ipnsValidator } from 'ipns/validator';
 import { bitswap } from '@helia/block-brokers';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
+import { hasBootstrapPeers } from './bootstrap-config.js';
 
 /**
  * Default config for Node.js environments.
@@ -113,11 +115,16 @@ export const defaultNodeConfig = (
           webTransport(),
         ],
         streamMuxers: [yamux()],
-        peerDiscovery: [bootstrap(bootstrapConfig), pubsubPeerDiscovery(), mdns()],
+        peerDiscovery: [
+          ...(hasBootstrapPeers(bootstrapConfig) ? [bootstrap(bootstrapConfig)] : []),
+          pubsubPeerDiscovery(),
+          mdns(),
+        ],
         services: {
           identify: identify(),
           dcutr: dcutr(),
           autoNAT: autoNAT(),
+          ping: ping(),
           pubsub: gossipsub({
             allowPublishToZeroTopicPeers: true,
             emitSelf: false,
