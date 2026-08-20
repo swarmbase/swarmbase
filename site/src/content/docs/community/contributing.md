@@ -60,23 +60,48 @@ The benchmark sources currently have a runner module mismatch. Do not present `y
 
 The test command alone does not create the required service topology. GitHub CI is the canonical sequence.
 
-```sh
-docker compose -f docker-compose.integration.yaml build
-docker compose -f docker-compose.integration.yaml up -d
-yarn test:integration
+Define bounded readiness helpers in Bash:
+
+```bash
+wait_http() {
+  local attempts=0
+  until curl -fsS "$1" >/dev/null; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -ge 60 ] && return 1
+    sleep 2
+  done
+}
+
+wait_tcp() {
+  local attempts=0
+  until (echo > "/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -ge 60 ] && return 1
+    sleep 2
+  done
+}
+```
+
+Run one topology at a time and always tear it down afterward:
+
+```bash
+docker compose -f docker-compose.integration.yaml up -d --build
+for port in 3001 3002; do wait_http "http://127.0.0.1:$port"; done
+CI=true yarn test:integration
 docker compose -f docker-compose.integration.yaml down -v
 
-
-docker compose -f docker-compose.nat-test.yaml build
-docker compose -f docker-compose.nat-test.yaml up -d
-yarn test:nat
+docker compose -f docker-compose.nat-test.yaml up -d --build
+for port in 3001 3002 3003; do wait_http "http://127.0.0.1:$port"; done
+CI=true yarn test:nat
 docker compose -f docker-compose.nat-test.yaml down -v
 
-
 docker compose -f docker-compose.swarmbase-nat.yaml up -d --build
-yarn test:swarmbase-nat
+for port in 3101 3102; do wait_tcp "$port"; done
+CI=true yarn test:swarmbase-nat
 docker compose -f docker-compose.swarmbase-nat.yaml down -v
 ```
+
+These helpers mirror CI's 120-second readiness budget. The workflow remains the canonical sequence, including failure logs and unconditional cleanup.
 
 Integration checks transport discovery, bidirectional messaging, resilience, and NAT behavior through the test app. Cross-NAT checks encrypted document retrieval between real Swarmbase apps; it does not prove invitation delivery or live post-load convergence.
 

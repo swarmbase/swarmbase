@@ -44,23 +44,7 @@ yarn test:e2e:password-manager
 
 `yarn test:e2e` runs three Vite/Chromium smoke suites and does not require Docker.
 
-Docker-backed suites require their matching topology; CI is canonical:
-
-```sh
-docker compose -f docker-compose.integration.yaml build
-docker compose -f docker-compose.integration.yaml up -d
-yarn test:integration
-docker compose -f docker-compose.integration.yaml down -v
-
-docker compose -f docker-compose.nat-test.yaml build
-docker compose -f docker-compose.nat-test.yaml up -d
-yarn test:nat
-docker compose -f docker-compose.nat-test.yaml down -v
-
-docker compose -f docker-compose.swarmbase-nat.yaml up -d --build
-yarn test:swarmbase-nat
-docker compose -f docker-compose.swarmbase-nat.yaml down -v
-```
+Docker-backed suites require their matching topology and readiness checks. Do not run the test command immediately after `docker compose up -d`; follow the exact bounded wait and teardown sequence in the corresponding `.github/workflows/ci.yml` job. The contributor guide also provides local readiness helpers.
 
 Do not describe `yarn benchmark:all` as working until its runner module mismatch is fixed.
 
