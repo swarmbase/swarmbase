@@ -1,21 +1,119 @@
 ---
-title: Swarmbase
-description: An encrypted, serverless, local-first document database that syncs browser to browser.
+title: Encrypted local-first database
+description: Swarmbase is alpha software for encrypted local-first documents synchronized over peer-to-peer networks.
 template: splash
 hero:
-  tagline: An encrypted, serverless, local-first document database that syncs browser to browser.
+  title: Local-first documents that sync peer to peer
+  tagline: >-
+    Swarmbase is an open-source TypeScript toolkit for encrypted CRDT documents.
+    Build collaborative browser applications without operating an application
+    database server. Alpha software — ready to explore, not yet production-ready.
   image:
     file: ../../assets/logo.svg
   actions:
-    - text: Get started
-      link: ./getting-started/quick-start/
-      icon: right-arrow
+    - text: Explore examples
+      link: https://github.com/swarmbase/swarmbase/tree/main/examples
+      icon: rocket
     - text: Star on GitHub
       link: https://github.com/swarmbase/swarmbase
       icon: star
       variant: secondary
 ---
 
-The full homepage is under construction. In the meantime, head to the
-[quick start](./getting-started/quick-start/) or browse the
-[source on GitHub](https://github.com/swarmbase/swarmbase).
+import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Alpha software, honestly labeled">
+  Swarmbase is under active development. It is suitable for experiments,
+  prototypes, and learning about local-first systems, but not yet for production
+  or irreplaceable data. See the current
+  [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md)
+  before choosing it for a project.
+</Aside>
+
+<CardGrid>
+  <Card title="Local-first" icon="laptop">
+    Changes apply to the local CRDT replica immediately. Peers exchange updates
+    when they can reach one another, while persistence and restart recovery
+    continue to mature.
+  </Card>
+  <Card title="Encrypted by default" icon="seti:lock">
+    Swarmbase signs changes and encrypts document traffic with AES-GCM by
+    default. Relays and remote stores can carry ciphertext without receiving
+    document plaintext.
+  </Card>
+  <Card title="No application database server" icon="setting">
+    Helia and libp2p provide storage and peer-to-peer transport. Browser
+    deployments may still use bootstrap peers, STUN/TURN, Circuit Relay, or
+    remote pinning infrastructure.
+  </Card>
+  <Card title="CRDT adapters" icon="puzzle">
+    Use Yjs or Automerge documents. Replicas are designed to converge after
+    valid updates are delivered, without a central consensus service.
+  </Card>
+</CardGrid>
+
+## A Yjs document in a few lines
+
+Once a Swarmbase node is configured with the Yjs adapter, document changes use
+Yjs shared types directly:
+
+```ts
+const todos = swarm.doc('/todo-list');
+if (!todos) throw new Error('Swarmbase is not initialized');
+
+await todos.open();
+
+todos.subscribe('ui', (state) => {
+  render(state.getArray<string>('items').toArray());
+});
+
+await todos.change((state) => {
+  state.getArray<string>('items').push(['Ship it']);
+});
+```
+
+The repository contains runnable browser, wiki, and password-manager examples
+that show provider setup, identity creation, and connecting peers.
+
+## How it works
+
+1. **Edit locally.** A provider applies each change to the local CRDT replica.
+2. **Sign, encrypt, publish.** By default, Swarmbase signs the sync message,
+   encrypts the serialized envelope, and publishes it to connected peers.
+3. **Verify and merge.** Recipients verify, decrypt, and apply valid updates.
+   CRDT semantics are designed to reconcile concurrent edits after delivery.
+
+Swarmbase currently verifies real encrypted document retrieval across a
+Circuit Relay boundary in CI. Broader partition/rejoin, persistence, and
+production deployment coverage remains active work.
+
+## Built in the open
+
+Swarmbase is young enough that careful bug reports, API feedback, documentation,
+and unusual network tests can materially shape the project.
+
+<CardGrid>
+  <Card title="Run the examples" icon="rocket">
+    Start with the
+    [browser applications](https://github.com/swarmbase/swarmbase/tree/main/examples)
+    and inspect the matching Playwright acceptance tests.
+  </Card>
+  <Card title="Join the project" icon="pencil">
+    Browse [open issues](https://github.com/swarmbase/swarmbase/issues) or ask a
+    question in [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions).
+  </Card>
+</CardGrid>
+
+<LinkButton
+  href="https://github.com/swarmbase/swarmbase/tree/main/examples"
+  icon="rocket"
+>
+  Explore runnable examples
+</LinkButton>{' '}
+<LinkButton
+  href="https://github.com/swarmbase/swarmbase"
+  icon="star"
+  variant="secondary"
+>
+  View Swarmbase on GitHub
+</LinkButton>

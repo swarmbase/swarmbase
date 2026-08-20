@@ -10,7 +10,7 @@ export default defineConfig({
     starlight({
       title: 'Swarmbase',
       description:
-        'An encrypted, serverless, local-first document database that syncs browser to browser.',
+        'Alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'Swarmbase',
