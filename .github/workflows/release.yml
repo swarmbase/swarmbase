@@ -109,6 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(node scripts/release-version.mjs)"
+          BASE_VERSION="${VERSION%%+*}"
           TARGET_TAG=latest
-          case "$VERSION" in *-*) TARGET_TAG=next ;; esac
+          case "$BASE_VERSION" in *-*) TARGET_TAG=next ;; esac
           node scripts/publish-release.mjs "$RUNNER_TEMP/swarmbase-release" "$STAGING_TAG" "$TARGET_TAG"

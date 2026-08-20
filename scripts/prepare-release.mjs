@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertStrictSemver, packages } from './release-packages.mjs';
 
@@ -9,7 +9,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 if (args.length !== 1) throw new Error('Usage: node scripts/prepare-release.mjs <output-directory>');
 const output = resolve(args[0]);
-if (output === root) throw new Error('Output directory must be a dedicated directory');
+if (output === root || !relative(output, root).startsWith('..')) throw new Error('Output directory must not be within the repository tree');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 
