@@ -14,6 +14,6 @@ The package API reference is generated from source doc comments on every site bu
 | `@swarmbase/collabswarm-redux` | package root | Redux bindings, including actions, reducers, and selectors. |
 | `@swarmbase/collabswarm-index` | package root, `/react` | Indexing and querying, with React hooks in `/react`. |
 
-The core package currently also exposes `./src/*` paths for compatibility with the site browser shim. Those source paths are internal escape hatches rather than supported public API entry points and are not included in the generated reference.
+The core package also exposes `./browser-primitives` as a targeted subpath for light browser consumers that do not import the full libp2p/Helia stack. That subpath is part of the generated API reference on every site build.
 
 If a doc comment is missing, wrong, or unclear, improve it through a [contribution](../community/contributing/).

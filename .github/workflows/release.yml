@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - 'RELEASING.md'
+      - 'scripts/publish-release.tests.mjs'
       - 'scripts/release-*.mjs'
       - 'scripts/prepare-release.mjs'
       - 'scripts/publish-release.mjs'
@@ -21,6 +22,7 @@ on:
       - 'packages/*/README.md'
       - 'packages/*/LICENSE'
       - 'packages/*/src/**'
+      - 'packages/*/bin/**'
       - 'packages/*/tsconfig*.json'
   workflow_dispatch:
 
@@ -63,7 +65,7 @@ jobs:
         run: yarn release:validate-consumer "$RUNNER_TEMP/swarmbase-release" "$RUNNER_TEMP"
       - uses: actions/upload-artifact@v7
         with:
-          name: npm-release-artifacts-${{ github.sha }}
+          name: npm-release-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/swarmbase-release/*.tgz
             ${{ runner.temp }}/swarmbase-release/release-manifest.json
@@ -91,7 +93,7 @@ jobs:
       - run: npm install --global npm@11.19.0
       - uses: actions/download-artifact@v7
         with:
-          name: npm-release-artifacts-${{ github.sha }}
+          name: npm-release-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/swarmbase-release
       - name: Authenticate bootstrap publisher
         env:

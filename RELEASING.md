@@ -43,6 +43,7 @@ To reproduce artifact validation locally:
 
 ```sh
 ARTIFACT_DIR="$(mktemp -d)"
+yarn build
 yarn release:prepare "$ARTIFACT_DIR"
 yarn release:validate-consumer "$ARTIFACT_DIR" "$(dirname "$ARTIFACT_DIR")"
 ```
