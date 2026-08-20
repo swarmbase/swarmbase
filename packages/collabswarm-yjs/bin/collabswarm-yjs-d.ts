@@ -7,13 +7,13 @@ import {
 import {
   CollabswarmNode,
   defaultNodeConfig,
-} from '@swarmbase/collabswarm/src/collabswarm-node';
+} from '@swarmbase/collabswarm/node';
 import {
   YjsACLProvider,
   YjsJSONSerializer,
   YjsKeychainProvider,
   YjsProvider,
-} from '../src';
+} from '../src/index.js';
 
 global.crypto = require('crypto').webcrypto;
 

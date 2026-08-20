@@ -486,7 +486,7 @@ function deserializeBinaryChanges(changes: string[]): BinaryChange[] {
   return changes.map((c: string) => Base64.toUint8Array(c)) as BinaryChange[];
 }
 
-export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[]> {
+export class AutomergeJSONSerializer extends JSONSerializer<BinaryChange[], CryptoKey> {
   serializeChanges(changes: BinaryChange[]): Uint8Array {
     return this.encode(this.serialize(serializeBinaryChanges(changes)));
   }

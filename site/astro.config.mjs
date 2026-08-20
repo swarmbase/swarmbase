@@ -11,9 +11,6 @@ export default defineConfig({
     resolve: {
       alias: [
         {
-          // The core barrel drags in libp2p/Helia, which the browser bundle
-          // doesn't need. The sync demo only uses light modules, re-exported
-          // by the shim.
           find: /^@swarmbase\/collabswarm$/,
           replacement: fileURLToPath(
             new URL('./src/lib/collabswarm-shim.ts', import.meta.url),
@@ -26,7 +23,7 @@ export default defineConfig({
     starlight({
       title: 'Swarmbase',
       description:
-        'An encrypted, serverless, local-first document database that syncs browser to browser.',
+        'Alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'Swarmbase',

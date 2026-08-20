@@ -254,7 +254,7 @@ describe('EpochManager', () => {
     ['key_update', undefined],
   ] as const)(
     'transitionEpoch with reason=%s',
-    async (reason, affectedMember) => {
+    async (...[reason, affectedMember]) => {
       const epoch1 = await createEpoch(groupSecret1, new Set(['a']));
       manager.addEpoch(epoch1);
 

@@ -1,5 +1,3 @@
-# Build the project site (site/) and deploy it to GitHub Pages.
-# PRs that touch the site get a build check; pushes to main deploy.
 name: Site
 
 on:
@@ -8,34 +6,55 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/site.yml'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.tool-versions'
+      - '.yarnrc.yml'
+      - '.yarn/releases/yarn-4.5.0.cjs'
   pull_request:
     paths:
       - 'site/**'
       - '.github/workflows/site.yml'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.tool-versions'
+      - '.yarnrc.yml'
+      - '.yarn/releases/yarn-4.5.0.cjs'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: github-pages-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
-      - uses: actions/setup-node@v6
         with:
-          # Matches package.json engines; Astro's toolchain needs >= 22.12.
-          node-version: '22.19.0'
+          persist-credentials: false
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> $GITHUB_OUTPUT
+      - run: corepack enable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.nodeversion.outputs.version }}
           cache: 'yarn'
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --immutable
       - name: Build workspace packages used by the site
         run: |
           yarn workspace @swarmbase/collabswarm tsc
           yarn workspace @swarmbase/collabswarm-yjs tsc
       - name: Build site
         run: yarn workspace @swarmbase/site build
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
@@ -50,9 +69,6 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5

@@ -7,12 +7,12 @@ import {
 import {
   CollabswarmNode,
   defaultNodeConfig,
-} from '@swarmbase/collabswarm/src/collabswarm-node';
-import { AutomergeJSONSerializer, AutomergeProvider } from '../src';
+} from '@swarmbase/collabswarm/node';
+import { AutomergeJSONSerializer, AutomergeProvider } from '../src/index.js';
 import {
   AutomergeACLProvider,
   AutomergeKeychainProvider,
-} from '../src/collabswarm-automerge';
+} from '../src/collabswarm-automerge.js';
 
 const crypto: Crypto = require('crypto').webcrypto;
 global.crypto = crypto;

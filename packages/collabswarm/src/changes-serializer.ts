@@ -1,4 +1,4 @@
-import { CRDTChangeBlock } from './crdt-change-block';
+import { CRDTChangeBlock } from './crdt-change-block.js';
 
 /**
  * ChangesSerializer provides serialization/deserialization methods for `CRDTChangeBlock`s and Changes.

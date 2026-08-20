@@ -6,7 +6,7 @@ import {
   crdtDocumentChangeNode,
   crdtReaderChangeNode,
   crdtWriterChangeNode,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 
 // Allow-list of `kind` discriminants accepted from peer wire messages.
 //

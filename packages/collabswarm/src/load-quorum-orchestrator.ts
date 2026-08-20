@@ -47,8 +47,8 @@ import {
   LoadQuorumFailedError,
   PeerTipAdvertisement,
   validateLoadQuorumConfig,
-} from './load-quorum';
-import { tipsHashToHex } from './tips-hash';
+} from './load-quorum.js';
+import { tipsHashToHex } from './tips-hash.js';
 
 /**
  * Config inputs for `runLoadQuorum`. Mirrors the relevant subset of
