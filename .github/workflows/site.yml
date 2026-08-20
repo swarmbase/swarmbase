@@ -52,6 +52,8 @@ jobs:
         run: yarn install --immutable
       - name: Build site
         run: yarn workspace @swarmbase/site build
+      - name: Check internal site links
+        run: node site/scripts/check-links.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v5
         with:
