@@ -309,10 +309,6 @@ export class Collabswarm<
       throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
     }
 
-    // In libp2p v2, 'peer:connect'/'peer:disconnect' emit CustomEvent<PeerId>.
-    // event.detail is a PeerId whose toString() returns the peer ID string.
-    // Note: libp2p v3 changed this to emit Connection objects -- this must be
-    // updated if libp2p is upgraded past v2.x.
     this.libp2p.addEventListener('peer:connect', (event) => {
       const peerId = event.detail.toString();
       this._peerIds.push(peerId);
@@ -336,7 +332,7 @@ export class Collabswarm<
     // the appropriate document via the document registry. This replaces
     // per-document protocol handler registration, reducing protocol
     // handler overhead for multi-document applications.
-    this._registerSharedProtocolHandlers();
+    await this._registerSharedProtocolHandlers();
 
     console.log('Helia node initialized:', this._peerId);
   }
@@ -393,11 +389,10 @@ export class Collabswarm<
    * key-update, a 4-byte length-prefixed document path header precedes
    * the encrypted payload.
    */
-  private _registerSharedProtocolHandlers(): void {
+  private async _registerSharedProtocolHandlers(): Promise<void> {
     if (this._sharedHandlersRegistered) {
       return;
     }
-    this._sharedHandlersRegistered = true;
 
     // Handler implementation for doc-load requests.
     //
@@ -692,12 +687,15 @@ export class Collabswarm<
     // handler for all documents; the document path is extracted from the
     // stream payload for routing.
     const relayProtocolOptions = { runOnLimitedConnection: true };
-    this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions);
-    this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions);
-    this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions);
-    this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions);
-    this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions);
-    this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions);
+    await Promise.all([
+      this.libp2p.handle(documentLoadV3, docLoadHandler, relayProtocolOptions),
+      this.libp2p.handle(snapshotLoadV3, snapshotLoadHandler, relayProtocolOptions),
+      this.libp2p.handle(documentKeyUpdateV2, keyUpdateHandler, relayProtocolOptions),
+      this.libp2p.handle(beekemWelcomeV1, beekemWelcomeHandler, relayProtocolOptions),
+      this.libp2p.handle(beekemPathUpdateV1, beekemPathUpdateHandler, relayProtocolOptions),
+      this.libp2p.handle(tipAdvertiseV1, tipAdvertiseHandler, relayProtocolOptions),
+    ]);
+    this._sharedHandlersRegistered = true;
   }
 
   /**

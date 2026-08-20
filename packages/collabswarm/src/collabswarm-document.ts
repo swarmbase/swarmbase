@@ -100,6 +100,7 @@ import { UnixFS, unixfs } from '@helia/unixfs';
 // from `@libp2p/gossipsub` instead -- it is what `helia` actually wires up via
 // `services.pubsub` and exposes the same publish/subscribe/event surface we
 // rely on. `Message` (the pubsub message shape) likewise moved here.
+import { TopicValidatorResult } from '@libp2p/gossipsub';
 import type { GossipSub, Message } from '@libp2p/gossipsub';
 import { EventHandler, PeerId } from '@libp2p/interface';
 
@@ -3315,8 +3316,8 @@ export class CollabswarmDocument<
   // - ACL updates via /collabswarm/key-update/1.0.0 protocol
   public async load(preferredPeer?: PeerId | string): Promise<boolean> {
     // Pick a peer. All peers come from getConnections() so they already have
-    // open connections. libp2p v2's dialProtocol reuses existing connections
-    // internally, so no additional connection management is needed here.
+    // open connections. dialProtocol reuses existing connections internally,
+    // so no additional connection management is needed here.
     const shuffledPeers = await this._shuffledPeers();
     if (shuffledPeers.length === 0) {
       return false;
@@ -3827,14 +3828,13 @@ export class CollabswarmDocument<
       // transport layer with a P4 penalty in peer scoring.
       // Skip entirely when signing is disabled to avoid unnecessary per-message decryption.
       if (this.swarm.config?.enableTopicValidators && this._isSigningEnabled()) {
-        const gossipsubService = pubsub as any;
-        if (typeof gossipsubService.topicValidators?.set === 'function') {
-          gossipsubService.topicValidators.set(
+        if (typeof pubsub.topicValidators?.set === 'function') {
+          pubsub.topicValidators.set(
             this._topic,
             async (
-              _peerIdStr: string,
-              message: { data: Uint8Array },
-            ): Promise<'Accept' | 'Reject' | 'Ignore'> => {
+              _peerId: PeerId,
+              message: Message,
+            ): Promise<TopicValidatorResult> => {
               try {
                 // Decrypt the message to access the signature.
                 const blockKeyID = message.data.slice(
@@ -3856,14 +3856,14 @@ export class CollabswarmDocument<
                 if (!rawContent) {
                   // Decryption failed -- key may not be in keychain yet
                   console.warn(`[${this.documentPath}] Topic validator: decryption failed, ignoring message`);
-                  return 'Ignore';
+                  return TopicValidatorResult.Ignore;
                 }
 
                 const syncMessage =
                   this._syncMessageSerializer.deserializeSyncMessage(rawContent);
 
                 if (!syncMessage.signature) {
-                  return 'Reject';
+                  return TopicValidatorResult.Reject;
                 }
 
                 const { signature, ...messageWithoutSignature } = syncMessage;
@@ -3874,12 +3874,12 @@ export class CollabswarmDocument<
 
                 // Verify the message was signed by an authorized writer for this document
                 if (await this._verifyWriterSignature(raw, signature)) {
-                  return 'Accept';
+                  return TopicValidatorResult.Accept;
                 }
-                return 'Reject';
+                return TopicValidatorResult.Reject;
               } catch {
                 console.warn(`[${this.documentPath}] Topic validator: unexpected error, ignoring message`);
-                return 'Ignore';
+                return TopicValidatorResult.Ignore;
               }
             },
           );
@@ -3941,15 +3941,7 @@ export class CollabswarmDocument<
       // Always attempt to remove the GossipSub topic validator. This is safe
       // even if none was registered (Map.delete is a no-op for missing keys),
       // and ensures cleanup regardless of config changes between open() and close().
-      const gossipsubService = pubsub as any;
-      if (typeof gossipsubService.topicValidators?.delete === 'function') {
-        gossipsubService.topicValidators.delete(topic);
-      }
-    }
-    // Remove topicValidators entry if one was registered during open().
-    const gossipsub = this.swarm.libp2p?.services?.pubsub as any;
-    if (gossipsub?.topicValidators) {
-      gossipsub.topicValidators.delete(topic);
+      pubsub.topicValidators.delete(topic);
     }
 
     // Unregister this document from the shared V2 protocol handler registry.

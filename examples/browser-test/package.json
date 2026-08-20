@@ -28,7 +28,7 @@
   },
   "scripts": {
     "start": "vite",
-    "start:relay": "node src/relay.js",
+    "start:relay": "node src/relay.ts",
     "build": "tsc --noEmit && vite build"
   },
   "eslintConfig": {
@@ -48,9 +48,18 @@
   },
   "type": "module",
   "devDependencies": {
-    "@libp2p/gossipsub": "^15.0.22",
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@libp2p/autonat": "^3.0.26",
+    "@libp2p/circuit-relay-v2": "^4.2.11",
+    "@libp2p/gossipsub": "^17.0.0",
+    "@libp2p/identify": "^4.1.12",
+    "@libp2p/interface": "^3.2.5",
+    "@libp2p/tcp": "^11.0.26",
+    "@libp2p/websockets": "^10.1.19",
     "@vitejs/plugin-react": "^4.3.4",
-    "libp2p": "^3.3.0",
+    "libp2p": "^3.3.8",
+    "uint8arraylist": "^3.0.2",
     "vite": "^6.1.0",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0"
