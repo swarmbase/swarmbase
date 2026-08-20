@@ -1,51 +1,56 @@
 ---
 title: Limitations
-description: What Swarmbase cannot do yet, where it can lose data, and when you should use a different database. Read this before building on it.
+description: Current Swarmbase production, durability, networking, security, scale, and verification limits.
 ---
 
-Every database has limitations; most bury them in a FAQ. We would rather you read them first. Swarmbase is built on genuinely young technology — distributed-web databases are a new category — and trust is earned by being straight about where the edges are. Everything on this page is a known, current limitation. If one of them is a dealbreaker for you today, we'd rather you find out now — and if one of them is a problem you'd enjoy working on, we'd love the help.
+Swarmbase is **alpha software**. It has no independent security audit, production SLA, durability SLA, or compatibility guarantee. Do not use it as the only copy of important data or for production workloads that require assured availability, recovery, or revocation.
 
-## Alpha software — not for production
+## Distribution and operations
 
-Swarmbase is in **active alpha development**. The core APIs are still being nailed down, test coverage is growing but incomplete, and there has been **no independent security audit** of the [cryptographic design](../security/) or its implementation. It is not appropriate for production workloads, heavy usage, or data you cannot afford to lose. The current goal is to release something good enough to explore real use cases and learn from them — not to carry your company's uptime.
+- Workspace packages build in the repository but are not published, and clean external-package installation is not an acceptance test.
+- Production deployment is documentation-only: there is no automated deployment, upgrade, rollback, backup, or restore validation.
+- The relay server has unit/build coverage, but operational scaling and multi-relay behavior are not proven.
 
-## Data loss is possible without pinning
+## Local and durable operation
 
-This is the sharpest edge, so here it is without cushioning: **if all clients holding a document lose their local storage and no pinning service is configured, that data is permanently gone.** There is no server-side copy, because there is no server.
+- Offline changes apply only to an already-loaded replica with the necessary local state and keys.
+- A change promise includes authorization, storage, optional signing, encryption, publication, handlers, and possible compaction; it is not merely an in-memory UI edit.
+- There is no durable outbox, publish acknowledgement, automatic retry, or guaranteed automatic reconnect. Failed commits can leave provider-dependent local state, especially with in-place Yjs mutation.
+- Browser defaults use IndexedDB-backed stores, but complete document recovery after close/restart is not verified. Browsers may evict or clear storage.
+- Recovery requires discoverable CIDs/graph state, retained blocks, epoch keys, identity and KEM material, compatible configuration, and reachable peers. Loss of keys or identity may be unrecoverable.
 
-Browser storage makes this a realistic failure mode, not a theoretical one — cleared site data, private browsing, storage eviction under disk pressure, or simply a small group of users all replacing their devices. Until you have set up [pinning](../storage/), treat Swarmbase like venture investing: only put in what you can afford to lose. Making pinning easier (and eventually offering turnkey options) is on the roadmap, but today it is manual setup you must do yourself.
+## Storage, snapshots, and pinning
 
-## Browsers behind NAT need a relay
+- There is no automatic replication-factor guarantee.
+- Pinning is incomplete: `CollabswarmNode` listens for document-publish pin requests, but the core commit path does not publish them; no generic pinning service is integrated.
+- Automatic compaction is off by default. Pruning changes what a peer can serve, and optional block GC is destructive.
+- After snapshot compaction or pruning, a new replica can fail to bootstrap: it may lack the trusted writer ACL needed to accept the snapshot, retained tail changes may not reconstruct pruned state, required data may be unavailable, or default tip-hash quorum may not agree on served frontiers.
+- Concurrent snapshots can represent different local states; deterministic preference does not prove equivalence.
 
-"Peer-to-peer" does not mean "zero infrastructure." Browsers cannot accept inbound connections, and NATs and firewalls block many direct paths, so every real-world deployment needs at least one publicly reachable **bootstrap/relay node** (libp2p Circuit Relay v2) for peers to find each other and to carry traffic when direct WebRTC fails — which is common on corporate networks and symmetric NATs. The relay is small, cheap, and [never sees plaintext](../networking/), but it is a piece of infrastructure you must run, monitor, and pay for. If relays are unreachable, peers that don't already have a direct connection cannot sync.
+## Networking and availability
 
-## Not battle-tested at scale
+- Browser deployments generally need bootstrap/relay infrastructure. Paths may be direct or relay-mediated; DCUtR, WebRTC, STUN, TURN, and direct upgrades are topology-dependent.
+- GossipSub is best effort and does not guarantee delivery to every subscriber.
+- Bootstrap, pubsub discovery, DHT, WebRTC, relay fallback, and NAT traversal are only partially system-tested. WebSocket and WebTransport synchronization are configuration claims without transport-specific acceptance tests.
+- Connection churn, large multi-peer meshes, relay failover during edits, bootstrap replacement, and partition/rejoin remain partially or untested.
+- Relays can observe metadata and can censor, delay, or partition traffic even though they need not see plaintext.
+- Relay identity is operational state: clients pinned to an old relay peer ID may not recover after replacement. Topic allowlists/caps and relay capacity can deny service.
 
-Swarmbase has not been proven with large documents, large swarms, high transaction rates, or long-lived heavy usage. Benchmarking is future work; the current test coverage is unit and integration level, not soak testing under production-shaped load. Concretely, that means undiscovered failure modes are likely in areas like GossipSub mesh behavior at scale, sync performance on very large histories, and browser storage limits. The development philosophy is to prioritize performance, reliability, and security over new features — but that work is in progress, not done.
+## Authorization and revocation
 
-## CRDT history grows
+- Application-level signing is on by default but can be disabled, removing normal sync-message authentication and binary ACL enforcement.
+- The active document path enforces reader/writer ACLs. Capability, UCAN, `UCANACL`, and ACL-chain code is standalone and not integrated end to end.
+- Every writer can administer ACLs. A valid sync signature proves only that some current writer key signed; it is not durable explicit authorship.
+- Initial-load quorum assumes enough independent reachable peer identities, is not Sybil-resistant, and trades availability for defense in depth. It covers the served frontier, not every concurrent head known anywhere.
+- BeeKEM's cryptographic core and focused Welcome/PathUpdate flows are tested, but important membership state is memory-only and PathUpdate delivery is best effort. Restart, missed update, multiwriter, and full-system revocation gaps remain.
+- Removing a writer blocks future acceptance under the current writer ACL; removing a reader attempts future key separation. Neither can erase plaintext or keys already copied, and no absolute post-revocation confidentiality guarantee is established.
+- History visibility is configured locally and cannot force other replicas to delete earlier epoch keys.
 
-Every edit adds a node to the document's [Merkle-DAG](../storage/): storage, sync-message size, and new-peer load time all grow with total edits, and at the CRDT layer deletions leave permanent tombstones — heavily edited documents grow with operations performed, not final content size. [Snapshot-based compaction](../crdts/) exists to bound sync and load costs, but it is **opt-in, disabled by default, and new code** — and it does not shrink tombstone overhead inside the live document state. Long-lived, high-churn documents will get slower and heavier until compaction matures.
+## Convergence and verification
 
-## Revocation cannot rewind
+- Adapter tests support Yjs and Automerge convergence claims at component level. Complete system partition/rejoin and live post-load cross-browser convergence are only partially covered.
+- A dedicated CI topology verifies initial encrypted Automerge document load across NAT through a relay; it does not verify every onboarding, mutation, reconnect, revocation, or recovery path.
+- Performance, crypto, sync, convergence, Bloom, and query benchmarks exist, but they have no pass/fail budgets. No bounded latency, memory, storage, load, or sync guarantee follows from them.
+- Large documents, long histories, high change rates, large groups, hostile graph shapes, prolonged churn, and production-scale swarms are unproven.
 
-Removing a reader [rotates the document key](../security/) so they cannot decrypt anything *new*. It cannot claw back what their device already decrypted. This is a fundamental property of any end-to-end-encrypted replicated system, not a temporary gap — but it surprises people, so it belongs on this list.
-
-## Metadata is visible
-
-Contents are end-to-end encrypted; *patterns* are not. Untrusted peers and relays can see document topic names (which by default embed the document path), which peers participate in which documents, message sizes and timing, and when keys rotate. If your threat model includes traffic analysis, Swarmbase alone is [not sufficient](../security/).
-
-## When another database is a better choice
-
-Use something else when:
-
-- **You need global real-time consistency.** Payments, inventory, reservations — anything where replicas briefly disagreeing is a correctness bug. The distributed web is asynchronous by nature; Swarmbase guarantees [convergence](../crdts/), not instantaneous agreement. Use a conventional transactional database.
-- **Your dataset is very large with a high transaction rate.** Unbounded history plus not-battle-tested equals the wrong tool. Use a server-side database built for throughput.
-- **You need high-uptime production guarantees now.** Alpha software, self-run relays, manual pinning. A managed database gives you SLAs; we give you honesty.
-- **A central authority must control the data.** E2E encryption and replica-owned data are the point of [local-first](../local-first/); if your requirements are centralized audit, retention enforcement, and deletion on demand, a centralized system matches them better.
-
-Swarmbase's sweet spot remains what it was designed for: local-first, collaborative applications for individuals and small-to-medium groups, resilient to bad connectivity, private by default.
-
-## Help us shrink this page
-
-We consider it a feature that this page exists — and a goal to make it shorter. Every item above is a tractable engineering problem, and this is an MIT-licensed open-source project: benchmarking, compaction hardening, pinning tooling, relay ergonomics, security review, and testing are all areas where contributions move the needle. See [how to help](../../community/help-wanted/), or open an issue or discussion on [GitHub](https://github.com/swarmbase/swarmbase) — comments and requests on any of these limitations are explicitly welcome.
+Use a conventional transactional or managed database when you require linearizable state, central control, audited deletion, assured disaster recovery, high throughput, or an SLA. The other concept pages explain the narrower implemented behavior: [Local-first](../local-first/), [CRDTs](../crdts/), [Networking](../networking/), [Storage](../storage/), and [Security](../security/).
