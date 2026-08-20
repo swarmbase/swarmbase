@@ -153,6 +153,10 @@
     let outstanding = 0;
     let drainPromise: Promise<void> | null = null;
     let preparation = Promise.resolve();
+    const focusedControls: Record<
+      Side,
+      HTMLInputElement | HTMLButtonElement | null
+    > = { alice: null, bob: null };
 
     const setStatus = (message: string, error = false) => {
       if (!active()) return;
@@ -164,12 +168,24 @@
     const setFormBusy = (side: Side, busy: boolean) => {
       if (!active()) return;
       const form = root.querySelector<HTMLFormElement>(`[data-form="${side}"]`)!;
+      if (busy) {
+        const focused = document.activeElement;
+        const isFormControl =
+          focused instanceof HTMLInputElement || focused instanceof HTMLButtonElement;
+        focusedControls[side] =
+          isFormControl && form.contains(focused) ? focused : null;
+      }
       form.setAttribute('aria-busy', String(busy));
       form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(
         (control) => {
           control.disabled = busy;
         },
       );
+      if (!busy) {
+        const focused = focusedControls[side];
+        focusedControls[side] = null;
+        if (focused && document.activeElement === document.body) focused.focus();
+      }
     };
 
     const hex = (bytes: Uint8Array, length = 10) =>
@@ -368,7 +384,12 @@
     const edit = async (side: Side, change: (doc: Doc) => void) => {
       if (!active()) return;
       if (outstanding >= MAX_PENDING) {
-        setStatus(`Queue limit reached (${MAX_PENDING}); reconnect before editing again.`, true);
+        setStatus(
+          offline
+            ? `Queue limit reached (${MAX_PENDING}); reconnect before editing again.`
+            : `Queue limit reached (${MAX_PENDING}); wait for pending updates to finish.`,
+          true,
+        );
         return;
       }
       outstanding += 1;
