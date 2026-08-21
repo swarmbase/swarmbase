@@ -47,7 +47,7 @@ await document.setKemKeyPair(kemKeyPair);
 
 - **Readers** receive the document key (via BeeKEM encapsulation) and can decrypt blocks.
 - **Writers** can publish new changes. Their signature is verified against the writer list before a change is applied.
-- **Signing is currently optional** — a change without a valid writer signature may be accepted depending on configuration. This is an alpha limitation, not a design choice.
+- **Signing is currently optional** — a change without a valid writer signature may be accepted depending on configuration.
 
 ### Current-writer authorization only
 

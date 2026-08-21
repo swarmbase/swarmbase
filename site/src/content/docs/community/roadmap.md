@@ -3,7 +3,7 @@ title: Roadmap
 description: Current development priorities and future directions for Swarmbase.
 ---
 
-Swarmbase is alpha software. This page tracks the most important gaps between the current implementation and a production-ready system.
+Swarmbase is under active development. This page tracks the most important gaps between the current implementation and a production-ready system.
 
 ## Priority gaps
 

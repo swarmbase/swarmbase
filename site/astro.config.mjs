@@ -63,7 +63,7 @@ export default defineConfig({
       ],
       title: 'Swarmbase',
       description:
-        'Alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
+        'Encrypted, local-first CRDT documents synchronized over peer-to-peer networks.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'Swarmbase',

@@ -5,7 +5,7 @@ description: Frequently asked questions about Swarmbase.
 
 ## Is Swarmbase production-ready?
 
-**No.** Swarmbase is alpha software. It is suitable for experiments, prototypes, and learning about local-first systems. Several critical paths are not yet verified end-to-end, including browser restart recovery, partition/rejoin convergence, and automatic reconnect. See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) for a complete capability map.
+**Not yet.** Swarmbase is under active development. It is suitable for experiments, prototypes, and learning about local-first systems. Several critical paths are not yet verified end-to-end, including browser restart recovery, partition/rejoin convergence, and automatic reconnect. See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) for a complete capability map.
 
 ## Can I use Swarmbase with npm/pnpm/yarn install?
 

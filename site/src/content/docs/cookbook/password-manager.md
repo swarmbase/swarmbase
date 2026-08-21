@@ -8,7 +8,7 @@ description: Assess the password-manager source example and the incomplete disti
 [`examples/password-manager`](https://github.com/swarmbase/swarmbase/tree/main/examples/password-manager) is a Vite, React, and Yjs reference application. Its typechecked production build and strict Chromium startup smoke test pass. It has no acceptance test proving two-user sharing, invitation delivery, restart recovery, or revocation.
 
 :::caution
-Do not store real passwords, recovery codes, API tokens, or other credentials in this example. Swarmbase is alpha software, is not independently audited, and has no assured durability or recovery path.
+Do not store real passwords, recovery codes, API tokens, or other credentials in this example. Swarmbase is under active development, is not independently audited, and has no assured durability or recovery path.
 :::
 
 Packages are unpublished. From a repository checkout prepared with the [quick start](../../getting-started/quick-start/), run:
