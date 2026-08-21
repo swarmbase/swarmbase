@@ -1,0 +1,89 @@
+name: Bug report
+description: Report a reproducible defect in Swarmbase or its development tooling.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Swarmbase is alpha software and is not production-ready. For questions and design exploration, use [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions).
+
+        Report suspected vulnerabilities through [private vulnerability reporting](https://github.com/swarmbase/swarmbase/security/advisories/new), not this form. Never include credentials, signing keys, KEM keys, document keys, private payloads, or sensitive user data.
+  - type: input
+    id: revision
+    attributes:
+      label: Version or commit
+      description: Give the commit SHA, branch, or package version where you reproduced the problem.
+      placeholder: e.g. main at 0123abcd
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Core document or runtime APIs
+        - Automerge adapter
+        - Yjs adapter
+        - React bindings
+        - Redux bindings
+        - Indexing and search
+        - Relay or peer-to-peer networking
+        - Browser examples
+        - Build, tests, or release tooling
+        - Documentation site
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the operating system, Node.js version, browser and version when relevant, and the command or example used.
+      placeholder: macOS 15; Node.js 22.19.0; Chromium 140; yarn test:e2e:browser-test
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest deterministic sequence that reproduces the problem.
+      placeholder: |
+        1. Install from a clean checkout...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized log output
+      description: Remove all secrets and private data. Include only the lines needed to understand the failure.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add sanitized screenshots, supporting links, or other details that help explain the problem.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and discussions for this problem.
+          required: true
+        - label: I removed credentials, keys, private payloads, and sensitive user data.
+          required: true
