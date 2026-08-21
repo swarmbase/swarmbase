@@ -7,7 +7,7 @@ import {
   YjsKeychain,
   YjsKeychainProvider,
   YjsJSONSerializer,
-} from './collabswarm-yjs';
+} from './collabswarm-yjs.js';
 
 // ECDSA P-384 test keys (extractable, verify-only)
 const publicKeyData1 = {

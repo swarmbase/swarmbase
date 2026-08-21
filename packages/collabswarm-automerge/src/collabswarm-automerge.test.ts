@@ -8,7 +8,7 @@ import {
   AutomergeJSONSerializer,
   serializeKey,
   deserializeKey,
-} from './collabswarm-automerge';
+} from './collabswarm-automerge.js';
 
 // ECDSA P-384 JWK test keys (public only - ACL uses raw export which requires public keys)
 const publicKeyData1 = {

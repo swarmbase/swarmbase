@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
-import { SubtleCrypto } from './auth-subtlecrypto';
-import type { AesAlgorithmName } from './auth-provider';
-import { importSymmetricKey } from './utils';
+import { SubtleCrypto } from './auth-subtlecrypto.js';
+import type { AesAlgorithmName } from './auth-provider.js';
+import { importSymmetricKey } from './utils.js';
 
 const auth = new SubtleCrypto();
 

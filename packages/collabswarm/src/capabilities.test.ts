@@ -7,7 +7,7 @@ import {
   capabilityImplies,
   isFieldCapability,
   getFieldPath,
-} from './capabilities';
+} from './capabilities.js';
 
 describe('capabilityImplies', () => {
   test.each([

@@ -1,9 +1,9 @@
 import { describe, expect, test } from '@jest/globals';
-import { BeeKEM } from './beekem/beekem';
+import { BeeKEM } from './beekem/beekem.js';
 import {
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
-} from './path-update-wire';
+} from './path-update-wire.js';
 
 const ECDH_ALGO = { name: 'ECDH', namedCurve: 'P-256' };
 

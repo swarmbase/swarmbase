@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { NetworkStats } from './network-stats';
+import { NetworkStats } from './network-stats.js';
 
 describe('NetworkStats', () => {
   test('initial snapshot has all zero counters', () => {

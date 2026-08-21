@@ -39,8 +39,8 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { BeeKEM } from './beekem/beekem';
-import { eciesOpen, eciesSeal, generateEciesKeyPair } from './ecies';
+import { BeeKEM } from './beekem/beekem.js';
+import { eciesOpen, eciesSeal, generateEciesKeyPair } from './ecies.js';
 
 /**
  * Re-import a raw SEC1 P-256 public key with `extractable=true` so
@@ -61,15 +61,15 @@ async function importExtractableKemPublicKey(
 import {
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
-} from './derive-doc-key';
+} from './derive-doc-key.js';
 import {
   deserializePathUpdateFromWire,
   serializePathUpdateForWire,
-} from './path-update-wire';
+} from './path-update-wire.js';
 import {
   decodeWelcomeSealedPayload,
   encodeWelcomeSealedPayload,
-} from './welcome-sealed-payload';
+} from './welcome-sealed-payload.js';
 
 function toBuffer(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(bytes.byteLength);

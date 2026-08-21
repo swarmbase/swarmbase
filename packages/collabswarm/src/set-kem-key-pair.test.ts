@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { validateAndExportKemKeyPair } from './kem-key-pair';
+import { validateAndExportKemKeyPair } from './kem-key-pair.js';
 
 /**
  * Validation coverage for the helper backing

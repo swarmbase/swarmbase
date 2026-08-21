@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
 import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
-import { IDBIndexStorage } from './idb-index-storage';
+import { IDBIndexStorage } from './idb-index-storage.js';
 
 describe('IDBIndexStorage', () => {
   let storage: IDBIndexStorage;

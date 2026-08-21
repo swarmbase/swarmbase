@@ -1,13 +1,13 @@
 import { describe, expect, test } from '@jest/globals';
-import { BeeKEM } from './beekem/beekem';
+import { BeeKEM } from './beekem/beekem.js';
 import {
   deserializeBeeKEMWelcomeFromWire,
   serializeBeeKEMWelcomeForWire,
-} from './beekem-welcome-wire';
+} from './beekem-welcome-wire.js';
 import {
   decodeWelcomeSealedPayload,
   encodeWelcomeSealedPayload,
-} from './welcome-sealed-payload';
+} from './welcome-sealed-payload.js';
 
 /**
  * Wire round-trip coverage for the BeeKEM Welcome wire shape and the

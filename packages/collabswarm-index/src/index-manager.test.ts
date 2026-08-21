@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { IndexManager } from './index-manager';
-import { MemoryIndexStorage } from './memory-index-storage';
-import { IndexDefinition } from './types';
+import { IndexManager } from './index-manager.js';
+import { MemoryIndexStorage } from './memory-index-storage.js';
+import { IndexDefinition } from './types.js';
 
 async function waitFor(condition: () => Promise<boolean>, timeoutMs: number = 2000): Promise<void> {
   const start = Date.now();

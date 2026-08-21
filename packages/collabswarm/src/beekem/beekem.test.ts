@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { BeeKEM } from './beekem';
+import { BeeKEM } from './beekem.js';
 
 const ECDH_ALGO = { name: 'ECDH', namedCurve: 'P-256' };
 

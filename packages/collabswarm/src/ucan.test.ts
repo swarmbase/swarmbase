@@ -6,7 +6,7 @@ import {
   deserializeUCAN,
   validateUCANChain,
   UCAN,
-} from './ucan';
+} from './ucan.js';
 
 /** Generate an ECDSA P-384 key pair for testing. */
 async function generateKeyPair(): Promise<CryptoKeyPair> {

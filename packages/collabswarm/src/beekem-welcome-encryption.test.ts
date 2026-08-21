@@ -5,7 +5,7 @@ import {
   generateEciesKeyPair,
   importEciesPublicKey,
   exportEciesPublicKey,
-} from './ecies';
+} from './ecies.js';
 
 /**
  * Wire-level coverage of the BeeKEM Welcome payload encryption flow.

@@ -10,14 +10,14 @@ import {
   stripInlineChanges,
   trackTipInList,
   treeContainsCid,
-} from './merkle-cross-links';
+} from './merkle-cross-links.js';
 import {
   CRDTChangeNode,
   CRDTChangeNodeKind,
   crdtChangeNodeDeferred,
   crdtDocumentChangeNode,
   crdtWriterChangeNode,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 
 /**
  * Tests for the Merkle-CRDT cross-link selection helpers introduced in

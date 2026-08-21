@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { IndexManager } from './index-manager';
-import { MemoryIndexStorage } from './memory-index-storage';
-import { QueryResult } from './types';
+import { IndexManager } from './index-manager.js';
+import { MemoryIndexStorage } from './memory-index-storage.js';
+import { QueryResult } from './types.js';
 
 // We test the hooks' backing logic by directly exercising IndexManager's
 // subscribe()/defineIndex()/removeIndex() — the same primitives the hooks
@@ -74,12 +74,12 @@ function subscribeAndWait<T extends Record<string, unknown>>(
 
 describe('React hooks (module surface)', () => {
   test('useIndexQuery should be exported as a function', async () => {
-    const mod = await import('./react');
+    const mod = await import('./react.js');
     expect(typeof mod.useIndexQuery).toBe('function');
   });
 
   test('useDefineIndexes should be exported as a function', async () => {
-    const mod = await import('./react');
+    const mod = await import('./react.js');
     expect(typeof mod.useDefineIndexes).toBe('function');
   });
 });
