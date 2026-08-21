@@ -1,35 +1,37 @@
-# Demo: Password manager
+# Swarmbase password manager
 
-Shared secrets with item-specific access control.
+This Vite and React reference interface explores Yjs documents, Swarmbase React
+hooks, and item-specific access-control UI.
 
-## Prerequisites
+> Swarmbase is alpha software and is not production-ready. Do not enter real
+> credentials or other sensitive data into this example.
 
-- Node.js 16+
-- Yarn
+## Run from source
 
-## Install
-
-First, setup node modules and typescript:
-
-```sh
-yarn install
-yarn workspace @swarmbase/password-manager build
-```
-
-Then, start a local web server:
+Use Node.js 22.19.0 and Yarn 4.5.0 through Corepack. From the repository root:
 
 ```sh
+corepack enable
+yarn install --immutable
+yarn build
 yarn workspace @swarmbase/password-manager start
 ```
 
-_Make sure to 'allow' network connections if asked._
+Open the URL printed by Vite. The application redirects its root route to the
+login interface.
 
-Now, you can open a browser tab to:
+## Verify the current example
 
-- <http://localhost:3000/login>
+```sh
+yarn exec playwright install chromium
+yarn test:e2e:password-manager
+```
 
-You now have a local instance running and should be able to log in.
+The smoke test builds this workspace and verifies that the login interface
+renders in Chromium without runtime errors. It does not prove distinct-identity
+sharing, invitation delivery, restart recovery, revocation, or protection of
+real credentials.
 
-## Application quickstart
-
-Coming soon!
+- [Encrypted shared-secrets guide](https://swarmbase.github.io/swarmbase/cookbook/password-manager/)
+- [Security model](https://swarmbase.github.io/swarmbase/concepts/security/)
+- [Current limitations](https://swarmbase.github.io/swarmbase/concepts/limitations/)
