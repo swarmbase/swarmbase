@@ -79,6 +79,12 @@ export default defineConfig({
         baseUrl: 'https://github.com/swarmbase/swarmbase/edit/main/site/',
       },
       customCss: ['./src/styles/custom.css'],
+      head: [
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image', content: '/swarmbase/og-image.svg' },
+        },
+      ],
       sidebar: [
         {
           label: 'Getting started',

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0f0e1a"/>
+  <circle cx="600" cy="240" r="80" fill="#6366f1" opacity="0.8"/>
+  <circle cx="460" cy="200" r="24" fill="#2dd4bf"/>
+  <circle cx="740" cy="200" r="24" fill="#2dd4bf"/>
+  <circle cx="460" cy="280" r="24" fill="#2dd4bf"/>
+  <circle cx="740" cy="280" r="24" fill="#2dd4bf"/>
+  <circle cx="600" cy="160" r="24" fill="#2dd4bf"/>
+  <circle cx="600" cy="320" r="24" fill="#2dd4bf"/>
+  <text x="600" y="420" text-anchor="middle" fill="#c7d2fe" font-family="system-ui, sans-serif" font-size="52" font-weight="700">Swarmbase</text>
+  <text x="600" y="480" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="28">Encrypted, local-first CRDT documents</text>
+  <text x="600" y="520" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="24">that sync peer to peer</text>
+</svg>

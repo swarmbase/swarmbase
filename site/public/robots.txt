@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://swarmbase.github.io/swarmbase/sitemap-index.xml
