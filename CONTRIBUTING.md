@@ -1,6 +1,6 @@
 # Contributing to Swarmbase
 
-Swarmbase is alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks. It is not production-ready, and contributions should distinguish implemented primitives from behavior verified end to end.
+Swarmbase is under active development. Contributions should distinguish implemented primitives from behavior verified end to end.
 
 Read the [full contributing guide](https://swarmbase.github.io/swarmbase/community/contributing/) before starting. It contains the repository map, exact setup commands, Docker readiness sequence, generated-documentation boundaries, and pull request expectations. The repository's [AGENTS.md](AGENTS.md) provides the same operational baseline for coding tools.
 
