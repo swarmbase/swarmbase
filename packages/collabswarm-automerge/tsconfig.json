@@ -18,7 +18,8 @@
   },
   "exclude": [
     "node_modules",
-    "extras"
+    "extras",
+    "src/**/*.test.ts"
   ],
   "include": [
     "src",
