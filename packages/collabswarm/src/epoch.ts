@@ -7,8 +7,8 @@ export const EPOCH_ID_LENGTH = 32;
  * Length of AES-256-GCM nonce in bytes. CTR and CBC use 16-byte nonces instead.
  *
  * @remarks Renamed from `NONCE_LENGTH` in the AES-CTR/CBC support update. This
- * is a breaking rename, but no migration alias is provided: SwarmDB is in
- * pre-1.0 alpha and has no known live consumers.
+ * is a breaking rename, but no migration alias is provided because there are no
+ * known live consumers of the old name.
  */
 export const GCM_NONCE_LENGTH = 12;
 
@@ -20,8 +20,8 @@ export const EPOCH_SECRET_INFO = 'swarmdb-epoch-v1';
  *
  * @remarks Changed from a single string (the previous AES-GCM-only value
  * `'aes-gcm-key'`) to an algorithm-keyed record in the AES-CTR/CBC support
- * update. This is a breaking type change, accepted because SwarmDB is in
- * pre-1.0 alpha with no known live consumers.
+ * update. This is a breaking type change, accepted because there are no
+ * known live consumers of the old value.
  */
 export const ENCRYPTION_KEY_INFO: Record<AesAlgorithmName, string> = {
   'AES-GCM': 'aes-gcm-key',
@@ -236,8 +236,8 @@ export class EpochManager {
    * @remarks The 4th parameter changed from a positional `affectedMember?: string`
    * to an `options` object in the AES-CTR/CBC support update so the algorithm
    * choice cannot be silently swallowed by a stringly-typed positional arg.
-   * This is a breaking signature change, accepted because SwarmDB is in pre-1.0
-   * alpha with no known live consumers; no overload shim is provided.
+   * This is a breaking signature change, accepted because there are no known
+   * live consumers; no overload shim is provided.
    */
   async transitionEpoch(
     groupSecret: Uint8Array,

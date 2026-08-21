@@ -5,8 +5,7 @@ Automerge and Redux integrations. It exposes node addresses, peer connection
 controls, document open/edit controls, and ACL inspection for development and
 testing.
 
-> Swarmbase is alpha software and is not production-ready. This example is a
-> test harness, not an application template or a production deployment.
+This example is a test harness, not an application template or a production deployment.
 
 ## Run from source
 

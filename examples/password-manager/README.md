@@ -3,8 +3,7 @@
 This Vite and React reference interface explores Yjs documents, Swarmbase React
 hooks, and item-specific access-control UI.
 
-> Swarmbase is alpha software and is not production-ready. Do not enter real
-> credentials or other sensitive data into this example.
+Do not enter real credentials or other sensitive data into this example.
 
 ## Run from source
 

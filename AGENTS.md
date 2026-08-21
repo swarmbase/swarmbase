@@ -2,7 +2,7 @@
 
 ## Project
 
-Swarmbase is alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks. It is not production-ready. The six `@swarmbase/*` library packages are source workspaces and are not published to npm.
+Swarmbase provides encrypted, local-first CRDT documents synchronized over peer-to-peer networks. The six `@swarmbase/*` library packages are source workspaces and are not published to npm.
 
 Use `docs/feature-audit.md` and `site/src/content/docs/concepts/` for architecture, evidence, security, and limitation details. Do not turn isolated primitive tests into end-to-end capability claims.
 
