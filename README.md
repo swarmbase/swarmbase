@@ -8,7 +8,6 @@
 
 Open-source TypeScript toolkit for encrypted, local-first CRDT documents that sync peer to peer. Build collaborative browser applications without a server seeing your data in plaintext.
 
-> **Alpha:** Swarmbase is not production-ready and may lose data or change APIs. The `@swarmbase/*` packages are not published to npm; use the source workspaces.
 
 **Documentation:** https://swarmbase.github.io/swarmbase/
 
