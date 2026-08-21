@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Swarmbase is under active development. APIs and persisted formats may change. Security fixes are developed on the default branch; no release line currently receives backported fixes.
+Swarmbase is alpha software with no production-supported release. APIs and persisted formats may change, and the software must not be used for irreplaceable data. Security fixes are developed on the default branch; no release line currently receives backported fixes.
 
 ## Reporting a vulnerability
 

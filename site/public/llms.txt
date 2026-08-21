@@ -2,6 +2,8 @@
 
 > TypeScript toolkit for encrypted, local-first CRDT documents synchronized over peer-to-peer networks. Composes Yjs/Automerge CRDT libraries with libp2p networking, Helia content-addressed storage, ECDSA P-384 signing, and AES-GCM encryption.
 
+Swarmbase is alpha software and is not production-ready. The six `@swarmbase/*` libraries are source workspaces and are not published to npm.
+
 Use the feature audit and concept documentation as the authority for capability claims. A primitive test does not establish complete multi-peer behavior. Every capability must be verified by CI evidence.
 
 ## Start
