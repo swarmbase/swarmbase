@@ -1,12 +1,12 @@
 import { describe, expect, test } from '@jest/globals';
-import { collectTreeCIDs, filterDeletableCIDs } from './blockstore-gc';
+import { collectTreeCIDs, filterDeletableCIDs } from './blockstore-gc.js';
 import {
   CRDTChangeNode,
   crdtDocumentChangeNode,
   crdtReaderChangeNode,
   crdtWriterChangeNode,
   crdtChangeNodeDeferred,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 
 type Changes = Uint8Array;
 

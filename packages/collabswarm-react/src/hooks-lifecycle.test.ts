@@ -8,7 +8,7 @@ import {
   createMockCollabswarm,
   TestProvider,
   TestConsumer,
-} from './test-utils';
+} from './test-utils.js';
 
 // ---------------------------------------------------------------------------
 // Tests

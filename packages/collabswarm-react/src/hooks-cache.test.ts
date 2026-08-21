@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
-import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache';
+import { openTasks, openTaskResults, subscriberCounts } from './hooks-cache.js';
 
 function resetCaches() {
   openTasks.clear();

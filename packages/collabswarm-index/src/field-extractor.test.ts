@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { extractField } from './field-extractor';
+import { extractField } from './field-extractor.js';
 
 describe('extractField', () => {
   test.each([

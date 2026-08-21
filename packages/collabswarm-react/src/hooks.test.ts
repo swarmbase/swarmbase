@@ -1,7 +1,7 @@
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react';
-import { CollabswarmContext, useCollabswarm } from './hooks';
+import { CollabswarmContext, useCollabswarm } from './hooks.js';
 
 // ---------------------------------------------------------------------------
 // CollabswarmContext defaults

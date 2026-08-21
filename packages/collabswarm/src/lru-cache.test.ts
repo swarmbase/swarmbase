@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { LRUCache } from './lru-cache';
+import { LRUCache } from './lru-cache.js';
 
 describe('LRUCache', () => {
   test('get/set basic operations', () => {

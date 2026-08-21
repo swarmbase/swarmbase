@@ -10,7 +10,7 @@ import {
   LOAD_QUORUM_TIMEOUT_MS_MAX,
   LoadQuorumFailedError,
   validateLoadQuorumConfig,
-} from './load-quorum';
+} from './load-quorum.js';
 
 function bytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {

@@ -11,7 +11,7 @@ import {
   generateAndExportSymmetricKey,
   importHmacKey,
   importSymmetricKey,
-} from './utils';
+} from './utils.js';
 
 /**
  * Minimal Uint8ArrayList stand-in for testing. The real package is ESM-only

@@ -12,7 +12,7 @@ import {
   leafToNodeIndex,
   nodeToLeafIndex,
   copath,
-} from './tree-math';
+} from './tree-math.js';
 
 describe('isLeaf / isInternal', () => {
   test.each([

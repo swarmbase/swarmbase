@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { Doc } from 'yjs';
 import { Base64 } from 'js-base64';
-import { YjsJSONSerializer } from './collabswarm-yjs';
+import { YjsJSONSerializer } from './collabswarm-yjs.js';
 
 // Test the core Yjs functionality that YjsProvider wraps
 describe('Yjs Core Functionality', () => {

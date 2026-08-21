@@ -2,12 +2,12 @@ import { describe, expect, test } from '@jest/globals';
 import {
   CRDTChangeNode,
   crdtChangeNodeDeferred,
-} from './crdt-change-node';
+} from './crdt-change-node.js';
 import {
   CRDTChangeNodeWire,
   deserializeChangeNodeFromJSON,
   serializeChangeNodeForJSON,
-} from './merkle-dag-serialization';
+} from './merkle-dag-serialization.js';
 
 // --- Test encoders -------------------------------------------------------
 

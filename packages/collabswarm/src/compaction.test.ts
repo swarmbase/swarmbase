@@ -2,12 +2,12 @@ import { describe, expect, jest, test } from '@jest/globals';
 import {
   CompactionConfig,
   defaultCompactionConfig,
-} from './compaction-config';
-import { CRDTSnapshotNode } from './snapshot-node';
+} from './compaction-config.js';
+import { CRDTSnapshotNode } from './snapshot-node.js';
 import {
   isBlockNotFoundError,
   loadChangeBlock,
-} from './blockstore-gc';
+} from './blockstore-gc.js';
 
 describe('CompactionConfig', () => {
   test('default config has compaction disabled', () => {

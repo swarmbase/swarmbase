@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { CollabswarmIndexIntegration, SubscribableDocument } from './collabswarm-index-integration';
-import { IndexManager } from './index-manager';
-import { MemoryIndexStorage } from './memory-index-storage';
+import { CollabswarmIndexIntegration, SubscribableDocument } from './collabswarm-index-integration.js';
+import { IndexManager } from './index-manager.js';
+import { MemoryIndexStorage } from './memory-index-storage.js';
 
 interface MockDoc {
   title: string;

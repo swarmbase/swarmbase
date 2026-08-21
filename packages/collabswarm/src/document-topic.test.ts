@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic';
+import { documentTopic, DEFAULT_DOCUMENT_TOPIC_PREFIX } from './document-topic.js';
 
 describe('documentTopic', () => {
   test('uses /document/ prefix by default', () => {

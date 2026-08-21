@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { MemoryIndexStorage } from './memory-index-storage';
-import { FieldFilter } from './types';
+import { MemoryIndexStorage } from './memory-index-storage.js';
+import { FieldFilter } from './types.js';
 
 describe('MemoryIndexStorage', () => {
   let storage: MemoryIndexStorage;

@@ -1,10 +1,10 @@
 import { describe, expect, test } from '@jest/globals';
-import { CRDTSyncMessage } from './crdt-sync-message';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
 import {
   evaluateBeeKEMWelcome,
   WelcomeValidationDeps,
-} from './beekem-welcome-handler';
-import { SyncMessageSerializer } from './sync-message-serializer';
+} from './beekem-welcome-handler.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
 
 /**
  * Unit-level coverage for the pending-welcomes buffer + drain semantics

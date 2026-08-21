@@ -6,7 +6,7 @@ import {
   importEciesPublicKey,
   exportEciesPublicKey,
   ECIES_P256_PUBLIC_KEY_LENGTH,
-} from './ecies';
+} from './ecies.js';
 
 /**
  * Direct-unit tests for the ECIES sealed-box primitive.

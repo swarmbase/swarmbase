@@ -3,7 +3,7 @@ import {
   DOC_KEY_INFO,
   deriveDocumentKeyFromRootSecret,
   deriveEpochIdFromRootSecret,
-} from './derive-doc-key';
+} from './derive-doc-key.js';
 
 const ALGO = { name: 'AES-GCM' };
 
