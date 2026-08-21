@@ -9,7 +9,7 @@ body:
       value: |
         Use this form for actionable documentation changes. Ask open-ended questions and discuss new ideas in [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions).
 
-        Swarmbase is alpha software. Capability and security claims must match the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md).
+        Capability and security claims must match the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md).
   - type: input
     id: location
     attributes:
