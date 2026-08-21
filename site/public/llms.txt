@@ -13,6 +13,17 @@ Use the feature audit and concept documentation as the authority for capability 
 - [API reference](https://swarmbase.github.io/swarmbase/reference/): Generated package documentation for all six @swarmbase/* packages.
 - [Comparisons](https://swarmbase.github.io/swarmbase/reference/comparisons/): Swarmbase vs Yjs, Automerge, Liveblocks, RxDB, Jazz, ElectricSQL.
 
+## Packages
+
+The six libraries are source workspaces and are not yet published to npm. Most applications combine the core package with one CRDT adapter and optional framework bindings.
+
+- [`@swarmbase/collabswarm`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm/README.md): Core document and runtime APIs, with dedicated Node and browser-primitives entry points.
+- [`@swarmbase/collabswarm-automerge`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm-automerge/README.md): Automerge provider, serialization, ACL, and keychain adapters.
+- [`@swarmbase/collabswarm-yjs`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm-yjs/README.md): Yjs provider, serialization, ACL, and keychain adapters.
+- [`@swarmbase/collabswarm-react`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm-react/README.md): React context and hooks for applications that supply compatible document adapters.
+- [`@swarmbase/collabswarm-redux`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm-redux/README.md): Redux actions, thunks, and reducers; review the documented local-change ordering limitation.
+- [`@swarmbase/collabswarm-index`](https://github.com/swarmbase/swarmbase/blob/main/packages/collabswarm-index/README.md): Local memory and IndexedDB indexing with optional React hooks; distributed search remains incomplete.
+
 ## Concepts
 
 - [Local-first design](https://swarmbase.github.io/swarmbase/concepts/local-first/): What "local-first" means, implemented behavior, missing features (no outbox, no reconnect, no restart recovery).
