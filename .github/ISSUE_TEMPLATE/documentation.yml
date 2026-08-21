@@ -1,0 +1,57 @@
+name: Documentation issue
+description: Report missing, inaccurate, or unclear Swarmbase documentation.
+title: "[Docs]: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for actionable documentation changes. Ask open-ended questions and discuss new ideas in [GitHub Discussions](https://github.com/swarmbase/swarmbase/discussions).
+
+        Capability and security claims must match the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md).
+  - type: input
+    id: location
+    attributes:
+      label: Documentation location
+      description: Link the page or give the repository path and section.
+      placeholder: https://swarmbase.github.io/swarmbase/concepts/security/
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is missing, inaccurate, or unclear?
+      description: Quote only the minimum text needed and explain the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: correction
+    attributes:
+      label: Suggested correction
+      description: Describe the result you expect. Include supporting source or test links for capability claims.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Documentation area
+      options:
+        - Getting started
+        - Concepts or architecture
+        - Security or limitations
+        - Cookbook
+        - API reference or source comments
+        - Examples
+        - Contributor documentation
+        - Agent index (llms.txt)
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and discussions for this problem.
+          required: true
+        - label: I did not include credentials, keys, private payloads, or sensitive user data.
+          required: true
