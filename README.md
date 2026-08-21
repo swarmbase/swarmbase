@@ -1,11 +1,13 @@
 # Swarmbase
 
-[![CI workflow](https://github.com/swarmbase/swarmbase/actions/workflows/ci.yml/badge.svg)](https://github.com/swarmbase/swarmbase/actions/workflows/ci.yml)
-[![Site workflow](https://github.com/swarmbase/swarmbase/actions/workflows/site.yml/badge.svg)](https://github.com/swarmbase/swarmbase/actions/workflows/site.yml)
+[![CI](https://github.com/swarmbase/swarmbase/actions/workflows/ci.yml/badge.svg)](https://github.com/swarmbase/swarmbase/actions/workflows/ci.yml)
+[![Site](https://github.com/swarmbase/swarmbase/actions/workflows/site.yml/badge.svg)](https://github.com/swarmbase/swarmbase/actions/workflows/site.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://swarmbase.github.io/swarmbase/community/contributing/)
+[![Docs](https://img.shields.io/badge/docs-swarmbase.github.io-4f46e5)](https://swarmbase.github.io/swarmbase/)
 
-> **Alpha:** Swarmbase is under active development, is not production-ready, and may lose data or change APIs. The `@swarmbase/*` packages are not published to npm; use the source workspaces.
+Open-source TypeScript toolkit for encrypted, local-first CRDT documents that sync peer to peer. Build collaborative browser applications without a server seeing your data in plaintext.
 
-Swarmbase (formerly SwarmDB) explores encrypted, local-first document collaboration in browsers. It combines CRDT adapters, content-addressed storage, libp2p networking, signed changes, and dynamic access-control primitives while keeping the evidence for each capability explicit.
 
 **Documentation:** https://swarmbase.github.io/swarmbase/
 
