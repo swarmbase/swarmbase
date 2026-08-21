@@ -422,7 +422,7 @@ export function generateLlmsFull() {
     '# Swarmbase documentation site — full handwritten corpus',
     '',
     '> Concatenated hand-authored documentation pages plus the feature audit. Generated API detail and repository/package READMEs are indexed separately in llms.txt.',
-    '> Swarmbase is alpha software. Check capability claims against the feature audit and documented limitations.',
+    '> Swarmbase is under active development. Check capability claims against the feature audit and documented limitations.',
     '',
     ...sections.flatMap((section) => [section, '', '---', '']),
   ].join('\n');
