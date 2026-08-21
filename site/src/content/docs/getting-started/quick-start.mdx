@@ -127,9 +127,12 @@ commands without their services.
 
 ## Current package boundaries
 
-The source packages already expose ESM output and TypeScript declarations, but
-registry publication and clean external-consumer installation are not yet
-verified. Until that work lands:
+Release validation packs all six libraries and installs the exact tarballs in a
+clean Node 22.19.0 consumer. It checks all supported library ESM import paths,
+strict TypeScript typechecking with NodeNext module resolution, and a Vite
+build. The packages remain unpublished; this does not prove registry
+installation, browser runtime behavior, or packaged daemon execution. Until
+publication:
 
 - use Yarn workspace package names such as `@swarmbase/collabswarm`;
 - do not copy future `npm install` commands from issues or old documentation;

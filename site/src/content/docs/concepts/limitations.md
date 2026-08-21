@@ -9,7 +9,7 @@ See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/fe
 
 ## Distribution and operations
 
-- **Packages are unpublished.** The `@swarmbase/*` packages are source workspaces, not published to npm. You must clone and build from source.
+- **Packages are unpublished.** The `@swarmbase/*` packages are source workspaces, not published to npm. Clean local-tarball installation, Node ESM imports, strict NodeNext typechecking, and a Vite build are automated; registry installation, browser runtime behavior, and packaged daemon execution remain unverified. You must clone and build from source.
 - **No deployment automation.** There is no CI/CD pipeline for deploying relays, bootstrap nodes, or pinning services.
 - **No upgrade or migration path.** API changes between commits may break your application without warning. There is no changelog, no semver, and no deprecation period.
 
