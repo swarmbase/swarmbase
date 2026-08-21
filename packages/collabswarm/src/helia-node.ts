@@ -46,6 +46,9 @@ export async function createAndStartHeliaNode(
       libp2pInit
         ? withBitswap(
             withLibp2pLight(
+              // createHeliaLight always supplies dag-pb/raw and sha256/identity.
+              // Add createHelia's extra codecs and hasher here while retaining
+              // Swarmbase's custom libp2p topology.
               createHeliaLight({
                 ...heliaOptions,
                 codecs: [

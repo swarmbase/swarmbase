@@ -130,13 +130,13 @@ test('Helia 7 reads and extends blocks and pins written by Helia 6', async () =>
     await legacyHelia?.stop().catch(() => {});
     await upgradedHelia?.stop().catch(() => {});
     await reopenedHelia?.stop().catch(() => {});
-    await legacyBlockstore.close();
-    await legacyDatastore.close();
-    await upgradedBlockstore.close();
-    await upgradedDatastore.close();
-    await reopenedBlockstore.close();
-    await reopenedDatastore.close();
-    await reopenedBlockstore.destroy();
-    await reopenedDatastore.destroy();
+    await legacyBlockstore.close().catch(() => {});
+    await legacyDatastore.close().catch(() => {});
+    await upgradedBlockstore.close().catch(() => {});
+    await upgradedDatastore.close().catch(() => {});
+    await reopenedBlockstore.close().catch(() => {});
+    await reopenedDatastore.close().catch(() => {});
+    await reopenedBlockstore.destroy().catch(() => {});
+    await reopenedDatastore.destroy().catch(() => {});
   }
 });
