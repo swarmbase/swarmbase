@@ -62,7 +62,7 @@ jobs:
         run: node --test site/scripts/check-links.test.mjs site/scripts/generate-llms-full.test.mjs
       - name: Check site and agent index links
         run: node site/scripts/check-links.mjs
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
