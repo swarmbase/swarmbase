@@ -6,6 +6,9 @@ on:
     paths:
       - 'site/**'
       - 'packages/**'
+      - 'docs/feature-audit.md'
+      - 'examples/**'
+      - 'AGENTS.md'
       - '.github/workflows/site.yml'
       - 'package.json'
       - 'yarn.lock'
@@ -16,6 +19,9 @@ on:
     paths:
       - 'site/**'
       - 'packages/**'
+      - 'docs/feature-audit.md'
+      - 'examples/**'
+      - 'AGENTS.md'
       - '.github/workflows/site.yml'
       - 'package.json'
       - 'yarn.lock'
@@ -52,7 +58,9 @@ jobs:
         run: yarn install --immutable
       - name: Build site
         run: yarn workspace @swarmbase/site build
-      - name: Check internal site links
+      - name: Test site link checker
+        run: node --test site/scripts/check-links.test.mjs
+      - name: Check site and agent index links
         run: node site/scripts/check-links.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v5
