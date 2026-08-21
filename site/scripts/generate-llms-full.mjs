@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  mkdirSync,
   readFileSync,
   readdirSync,
   statSync,
@@ -248,9 +249,11 @@ export function cleanMdx(markdown, sourceName = 'MDX') {
     );
     clean = clean.replace(/\{\s*(['"])\s+\1\s*\}/g, '');
 
-    const component = /<\/?[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/.exec(clean);
+    const component = /<\/?([A-Z][A-Za-z0-9.]*)(?:\s|\/?>)/.exec(clean);
     if (component) {
-      throw new Error(`unsupported MDX component ${component[0].trim()}`);
+      throw new Error(
+        `${sourceName}: unsupported MDX component ${component[1]}`,
+      );
     }
 
     return clean;
@@ -301,8 +304,12 @@ function relativeTarget(sourcePath, href) {
 
   try {
     return resolve(dirname(sourcePath), decodeURIComponent(pathPart));
-  } catch {
-    throw new Error(`${repositoryPath(sourcePath)} has an invalid link: ${href}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${repositoryPath(sourcePath)} has an invalid link ${href}: ${message}`,
+      { cause: error },
+    );
   }
 }
 
@@ -310,13 +317,24 @@ function rewriteHref(href, sourcePath) {
   if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('//')) return href;
 
   if (!pathIsInside(docsRoot, sourcePath)) {
-    const base = new URL(
-      repositoryPath(sourcePath),
-      'https://repository.invalid/',
-    );
-    const parsed = new URL(href, base);
-    const targetPath = resolve(root, decodeURIComponent(parsed.pathname.slice(1)));
-    return repositoryUrlForPath(targetPath, parsed.search, parsed.hash).href;
+    try {
+      const base = new URL(
+        repositoryPath(sourcePath),
+        'https://repository.invalid/',
+      );
+      const parsed = new URL(href, base);
+      const targetPath = resolve(
+        root,
+        decodeURIComponent(parsed.pathname.slice(1)),
+      );
+      return repositoryUrlForPath(targetPath, parsed.search, parsed.hash).href;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `${repositoryPath(sourcePath)} has an invalid repository link ${href}: ${message}`,
+        { cause: error },
+      );
+    }
   }
 
   const target = relativeTarget(sourcePath, href);
@@ -400,9 +418,11 @@ export function generateLlmsFull() {
       const relativePath = relative(docsRoot, path).split(sep).join('/');
       return !relativePath.startsWith('reference/api/');
     })
-    .sort((left, right) =>
-      documentationOrder(left).localeCompare(documentationOrder(right)),
-    );
+    .sort((left, right) => {
+      const leftOrder = documentationOrder(left);
+      const rightOrder = documentationOrder(right);
+      return leftOrder < rightOrder ? -1 : leftOrder > rightOrder ? 1 : 0;
+    });
   const sources = [...siteSources, resolve(root, 'docs/feature-audit.md')];
   const sections = sources.map((path) => {
     const { content, title } = cleanContent(path);
@@ -427,6 +447,7 @@ export function generateLlmsFull() {
     ...sections.flatMap((section) => [section, '', '---', '']),
   ].join('\n');
 
+  mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, `${output.trimEnd()}\n`);
   const lineCount = output.trimEnd().split('\n').length;
   console.log(
