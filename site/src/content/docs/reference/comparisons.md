@@ -3,11 +3,11 @@ title: Comparisons
 description: How Swarmbase compares to other local-first, CRDT, and realtime collaboration tools.
 ---
 
-Swarmbase occupies a specific niche: **encrypted, peer-to-peer CRDT document collaboration with source-available libraries**. This page compares it to related projects to help you understand when Swarmbase is the right choice.
+Swarmbase occupies a specific niche: **encrypted, peer-to-peer CRDT document collaboration with open-source libraries**. This page compares it to related projects to help you understand when Swarmbase is the right choice.
 
 ## Swarmbase vs Yjs (standalone)
 
-[Yjs](https://docs.yjs.dev) is a high-performance CRDT library for shared editing. It provides shared types (`Y.Map`, `Y.Array`, `Y.Text`) and network-agnostic sync, but leaves encryption, authentication, access control, storage, and peer discovery to the application.
+[Yjs](https://docs.yjs.dev) is a high-performance CRDT library for shared editing. It provides shared types (`Y.Map`, `Y.Array`, `Y.Text`), network-agnostic sync, and an ecosystem of network and persistence providers. Encryption, authentication, access control, and provider selection remain application choices.
 
 | | Swarmbase | Yjs (standalone) |
 |---|---|---|
@@ -23,7 +23,7 @@ Swarmbase is a good choice when you need encryption, signing, and access control
 
 ## Swarmbase vs Automerge (standalone)
 
-[Automerge](https://automerge.org) is a CRDT library with a JSON-like document model. Like Yjs, it provides merge semantics but not encryption, access control, or networking.
+[Automerge](https://automerge.org) is a CRDT library with a JSON-like document model and transport-agnostic sync protocol. Automerge Repo adds storage and networking through configurable adapters; encryption and access control remain application concerns.
 
 | | Swarmbase | Automerge (standalone) |
 |---|---|---|
@@ -44,10 +44,10 @@ Swarmbase wraps Automerge documents with encryption and access control. If you o
 | **Architecture** | Peer-to-peer with relay infrastructure | Client-server (Liveblocks backend) |
 | **Deployment** | Self-hosted (you run relays) | Managed service (Liveblocks cloud) |
 | **Data sovereignty** | Full control (encrypted on your infrastructure) | Data stored on Liveblocks servers |
-| **Encryption model** | End-to-end (server never sees plaintext) | Encrypted in transit (server sees data) |
-| **Offline first** | Yes (IndexedDB local replica) | Experimental (Yjs + IndexedDB; available after initial load) |
+| **Encryption model** | Document payloads are end-to-end encrypted; connection and traffic metadata remain visible | Encrypted in transit (server sees data) |
+| **Offline behavior** | IndexedDB-backed Helia/IPFS storage; partition/rejoin recovery is not yet verified end to end | Yjs + IndexedDB support is available after initial load |
 | **Pricing** | Open source (MIT) | Free tier + paid plans |
-| **Production readiness** | Early stage (active development) | Production-grade |
+| **Project status** | Alpha; not production-ready | Established managed service |
 | **AI collaboration features** | Not included | AI comments, AI copilots |
 
 Use Liveblocks for production collaborative UIs with presence, comments, and rich-text when you are comfortable with a managed service. Use Swarmbase when you need end-to-end encryption and data sovereignty, or when you want to own your infrastructure.
@@ -65,50 +65,50 @@ Use Liveblocks for production collaborative UIs with presence, comments, and ric
 | **Encryption** | End-to-end (AES-GCM per document) | Field-level encryption plugin |
 | **Convergence** | CRDT (Yjs/Automerge) | CRDT plugin + conflict handlers |
 | **Framework support** | React, Redux | React, Angular, Vue, Svelte, Node.js, Expo |
-| **Production readiness** | Early stage | Production-grade (v17+) |
+| **Project status** | Alpha; not production-ready | Established project |
 
-RxDB is a mature, production-ready local-first database with broad backend support. Swarmbase is focused on encrypted peer-to-peer CRDT collaboration without a central server. They solve different problems.
+RxDB is an established local-first database with broad backend support. Swarmbase is focused on encrypted peer-to-peer CRDT collaboration without a central database. They solve different problems.
 
 ## Swarmbase vs Jazz
 
-[Jazz](https://jazz.tools) is a local-first relational database with row-level permissions and real-time sync. It provides a managed sync server and a React-friendly API.
+[Jazz](https://jazz.tools) is a local-first relational database with row-level permissions and real-time sync. Jazz v2 is a public alpha with hosted and self-hosted database-server options.
 
 | | Swarmbase | Jazz |
 |---|---|---|
 | **Data model** | CRDT documents | Relational tables with schemas |
 | **Sync model** | Peer-to-peer (libp2p) | Client-server (Jazz Cloud or self-hosted) |
-| **Permissions** | Cryptographic ACL (reader/writer keys) | Row-level permissions |
-| **Encryption** | End-to-end (server never sees data) | E2E encryption |
+| **Permissions** | Cryptographic ACL (reader/writer keys) | Server-enforced row-level policies |
+| **Encryption** | Document payloads are end-to-end encrypted | Server is trusted for access control; the v2 design scopes E2E encryption to selected sensitive fields |
 | **Server** | Relay nodes (pass-through) | Jazz sync server (stateful) |
 | **Framework support** | React, Redux | React, Vue, Svelte, Solid, Expo |
-| **Production readiness** | Early stage | Production (Jazz Cloud) |
+| **Project status** | Alpha; not production-ready | Public alpha (Jazz v2) |
 
-Jazz provides a more polished developer experience with managed infrastructure. Swarmbase gives you more control over networking and infrastructure, at the cost of more setup.
+Jazz v2 provides a relational model and managed or self-hosted sync infrastructure. Swarmbase focuses on encrypted CRDT documents and user-operated peer-to-peer networking. Both are early-stage projects that require careful evaluation.
 
-## Swarmbase vs ElectricSQL
+## Swarmbase vs Electric Sync
 
-[ElectricSQL](https://electric-sql.com) syncs a subset of Postgres to local clients. It provides read-path sync from a Postgres database to client-side PGlite instances.
+[Electric Sync](https://electric-sql.com) is a read-path sync engine that streams selected Postgres data to local clients over HTTP.
 
-| | Swarmbase | ElectricSQL |
+| | Swarmbase | Electric Sync |
 |---|---|---|
 | **Sync direction** | Bidirectional (peers read and write) | Primarily read-path sync (writes go through your API) |
 | **Source of truth** | CRDT merge (no central authority) | Postgres (server is authoritative) |
 | **Data model** | CRDT documents | Postgres tables with Shapes |
 | **Schema** | Schema-less (CRDT types) | Postgres DDL |
 | **Encryption** | End-to-end | Server-side (you control Postgres access) |
-| **Offline** | Yes (IndexedDB local replica) | Yes (PGlite local replica) |
-| **Production readiness** | Early stage | Postgres sync is stable |
+| **Offline** | IndexedDB-backed Helia/IPFS storage; partition/rejoin recovery is not yet verified end to end | Depends on the client stack, such as PGlite or TanStack DB |
+| **Deployment** | Self-hosted peer, relay, and bootstrap infrastructure | Electric Cloud or self-hosted sync service |
 
-ElectricSQL is ideal when you already have a Postgres database and want to sync a subset of it to clients. Swarmbase is designed for peer-to-peer document collaboration where there is no central database.
+Electric Sync fits applications that already use Postgres and need a read-path sync engine. Swarmbase is designed for peer-to-peer document collaboration without a central database.
 
 ## When to choose Swarmbase
 
 Swarmbase stands out when you need:
 
-1. **End-to-end encrypted peer-to-peer documents** — no server ever sees plaintext
+1. **End-to-end encrypted peer-to-peer documents** — relay and bootstrap infrastructure does not see document plaintext, though connection and traffic metadata remain visible
 2. **No central database server** — your application has no backend database at all
 3. **Full control over infrastructure** — you run the relay nodes, you hold the keys
 4. **Composable libraries** — use only the packages you need, not a monolithic platform
-5. **Source-available transparency** — every layer is inspectable and modifiable
+5. **Open-source transparency** — every layer is inspectable and modifiable
 
-If any of the projects above matches your requirements more closely, use it — they are more mature and have larger communities. Swarmbase is exploring a specific design point: encrypted CRDT documents that sync directly between peers, with no server in the data path.
+If any of the projects above matches your requirements more closely, use it — most are more mature and have larger communities. Swarmbase is exploring a specific design point: encrypted CRDT documents that sync between peers without a trusted central database, while self-hosted relay infrastructure may remain in the data path.
