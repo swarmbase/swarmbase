@@ -4755,7 +4755,7 @@ __metadata:
     react: "npm:^19.2.6"
     react-bootstrap: "npm:^2.10.10"
     react-dom: "npm:^19.2.6"
-    react-router-bootstrap: "npm:0.25.0"
+    react-router-bootstrap: "npm:0.26.3"
     react-router-dom: "npm:^5.3.4"
     typescript: "npm:^5.9.3"
     uuid: "npm:^14.0.1"
@@ -4811,7 +4811,7 @@ __metadata:
     react-bootstrap-icons: "npm:^1.11.6"
     react-dom: "npm:^19.2.6"
     react-redux: "npm:^9.2.0"
-    react-router-bootstrap: "npm:0.25.0"
+    react-router-bootstrap: "npm:0.26.3"
     react-router-dom: "npm:^5.3.4"
     redux: "npm:^5.0.1"
     redux-thunk: "npm:^3.1.0"
@@ -12813,7 +12813,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prop-types@npm:^15.5.10, prop-types@npm:^15.6.2, prop-types@npm:^15.7.2, prop-types@npm:^15.8.1":
+"prop-types@npm:^15.6.2, prop-types@npm:^15.7.2, prop-types@npm:^15.8.1":
   version: 15.8.1
   resolution: "prop-types@npm:15.8.1"
   dependencies:
@@ -13127,15 +13127,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-router-bootstrap@npm:0.25.0":
-  version: 0.25.0
-  resolution: "react-router-bootstrap@npm:0.25.0"
+"react-router-bootstrap@npm:0.26.3":
+  version: 0.26.3
+  resolution: "react-router-bootstrap@npm:0.26.3"
   dependencies:
-    prop-types: "npm:^15.5.10"
+    prop-types: "npm:^15.7.2"
   peerDependencies:
-    react: ">=0.14.0"
-    react-router-dom: ">=4.0.0"
-  checksum: 10/6dffb4df9ab66e66de4bd8281fb913aeec7f4e6ef848a40a8b709aca951491752797658f4c26b004e1ddafda2c1832f7097e7671d7adcc5de2407de2cf012bdf
+    react: ">=16.13.1"
+    react-router-dom: ">=6.0.0"
+  checksum: 10/8ed506caa670d96b99599f238d04db842a71fb1b18442e2fa374ddad81e6111b36892db335734beacf60ae7523dc07d3bd2ccb2f33a0833b52ab074fa9c5ab0f
   languageName: node
   linkType: hard
 
