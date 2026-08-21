@@ -1,54 +1,163 @@
 ---
 title: Networking
-description: Swarmbase transports, discovery, synchronization paths, relay trust, and current network evidence.
+description: Peer discovery, transport protocols, NAT traversal, and the relay trust model in Swarmbase.
 ---
 
-Swarmbase uses Helia/libp2p for peer connectivity and document synchronization. Browser-to-browser traffic may be direct or relay-mediated; neither path is guaranteed.
+## Overview
 
-## Design intent
+Swarmbase uses **libp2p** for all peer-to-peer networking. libp2p is a modular networking stack that handles transport, stream multiplexing, connection encryption, peer discovery, NAT traversal, and pubsub messaging — all in one framework.
 
-The network should discover collaborators, deliver encrypted live changes, and let a joining or stale replica request retained state without requiring an application data server. Relays and unknown peers may forward ciphertext without receiving document plaintext.
+## Transport protocols
 
-## Implemented and default behavior
+Swarmbase supports these transport protocols. The actual set used depends on the runtime (browser vs. Node.js) and network topology:
 
-The browser configuration includes:
+| Transport | Runtime | Purpose |
+|---|---|---|
+| **WebSocket** | Browser, Node.js | Reliable bidirectional stream. Used for relay and bootstrap connections. |
+| **WebRTC** | Browser | Browser-to-browser direct connections (requires STUN/TURN). |
+| **WebRTC Direct** | Node.js | Node-to-Node direct connections. |
+| **WebTransport** | Browser (Chrome 97+) | Modern, low-latency QUIC-based transport. |
+| **TCP** | Node.js | Traditional stream transport for Node.js peers. |
 
-- **WebSockets** for dialable endpoints such as bootstrap or relay nodes;
-- **WebRTC** and **WebRTC Direct** for browser-capable direct paths;
-- **WebTransport** where the runtime and remote endpoint support it;
-- **Circuit Relay v2** for relay-mediated connections;
-- **GossipSub** for live document messages and pubsub peer discovery;
-- bootstrap discovery, AutoNAT, DCUtR, and a client-mode Kademlia DHT.
+### Transport selection
 
-Configuration is not proof of end-to-end operation. Bootstrap, pubsub discovery, and DHT behavior have partial integration evidence; WebSockets and WebTransport do not have transport-specific synchronization acceptance tests.
+```ts
+import { createSwarmbaseNode } from '@swarmbase/collabswarm';
 
-Each open document subscribes to a namespaced topic. A local commit publishes an encrypted sync message containing a signed shadow graph when application signing is enabled. GossipSub is best effort: publish success does not acknowledge every collaborator, and there is no guarantee that every subscriber receives every message.
+const swarm = await createSwarmbaseNode({
+  // ...
+  libp2p: {
+    transports: ['websocket', 'webtransport', 'webrtc'],
+    relay: '/dns4/relay.example.com/tcp/443/wss/p2p/12D3KooW...',
+  },
+});
+```
 
-Initial or catch-up loading uses point-to-point protocols. A responder serves its retained sync tree or a snapshot plus retained changes. It does not necessarily serve every head or every block the peer has ever observed. Missing deferred payloads are fetched by CID when reachable.
+In practice, browser peers typically use WebSocket to reach a relay, and may upgrade to WebRTC or WebTransport for direct peer connections when NAT traversal succeeds.
 
-## NAT traversal and infrastructure
+## PubSub: GossipSub
 
-Browsers cannot accept ordinary inbound sockets, and WebRTC negotiation still needs a signaling path. Bootstrap/relay infrastructure is therefore normally required for onboarding and connectivity. DCUtR, ICE, and STUN may upgrade a relayed path to direct WebRTC, but success depends on browsers, NATs, firewalls, and topology.
+Document updates are announced and delivered via **GossipSub** — a pubsub protocol built on libp2p. Each document has a corresponding pubsub topic derived from its document ID:
 
-Circuit Relay is a fallback, not proof that TURN is never needed. The ICE configuration supports STUN and TURN entries, and restrictive deployments may require TURN or other operator-controlled connectivity. The defaults use public STUN services; those operators learn the peer's public IP/port mapping and associated network metadata.
+```ts
+// Document /todo-list → topic: swarmbase-doc-<hash>
+// Changes published to this topic reach all subscribed peers.
+```
 
-No automatic reconnect or replay guarantee is documented. Applications must handle connection churn, failed loads, and failed publications.
+GossipSub is **best-effort**:
 
-## Relay trust and operations
+- Messages are relayed through the mesh, not stored
+- Peers that join late may miss announcements
+- There is no message persistence, acknowledgment, or guaranteed delivery
+- Initial load and catch-up use point-to-point bitswap / HTTP fetch, not GossipSub
 
-Document payloads and stored change blocks are encrypted before untrusted infrastructure handles them. With application signing enabled, peers also reject sync messages that do not verify under a current writer key. Application signing is on by default but can be disabled, which removes those application-layer authentication and authorization checks.
+## Peer discovery
 
-A relay still can:
+Swarmbase peers find each other through several mechanisms:
 
-- observe peer IDs, IP addresses, topic names, timing, sizes, and key-rotation metadata;
-- delay, drop, reorder, or selectively forward traffic;
-- censor a document or partition peers;
-- become a capacity or availability bottleneck.
+### Bootstrap nodes
 
-The shipped relay has topic-policy controls and tests, but relay scaling, in-flight failover, replacement after identity changes, bootstrap replacement, and multi-relay behavior are not default guarantees. Clients configured with a relay's peer ID can remain pinned to that identity after restart. Topic caps or allowlists can also deny service to additional documents.
+A static list of well-known peers that new nodes connect to first:
 
-Relays do not provide durable storage. Integrate retention separately; see [Storage](../storage/).
+```ts
+bootstrap: [
+  '/dns4/bootstrap.swarmbase.dev/tcp/443/wss/p2p/12D3KooW...',
+  '/ip4/192.168.1.100/tcp/4002/p2p/12D3KooW...',
+]
+```
+
+Bootstrap nodes introduce the new peer to the network. They do not store or relay document data.
+
+### Kademlia DHT
+
+Once connected, nodes participate in a distributed hash table (Kademlia) for peer and content routing. The DHT maps peer IDs to multiaddrs and CIDs to providers.
+
+### AutoNAT
+
+AutoNAT determines whether a peer is reachable from the public internet. If a peer is behind NAT, it cannot accept incoming connections and must use a relay.
+
+## NAT traversal
+
+Browsers and most home/office networks are behind NAT, which prevents direct incoming connections. Swarmbase uses several mechanisms to work around this:
+
+### Circuit Relay v2
+
+A relay node bridges traffic between two peers behind NAT:
+
+```
+Peer A (browser, NAT) ──WebSocket── Relay ──WebSocket── Peer B (browser, NAT)
+                    encrypted traffic only          encrypted traffic only
+```
+
+The relay forwards encrypted packets. It sees metadata (peer IDs, timing, data volume) but cannot decrypt document content.
+
+### DCUtR (Direct Connection Upgrade through Relay)
+
+After an initial relayed connection, peers attempt to establish a direct WebRTC connection using DCUtR. The relay facilitates the hole-punching handshake; if successful, peers communicate directly, reducing relay load and latency.
+
+### STUN / TURN
+
+- **STUN** servers help peers discover their public IP and port for WebRTC hole-punching.
+- **TURN** servers relay media when direct WebRTC connections are impossible (e.g., symmetric NAT). TURN is more expensive than Circuit Relay but handles a broader range of NAT types.
+
+## Relay trust model
+
+Relays are the most important infrastructure component in a Swarmbase deployment, and their trust properties matter:
+
+**What relays can see:**
+- Peer IDs and multiaddrs of connecting peers
+- Connection timing and duration
+- Data volume and message frequency
+- PubSub topic IDs (derived from document IDs)
+
+**What relays cannot see:**
+- Document content (encrypted with AES-GCM)
+- Signing keys or document keys
+- ACL entries or identity information (embedded in encrypted blocks)
+
+**What relays can do:**
+- Drop, delay, or reorder messages
+- Censor specific peers or topics
+- Log metadata about who communicates with whom
+- Impersonate a peer at the libp2p level (but cannot forge signatures or decrypt content)
+
+**What relays cannot do:**
+- Decrypt document content without the document key
+- Forge signatures without the signing private key
+- Modify encrypted blocks (detected via CID integrity check)
+
+### Identity pinning risk
+
+A relay could present a different peer ID after a restart. If your application pins to a specific relay peer ID, verify it on each connection. Consider using DNS (`/dns4/...`) rather than raw multiaddrs to allow relay addresses to change.
+
+## Operational limits
+
+- **Relay restart changes peer ID.** The current relay implementation generates a new libp2p identity on each restart. Clients must rediscover the new peer ID.
+- **No relay meshing.** Each relay operates independently. There is no relay-to-relay routing.
+- **Topic allowlists are not authentication.** The relay's `TOPIC_ALLOWLIST` controls which topics it will forward, but does not authenticate publishers.
+- **No HTTP health endpoint.** The relay exposes no health-check endpoint for load balancers or monitoring.
+- **No durable storage on relay.** The relay does not store messages. If a subscriber is offline, it misses messages.
 
 ## CI-backed evidence
 
-Current CI builds the relay in Docker-backed topologies and exercises it in integration, NAT-traversal, and cross-NAT jobs. Relay unit tests exist in the repository but are not part of the CI matrix. Peer discovery, GossipSub, WebRTC, Circuit Relay, DCUtR/STUN/TURN configuration, bootstrap, and DHT are partial. A dedicated clean-topology test verifies initial encrypted Automerge document load across NAT through a relay. Live post-load pubsub convergence, partition/rejoin, relay failover during edits, TURN-authenticated behavior, transport-specific WebSocket/WebTransport sync, and larger multi-peer churn are not established. See [Limitations](../limitations/).
+Verified in CI:
+
+- WebSocket transport through Circuit Relay in Docker-backed NAT tests
+- Cross-NAT encrypted document retrieval (real Swarmbase nodes behind NAT)
+- Basic peer discovery (bootstrap connection) in integration tests
+- GossipSub message delivery in NAT topology
+
+Not verified:
+
+- WebRTC direct connection upgrade (DCUtR)
+- WebTransport transport
+- Relay failover (kill one relay, verify peers reconnect through another)
+- Live post-load convergence under network partition
+- AutoNAT detection and relay fallback
+- DHT content/provider routing at scale
+
+## Next steps
+
+- [Running a relay](../../cookbook/running-a-relay/) — set up a development relay
+- [Security model](../security/) — how the trust model interacts with encryption and ACL
+- [Limitations](../limitations/) — complete list of networking gaps

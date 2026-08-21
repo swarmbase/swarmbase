@@ -1,14 +1,54 @@
-/* Swarmbase brand accents (indigo primary, teal secondary). */
+/* Swarmbase brand accents (indigo primary, teal secondary, slate neutral). */
 :root {
-  --sl-color-accent-low: #262367;
+  --sl-color-accent-low: #1e1b4b;
   --sl-color-accent: #6366f1;
-  --sl-color-accent-high: #c7c9f8;
+  --sl-color-accent-high: #c7d2fe;
   --sw-color-teal: #2dd4bf;
+  --sw-color-teal-low: #134e4a;
+  --sw-color-teal-high: #99f6e4;
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #e0e1fa;
+  --sl-color-accent-low: #e0e7ff;
   --sl-color-accent: #4f46e5;
-  --sl-color-accent-high: #312c96;
+  --sl-color-accent-high: #312e81;
   --sw-color-teal: #0d9488;
+  --sw-color-teal-low: #ccfbf1;
+  --sw-color-teal-high: #115e59;
+}
+
+.sl-link-card,
+.sl-link-button {
+  border-radius: 0.5rem;
+}
+
+table {
+  width: 100%;
+}
+
+th {
+  text-align: left;
+}
+
+td:first-child,
+th:first-child {
+  white-space: nowrap;
+}
+
+pre.astro-code {
+  border-radius: 0.5rem;
+}
+
+:is(h2, h3, h4) code {
+  font-weight: inherit;
+}
+
+aside:is([aria-label='Note'], [aria-label='Tip']) {
+  border-left-color: var(--sw-color-teal);
+}
+
+a[href^='http']:not([href*='github.com/swarmbase']):not([href*='swarmbase.github.io'])::after {
+  content: ' ↗';
+  font-size: 0.75em;
+  opacity: 0.6;
 }

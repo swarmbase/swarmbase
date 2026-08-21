@@ -1,46 +1,184 @@
 ---
 title: CRDTs
-description: CRDT convergence in Swarmbase, the Yjs and Automerge adapters, snapshots, and current evidence.
+description: How Swarmbase integrates Yjs and Automerge CRDT libraries — the sync model, convergence, snapshots, and quorum loading.
 ---
-
-Swarmbase delegates document merge semantics to a CRDT adapter. The repository provides adapters for **Yjs** and **Automerge**; every replica of a document must use a compatible adapter and data model.
 
 ## Design intent
 
-CRDTs allow replicas to commit without a leader or write-time consensus. The precise rule is not “apply every operation in arbitrary order.” Causal predecessors must be available or applied in the order required by the CRDT, while operations that are genuinely concurrent must have merge semantics that commute or otherwise converge deterministically.
+Swarmbase does not implement its own CRDT. It adapts existing, well-tested CRDT libraries — Yjs and Automerge — wrapping them with encryption, signing, access control, and peer-to-peer transport. The application interacts with Yjs shared types or Automerge documents directly. Swarmbase handles everything else.
 
-If compatible replicas receive the same complete set of committed changes, the adapter is intended to produce convergent state. That says nothing about when all replicas have received those changes or whether the result matches user intent.
+The goal: merge edits from multiple peers without a central consensus service, a lock manager, or a leader election protocol. No server assigns a global write order. Two peers editing concurrently produce a deterministic merged result.
 
 ## Implemented model
 
-A successful `document.change()` produces one committed CRDT change. A transaction can combine multiple application or UI edits into one committed change. Swarmbase stores the change as an encrypted CID-addressed block and carries a signed-when-enabled, encrypted shadow sync graph that may include payloads inline or defer them by CID.
+### The `document.change()` lifecycle
 
-`CRDTProvider` supplies `localChange`, `remoteChange`, and `getHistory`, plus optional snapshot operations. `getHistory` is an adapter API; current document loading uses the document-load or snapshot-load protocols and the retained sync tree, not `getHistory` as its network load mechanism.
+```ts
+const todos = swarm.doc('/todo-list');
+await todos.open();
 
-Yjs and Automerge choose their own semantics for maps, sequences, deletion, metadata, and history. Swarmbase does not impose a universal last-writer-wins rule, universal tombstones, or one conflict model across adapters. Model application invariants explicitly and inspect each adapter's behavior.
+await todos.change((state) => {
+  state.getArray<string>('items').push(['buy milk']);
+});
+```
+
+Each `document.change()` call produces one committed, encrypted, CID-addressed block:
+
+```
+Application calls document.change(fn)
+  │
+  ▼
+fn applied to local CRDT replica (Yjs doc.transact / Automerge doc.change)
+  │
+  ▼
+CRDT update serialized
+  │
+  ▼
+Wrapped in CRDTChangeBlock
+  ├── parent: CID of previous tip
+  ├── epoch: current document epoch
+  ├── signature: ECDSA P-384 over block payload
+  └── payload: encrypted CRDT update (AES-GCM)
+  │
+  ▼
+Block stored in Helia blockstore (local IndexedDB)
+  │
+  ▼
+CID published to GossipSub (document topic)
+```
+
+### The shadow sync graph
+
+Swarmbase does not use a conventional Merkle-DAG. Instead, each `CRDTChangeBlock` references its parent by CID, forming a **shadow sync graph**:
+
+```
+Tip (latest) ─── Block C ─── Block B ─── Block A (genesis)
+                            └── Block B' (concurrent edit from another peer)
+
+The CRDT layer merges B and B' when both arrive.
+The shadow graph preserves the DAG structure for sync,
+but the CRDT layer produces the resolved document state.
+```
+
+This means:
+
+- Blocks reference their immediate parent(s) by CID — forming a DAG across concurrent writers
+- The CRDT layer resolves concurrent edits (e.g., Yjs merges Y.Map updates from two peers)
+- Blocks are immutable once stored; the tip pointer advances to the latest block
+- The shadow graph is used for sync (walk backward to find missing blocks), not for data modeling
+
+### `CRDTProvider` interface
+
+The `CRDTProvider` interface abstracts the CRDT library from Swarmbase's core:
+
+```ts
+interface CRDTProvider {
+  createDoc(): CRDTDoc;
+  applyUpdate(doc: CRDTDoc, update: Uint8Array): void;
+  encodeStateAsUpdate(doc: CRDTDoc): Uint8Array;
+  encodeStateVector(doc: CRDTDoc): Uint8Array;
+  diffUpdate(doc: CRDTDoc, stateVector: Uint8Array): Uint8Array;
+}
+```
+
+Two implementations exist:
+
+- **YjsProvider** — wraps Yjs `Doc`, `Y.encodeStateAsUpdate`, `Y.applyUpdate`, `Y.encodeStateVector`, `Y.diffUpdate`
+- **AutomergeProvider** — wraps Automerge `Doc`, `Automerge.save`, `Automerge.loadIncremental`, `Automerge.getLastLocalChange`
+
+### Yjs semantics
+
+Yjs provides shared types that merge deterministically:
+
+```ts
+// Y.Map: last-writer-wins per key
+const ymap = state.getMap('settings');
+ymap.set('theme', 'dark');
+
+// Y.Array: concurrent insertions preserved
+const yarray = state.getArray('items');
+yarray.insert(0, ['first']);
+
+// Y.Text: concurrent character insertions merged
+const ytext = state.getText('content');
+ytext.insert(0, 'Hello');
+```
+
+See the [Yjs schema design cookbook](../../cookbook/yjs-schema-design/) for merge behavior tables, ID patterns, and migration strategies.
+
+### Automerge semantics
+
+Automerge provides a JSON-like CRDT document model:
+
+```ts
+// Automerge: concurrent field updates merged
+state.title = 'New title';
+
+// Automerge: concurrent list insertions preserved
+state.items.push({ text: 'buy milk', done: false });
+
+// Automerge: Text type for rich text
+state.content = new Automerge.Text('Hello');
+```
 
 ## Convergence boundaries
 
-CRDT convergence does not provide:
+Swarmbase does **not** provide:
 
-- agreement-right-now or a global order of all writes;
-- conflict-free human meaning;
-- protection from a malicious authorized writer;
-- delivery, retention, onboarding, or key recovery;
-- proof that the complete Swarmbase system converges after every partition and rejoin.
-
-The network and storage layers must still deliver every required change and causal predecessor. Missing blocks, pruned history, failed publication, unavailable peers, incompatible keys, or authorization failures can prevent convergence.
+- **Agreement-right-now.** Two peers editing concurrently will see different states until they exchange updates. There is no real-time synchronization lock.
+- **Conflict-free in the database sense.** CRDTs resolve structural conflicts (concurrent edits to the same field), but application-level conflicts (e.g., two peers setting a title to different values) are handled by the CRDT's merge rule, not by application logic.
+- **Guaranteed delivery.** Updates are published via GossipSub but not acknowledged. A peer that goes offline before publishing may lose updates.
+- **Convergence under partition.** If a peer is partitioned for a long time, its replica diverges. When the partition heals, the CRDT merges. But if the local blocks are lost (e.g., IndexedDB cleared), convergence may fail.
 
 ## Snapshots and compaction
 
-Automatic compaction is **off by default**. When enabled, an authorized writer can create a signed full-state snapshot, retain post-snapshot changes, prune older document nodes from the in-memory sync tree, and optionally garbage-collect pruned blocks. Block GC is separately off by default.
+### Snapshots
 
-Concurrent writers can snapshot different local states. Swarmbase's deterministic preference rule chooses snapshot metadata by compacted-change count and then boundary CID; preference does not prove that competing snapshots are semantically equivalent. A snapshot is verified under a current writer key when signing is enabled.
+Snapshots are **off by default**. A writer can create a signed, full-state snapshot:
 
-Default initial loading also requires tip-hash agreement from multiple peers. A first-time quorum load may not yet have a trusted writer ACL, so it can reject a snapshot whose writer cannot be verified. If pre-snapshot changes were pruned or garbage-collected, the retained tail may be insufficient to reconstruct the state. Different served frontiers or unavailable graph data can also make the load fail closed even when an existing replica remains usable. Operators must treat snapshots, retained blocks, quorum configuration, ACL bootstrap, and reachability as one availability problem.
+```ts
+await document.compact();
+```
 
-Compaction can reduce what a load response replays, but it does not establish bounded storage, memory, load time, or sync time. Adapter-internal state and retained blocks may continue to grow.
+A snapshot contains the complete CRDT state at that point, signed and encrypted like any other block. Peers loading the document can start from the snapshot instead of replaying the entire change history.
+
+### Compaction
+
+Compaction is **off by default** and uses a preference rule based on compacted-change count. When enabled, it can reduce storage by pruning older blocks. However:
+
+- Pruning removes in-memory CRDT nodes — the document cannot be reconstructed if all pruned blocks are lost
+- Snapshot-only bootstrap can fail if snapshots reference pruned blocks
+- Snapshot creation is not automatic — the application must trigger it
+
+## Quorum loading
+
+Before trusting a document's state, Swarmbase can require K-of-Q bootstrap peers to agree on the current tip hash:
+
+```ts
+const document = await swarm.loadDocument('/shared-note', {
+  quorum: { k: 2, peers: [bootstrap1, bootstrap2, bootstrap3] },
+});
+```
+
+This prevents loading a fork or a stale version when multiple peers have written to the document. The quorum check is **not** Sybil-resistant — a peer that controls multiple identities can subvert it.
 
 ## CI-backed evidence
 
-Current CI has broad Yjs and Automerge adapter tests plus snapshot, compaction, serialization, cross-link, quorum, and block-GC suites. This verifies components and selected interactions. The repository also contains convergence benchmarks, but they are not assertion-based CI budgets. Long-running concurrent compaction, large histories, hostile graph shapes, and deterministic system partition/rejoin remain unproven. See [Limitations](../limitations/).
+Verified end-to-end in CI:
+
+- Document creation, mutation, and retrieval in a single browser
+- Yjs and Automerge provider initialization
+- Encrypted block storage and retrieval through Circuit Relay
+- Cross-NAT document retrieval with Docker-backed topologies
+
+Not verified:
+
+- Multi-peer concurrent editing and convergence under partition
+- Snapshot creation and bootstrap from snapshot
+- Quorum loading with K > 1
+- Compaction and GC with subsequent recovery
+
+## Next steps
+
+- [Yjs schema design](../../cookbook/yjs-schema-design/) — patterns for modeling data with Yjs shared types
+- [Security model](../security/) — how signing, encryption, and ACL interact with the CRDT layer

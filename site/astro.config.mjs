@@ -87,6 +87,8 @@ export default defineConfig({
         {
           label: 'Concepts',
           items: [
+            'concepts/why-swarmbase',
+            'concepts/architecture',
             'concepts/local-first',
             'concepts/crdts',
             'concepts/networking',
@@ -110,12 +112,18 @@ export default defineConfig({
         },
         {
           label: 'Reference',
-          items: ['reference', typeDocSidebarGroup],
+          items: [
+            'reference',
+            'reference/comparisons',
+            typeDocSidebarGroup,
+          ],
         },
         {
           label: 'Community',
           items: [
             'community',
+            'community/faq',
+            'community/roadmap',
             'community/contributing',
             'community/help-wanted',
           ],
