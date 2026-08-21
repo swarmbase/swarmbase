@@ -1,21 +1,25 @@
 # `@swarmbase/collabswarm-index`
 
-Local and privacy-oriented indexing primitives with optional React query bindings for Swarmbase documents.
-
-> **Alpha:** Swarmbase is not production-ready and may lose data or change APIs. The project examples and [verified quick start](https://swarmbase.github.io/swarmbase/getting-started/quick-start/) use the repository source workspaces.
+Client-side indexing for Swarmbase documents. Build local materialized indexes over your encrypted CRDT documents, with optional React query hooks for reactive UIs — no server-side indexing required.
 
 Swarmbase is the project name; some exported APIs retain the historical `Collabswarm` prefix.
 
+## What you get
+
+- **`IndexManager`** — define indexes over document fields, update incrementally on each change, query with field filters and sort clauses
+- **Pluggable storage** — in-memory or IndexedDB-backed via `MemoryIndexStorage` / `IDBIndexStorage`
+- **Blind-index primitives** — deterministic equality tokens for privacy-preserving search without revealing field values
+- **Bloom-filter gossip** — peer discovery via Bloom filter exchange for candidate routing (deferred integration)
+- **React hooks** — `useDefineIndexes` and `useIndexQuery` for reactive UI updates from indexed data
+
 ## Choose this package
 
-Use this package to build local memory or IndexedDB indexes over documents already available to an application. It also contains blind-index and Bloom-filter gossip primitives, but does not provide a complete distributed-search workflow.
+Use this package to build local memory or IndexedDB indexes over documents already available to an application. It depends on `@swarmbase/collabswarm` and `idb`. React is declared as a peer dependency for the optional query hooks.
 
-It depends on `@swarmbase/collabswarm` and `idb`. React is declared as a peer dependency for the optional query hooks.
+## Entry points
 
-## Runtime entry points
-
-- `@swarmbase/collabswarm-index` — index definitions, storage, queries, document integration, blind indexes, and Bloom-filter primitives.
-- `@swarmbase/collabswarm-index/react` — `useDefineIndexes` and `useIndexQuery`.
+- `@swarmbase/collabswarm-index` — index definitions, storage, queries, document integration, blind indexes, and Bloom-filter primitives
+- `@swarmbase/collabswarm-index/react` — `useDefineIndexes` and `useIndexQuery`
 
 ## Start here
 
