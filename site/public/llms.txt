@@ -1,6 +1,6 @@
 # Swarmbase
 
-> Alpha TypeScript software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks. Not production-ready. Composes Yjs/Automerge CRDT libraries with libp2p networking, Helia content-addressed storage, ECDSA P-384 signing, and AES-GCM encryption.
+> TypeScript toolkit for encrypted, local-first CRDT documents synchronized over peer-to-peer networks. Composes Yjs/Automerge CRDT libraries with libp2p networking, Helia content-addressed storage, ECDSA P-384 signing, and AES-GCM encryption.
 
 Use the feature audit and concept documentation as the authority for capability claims. A primitive test does not establish complete multi-peer behavior. Every capability must be verified by CI evidence.
 
@@ -20,7 +20,7 @@ Use the feature audit and concept documentation as the authority for capability 
 - [Networking](https://swarmbase.github.io/swarmbase/concepts/networking/): libp2p transports (WebSocket, WebRTC, WebTransport), Circuit Relay v2, GossipSub pubsub, peer discovery (bootstrap, Kademlia DHT, AutoNAT), NAT traversal (DCUtR, STUN/TURN), relay trust model.
 - [Storage](https://swarmbase.github.io/swarmbase/concepts/storage/): Content-addressed blocks, Helia blockstore (IndexedDB), shadow sync graph, pinning status (incomplete), recovery requirements, compaction/GC.
 - [Security](https://swarmbase.github.io/swarmbase/concepts/security/): ECDSA P-384 signing, AES-GCM encryption, reader/writer ACL, BeeKEM key encapsulation, UCAN capabilities (standalone), K-of-Q quorum loading, revocation (partial, memory-only BeeKEM state).
-- [Limitations](https://swarmbase.github.io/swarmbase/concepts/limitations/): Complete catalog of alpha gaps — distribution, offline, storage, networking, auth, convergence, examples.
+- [Limitations](https://swarmbase.github.io/swarmbase/concepts/limitations/): Complete catalog of current gaps — distribution, offline, storage, networking, auth, convergence, examples.
 
 ## Cookbook
 

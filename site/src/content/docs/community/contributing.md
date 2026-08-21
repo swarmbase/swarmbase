@@ -3,7 +3,7 @@ title: Contributing to Swarmbase
 description: Set up the repository, run the correct validation, and prepare a focused Swarmbase contribution.
 ---
 
-Swarmbase is alpha software. Discuss non-trivial, architecture-changing, or security-sensitive work before implementation. Questions and early ideas belong in [Discussions](https://github.com/swarmbase/swarmbase/discussions); reproducible bugs and actionable proposals belong in [Issues](https://github.com/swarmbase/swarmbase/issues). Suspected vulnerabilities must use private vulnerability reporting from the repository **Security** tab, never a public issue or discussion.
+Discuss non-trivial, architecture-changing, or security-sensitive work before implementation. Questions and early ideas belong in [Discussions](https://github.com/swarmbase/swarmbase/discussions); reproducible bugs and actionable proposals belong in [Issues](https://github.com/swarmbase/swarmbase/issues). Suspected vulnerabilities must use private vulnerability reporting from the repository **Security** tab, never a public issue or discussion.
 
 ## Setup
 

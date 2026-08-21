@@ -3,7 +3,7 @@ title: Community
 description: Where to ask questions, report actionable work, and contribute to Swarmbase.
 ---
 
-Swarmbase is an alpha project. APIs and behavior may change, data-loss risks remain, and documentation should distinguish implemented primitives from behavior verified end to end. Contributions that improve evidence, tests, and honest capability boundaries are especially valuable.
+Swarmbase is under active development. APIs may change, and documentation should distinguish implemented primitives from behavior verified end to end. Contributions that improve evidence, tests, and honest capability boundaries are especially valuable.
 
 ## Choose the right channel
 

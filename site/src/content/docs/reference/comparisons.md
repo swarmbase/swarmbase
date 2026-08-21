@@ -47,7 +47,7 @@ Swarmbase wraps Automerge documents with encryption and access control. If you o
 | **Encryption model** | End-to-end (server never sees plaintext) | Encrypted in transit (server sees data) |
 | **Offline first** | Yes (IndexedDB local replica) | Experimental (Yjs + IndexedDB; available after initial load) |
 | **Pricing** | Open source (MIT) | Free tier + paid plans |
-| **Production readiness** | Alpha (not production-ready) | Production-grade |
+| **Production readiness** | Early stage (active development) | Production-grade |
 | **AI collaboration features** | Not included | AI comments, AI copilots |
 
 Use Liveblocks for production collaborative UIs with presence, comments, and rich-text when you are comfortable with a managed service. Use Swarmbase when you need end-to-end encryption and data sovereignty, or when you want to own your infrastructure.
@@ -65,7 +65,7 @@ Use Liveblocks for production collaborative UIs with presence, comments, and ric
 | **Encryption** | End-to-end (AES-GCM per document) | Field-level encryption plugin |
 | **Convergence** | CRDT (Yjs/Automerge) | CRDT plugin + conflict handlers |
 | **Framework support** | React, Redux | React, Angular, Vue, Svelte, Node.js, Expo |
-| **Production readiness** | Alpha | Production-grade (v17+) |
+| **Production readiness** | Early stage | Production-grade (v17+) |
 
 RxDB is a mature, production-ready local-first database with broad backend support. Swarmbase is focused on encrypted peer-to-peer CRDT collaboration without a central server. They solve different problems.
 
@@ -81,7 +81,7 @@ RxDB is a mature, production-ready local-first database with broad backend suppo
 | **Encryption** | End-to-end (server never sees data) | E2E encryption |
 | **Server** | Relay nodes (pass-through) | Jazz sync server (stateful) |
 | **Framework support** | React, Redux | React, Vue, Svelte, Solid, Expo |
-| **Production readiness** | Alpha | Production (Jazz Cloud) |
+| **Production readiness** | Early stage | Production (Jazz Cloud) |
 
 Jazz provides a more polished developer experience with managed infrastructure. Swarmbase gives you more control over networking and infrastructure, at the cost of more setup.
 
@@ -97,7 +97,7 @@ Jazz provides a more polished developer experience with managed infrastructure. 
 | **Schema** | Schema-less (CRDT types) | Postgres DDL |
 | **Encryption** | End-to-end | Server-side (you control Postgres access) |
 | **Offline** | Yes (IndexedDB local replica) | Yes (PGlite local replica) |
-| **Production readiness** | Alpha | Postgres sync is stable |
+| **Production readiness** | Early stage | Postgres sync is stable |
 
 ElectricSQL is ideal when you already have a Postgres database and want to sync a subset of it to clients. Swarmbase is designed for peer-to-peer document collaboration where there is no central database.
 
@@ -111,4 +111,4 @@ Swarmbase stands out when you need:
 4. **Composable libraries** — use only the packages you need, not a monolithic platform
 5. **Source-available transparency** — every layer is inspectable and modifiable
 
-If any of the projects above matches your requirements more closely, use it — they are more mature and have larger communities. Swarmbase is an alpha project exploring a specific design point: encrypted CRDT documents that sync directly between peers, with no server in the data path.
+If any of the projects above matches your requirements more closely, use it — they are more mature and have larger communities. Swarmbase is exploring a specific design point: encrypted CRDT documents that sync directly between peers, with no server in the data path.

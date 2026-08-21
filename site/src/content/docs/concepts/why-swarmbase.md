@@ -50,7 +50,6 @@ Swarmbase is a good fit for applications that need:
 
 Swarmbase is **not** a good fit when:
 
-- You need production-grade reliability today (it is alpha software)
 - You want a managed backend service (Swarmbase has no cloud offering)
 - You need sub-100ms multiplayer presence (CRDT conflict resolution is eventual, not real-time)
 - You are building a simple single-user offline app (use IndexedDB directly)
@@ -58,7 +57,7 @@ Swarmbase is **not** a good fit when:
 
 ## Current status
 
-Swarmbase is **alpha software** under active development. It is suitable for experiments, prototypes, and learning about local-first systems. It is not yet production-ready.
+Swarmbase is under active development with a growing CI-verified feature set. It is suitable for experiments, prototypes, and learning about local-first systems.
 
 Key capabilities that are verified end-to-end in CI:
 

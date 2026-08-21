@@ -3,7 +3,7 @@ title: Run your own relay node
 description: Run the repository's development relay and configure Vite browser clients to dial it.
 ---
 
-**Status: Runnable development relay.** The relay builds and has unit coverage; deployment, failover, stable identity, and scale are not production-validated.
+**Status: Runnable development relay.** The relay builds and has unit coverage; deployment, failover, stable identity, and scale are not yet production-validated.
 
 Browser deployments generally need bootstrap/relay infrastructure because browsers cannot usually accept arbitrary inbound connections. Not every topology routes all traffic through a relay: peers may discover direct WebRTC paths, and Node/LAN topologies may use other discovery. See [Networking](../../concepts/networking/).
 

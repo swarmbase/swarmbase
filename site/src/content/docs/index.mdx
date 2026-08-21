@@ -1,13 +1,13 @@
 ---
 title: Encrypted local-first database
-description: Swarmbase is alpha software for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.
+description: Swarmbase is a toolkit for encrypted, local-first CRDT documents synchronized over peer-to-peer networks.
 template: splash
 hero:
   title: Local-first documents that sync peer to peer
   tagline: >-
     Swarmbase is an open-source TypeScript toolkit for encrypted CRDT documents.
     Build collaborative browser applications without operating an application
-    database server. Alpha software — ready to explore, not yet production-ready.
+    database server. Composable libraries — use only what you need.
   image:
     file: ../../assets/logo.svg
   actions:
@@ -24,16 +24,10 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid, LinkButton, Aside } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 import SyncDemo from '../../components/SyncDemo.astro';
 
-<Aside type="caution" title="Alpha software, honestly labeled">
-  Swarmbase is under active development. It is suitable for experiments,
-  prototypes, and learning about local-first systems, but not yet for production
-  or irreplaceable data. See the
-  [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md)
-  for the current capability-to-evidence map.
-</Aside>
+
 
 ## What is Swarmbase?
 

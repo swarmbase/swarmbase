@@ -1,9 +1,9 @@
 ---
 title: Limitations
-description: Current alpha limitations — what is not yet implemented, verified, or production-ready in Swarmbase.
+description: Current limitations — what is not yet implemented or verified in Swarmbase.
 ---
 
-Swarmbase is alpha software. This page catalogs the known gaps between the current implementation and a production-ready system. Every limitation listed here is either not yet implemented or not yet verified in CI.
+Swarmbase is under active development. This page catalogs the known gaps between the current implementation and a production-ready system. Every limitation listed here is either not yet implemented or not yet verified in CI.
 
 See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) for the evidence backing each claim, and the [roadmap](../../community/roadmap/) for current development priorities.
 
