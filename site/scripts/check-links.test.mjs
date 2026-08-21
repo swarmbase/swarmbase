@@ -26,6 +26,7 @@ after(() => {
 function createFixture({
   indexBody = '',
   llms = '[Home](https://swarmbase.github.io/swarmbase/)',
+  llmsFull = '[Home](https://swarmbase.github.io/swarmbase/)',
   pages = {},
   repositoryDirectories = [],
   repositoryFiles = {},
@@ -58,6 +59,9 @@ function createFixture({
   }
 
   if (llms !== null) writeFileSync(join(directory, 'llms.txt'), llms);
+  if (llmsFull !== null) {
+    writeFileSync(join(directory, 'llms-full.txt'), llmsFull);
+  }
   return { directory, repositoryDirectory, root };
 }
 
@@ -272,4 +276,44 @@ test('requires llms.txt in the built site', () => {
 
   assert.equal(result.status, 1, outputFor(result));
   assert.match(outputFor(result), /llms\.txt does not exist/);
+});
+
+test('resumes llms-full.txt validation after fenced examples', () => {
+  const result = check(
+    createFixture({
+      llmsFull: [
+        '[Guide](https://swarmbase.github.io/swarmbase/guide/#topic)',
+        '```md',
+        '[Example only](https://swarmbase.github.io/swarmbase/ignored/)',
+        '```',
+        '[Missing](https://swarmbase.github.io/swarmbase/missing/)',
+      ].join('\n'),
+      pages: { 'guide/index.html': '<h2 id="topic">Topic</h2>' },
+    }),
+  );
+
+  assert.equal(result.status, 1, outputFor(result));
+  assert.match(outputFor(result), /llms-full\.txt:.*missing target/);
+});
+
+test('rejects an unclosed fence in llms-full.txt', () => {
+  const result = check(
+    createFixture({
+      llmsFull: [
+        '[Home](https://swarmbase.github.io/swarmbase/)',
+        '```md',
+        '[Masked](https://swarmbase.github.io/swarmbase/missing/)',
+      ].join('\n'),
+    }),
+  );
+
+  assert.equal(result.status, 1, outputFor(result));
+  assert.match(outputFor(result), /llms-full\.txt:2: unclosed ``` fence/);
+});
+
+test('requires llms-full.txt in the built site', () => {
+  const result = check(createFixture({ llmsFull: null }));
+
+  assert.equal(result.status, 1, outputFor(result));
+  assert.match(outputFor(result), /llms-full\.txt does not exist/);
 });

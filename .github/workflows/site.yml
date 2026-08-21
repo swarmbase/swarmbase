@@ -58,8 +58,8 @@ jobs:
         run: yarn install --immutable
       - name: Build site
         run: yarn workspace @swarmbase/site build
-      - name: Test site link checker
-        run: node --test site/scripts/check-links.test.mjs
+      - name: Test site tooling
+        run: node --test site/scripts/check-links.test.mjs site/scripts/generate-llms-full.test.mjs
       - name: Check site and agent index links
         run: node site/scripts/check-links.mjs
       - uses: actions/configure-pages@v5

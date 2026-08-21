@@ -6,7 +6,7 @@
   "scripts": {
     "build:dependencies": "yarn workspace @swarmbase/collabswarm tsc && yarn workspace @swarmbase/collabswarm-yjs tsc",
     "dev": "yarn run build:dependencies && astro dev",
-    "build": "yarn run build:dependencies && astro build",
+    "build": "yarn run build:dependencies && astro build && node scripts/generate-llms-full.mjs",
     "preview": "astro preview"
   },
   "dependencies": {
