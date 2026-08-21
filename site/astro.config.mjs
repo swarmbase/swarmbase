@@ -22,6 +22,11 @@ const removeGeneratedApiLanding = {
   },
 };
 
+const socialCard = {
+  url: 'https://swarmbase.github.io/swarmbase/social-card.png',
+  alt: 'Swarmbase — encrypted, local-first CRDT documents over peer-to-peer networks. Alpha software.',
+};
+
 // Served as a GitHub Pages project page until a custom domain is set up.
 export default defineConfig({
   site: 'https://swarmbase.github.io',
@@ -82,7 +87,31 @@ export default defineConfig({
       head: [
         {
           tag: 'meta',
-          attrs: { property: 'og:image', content: '/swarmbase/og-image.svg' },
+          attrs: { property: 'og:image', content: socialCard.url },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:width', content: '1200' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:height', content: '630' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:type', content: 'image/png' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:alt', content: socialCard.alt },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:image', content: socialCard.url },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:image:alt', content: socialCard.alt },
         },
       ],
       sidebar: [
