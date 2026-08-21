@@ -81,17 +81,16 @@ const block = {
 };
 ```
 
-### Visibility settings
+### Signing configuration
 
-Swarmbase currently supports three document visibility configurations:
+Document signing is controlled by `CollabswarmConfig.enableSigning` (default: `true`):
 
-| Visibility | Effect |
+| Setting | Effect |
 |---|---|
-| **Encrypted** (default) | All blocks encrypted with document key. Only readers can decrypt. |
-| **Signed only** | Blocks signed but not encrypted. Any peer can read, but only authorized writers can publish. |
-| **Public** | Blocks neither signed nor encrypted. Any peer can read and write. |
+| **`enableSigning: true`** (default) | Changes are signed with ECDSA P-384 and encrypted with AES-GCM. Receivers verify signatures. |
+| **`enableSigning: false`** | Changes are still encrypted with AES-GCM but not signed. ACL enforcement is disabled — any peer that can connect may publish changes. |
 
-Public documents undermine Swarmbase's core value proposition and are primarily useful for testing.
+Documents are always encrypted at rest and in transit. There is no configuration toggle to disable encryption.
 
 ## Initial-load quorum
 

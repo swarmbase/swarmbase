@@ -33,7 +33,7 @@ See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/fe
 
 ## Networking and availability
 
-- **Browsers require a relay.** Browser peers cannot accept incoming connections. All browser-to-browser traffic goes through a Circuit Relay.
+- **Browsers typically need a relay.** Browser peers cannot accept incoming connections directly. A Circuit Relay is needed for initial connectivity and as a fallback; direct WebRTC or WebTransport connections may be possible when NAT traversal succeeds, but this is not yet verified in CI.
 - **GossipSub is best-effort.** Message delivery is not guaranteed. Late-joining peers miss earlier announcements.
 - **Many transports are untested in CI.** WebRTC, WebTransport, and DCUtR are configuration claims without transport-specific sync tests. Only WebSocket has verified end-to-end sync.
 - **DHT and AutoNAT have no standalone CI tests.** They are included in the Docker-backed NAT topology but not stress-tested.

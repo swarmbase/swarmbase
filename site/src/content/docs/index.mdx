@@ -41,8 +41,9 @@ Swarmbase is a set of **composable TypeScript libraries** that let you build app
 
 <CardGrid>
   <Card title="Encrypted by default" icon="seti:lock">
-    Every change is signed with ECDSA P-384 and encrypted with AES-GCM before it
-    leaves the device. Relays and remote stores see only opaque ciphertext.
+    By default, every change is signed with ECDSA P-384 and encrypted with AES-GCM
+    before it leaves the device. Relays and remote stores see only opaque ciphertext.
+    (Signing can be configured via `enableSigning`.)
   </Card>
   <Card title="No application database server" icon="setting">
     Helia and libp2p provide storage and peer-to-peer transport. You run relay
