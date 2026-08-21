@@ -147,6 +147,24 @@ coverage remains active work.
 See the [architecture page](concepts/architecture/) for detailed diagrams of the
 data flow, networking stack, and encryption model.
 
+## How Swarmbase compares
+
+| Tool | Use case | Server role |
+|---|---|---|
+| **Swarmbase** | Encrypted peer-to-peer CRDT documents | Self-hosted relay/bootstrap; document payloads end-to-end encrypted |
+| **Yjs** | High-performance CRDT runtime | Bring or configure a sync provider |
+| **Automerge** | JSON-like CRDT documents | Configure Repo storage/network adapters |
+| **Liveblocks** | Real-time presence + collaboration | Managed backend service |
+| **RxDB** | Local-first NoSQL database | Flexible replication to many backends |
+| **Jazz** | Local-first relational database | Managed or self-hosted sync server |
+| **Electric Sync** | Sync Postgres data to clients | Postgres read-path sync engine |
+
+Swarmbase is designed for **end-to-end encrypted documents** that sync through
+**self-hosted relay infrastructure without exposing document plaintext**. Relays
+can still observe connection and traffic metadata. See the
+[full comparisons](reference/comparisons/) for detailed trade-offs against each
+project.
+
 ## Built in the open
 
 Swarmbase is young enough that careful bug reports, API feedback, documentation,
