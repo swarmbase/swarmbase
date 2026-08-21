@@ -4716,7 +4716,7 @@ __metadata:
     fake-indexeddb: "npm:^6.2.5"
     helia: "npm:^7.1.7"
     helia-v6: "npm:helia@6.1.4"
-    ipns: "npm:^11.0.0"
+    ipns: "npm:^11.0.1"
     jest: "npm:^29.2.5"
     js-base64: "npm:^3.7.8"
     libp2p: "npm:^3.3.8"
@@ -9185,21 +9185,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ipns@npm:^11.0.0":
-  version: 11.0.0
-  resolution: "ipns@npm:11.0.0"
+"ipns@npm:^11.0.1":
+  version: 11.0.1
+  resolution: "ipns@npm:11.0.1"
   dependencies:
     "@libp2p/crypto": "npm:^5.0.0"
     "@libp2p/interface": "npm:^3.0.2"
     "@libp2p/logger": "npm:^6.0.4"
-    cborg: "npm:^5.1.0"
+    cborg: "npm:^6.1.1"
     interface-datastore: "npm:^10.0.0"
     multiformats: "npm:^14.0.0"
     protons-runtime: "npm:^7.0.0"
     timestamp-nano: "npm:^1.0.1"
     uint8arraylist: "npm:^3.0.2"
     uint8arrays: "npm:^6.1.1"
-  checksum: 10/3626c2b55e8acaa2c0285576f3ad969b75a2870ba9a3061bb665b0b853cb7e26495b606306203d3e1fc4f93fc8f159f89965f20d9b848cada4b1d2a0d5abbcb7
+  checksum: 10/dea968170284f6d059160912ccaab2eb355ec3c8edc03f680235c01445525fb9367291fc4853d611220bb900122f4f2b56f8d6a5affba2f51b5200441ba3d976
   languageName: node
   linkType: hard
 
