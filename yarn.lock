@@ -4551,7 +4551,7 @@ __metadata:
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/react": "npm:^16.3.2"
-    "@testing-library/user-event": "npm:^14.6.1"
+    "@testing-library/user-event": "npm:^14.6.5"
     "@types/jest": "npm:^29.5.13"
     "@types/jsoneditor": "npm:^9.9.6"
     "@types/node": "npm:^22.7.5"
@@ -4740,7 +4740,7 @@ __metadata:
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/react": "npm:^16.3.2"
-    "@testing-library/user-event": "npm:^14.6.1"
+    "@testing-library/user-event": "npm:^14.6.5"
     "@types/bootstrap": "npm:^5.2.10"
     "@types/node": "npm:^22.7.5"
     "@types/react": "npm:^19.2.3"
@@ -4793,7 +4793,7 @@ __metadata:
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/react": "npm:^16.3.2"
-    "@testing-library/user-event": "npm:^14.6.1"
+    "@testing-library/user-event": "npm:^14.6.5"
     "@types/jest": "npm:^29.5.13"
     "@types/node": "npm:^22.7.5"
     "@types/react": "npm:^19.2.3"
@@ -5043,12 +5043,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/user-event@npm:^14.6.1":
-  version: 14.6.1
-  resolution: "@testing-library/user-event@npm:14.6.1"
+"@testing-library/user-event@npm:^14.6.5":
+  version: 14.6.5
+  resolution: "@testing-library/user-event@npm:14.6.5"
   peerDependencies:
     "@testing-library/dom": ">=7.21.4"
-  checksum: 10/34b74fff56a0447731a94b40d4cf246deb8dbc1c1e3aec93acd1c3377a760bb062e979f1572bb34ec164ad28ee2a391744b42d0d6d6cc16c4ce527e5e09610e1
+  checksum: 10/ed77506cbbd78ce1483b793895bd5b177ad7ff94ee2b038f2ac04eca254defbd43df00325c4a3a10ffb4d319b6e2efae36fdf3bba9f7d68b1bd30c152855b727
   languageName: node
   linkType: hard
 
