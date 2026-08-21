@@ -51,7 +51,7 @@ See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/fe
 - **PathUpdate is best-effort.** There is no guarantee that ACL change notifications reach all peers.
 - **No time-bound or conditional access.** Readers and writers are either in the ACL or not. There is no expiration, usage limit, or context-based access control.
 - **UCAN capabilities are standalone.** The UCAN module can issue and verify capability tokens, but the document change path does not check them.
-- **No key rotation.** Document keys, once created, cannot be rotated (though BeeKEM can issue new encapsulations).
+- **No automatic or restart-safe key rotation.** Document keys can be rotated on demand via `removeReader()`, which activates a new document key through BeeKEM, but rotation requires explicit application triggers, BeeKEM rekey state is memory-only, and PathUpdate delivery is best-effort.
 
 ## Convergence and verification
 

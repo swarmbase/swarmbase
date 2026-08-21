@@ -10,8 +10,9 @@ A local-first application stores its primary data on the user's device — not o
 Swarmbase adopts these local-first principles:
 
 - **Local replica near the user.** The application reads and writes a local CRDT document. There is no server round-trip for reads or writes.
-- **Work offline.** Once a document is loaded, the local replica can be edited without network access. Changes are applied immediately to the CRDT and queued for peers.
+- **Work offline.** Once a document is loaded, the local replica can be edited without network access. Changes are applied immediately to the CRDT and stored locally in IndexedDB.
 - **No server-ordained write ordering.** Two peers can edit the same document concurrently. The CRDT layer merges their changes when they eventually exchange updates.
+- **Eventually consistent.** When peers reconnect, they may discover and fetch blocks that were created during the offline period. Delivery is not guaranteed — see limitations below.
 
 ## What is implemented today
 

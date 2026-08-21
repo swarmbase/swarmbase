@@ -13,7 +13,7 @@ In a typical collaborative app, the server is a central point of failure, a scal
 
 ### Encryption is the default, not an add-on
 
-Every document change is signed with the writer's identity and encrypted with AES-GCM before it leaves the device. Relays, bootstrap nodes, and remote storage see only opaque ciphertext. Key material stays on devices — Swarmbase never transmits unencrypted document content.
+By default (`enableSigning: true`), every document change is signed with the writer's identity and encrypted with AES-GCM before it leaves the device. Relays, bootstrap nodes, and remote storage see only opaque ciphertext. Encryption is always on, whether signing is enabled or not. Key material stays on devices — Swarmbase never transmits unencrypted document content.
 
 ### Composable, not monolithic
 

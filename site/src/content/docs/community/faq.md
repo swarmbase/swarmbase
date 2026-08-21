@@ -33,7 +33,7 @@ Swarmbase targets browser and Node.js environments. It has not been tested on Re
 
 ## How does Swarmbase handle conflicts?
 
-Swarmbase delegates conflict resolution to the underlying CRDT library (Yjs or Automerge). Both libraries provide deterministic merge semantics — concurrent edits to the same field are resolved automatically, without application-level conflict handlers. For example, Yjs merges concurrent `Y.Map` key updates by taking the later one, and merges concurrent `Y.Array` insertions by preserving both at their intended positions.
+Swarmbase delegates conflict resolution to the underlying CRDT library (Yjs or Automerge). Both libraries provide deterministic merge semantics — concurrent edits are resolved automatically, without application-level conflict handlers. For example, Yjs merges concurrent `Y.Map` key updates using deterministic per-key conflict resolution (not wall-clock ordering), and merges concurrent `Y.Array` insertions by preserving both at their intended positions.
 
 ## How does Swarmbase compare to CRDT-based databases?
 

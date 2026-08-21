@@ -27,7 +27,7 @@ Every `CRDTChangeBlock` is stored as an opaque blob:
 └─────────────────────────────────────┘
 ```
 
-Blocks are immutable. Once stored, a block's CID is stable forever. The document's current state is the **tip** — the most recent block applied to the CRDT replica. The tip advances with each `document.change()`.
+Blocks are immutable. Once stored, a block's CID is stable forever. The document's current state is materialized by the CRDT layer from the **frontier** — the most recent block(s) at the head of the sync graph. New blocks added via `document.change()` extend the frontier, and the CRDT layer resolves any concurrent heads.
 
 ### Inline vs deferred payloads
 
@@ -78,17 +78,35 @@ See the [pinning cookbook](../../cookbook/pinning/) for the integration checklis
 
 ## Recovery requirements
 
-Recovering a document requires more than just the encrypted blocks. A peer needs:
+The components a peer needs depend on what it needs to do:
+
+### Read-only recovery
+
+A reader that only needs to reconstruct and verify existing document history requires:
 
 1. **The block data** — encrypted CRDT change blocks (from any peer or pinning service)
-2. **The graph structure** — which CIDs form the tip and its ancestor chain (from the shadow sync graph)
-3. **The document key** — AES-GCM key to decrypt blocks (held by authorized peers)
-4. **The identity key** — ECDSA P-384 signing key to prove authorship (held by each writer)
-5. **The KEM state** — BeeKEM key material for dynamic group membership (memory-only currently)
-6. **Network reachability** — connection to at least one peer or bootstrap node
-7. **K-of-Q quorum** — agreement from bootstrap peers on the current tip hash (configurable)
+2. **The graph structure** — which CIDs form the frontier and its ancestor chain (from the shadow sync graph)
+3. **The document key history** — AES-GCM keys to decrypt blocks for each epoch
+4. **The writers' public keys** — to verify signatures on existing blocks
 
-Losing any of these components may make full recovery impossible. Key management and backup are application responsibilities.
+### Write recovery
+
+To issue new changes, a peer additionally needs:
+
+5. **The identity key** — ECDSA P-384 signing key to prove authorship
+
+### Membership recovery
+
+To participate in dynamic group membership (add/remove readers), a peer additionally needs:
+
+6. **The KEM state** — BeeKEM key material (memory-only currently; determining the set of active members requires this)
+
+### Configurable prerequisites
+
+7. **Network reachability** — connection to at least one peer or bootstrap node (needed to fetch missing blocks)
+8. **Q-of-K quorum** — agreement from bootstrap peers on the current frontier hash (enabled by default but configurable via `loadQuorumK`/`loadQuorumQ`)
+
+Losing any of these components may make the corresponding recovery path impossible. Key management and backup are application responsibilities.
 
 ## Compaction and garbage collection
 

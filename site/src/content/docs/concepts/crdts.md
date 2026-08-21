@@ -64,7 +64,8 @@ This means:
 
 - Blocks reference their immediate parent(s) by CID — forming a DAG across concurrent writers
 - The CRDT layer resolves concurrent edits (e.g., Yjs merges Y.Map updates from two peers)
-- Blocks are immutable once stored; the tip pointer advances to the latest block
+- Blocks are immutable once stored; the frontier advances as new blocks are added
+- The implementation tracks a tip-set (multiple concurrent heads), computing a combined tip-set hash
 - The shadow graph is used for sync (walk backward to find missing blocks), not for data modeling
 
 ### `CRDTProvider` interface
@@ -99,7 +100,7 @@ Two implementations exist:
 Yjs provides shared types that merge deterministically:
 
 ```ts
-// Y.Map: last-writer-wins per key
+// Y.Map: deterministic per-key conflict resolution
 const ymap = state.getMap('settings');
 ymap.set('theme', 'dark');
 
@@ -160,15 +161,7 @@ Compaction is **off by default** and uses a preference rule based on compacted-c
 
 ## Quorum loading
 
-Before trusting a document's state, Swarmbase can require K-of-Q bootstrap peers to agree on the current tip hash:
-
-```ts
-const document = await swarm.loadDocument('/shared-note', {
-  quorum: { k: 2, peers: [bootstrap1, bootstrap2, bootstrap3] },
-});
-```
-
-This prevents loading a fork or a stale version when multiple peers have written to the document. The quorum check is **not** Sybil-resistant — a peer that controls multiple identities can subvert it.
+Before trusting a document's state, Swarmbase can require Q-of-K bootstrap peers to agree on the current frontier hashes. Quorum is configured via `CollabswarmConfig` fields `loadQuorumK` and `loadQuorumQ`, then runs automatically during `document.open()`. This prevents loading a fork or a stale version when multiple peers have written to the document. The quorum check is **not** Sybil-resistant — a peer that controls multiple identities can subvert it.
 
 ## CI-backed evidence
 

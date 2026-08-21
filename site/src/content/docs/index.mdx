@@ -71,6 +71,13 @@ import { Collabswarm, SubtleCrypto, defaultConfig,
 import { YjsProvider, YjsACLProvider,
   YjsKeychainProvider, YjsJSONSerializer } from '@swarmbase/collabswarm-yjs';
 
+// The application must supply an ECDSA P-384 key pair:
+const userKeyPair = await crypto.subtle.generateKey(
+  { name: 'ECDSA', namedCurve: 'P-384' },
+  true,
+  ['sign', 'verify'],
+) as CryptoKeyPair;
+
 const swarm = new Collabswarm(
   userKeyPair.privateKey,
   userKeyPair.publicKey,

@@ -94,20 +94,24 @@ Documents are always encrypted at rest and in transit. There is no configuration
 
 ## Initial-load quorum
 
-Before trusting a document's state, Swarmbase can require **K-of-Q** bootstrap peers to agree on the current tip hash. This prevents loading a fork or a truncated history.
+Before trusting a document's state, Swarmbase can require **Q-of-K** bootstrap peers to agree on the current tip hashes. This prevents loading a fork or a truncated history. Quorum is configured via `CollabswarmConfig`:
 
 ```ts
-const document = await swarm.loadDocument('/shared-note', {
-  quorum: {
-    k: 2,  // Require 2 of 3 peers to agree
-    peers: [bootstrapPeerId1, bootstrapPeerId2, bootstrapPeerId3],
-  },
-});
+// Set loadQuorumK and loadQuorumQ when initializing:
+await swarm.initialize(defaultConfig({
+  ...defaultBootstrapConfig([]),
+  loadQuorumK: 3,  // probe up to 3 peers
+  loadQuorumQ: 2,  // require agreement from at least 2
+}));
+
+// Documents are then opened normally; quorum runs automatically:
+const document = swarm.doc('/shared-note');
+await document.open();
 ```
 
 The quorum check:
-- Queries K-of-Q peers for their current tip hash
-- Proceeds only when enough peers agree on the same tip
+- Probes up to `loadQuorumK` peers for their current frontier hashes
+- Proceeds only when at least `loadQuorumQ` peers agree on the same frontier
 - Rejects the load if agreement cannot be reached
 - Is **not Sybil-resistant** — a peer controlling multiple identities can subvert it
 

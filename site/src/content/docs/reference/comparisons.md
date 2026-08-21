@@ -45,7 +45,7 @@ Swarmbase wraps Automerge documents with encryption and access control. If you o
 | **Deployment** | Self-hosted (you run relays) | Managed service (Liveblocks cloud) |
 | **Data sovereignty** | Full control (encrypted on your infrastructure) | Data stored on Liveblocks servers |
 | **Encryption model** | End-to-end (server never sees plaintext) | Encrypted in transit (server sees data) |
-| **Offline first** | Yes (IndexedDB local replica) | No (requires connection) |
+| **Offline first** | Yes (IndexedDB local replica) | Experimental (Yjs + IndexedDB; available after initial load) |
 | **Pricing** | Open source (MIT) | Free tier + paid plans |
 | **Production readiness** | Alpha (not production-ready) | Production-grade |
 | **AI collaboration features** | Not included | AI comments, AI copilots |

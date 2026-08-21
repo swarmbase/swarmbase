@@ -64,16 +64,16 @@ document.open()
   ▼
 CollabswarmNode
   │  resolves document ID to CID via IPNS or bootstrap
-  │  if local: loads tip from Helia blockstore
-  │  if remote: queries K-of-Q peers for latest tip hashes
+  │  if local: loads frontier from Helia blockstore
+  │  if remote: queries Q-of-K peers for frontier agreement
   ▼
 Load Quorum Orchestrator
   │  requests tips from configured bootstrap peers
-  │  selects valid tip with highest epoch
-  │  waits for K-of-Q agreement before proceeding
+  │  selects candidate with highest epoch
+  │  waits for Q-of-K agreement before proceeding
   ▼
 Shadow Graph Walk
-  │  walks CRDTChangeNode chain from tip backward
+  │  walks CRDTChangeNode chain from frontier backward
   │  fetches missing blocks (bitswap / HTTP)
   │  verifies signatures, decrypts, applies to CRDT
   ▼
@@ -158,7 +158,7 @@ Swarmbase documents can sync over peer-to-peer links, but most deployments need 
 | **Relay node** | For browser peers | Bridges NAT; peers behind restrictive firewalls connect through it |
 | **Bootstrap node** | For initial discovery | Provides a well-known entry point for the libp2p network |
 | **STUN/TURN server** | For WebRTC direct connections | Helps peers establish direct browser-to-browser links |
-| **Remote pinning** | Optional | Persists encrypted blocks when all local peers go offline |
+| **Remote pinning** | Optional (integration incomplete) | Would persist encrypted blocks when all local peers go offline; the listener API exists but the current commit path does not invoke a publisher |
 | **Identity service** | Application responsibility | Swarmbase does not provide user authentication or key management |
 
 The relay server source is in `relay-server/`. The Docker Compose files in the repository root provide ready-to-run multi-node topologies for testing.
@@ -167,7 +167,7 @@ The relay server source is in `relay-server/`. The Docker Compose files in the r
 
 See the [limitations page](../limitations/) for a complete list. Key architectural limitations to be aware of:
 
-- **No durable outbox**: if a remote peer is unreachable at write time, the update may be lost
+- **No durable outbox**: local blocks are stored in IndexedDB, but an unreachable peer may not receive the update; there is no delivery retry queue
 - **No automatic reconnect**: the application must detect disconnection and re-establish transport
 - **No pass/fail performance budgets**: benchmarks exist but have no thresholds
 - **Pinning is incomplete**: the listener exists but the publisher does not

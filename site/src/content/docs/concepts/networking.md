@@ -14,7 +14,7 @@ Swarmbase supports these transport protocols. The actual set used depends on the
 | Transport | Runtime | Purpose |
 |---|---|---|
 | **WebSocket** | Browser, Node.js | Reliable bidirectional stream. Used for relay and bootstrap connections. |
-| **WebRTC** | Browser | Browser-to-browser direct connections (requires STUN/TURN). |
+| **WebRTC** | Browser | Browser-to-browser direct connections (STUN improves NAT traversal; TURN or Circuit Relay may be needed for restrictive NATs). |
 | **WebRTC Direct** | Node.js | Node-to-Node direct connections. |
 | **WebTransport** | Browser (Chrome 97+) | Modern, low-latency QUIC-based transport. |
 | **TCP** | Node.js | Traditional stream transport for Node.js peers. |
@@ -117,18 +117,19 @@ Relays are the most important infrastructure component in a Swarmbase deployment
 
 **What relays can do:**
 - Drop, delay, or reorder messages
+- Terminate transport connections and forward relayed traffic
 - Censor specific peers or topics
 - Log metadata about who communicates with whom
-- Impersonate a peer at the libp2p level (but cannot forge signatures or decrypt content)
 
 **What relays cannot do:**
 - Decrypt document content without the document key
-- Forge signatures without the signing private key
+- Forge application-level signatures without the signing private key
+- Authenticate as another peer at the libp2p level (Noise provides end-to-end peer authentication)
 - Modify encrypted blocks (detected via CID integrity check)
 
 ### Identity pinning risk
 
-A relay could present a different peer ID after a restart. If your application pins to a specific relay peer ID, verify it on each connection. Consider using DNS (`/dns4/...`) rather than raw multiaddrs to allow relay addresses to change.
+A relay that restarts with a new peer ID breaks connections from clients that pinned to the old identity. Mitigation options include using a persistent relay key so the peer ID stays stable across restarts, or using authenticated discovery to learn a trusted new peer ID after the relay restarts. DNS (`/dns4/...`) changes address resolution but `/p2p/<peerID>` still pins the relay identity.
 
 ## Operational limits
 
