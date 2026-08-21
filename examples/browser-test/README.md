@@ -19,8 +19,8 @@ yarn build
 yarn workspace @swarmbase/browser-test start
 ```
 
-Open the URL printed by Vite. A document path such as `/demo/document` can be
-entered in the **Open Document** field.
+Open the URL printed by Vite. Enter a document path such as `/demo/document` in
+the text field beside **Open**, then select **Open**.
 
 ## Verify the supported browser path
 
