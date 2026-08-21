@@ -1,7 +1,7 @@
 import { describe, expect, test, jest, afterEach } from '@jest/globals';
 import React, { useState } from 'react';
 import { render, act, cleanup, waitFor } from '@testing-library/react';
-import { openTaskResults, subscriberCounts } from './hooks-cache';
+import { openTaskResults, subscriberCounts } from './hooks-cache.js';
 import {
   resetCaches,
   createMockDocument,
@@ -9,7 +9,7 @@ import {
   createMockCollabswarmMultiDoc,
   TestProvider,
   TestConsumer,
-} from './test-utils';
+} from './test-utils.js';
 
 // ---------------------------------------------------------------------------
 // Tests: Subscription callback behavior

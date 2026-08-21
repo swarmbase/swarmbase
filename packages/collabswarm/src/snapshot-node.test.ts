@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { CRDTSnapshotNode } from './snapshot-node';
+import { CRDTSnapshotNode } from './snapshot-node.js';
 
 describe('CRDTSnapshotNode', () => {
   test('can create a valid snapshot node', () => {

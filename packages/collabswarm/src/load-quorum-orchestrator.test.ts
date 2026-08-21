@@ -35,9 +35,9 @@ import {
   beforeEach,
   afterEach,
 } from '@jest/globals';
-import { runLoadQuorum } from './load-quorum-orchestrator';
-import { dedupePeersByPeerId, LoadQuorumFailedError } from './load-quorum';
-import { tipsHashToHex } from './tips-hash';
+import { runLoadQuorum } from './load-quorum-orchestrator.js';
+import { dedupePeersByPeerId, LoadQuorumFailedError } from './load-quorum.js';
+import { tipsHashToHex } from './tips-hash.js';
 
 /**
  * Fixture hashes. Each is a 32-byte fixed-byte buffer so the hex form is

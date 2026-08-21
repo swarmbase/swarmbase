@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { CRDTSyncMessage } from './crdt-sync-message';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
 
 /**
  * Unit-level coverage for the BeeKEM Welcome receive flow.

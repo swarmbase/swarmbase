@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { SubtleCrypto } from './auth-subtlecrypto';
+import { SubtleCrypto } from './auth-subtlecrypto.js';
 
 describe('Collabswarm crypto key generation', () => {
   const auth = new SubtleCrypto();

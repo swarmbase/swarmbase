@@ -7,8 +7,8 @@ import {
   ACLState,
   canonicalEntryPayload,
   computeEntryHash,
-} from './acl-chain';
-import { SubtleCrypto } from './auth-subtlecrypto';
+} from './acl-chain.js';
+import { SubtleCrypto } from './auth-subtlecrypto.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures and helpers

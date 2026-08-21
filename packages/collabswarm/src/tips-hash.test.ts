@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
-import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash';
-import { constantTimeHexEquals } from './load-quorum';
+import { tipsHash, tipsHashToHex, TIPS_HASH_LENGTH } from './tips-hash.js';
+import { constantTimeHexEquals } from './load-quorum.js';
 
 describe('tipsHash (initial-load quorum, #189 §5.4.2)', () => {
   test('returns a 32-byte SHA-256 digest', async () => {

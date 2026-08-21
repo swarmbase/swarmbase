@@ -16,8 +16,8 @@ import {
   CHANGE_DOCUMENT,
   PEER_CONNECT,
   PEER_DISCONNECT,
-} from './actions';
-import { collabswarmReducer, CollabswarmState } from './reducers';
+} from './actions.js';
+import { collabswarmReducer, CollabswarmState } from './reducers.js';
 
 // Mock state with `as any` casts since the reducer only stores references.
 function createMockState(): CollabswarmState<any, any, any, any, any, any> {

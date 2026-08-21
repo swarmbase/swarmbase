@@ -8,7 +8,7 @@ import {
   createEpoch,
   EpochManager,
   toHex,
-} from './epoch';
+} from './epoch.js';
 
 /** Helper: create a deterministic Uint8Array of the given length from a seed byte. */
 function makeBytes(length: number, seed: number): Uint8Array {

@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeAll } from '@jest/globals';
-import { SubtleBlindIndexProvider } from './subtle-blind-index-provider';
+import { SubtleBlindIndexProvider } from './subtle-blind-index-provider.js';
 
 describe('SubtleBlindIndexProvider', () => {
   let provider: SubtleBlindIndexProvider;

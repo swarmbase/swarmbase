@@ -1,10 +1,10 @@
 import { describe, expect, test } from '@jest/globals';
-import { CRDTSyncMessage } from './crdt-sync-message';
-import { SyncMessageSerializer } from './sync-message-serializer';
+import { CRDTSyncMessage } from './crdt-sync-message.js';
+import { SyncMessageSerializer } from './sync-message-serializer.js';
 import {
   evaluateBeeKEMWelcome,
   WelcomeValidationDeps,
-} from './beekem-welcome-handler';
+} from './beekem-welcome-handler.js';
 
 /**
  * Direct unit-test coverage for the security-critical gates of the

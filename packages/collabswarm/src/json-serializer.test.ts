@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
-import { JSONSerializer } from './json-serializer';
-import { CRDTChangeBlock } from './crdt-change-block';
+import { JSONSerializer } from './json-serializer.js';
+import { CRDTChangeBlock } from './crdt-change-block.js';
 
 const jsonSerializer = new JSONSerializer<any>();
 

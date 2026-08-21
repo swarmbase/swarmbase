@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { BloomFilterCRDT } from './bloom-filter-crdt';
+import { BloomFilterCRDT } from './bloom-filter-crdt.js';
 
 describe('BloomFilterCRDT', () => {
   describe('add and has', () => {
