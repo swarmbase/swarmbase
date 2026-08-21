@@ -3,8 +3,7 @@
 This Vite and React example explores a collaborative wiki interface with the
 Swarmbase Automerge and Redux packages.
 
-> Swarmbase is alpha software and is not production-ready. This workspace is a
-> source example with startup coverage, not a complete collaborative product.
+This workspace is a source example with startup coverage, not a complete collaborative product.
 
 ## Run from source
 

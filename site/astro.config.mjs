@@ -24,7 +24,7 @@ const removeGeneratedApiLanding = {
 
 const socialCard = {
   url: 'https://swarmbase.github.io/swarmbase/social-card.png',
-  alt: 'Swarmbase — encrypted, local-first CRDT documents over peer-to-peer networks. Alpha software.',
+  alt: 'Swarmbase — encrypted, local-first CRDT documents over peer-to-peer networks.',
 };
 
 // Served as a GitHub Pages project page until a custom domain is set up.

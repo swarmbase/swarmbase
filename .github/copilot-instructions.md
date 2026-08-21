@@ -4,7 +4,7 @@ Follow the repository-root `AGENTS.md`; it is the authoritative setup, command, 
 
 ## Project status
 
-Swarmbase is alpha software for encrypted, local-first CRDT documents over peer-to-peer networks. The six `@swarmbase/*` libraries are source workspaces and are not published to npm.
+Swarmbase provides encrypted, local-first CRDT documents over peer-to-peer networks. The six `@swarmbase/*` libraries are source workspaces and are not published to npm.
 
 Use `docs/feature-audit.md` and the site concept pages as the evidence baseline. Do not present isolated CRDT, crypto, ACL, BeeKEM, storage, or networking tests as proof of complete multi-peer behavior.
 

@@ -61,7 +61,7 @@ What needs to happen:
 What needs to happen:
 - npm scope `@swarmbase` claimed
 - `NPM_TOKEN` and `NPM_PUBLISH_ENABLED` secrets configured
-- First alpha release published
+- First npm release published
 - External consumer validation (import from npm, build, run)
 
 ### 7. Documentation and snippet tests

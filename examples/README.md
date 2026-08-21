@@ -9,10 +9,9 @@ source checkout. Use the smallest example that matches what you want to inspect:
 | [`wiki-swarm`](./wiki-swarm/)             | Automerge and Redux | A larger editor and routing pattern                                   | Builds and renders the wiki interface in Chromium         |
 | [`password-manager`](./password-manager/) | Yjs and React       | React hooks and item-specific access-control UI                       | Builds and renders the login interface in Chromium        |
 
-> Swarmbase is alpha software and is not production-ready. These are source
-> examples for evaluation and development, not application templates or
-> production showcases. Never enter real credentials into the password-manager
-> example.
+These are source examples for evaluation and development, not application
+templates or production showcases. Never enter real credentials into the
+password-manager example.
 
 ## Run from source
 
