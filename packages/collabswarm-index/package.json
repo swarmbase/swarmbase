@@ -1,10 +1,14 @@
 {
   "name": "@swarmbase/collabswarm-index",
-  "description": "Distributed indexing and query engine for SwarmDB",
+  "description": "Local and privacy-oriented indexing primitives for Swarmbase documents",
   "version": "0.1.0",
+  "homepage": "https://swarmbase.github.io/swarmbase/",
+  "bugs": {
+    "url": "https://github.com/swarmbase/swarmbase/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/swarmbase/swarmbase.git",
+    "url": "git+https://github.com/swarmbase/swarmbase.git",
     "directory": "packages/collabswarm-index"
   },
   "scripts": {
@@ -19,19 +23,32 @@
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
     "./react": {
       "types": "./dist/src/react.d.ts",
+      "import": "./dist/src/react.js",
       "default": "./dist/src/react.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/__tests__/**",
+    "!dist/**/__benchmarks__/**",
+    "!dist/**/__mocks__/**",
+    "!dist/**/*.map",
+    "!dist/**/*.tsbuildinfo"
   ],
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "devDependencies": {
     "@peculiar/webcrypto": "^1.7.1",
     "@types/node": "^22.7.5",
@@ -42,7 +59,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm",
+    "@swarmbase/collabswarm": "workspace:^",
     "idb": "^8.0.0"
   },
   "peerDependencies": {

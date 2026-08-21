@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'RELEASING.md'
+      - 'scripts/publish-release.tests.mjs'
+      - 'scripts/release-*.mjs'
+      - 'scripts/prepare-release.mjs'
+      - 'scripts/publish-release.mjs'
+      - 'scripts/set-version.mjs'
+      - 'scripts/tag-release.sh'
+      - 'scripts/validate-release-consumer.mjs'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'packages/*/package.json'
+      - 'packages/*/.npmignore'
+      - 'packages/*/README.md'
+      - 'packages/*/LICENSE'
+      - 'packages/*/src/**'
+      - 'packages/*/bin/**'
+      - 'packages/*/tsconfig*.json'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-artifacts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git fetch --force --prune origin main
+          VERSION="$(node scripts/release-version.mjs)"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.nodeversion.outputs.version }}
+      - run: corepack enable
+      - run: npm install --global npm@11.19.0
+      - run: yarn install --immutable
+      - run: yarn test:release
+      - run: yarn build
+      - run: yarn test
+      - name: Pack and inspect release artifacts
+        run: yarn release:prepare "$RUNNER_TEMP/swarmbase-release"
+      - name: Validate clean external consumer
+        run: yarn release:validate-consumer "$RUNNER_TEMP/swarmbase-release" "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-release-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/swarmbase-release/*.tgz
+            ${{ runner.temp }}/swarmbase-release/release-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && vars.NPM_PUBLISH_ENABLED == 'true'
+    needs: validate-artifacts
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: nodeversion
+        run: echo "version=$(grep nodejs .tool-versions | sed -e 's/[^[:space:]]*[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.nodeversion.outputs.version }}
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install --global npm@11.19.0
+      - uses: actions/download-artifact@v7
+        with:
+          name: npm-release-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/swarmbase-release
+      - name: Authenticate bootstrap publisher
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          npm whoami
+      - name: Stage, verify, and promote packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          STAGING_TAG: swarmbase-stage-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node scripts/release-version.mjs)"
+          BASE_VERSION="${VERSION%%+*}"
+          TARGET_TAG=latest
+          case "$BASE_VERSION" in *-*) TARGET_TAG=next ;; esac
+          node scripts/publish-release.mjs "$RUNNER_TEMP/swarmbase-release" "$STAGING_TAG" "$TARGET_TAG"

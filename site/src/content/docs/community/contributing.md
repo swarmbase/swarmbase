@@ -122,6 +122,6 @@ The CI workflow runs the six-package build and unit-test matrix, Docker integrat
 
 Review timing depends on maintainer availability; there is no response or review-time SLA.
 
-## License metadata
+## License
 
-The root `LICENSE` is MIT, while package manifests currently say ISC. This inconsistency must be reconciled before publication; do not describe the packages as having one unqualified license until then.
+Swarmbase and all six package manifests use the MIT License.

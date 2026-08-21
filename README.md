@@ -36,7 +36,7 @@ The browser test builds and smoke-tests one real encrypted Automerge document. I
 | `@swarmbase/collabswarm-redux` | Redux actions and reducers |
 | `@swarmbase/collabswarm-index` | Local/blind indexes, Bloom-filter gossip, and query bindings |
 
-The historical source-directory basename `collabswarm` remains in package paths. All current package names use `@swarmbase/*`, but registry publication and clean external-consumer installation are not yet verified.
+The historical source-directory basename `collabswarm` remains in package paths. All current package names use `@swarmbase/*`. Registry publication has not happened; release tooling validates the packed tarballs in a clean external consumer.
 
 ## Architecture and evidence
 
@@ -66,4 +66,4 @@ For suspected vulnerabilities, use private vulnerability reporting from the repo
 
 ## License
 
-The root [`LICENSE`](LICENSE) is MIT. Package manifests currently declare ISC; this metadata inconsistency must be reconciled before publication.
+Swarmbase and all six package manifests use the [MIT License](LICENSE).

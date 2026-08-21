@@ -33,7 +33,7 @@ The relay has unit coverage and NAT acceptance paths. Needed work includes durab
 
 ### External package publication
 
-The six `@swarmbase/*` workspaces build, but they are unpublished. Prepare publication only with clean tarball inspection, external-consumer ESM and declaration tests on Node 22.19.0 and browsers, dependency/export verification, release automation, and reconciliation of the root MIT license with ISC package metadata.
+The six `@swarmbase/*` workspaces build, but they are unpublished. Prepare publication only with clean tarball inspection, external-consumer ESM and declaration tests on Node 22.19.0 and browsers, dependency/export verification, and reviewed release automation.
 
 ### Documentation and snippet tests
 

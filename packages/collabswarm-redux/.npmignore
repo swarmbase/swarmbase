@@ -1,0 +1,8 @@
+dist/**/*.test.*
+dist/**/*.spec.*
+dist/**/__tests__/**
+dist/**/__benchmarks__/**
+dist/**/__mocks__/**
+dist/**/*.map
+dist/**/*.tsbuildinfo
+*.tsbuildinfo

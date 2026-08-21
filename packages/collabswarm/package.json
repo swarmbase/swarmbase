@@ -1,10 +1,14 @@
 {
   "name": "@swarmbase/collabswarm",
-  "description": "",
+  "description": "Encrypted local-first CRDT documents over peer-to-peer networks",
   "version": "0.1.0",
+  "homepage": "https://swarmbase.github.io/swarmbase/",
+  "bugs": {
+    "url": "https://github.com/swarmbase/swarmbase/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/swarmbase/swarmbase.git",
+    "url": "git+https://github.com/swarmbase/swarmbase.git",
     "directory": "packages/collabswarm"
   },
   "scripts": {
@@ -20,24 +24,34 @@
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
     "./node": {
       "types": "./dist/src/collabswarm-node.d.ts",
+      "import": "./dist/src/collabswarm-node.js",
       "default": "./dist/src/collabswarm-node.js"
     },
-    "./src/*": {
-      "types": "./dist/src/*.d.ts",
-      "default": "./dist/src/*.js"
+    "./browser-primitives": {
+      "types": "./dist/src/browser-primitives.d.ts",
+      "import": "./dist/src/browser-primitives.js",
+      "default": "./dist/src/browser-primitives.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/__tests__/**",
+    "!dist/**/__benchmarks__/**",
+    "!dist/**/__mocks__/**",
+    "!dist/**/*.map",
+    "!dist/**/*.tsbuildinfo"
   ],
   "type": "module",
   "author": "allegrormc@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
   "engines": {
     "node": ">=22.19.0"
   },
@@ -87,7 +101,6 @@
     "multiformats": "^13.4.2",
     "uint8arraylist": "^3.0.2"
   },
-  "gitHead": "5d48e475ac53ef5920423d3a22a4e19201e607a1",
   "publishConfig": {
     "access": "public"
   },

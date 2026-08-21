@@ -35,6 +35,10 @@
     "test:nat": "playwright test --config=playwright.nat-test.config.ts",
     "test:swarmbase-nat": "playwright test --config=playwright.swarmbase-nat.config.ts",
     "test:relay": "yarn --cwd relay-server test",
+    "test:release": "node --test scripts/release-packages.test.mjs scripts/publish-release.tests.mjs",
+    "version:set": "node scripts/set-version.mjs",
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "release:validate-consumer": "node scripts/validate-release-consumer.mjs",
     "benchmark:all": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-index' run benchmark"
   },
   "packageManager": "yarn@4.5.0"

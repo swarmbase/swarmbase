@@ -4871,7 +4871,7 @@ __metadata:
   dependencies:
     "@automerge/automerge": "npm:^3.2.6"
     "@peculiar/webcrypto": "npm:^1.7.1"
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:^"
     "@types/node": "npm:^22.7.5"
     eslint: "npm:^10.4.1"
     jest: "npm:^29.2.5"
@@ -4890,7 +4890,7 @@ __metadata:
   resolution: "@swarmbase/collabswarm-index@workspace:packages/collabswarm-index"
   dependencies:
     "@peculiar/webcrypto": "npm:^1.7.1"
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:^"
     "@types/node": "npm:^22.7.5"
     fake-indexeddb: "npm:^6.0.0"
     idb: "npm:^8.0.0"
@@ -4911,7 +4911,7 @@ __metadata:
   resolution: "@swarmbase/collabswarm-react@workspace:packages/collabswarm-react"
   dependencies:
     "@peculiar/webcrypto": "npm:^1.7.1"
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:^"
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/react": "npm:^16.3.2"
     "@types/react": "npm:^19.2.3"
@@ -4924,6 +4924,8 @@ __metadata:
     redux-thunk: "npm:^3.1.0"
     ts-jest: "npm:^29.2.5"
     typescript: "npm:^5.9.3"
+  peerDependencies:
+    react: ^18.0.0 || ^19.0.0
   languageName: unknown
   linkType: soft
 
@@ -4939,7 +4941,7 @@ __metadata:
     ts-jest: "npm:^29.2.5"
     typescript: "npm:^5.9.3"
   peerDependencies:
-    "@swarmbase/collabswarm": "workspace:*"
+    "@swarmbase/collabswarm": "workspace:^"
     redux: ^4.0.0 || ^5.0.0
     redux-thunk: ^2.0.0 || ^3.0.0
   languageName: unknown
@@ -4950,7 +4952,7 @@ __metadata:
   resolution: "@swarmbase/collabswarm-yjs@workspace:packages/collabswarm-yjs"
   dependencies:
     "@peculiar/webcrypto": "npm:^1.7.1"
-    "@swarmbase/collabswarm": "workspace:packages/collabswarm"
+    "@swarmbase/collabswarm": "workspace:^"
     "@types/node": "npm:^22.7.5"
     eslint: "npm:^10.4.1"
     jest: "npm:^29.2.5"
@@ -4965,7 +4967,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@swarmbase/collabswarm@workspace:*, @swarmbase/collabswarm@workspace:packages/collabswarm":
+"@swarmbase/collabswarm@workspace:*, @swarmbase/collabswarm@workspace:^, @swarmbase/collabswarm@workspace:packages/collabswarm":
   version: 0.0.0-use.local
   resolution: "@swarmbase/collabswarm@workspace:packages/collabswarm"
   dependencies:
