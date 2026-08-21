@@ -1,13 +1,37 @@
 #!/usr/bin/env node
 
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const defaultDistDirectory = fileURLToPath(
-  new URL('../dist', import.meta.url),
-);
+const defaultDistDirectory = fileURLToPath(new URL('../dist', import.meta.url));
 const distDirectory = resolve(process.argv[2] ?? defaultDistDirectory);
+const defaultRepositoryDirectory = fileURLToPath(
+  new URL('../..', import.meta.url),
+);
+const repositoryDirectory = resolve(
+  process.argv[3] ?? defaultRepositoryDirectory,
+);
+const repositoryUrl = new URL('https://github.com/swarmbase/swarmbase/');
+const repositoryWebRoutes = new Set([
+  'actions',
+  'branches',
+  'commit',
+  'commits',
+  'compare',
+  'discussions',
+  'issues',
+  'labels',
+  'milestones',
+  'network',
+  'projects',
+  'pull',
+  'pulls',
+  'releases',
+  'security',
+  'tags',
+  'wiki',
+]);
 const maxDiagnostics = 100;
 
 function decodeHtmlEntities(value) {
@@ -90,6 +114,50 @@ function* tagsIn(html) {
   }
 }
 
+function linksInMarkdown(markdown) {
+  const inlineLinkPattern =
+    /\[[^\]\n]+\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^\n)]*\)))?\s*\)/g;
+  const inlineLinkOpeningPattern = /\[[^\]\n]+\]\(/g;
+  const referenceLinkPattern =
+    /^\s*\[([^\]\n]+)\]:\s*(?:<([^>\n]+)>|([^\s\n]+))/gm;
+  const referenceUsePattern = /\[([^\]\n]+)\]\[([^\]\n]*)\]/g;
+  const links = [];
+  const validInlineStarts = new Set();
+  const definitions = new Map();
+  const undefinedReferences = [];
+  const malformedInlineLinks = [];
+
+  for (const match of markdown.matchAll(inlineLinkPattern)) {
+    validInlineStarts.add(match.index);
+    links.push(match[1] ?? match[2]);
+  }
+  for (const match of markdown.matchAll(referenceLinkPattern)) {
+    const label = normalizeReferenceLabel(match[1]);
+    if (!definitions.has(label)) {
+      definitions.set(label, match[2] ?? match[3]);
+    }
+  }
+  for (const match of markdown.matchAll(referenceUsePattern)) {
+    const label = normalizeReferenceLabel(match[2] || match[1]);
+    const href = definitions.get(label);
+    if (href) links.push(href);
+    else undefinedReferences.push(match[2] || match[1]);
+  }
+  for (const match of markdown.matchAll(inlineLinkOpeningPattern)) {
+    if (!validInlineStarts.has(match.index)) {
+      malformedInlineLinks.push(
+        markdown.slice(0, match.index).split('\n').length,
+      );
+    }
+  }
+
+  return { links, malformedInlineLinks, undefinedReferences };
+}
+
+function normalizeReferenceLabel(label) {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function collectFiles(directory, relativeDirectory = '', files = new Set()) {
   const entries = readdirSync(resolve(directory, relativeDirectory), {
     withFileTypes: true,
@@ -169,6 +237,48 @@ function decodedPath(pathname) {
     .join('/');
 }
 
+function repositoryTargetFor(url) {
+  if (url.origin !== repositoryUrl.origin) return;
+
+  const segments = decodedPath(url.pathname).split('/').filter(Boolean);
+  if (segments[0] !== 'swarmbase' || segments[1] !== 'swarmbase') return;
+  if (segments.length === 2) {
+    return { kind: 'tree', relativePath: '' };
+  }
+
+  const [kind, branch, ...pathSegments] = segments.slice(2);
+  if (!['blob', 'tree'].includes(kind)) {
+    if (repositoryWebRoutes.has(kind)) return;
+    const route = [kind, branch].filter(Boolean).join('/');
+    return { error: `uses unsupported repository route "${route}"` };
+  }
+  if (branch !== 'main') {
+    return { error: `uses unsupported repository branch "${branch ?? ''}"` };
+  }
+  if (
+    pathSegments.some(
+      (segment) =>
+        segment === '.' ||
+        segment === '..' ||
+        segment === '' ||
+        segment.includes('\\'),
+    )
+  ) {
+    return { error: 'escapes the repository checkout' };
+  }
+
+  return { kind, relativePath: pathSegments.join('/') };
+}
+
+function pathEscapesDirectory(directory, path) {
+  const relativePath = relative(directory, path);
+  return (
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  );
+}
+
 function artifactFor(url, files, basePath) {
   if (
     basePath &&
@@ -207,15 +317,133 @@ function anchorFrom(hash) {
   return decodeURIComponent(fragment);
 }
 
+function checkSiteLink({
+  href,
+  sourceUrl,
+  sourceName,
+  siteRoot,
+  files,
+  basePath,
+  anchorsByFile,
+  diagnostics,
+}) {
+  let url;
+  try {
+    url = new URL(href, sourceUrl);
+  } catch {
+    diagnostics.push(`${sourceName}: invalid href="${href}"`);
+    return {};
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) return { url };
+  if (url.origin !== siteRoot.origin) return { url };
+
+  let result;
+  try {
+    result = artifactFor(url, files, basePath);
+  } catch {
+    diagnostics.push(
+      `${sourceName}: href="${href}" has invalid percent encoding`,
+    );
+    return { internal: true, url };
+  }
+
+  if (result.error) {
+    diagnostics.push(`${sourceName}: href="${href}" -> ${result.error}`);
+    return { internal: true, url };
+  }
+
+  if (!result.artifact.endsWith('.html')) return { internal: true, url };
+
+  let anchor;
+  try {
+    anchor = anchorFrom(url.hash);
+  } catch {
+    diagnostics.push(
+      `${sourceName}: href="${href}" has invalid fragment encoding`,
+    );
+    return { internal: true, url };
+  }
+
+  if (anchor && !anchorsByFile.get(result.artifact)?.has(anchor)) {
+    diagnostics.push(
+      `${sourceName}: href="${href}" -> missing anchor "${anchor}"`,
+    );
+  }
+
+  return { internal: true, url };
+}
+
+function checkRepositoryLink(href, url, diagnostics) {
+  let target;
+  try {
+    target = repositoryTargetFor(url);
+  } catch {
+    diagnostics.push(
+      `llms.txt: href="${href}" has invalid repository path encoding`,
+    );
+    return true;
+  }
+  if (!target) return false;
+  if (target.error) {
+    diagnostics.push(`llms.txt: href="${href}" -> ${target.error}`);
+    return true;
+  }
+
+  const targetPath = resolve(repositoryDirectory, target.relativePath);
+  if (pathEscapesDirectory(repositoryDirectory, targetPath)) {
+    diagnostics.push(
+      `llms.txt: href="${href}" -> escapes the repository checkout`,
+    );
+    return true;
+  }
+
+  let realRepositoryPath;
+  let realTargetPath;
+  try {
+    realRepositoryPath = realpathSync(repositoryDirectory);
+    realTargetPath = realpathSync(targetPath);
+  } catch {
+    diagnostics.push(
+      `llms.txt: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
+    );
+    return true;
+  }
+  if (pathEscapesDirectory(realRepositoryPath, realTargetPath)) {
+    diagnostics.push(
+      `llms.txt: href="${href}" -> repository target escapes the checkout through a symbolic link`,
+    );
+    return true;
+  }
+  let stats;
+  try {
+    stats = statSync(realTargetPath);
+  } catch {
+    diagnostics.push(
+      `llms.txt: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
+    );
+    return true;
+  }
+
+  const hasExpectedType =
+    target.kind === 'blob' ? stats.isFile() : stats.isDirectory();
+  if (!hasExpectedType) {
+    const expectedType = target.kind === 'blob' ? 'file' : 'directory';
+    diagnostics.push(
+      `llms.txt: href="${href}" -> repository target "${target.relativePath || '.'}" is not a ${expectedType}`,
+    );
+  }
+  return true;
+}
+
 function run() {
   let files;
   try {
     files = collectFiles(distDirectory);
   } catch (error) {
-    throw new Error(
-      `${distDirectory} does not exist; build the site first`,
-      { cause: error },
-    );
+    throw new Error(`${distDirectory} does not exist; build the site first`, {
+      cause: error,
+    });
   }
 
   const htmlFiles = [...files]
@@ -241,6 +469,28 @@ function run() {
       anchorsFor(htmlByFile.get(relativePath), relativePath, diagnostics),
     ]),
   );
+  let agentIndex;
+  try {
+    agentIndex = readFileSync(resolve(distDirectory, 'llms.txt'), 'utf8');
+  } catch (error) {
+    throw new Error(`${distDirectory}/llms.txt does not exist`, {
+      cause: error,
+    });
+  }
+  const {
+    links: agentIndexLinks,
+    malformedInlineLinks,
+    undefinedReferences,
+  } = linksInMarkdown(agentIndex);
+  if (agentIndexLinks.length === 0) {
+    diagnostics.push('llms.txt: contains no Markdown links');
+  }
+  for (const line of malformedInlineLinks) {
+    diagnostics.push(`llms.txt:${line}: malformed inline Markdown link`);
+  }
+  for (const label of undefinedReferences) {
+    diagnostics.push(`llms.txt: undefined link reference "${label}"`);
+  }
   let internalLinkCount = 0;
 
   for (const relativePath of htmlFiles) {
@@ -252,52 +502,47 @@ function run() {
       const href = attributesFor(tag.source).get('href');
       if (href === undefined) continue;
 
-      let url;
-      try {
-        url = new URL(href, sourceUrl);
-      } catch {
-        diagnostics.push(`${relativePath}: invalid href="${href}"`);
-        continue;
-      }
-
-      if (!['http:', 'https:'].includes(url.protocol)) continue;
-      if (url.origin !== siteRoot.origin) continue;
-      internalLinkCount += 1;
-
-      let result;
-      try {
-        result = artifactFor(url, files, basePath);
-      } catch {
-        diagnostics.push(
-          `${relativePath}: href="${href}" has invalid percent encoding`,
-        );
-        continue;
-      }
-
-      if (result.error) {
-        diagnostics.push(`${relativePath}: href="${href}" -> ${result.error}`);
-        continue;
-      }
-
-      if (!result.artifact.endsWith('.html')) continue;
-
-      let anchor;
-      try {
-        anchor = anchorFrom(url.hash);
-      } catch {
-        diagnostics.push(
-          `${relativePath}: href="${href}" has invalid fragment encoding`,
-        );
-        continue;
-      }
-
-      if (anchor && !anchorsByFile.get(result.artifact)?.has(anchor)) {
-        diagnostics.push(
-          `${relativePath}: href="${href}" -> missing anchor "${anchor}"`,
-        );
-      }
+      const result = checkSiteLink({
+        href,
+        sourceUrl,
+        sourceName: relativePath,
+        siteRoot,
+        files,
+        basePath,
+        anchorsByFile,
+        diagnostics,
+      });
+      if (result.internal) internalLinkCount += 1;
     }
   }
+
+  const agentIndexUrl = new URL('llms.txt', siteRoot);
+  let agentIndexSiteLinkCount = 0;
+  let agentIndexRepositoryLinkCount = 0;
+  for (const href of agentIndexLinks) {
+    const result = checkSiteLink({
+      href,
+      sourceUrl: agentIndexUrl,
+      sourceName: 'llms.txt',
+      siteRoot,
+      files,
+      basePath,
+      anchorsByFile,
+      diagnostics,
+    });
+    if (result.internal) {
+      agentIndexSiteLinkCount += 1;
+    } else if (
+      result.url &&
+      checkRepositoryLink(href, result.url, diagnostics)
+    ) {
+      agentIndexRepositoryLinkCount += 1;
+    }
+  }
+  const agentIndexExternalLinkCount =
+    agentIndexLinks.length -
+    agentIndexSiteLinkCount -
+    agentIndexRepositoryLinkCount;
 
   diagnostics.sort();
   if (diagnostics.length > 0) {
@@ -315,7 +560,7 @@ function run() {
   }
 
   console.log(
-    `Checked ${internalLinkCount} internal links in ${htmlFiles.length} HTML files; 0 issues.`,
+    `Checked ${internalLinkCount} internal links in ${htmlFiles.length} HTML files and ${agentIndexLinks.length} links in llms.txt (${agentIndexSiteLinkCount} site, ${agentIndexRepositoryLinkCount} repository, ${agentIndexExternalLinkCount} external); 0 issues.`,
   );
 }
 
