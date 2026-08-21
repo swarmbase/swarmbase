@@ -39,7 +39,8 @@
     "version:set": "node scripts/set-version.mjs",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:validate-consumer": "node scripts/validate-release-consumer.mjs",
-    "benchmark:all": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-index' run benchmark"
+    "benchmark:all": "yarn workspaces foreach -Apvi --include '@swarmbase/collabswarm' --include '@swarmbase/collabswarm-index' run benchmark",
+    "test:coverage": "yarn workspaces foreach -Apvi --include \"@swarmbase/collabswarm\" --include \"@swarmbase/collabswarm-yjs\" --include \"@swarmbase/collabswarm-react\" --include \"@swarmbase/collabswarm-automerge\" --include \"@swarmbase/collabswarm-redux\" --include \"@swarmbase/collabswarm-index\" run test:coverage"
   },
   "packageManager": "yarn@4.5.0"
 }

@@ -16,7 +16,8 @@
     "tsc": "tsc -b --clean && tsc -b",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
-    "tsc-watch": "tsc -w -p tsconfig.json"
+    "tsc-watch": "tsc -w -p tsconfig.json",
+    "test:coverage": "jest --coverage"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -111,6 +112,17 @@
       "^multiformats/(.*)$": "<rootDir>/jest.empty-mock.js",
       "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js",
       "^uint8arraylist$": "<rootDir>/jest.empty-mock.js"
-    }
+    },
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/__mocks__/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

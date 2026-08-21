@@ -16,7 +16,8 @@
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
-    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
+    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js",
+    "test:coverage": "jest --coverage"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -140,6 +141,17 @@
       "^multiformats$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^multiformats/(.*)$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.cjs"
-    }
+    },
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/__mocks__/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

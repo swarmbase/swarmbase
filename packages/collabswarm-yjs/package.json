@@ -15,7 +15,8 @@
     "tsc": "tsc -b",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
-    "tsc-watch": "tsc -w -p tsconfig.json"
+    "tsc-watch": "tsc -w -p tsconfig.json",
+    "test:coverage": "jest --coverage"
   },
   "bin": {
     "collabswarm-yjs-d": "dist/bin/collabswarm-yjs-d.js"
@@ -131,6 +132,17 @@
       "^multiformats$": "<rootDir>/src/__mocks__/empty-module.js",
       "^multiformats/(.*)$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.js"
-    }
+    },
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/__mocks__/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

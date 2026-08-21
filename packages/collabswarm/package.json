@@ -17,7 +17,8 @@
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
     "doc": "typedoc --excludePrivate --excludeProtected --excludeInternal",
-    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
+    "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js",
+    "test:coverage": "jest --coverage"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -115,7 +116,12 @@
       "<rootDir>/src"
     ],
     "transform": {
-      "^.+\\.tsx?$": "ts-jest"
+      "^.+.tsx?$": [
+        "ts-jest",
+        {
+          "diagnostics": false
+        }
+      ]
     },
     "moduleFileExtensions": [
       "ts",
@@ -135,6 +141,19 @@
     ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
-    }
+    },
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/*.benchmark.ts",
+      "!src/**/__mocks__/**",
+      "!src/**/__benchmarks__/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

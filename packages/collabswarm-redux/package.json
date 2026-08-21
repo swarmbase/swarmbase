@@ -15,7 +15,8 @@
     "tsc": "tsc -b",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
-    "tsc-watch": "tsc -w -p tsconfig.json"
+    "tsc-watch": "tsc -w -p tsconfig.json",
+    "test:coverage": "jest --coverage"
   },
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -90,6 +91,17 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1",
       "^@swarmbase/collabswarm$": "<rootDir>/src/__mocks__/@swarmbase/collabswarm.ts"
-    }
+    },
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/__mocks__/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

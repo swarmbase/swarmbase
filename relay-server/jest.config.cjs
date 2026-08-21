@@ -38,4 +38,7 @@ module.exports = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  coverageDirectory: 'coverage',
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.test.ts', '!src/**/__mocks__/**'],
+  coverageReporters: ['text', 'lcov', 'html'],
 }
