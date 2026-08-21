@@ -6,6 +6,7 @@ Use the feature audit and concept documentation as the authority for capability 
 
 ## Start
 
+- [Full handwritten documentation corpus](https://swarmbase.github.io/swarmbase/llms-full.txt): Every hand-authored site page plus the feature and verification audit in one generated file.
 - [Quick start](https://swarmbase.github.io/swarmbase/getting-started/quick-start/): Build Swarmbase from source and exercise the verified browser path.
 - [Why Swarmbase](https://swarmbase.github.io/swarmbase/concepts/why-swarmbase/): Value proposition, when to use/not use.
 - [Architecture](https://swarmbase.github.io/swarmbase/concepts/architecture/): System overview, data flow, networking stack, encryption model with ASCII diagrams.

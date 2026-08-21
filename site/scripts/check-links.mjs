@@ -114,7 +114,45 @@ function* tagsIn(html) {
   }
 }
 
-function linksInMarkdown(markdown) {
+function markdownOutsideFences(markdown, sourceName) {
+  let fence;
+
+  const searchable = markdown
+    .split('\n')
+    .map((line, index) => {
+      if (!fence) {
+        const opening = /^([ \t]*)(`{3,}|~{3,})/.exec(line);
+        if (!opening) return line;
+        fence = {
+          character: opening[2][0],
+          length: opening[2].length,
+          startLine: index + 1,
+        };
+        return ' '.repeat(line.length);
+      }
+
+      const closing = /^([ \t]*)(`+|~+)\s*$/.exec(line);
+      if (
+        closing &&
+        closing[2][0] === fence.character &&
+        closing[2].length >= fence.length
+      ) {
+        fence = undefined;
+      }
+      return ' '.repeat(line.length);
+    })
+    .join('\n');
+
+  if (fence) {
+    throw new Error(
+      `${sourceName}:${fence.startLine}: unclosed ${fence.character.repeat(fence.length)} fence`,
+    );
+  }
+  return searchable;
+}
+
+function linksInMarkdown(markdown, sourceName) {
+  const searchableMarkdown = markdownOutsideFences(markdown, sourceName);
   const inlineLinkPattern =
     /\[[^\]\n]+\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^\n)]*\)))?\s*\)/g;
   const inlineLinkOpeningPattern = /\[[^\]\n]+\]\(/g;
@@ -127,26 +165,26 @@ function linksInMarkdown(markdown) {
   const undefinedReferences = [];
   const malformedInlineLinks = [];
 
-  for (const match of markdown.matchAll(inlineLinkPattern)) {
+  for (const match of searchableMarkdown.matchAll(inlineLinkPattern)) {
     validInlineStarts.add(match.index);
     links.push(match[1] ?? match[2]);
   }
-  for (const match of markdown.matchAll(referenceLinkPattern)) {
+  for (const match of searchableMarkdown.matchAll(referenceLinkPattern)) {
     const label = normalizeReferenceLabel(match[1]);
     if (!definitions.has(label)) {
       definitions.set(label, match[2] ?? match[3]);
     }
   }
-  for (const match of markdown.matchAll(referenceUsePattern)) {
+  for (const match of searchableMarkdown.matchAll(referenceUsePattern)) {
     const label = normalizeReferenceLabel(match[2] || match[1]);
     const href = definitions.get(label);
     if (href) links.push(href);
     else undefinedReferences.push(match[2] || match[1]);
   }
-  for (const match of markdown.matchAll(inlineLinkOpeningPattern)) {
+  for (const match of searchableMarkdown.matchAll(inlineLinkOpeningPattern)) {
     if (!validInlineStarts.has(match.index)) {
       malformedInlineLinks.push(
-        markdown.slice(0, match.index).split('\n').length,
+        searchableMarkdown.slice(0, match.index).split('\n').length,
       );
     }
   }
@@ -374,26 +412,26 @@ function checkSiteLink({
   return { internal: true, url };
 }
 
-function checkRepositoryLink(href, url, diagnostics) {
+function checkRepositoryLink({ href, url, sourceName, diagnostics }) {
   let target;
   try {
     target = repositoryTargetFor(url);
   } catch {
     diagnostics.push(
-      `llms.txt: href="${href}" has invalid repository path encoding`,
+      `${sourceName}: href="${href}" has invalid repository path encoding`,
     );
     return true;
   }
   if (!target) return false;
   if (target.error) {
-    diagnostics.push(`llms.txt: href="${href}" -> ${target.error}`);
+    diagnostics.push(`${sourceName}: href="${href}" -> ${target.error}`);
     return true;
   }
 
   const targetPath = resolve(repositoryDirectory, target.relativePath);
   if (pathEscapesDirectory(repositoryDirectory, targetPath)) {
     diagnostics.push(
-      `llms.txt: href="${href}" -> escapes the repository checkout`,
+      `${sourceName}: href="${href}" -> escapes the repository checkout`,
     );
     return true;
   }
@@ -405,13 +443,13 @@ function checkRepositoryLink(href, url, diagnostics) {
     realTargetPath = realpathSync(targetPath);
   } catch {
     diagnostics.push(
-      `llms.txt: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
+      `${sourceName}: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
     );
     return true;
   }
   if (pathEscapesDirectory(realRepositoryPath, realTargetPath)) {
     diagnostics.push(
-      `llms.txt: href="${href}" -> repository target escapes the checkout through a symbolic link`,
+      `${sourceName}: href="${href}" -> repository target escapes the checkout through a symbolic link`,
     );
     return true;
   }
@@ -420,7 +458,7 @@ function checkRepositoryLink(href, url, diagnostics) {
     stats = statSync(realTargetPath);
   } catch {
     diagnostics.push(
-      `llms.txt: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
+      `${sourceName}: href="${href}" -> missing repository target "${target.relativePath || '.'}"`,
     );
     return true;
   }
@@ -430,10 +468,77 @@ function checkRepositoryLink(href, url, diagnostics) {
   if (!hasExpectedType) {
     const expectedType = target.kind === 'blob' ? 'file' : 'directory';
     diagnostics.push(
-      `llms.txt: href="${href}" -> repository target "${target.relativePath || '.'}" is not a ${expectedType}`,
+      `${sourceName}: href="${href}" -> repository target "${target.relativePath || '.'}" is not a ${expectedType}`,
     );
   }
   return true;
+}
+
+function checkMarkdownArtifact({
+  relativePath,
+  files,
+  siteRoot,
+  basePath,
+  anchorsByFile,
+  diagnostics,
+}) {
+  let markdown;
+  try {
+    markdown = readFileSync(resolve(distDirectory, relativePath), 'utf8');
+  } catch (error) {
+    throw new Error(`${distDirectory}/${relativePath} does not exist`, {
+      cause: error,
+    });
+  }
+
+  const { links, malformedInlineLinks, undefinedReferences } =
+    linksInMarkdown(markdown, relativePath);
+  if (links.length === 0) {
+    diagnostics.push(`${relativePath}: contains no Markdown links`);
+  }
+  for (const line of malformedInlineLinks) {
+    diagnostics.push(`${relativePath}:${line}: malformed inline Markdown link`);
+  }
+  for (const label of undefinedReferences) {
+    diagnostics.push(`${relativePath}: undefined link reference "${label}"`);
+  }
+
+  const sourceUrl = new URL(relativePath, siteRoot);
+  let siteLinkCount = 0;
+  let repositoryLinkCount = 0;
+  for (const href of links) {
+    const result = checkSiteLink({
+      href,
+      sourceUrl,
+      sourceName: relativePath,
+      siteRoot,
+      files,
+      basePath,
+      anchorsByFile,
+      diagnostics,
+    });
+    if (result.internal) {
+      siteLinkCount += 1;
+    } else if (
+      result.url &&
+      checkRepositoryLink({
+        href,
+        url: result.url,
+        sourceName: relativePath,
+        diagnostics,
+      })
+    ) {
+      repositoryLinkCount += 1;
+    }
+  }
+
+  return {
+    externalLinkCount: links.length - siteLinkCount - repositoryLinkCount,
+    linkCount: links.length,
+    relativePath,
+    repositoryLinkCount,
+    siteLinkCount,
+  };
 }
 
 function run() {
@@ -469,28 +574,6 @@ function run() {
       anchorsFor(htmlByFile.get(relativePath), relativePath, diagnostics),
     ]),
   );
-  let agentIndex;
-  try {
-    agentIndex = readFileSync(resolve(distDirectory, 'llms.txt'), 'utf8');
-  } catch (error) {
-    throw new Error(`${distDirectory}/llms.txt does not exist`, {
-      cause: error,
-    });
-  }
-  const {
-    links: agentIndexLinks,
-    malformedInlineLinks,
-    undefinedReferences,
-  } = linksInMarkdown(agentIndex);
-  if (agentIndexLinks.length === 0) {
-    diagnostics.push('llms.txt: contains no Markdown links');
-  }
-  for (const line of malformedInlineLinks) {
-    diagnostics.push(`llms.txt:${line}: malformed inline Markdown link`);
-  }
-  for (const label of undefinedReferences) {
-    diagnostics.push(`llms.txt: undefined link reference "${label}"`);
-  }
   let internalLinkCount = 0;
 
   for (const relativePath of htmlFiles) {
@@ -516,33 +599,16 @@ function run() {
     }
   }
 
-  const agentIndexUrl = new URL('llms.txt', siteRoot);
-  let agentIndexSiteLinkCount = 0;
-  let agentIndexRepositoryLinkCount = 0;
-  for (const href of agentIndexLinks) {
-    const result = checkSiteLink({
-      href,
-      sourceUrl: agentIndexUrl,
-      sourceName: 'llms.txt',
-      siteRoot,
+  const markdownResults = ['llms.txt', 'llms-full.txt'].map((relativePath) =>
+    checkMarkdownArtifact({
+      relativePath,
       files,
+      siteRoot,
       basePath,
       anchorsByFile,
       diagnostics,
-    });
-    if (result.internal) {
-      agentIndexSiteLinkCount += 1;
-    } else if (
-      result.url &&
-      checkRepositoryLink(href, result.url, diagnostics)
-    ) {
-      agentIndexRepositoryLinkCount += 1;
-    }
-  }
-  const agentIndexExternalLinkCount =
-    agentIndexLinks.length -
-    agentIndexSiteLinkCount -
-    agentIndexRepositoryLinkCount;
+    }),
+  );
 
   diagnostics.sort();
   if (diagnostics.length > 0) {
@@ -559,8 +625,14 @@ function run() {
     return;
   }
 
+  const markdownSummary = markdownResults
+    .map(
+      (result) =>
+        `${result.linkCount} links in ${result.relativePath} (${result.siteLinkCount} site, ${result.repositoryLinkCount} repository, ${result.externalLinkCount} external)`,
+    )
+    .join(' and ');
   console.log(
-    `Checked ${internalLinkCount} internal links in ${htmlFiles.length} HTML files and ${agentIndexLinks.length} links in llms.txt (${agentIndexSiteLinkCount} site, ${agentIndexRepositoryLinkCount} repository, ${agentIndexExternalLinkCount} external); 0 issues.`,
+    `Checked ${internalLinkCount} internal links in ${htmlFiles.length} HTML files and ${markdownSummary}; 0 issues.`,
   );
 }
 
