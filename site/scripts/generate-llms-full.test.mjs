@@ -66,6 +66,17 @@ test('cleans MDX wrappers while preserving fenced content', () => {
   assert.match(output, /- \[Guide\]\(\.\.\/guide\/\)/);
 });
 
+test('names the source containing an unsupported MDX component', () => {
+  assert.throws(
+    () => cleanMdx('<Unsupported />', 'docs/example.mdx'),
+    /docs\/example\.mdx: unsupported MDX component Unsupported/,
+  );
+  assert.throws(
+    () => cleanMdx('<Unsupported>content</Unsupported>', 'docs/example.mdx'),
+    /docs\/example\.mdx: unsupported MDX component Unsupported/,
+  );
+});
+
 test('rewrites site links without changing fenced examples', () => {
   const source = resolve(
     repository,
@@ -115,5 +126,35 @@ test('rewrites repository file, directory, and fragment links', () => {
   assert.match(
     output,
     /\[Section\]\(https:\/\/github\.com\/swarmbase\/swarmbase\/blob\/main\/docs\/feature-audit\.md#evidence\)/,
+  );
+});
+
+test('names the source and href for a missing repository link', () => {
+  const source = resolve(repository, 'docs/feature-audit.md');
+
+  assert.throws(
+    () => rewriteMarkdownLinks('[Missing](../not-here.md)', source),
+    /docs\/feature-audit\.md has an invalid repository link \.\.\/not-here\.md:.*not-here\.md/,
+  );
+});
+
+test('names the source and href for malformed repository encoding', () => {
+  const source = resolve(repository, 'docs/feature-audit.md');
+
+  assert.throws(
+    () => rewriteMarkdownLinks('[Bad](../bad%ZZ.md)', source),
+    /docs\/feature-audit\.md has an invalid repository link \.\.\/bad%ZZ\.md: URI malformed/,
+  );
+});
+
+test('names the source and href for malformed documentation encoding', () => {
+  const source = resolve(
+    repository,
+    'site/src/content/docs/concepts/architecture.md',
+  );
+
+  assert.throws(
+    () => rewriteMarkdownLinks('[Bad](../bad%ZZ.md)', source),
+    /site\/src\/content\/docs\/concepts\/architecture\.md has an invalid link \.\.\/bad%ZZ\.md: URI malformed/,
   );
 });
