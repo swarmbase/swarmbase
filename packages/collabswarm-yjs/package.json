@@ -97,6 +97,7 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1",
       "^@swarmbase/collabswarm$": "<rootDir>/../collabswarm/src/index.ts",
+      "^@chainsafe/libp2p-noise$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@chainsafe/libp2p-yamux$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/gossipsub$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@libp2p/bootstrap$": "<rootDir>/src/__mocks__/empty-module.js",
@@ -116,9 +117,11 @@
       "^@libp2p/ping$": "<rootDir>/src/__mocks__/empty-module.js",
       "^ipns/selector$": "<rootDir>/src/__mocks__/empty-module.js",
       "^ipns/validator$": "<rootDir>/src/__mocks__/empty-module.js",
-      "^@helia/block-brokers$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@helia/bitswap$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@helia/interface$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@helia/libp2p$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@helia/unixfs$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^@ipld/(.*)$": "<rootDir>/src/__mocks__/empty-module.js",
       "^helia$": "<rootDir>/src/__mocks__/empty-module.js",
       "^datastore-idb$": "<rootDir>/src/__mocks__/empty-module.js",
       "^blockstore-idb$": "<rootDir>/src/__mocks__/empty-module.js",
@@ -126,6 +129,7 @@
       "^it-pipe$": "<rootDir>/src/__mocks__/empty-module.js",
       "^bl$": "<rootDir>/src/__mocks__/empty-module.js",
       "^multiformats$": "<rootDir>/src/__mocks__/empty-module.js",
+      "^multiformats/(.*)$": "<rootDir>/src/__mocks__/empty-module.js",
       "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.js"
     }
   }

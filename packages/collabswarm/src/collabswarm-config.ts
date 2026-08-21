@@ -1,4 +1,8 @@
-import { HeliaInit } from 'helia';
+import type { HeliaInit } from 'helia';
+import type { BitswapOptions } from '@helia/bitswap';
+import type { CreateLibp2pOptions } from '@helia/libp2p';
+import type { ServiceMap } from '@libp2p/interface';
+import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
@@ -17,7 +21,6 @@ import { kadDHT } from '@libp2p/kad-dht';
 import { ping } from '@libp2p/ping';
 import { ipnsSelector } from 'ipns/selector';
 import { ipnsValidator } from 'ipns/validator';
-import { bitswap } from '@helia/block-brokers';
 import { IDBDatastore } from 'datastore-idb';
 import { IDBBlockstore } from 'blockstore-idb';
 import { CompactionConfig } from './compaction-config.js';
@@ -181,9 +184,8 @@ export const defaultConfig = (
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
-      blockBrokers: [bitswap()],
       libp2p: {
-        // https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
+        // https://github.com/ipfs/helia/blob/main/packages/libp2p/src/utils/libp2p-defaults.browser.ts
         addresses: {
           listen: ['/p2p-circuit', '/webrtc', '/wss', '/ws'],
         },
@@ -203,6 +205,7 @@ export const defaultConfig = (
           webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
           webTransport(),
         ],
+        connectionEncrypters: [noise()],
         streamMuxers: [yamux()],
         // @libp2p/bootstrap rejects an empty list during construction. A
         // brand-new/offline swarm is valid, so omit that discovery service
@@ -247,8 +250,14 @@ export const defaultConfig = (
 export interface CollabswarmConfig {
   /**
    * Configuration for Helia/libp2p.
+   *
+   * Helia 7 accepts libp2p creation options here, not an already-created
+   * libp2p node.
    */
-  helia?: HeliaInit;
+  helia?: HeliaInit & {
+    libp2p?: CreateLibp2pOptions<ServiceMap>;
+    bitswap?: BitswapOptions;
+  };
 
   /**
    * Prefix to apply to document pubsub topics.

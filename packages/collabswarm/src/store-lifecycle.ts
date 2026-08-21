@@ -16,10 +16,10 @@ function isOpenableStore(value: unknown): value is OpenableStore {
  * Open custom Helia stores before Helia/libp2p first access them.
  *
  * Current `datastore-idb` and `blockstore-idb` expose the older `open()` /
- * `close()` lifecycle, while Helia 6 only auto-starts stores implementing the
+ * `close()` lifecycle, while Helia only auto-starts stores implementing the
  * newer `start()` / `stop()` lifecycle. Helia also checks its datastore
  * version before invoking generic start hooks, so these stores must be opened
- * before `createHelia()`.
+ * before the node starts.
  */
 export async function openLegacyHeliaStores(
   ...stores: unknown[]

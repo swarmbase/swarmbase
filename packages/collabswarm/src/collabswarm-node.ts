@@ -56,7 +56,7 @@ import { IDBBlockstore } from 'blockstore-idb';
 import { IDBDatastore } from 'datastore-idb';
 import { ipnsSelector } from 'ipns/selector';
 import { ipnsValidator } from 'ipns/validator';
-import { bitswap } from '@helia/block-brokers';
+import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap, BootstrapInit } from '@libp2p/bootstrap';
 import { hasBootstrapPeers } from './bootstrap-config.js';
@@ -92,9 +92,8 @@ export const defaultNodeConfig = (
     helia: {
       blockstore: new IDBBlockstore('/collabswarm-blocks'),
       datastore: new IDBDatastore('/collabswarm-data'),
-      blockBrokers: [bitswap()],
       libp2p: {
-        // See: https://github.com/ipfs/helia/blob/main/packages/helia/src/utils/libp2p-defaults.browser.ts#L27
+        // See: https://github.com/ipfs/helia/blob/main/packages/libp2p/src/utils/libp2p-defaults.browser.ts
         addresses: {
           listen: ['/p2p-circuit', '/webrtc', '/wss', '/ws'],
         },
@@ -114,6 +113,7 @@ export const defaultNodeConfig = (
           webRTCDirect({ rtcConfiguration: { iceServers: sourceIceServers.map(cloneIceServer) as RTCIceServer[] } }),
           webTransport(),
         ],
+        connectionEncrypters: [noise()],
         streamMuxers: [yamux()],
         peerDiscovery: [
           ...(hasBootstrapPeers(bootstrapConfig) ? [bootstrap(bootstrapConfig)] : []),

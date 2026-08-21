@@ -39,22 +39,17 @@ import {
   readPathPrefixedProtocolHeader,
 } from './utils.js';
 import { wrapStream } from './stream-adapter.js';
-import {
-  closeLegacyHeliaStores,
-  OpenableStore,
-  openLegacyHeliaStores,
-} from './store-lifecycle.js';
-import { createHelia, DefaultLibp2pServices } from 'helia';
-import type { Helia } from '@helia/interface';
+import { closeLegacyHeliaStores } from './store-lifecycle.js';
+import type { OpenableStore } from './store-lifecycle.js';
+import { createAndStartHeliaNode } from './helia-node.js';
+import type { CollabswarmHeliaNode } from './helia-node.js';
+import type { HeliaWithLibp2p } from '@helia/libp2p';
 import { Libp2p } from 'libp2p';
 import { PeerId } from '@libp2p/interface';
-import type { Stream } from '@libp2p/interface';
+import type { ServiceMap, Stream } from '@libp2p/interface';
+import type { GossipSub } from '@libp2p/gossipsub';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { multiaddr } from '@multiformats/multiaddr';
-// libp2p v3 retired `@libp2p/pubsub` (the abstract base used by old
-// GossipSub). Use the concrete `GossipSub` service type instead --
-// that is what `helia` actually exposes on `services.pubsub`.
-import type { GossipSub } from '@libp2p/gossipsub';
 import type { Uint8ArrayList } from 'uint8arraylist';
 
 /** Maximum allowed document path length in key-update V2 wire format. */
@@ -137,11 +132,7 @@ export class Collabswarm<
 
   // configs for the swarm, thus passing its config to all documents opened in a swarm
   protected _config: CollabswarmConfig | null = null;
-  private _heliaNode:
-    | Helia<
-        Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
-      >
-    | undefined;
+  private _heliaNode: CollabswarmHeliaNode | undefined;
   private _peerId: PeerId | undefined;
   private _peerIds: string[] = [];
   private _peerConnectHandlers: Map<string, CollabswarmPeersHandler> = new Map<
@@ -185,8 +176,8 @@ export class Collabswarm<
    *
    * Only works after `.initialize()` has been called.
    */
-  public get heliaNode(): Helia<
-    Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
+  public get heliaNode(): HeliaWithLibp2p<
+    ServiceMap & { pubsub: GossipSub }
   > {
     if (this._heliaNode) {
       return this._heliaNode;
@@ -277,32 +268,10 @@ export class Collabswarm<
     this._networkStats = config.enableNetworkStats ? new NetworkStats() : undefined;
 
     // Setup Helia node.
-    const heliaInit = config.helia;
-    this._openedLegacyStores = heliaInit
-      ? await openLegacyHeliaStores(heliaInit.datastore, heliaInit.blockstore)
-      : [];
-    try {
-      this._heliaNode = await (heliaInit
-        ? (createHelia(heliaInit) as Promise<
-          Helia<
-            Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
-          >
-          >)
-        : (createHelia() as Promise<
-          Helia<
-            Libp2p<DefaultLibp2pServices & { pubsub: GossipSub }>
-          >
-          >));
-    } catch (error) {
-      await closeLegacyHeliaStores(this._openedLegacyStores);
-      this._openedLegacyStores = [];
-      throw error;
-    }
-
-    // Runtime guard: ensure the Helia node was initialized with a pubsub service.
-    if (!this._heliaNode.libp2p.services.pubsub) {
-      throw new Error('Helia node must be initialized with a pubsub service (e.g., gossipsub)');
-    }
+    const { heliaNode, openedLegacyStores } =
+      await createAndStartHeliaNode(config.helia);
+    this._heliaNode = heliaNode;
+    this._openedLegacyStores = openedLegacyStores;
 
     this.libp2p.addEventListener('peer:connect', (event) => {
       const peerId = event.detail.toString();
