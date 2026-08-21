@@ -1,41 +1,114 @@
 ---
-title: Why local-first
-description: Swarmbase's local-first design intent, current offline behavior, and verified limits.
+title: Local-first design
+description: What "local-first" means in Swarmbase, what is implemented today, and where the boundaries are.
 ---
-
-Swarmbase is an alpha, local-first, end-to-end-encrypted document database for browsers. “Local-first” describes the architecture it aims for; it is not a promise that every workflow works without a network or survives every restart.
 
 ## Design intent
 
-A local-first application keeps an editable replica near the user instead of treating the browser as a temporary view of a server database. Reads and changes should be responsive, replicas should synchronize when paths exist, and no coordinator should order every write.
+A local-first application stores its primary data on the user's device — not on a remote server. Changes apply to the local replica immediately, with zero network latency. The network is used to sync state between peers, not to enforce a global write order.
 
-Swarmbase uses [CRDT adapters](../crdts/) to merge committed changes, [libp2p](../networking/) to exchange them, and [CID-addressed encrypted blocks](../storage/) to retain them. This favors collaboration and intermittent connectivity over linearizable, globally current state.
+Swarmbase adopts these local-first principles:
 
-## Implemented and default behavior
+- **Local replica near the user.** The application reads and writes a local CRDT document. There is no server round-trip for reads or writes.
+- **Work offline.** Once a document is loaded, the local replica can be edited without network access. Changes are applied immediately to the CRDT and stored locally in IndexedDB.
+- **No server-ordained write ordering.** Two peers can edit the same document concurrently. The CRDT layer merges their changes when they eventually exchange updates.
+- **Eventually consistent.** When peers reconnect, they may discover and fetch blocks that were created during the offline period. Delivery is not guaranteed — see limitations below.
 
-An already-loaded replica can be read and changed without a working peer connection. A committed `change()` or transaction updates the local CRDT, but its returned promise also covers authorization, block storage, signing when enabled, encryption, publication, handlers, and possible compaction. A direct `change()` mutates or replaces the local document before that later work and has no rollback path, so rejection can leave the local mutation for both Automerge and Yjs. Transaction rollback restores a saved document reference for immutable providers such as Automerge, but remains best effort for in-place Yjs state.
+## What is implemented today
 
-There is no durable outbox, delivery acknowledgement, or retry queue for unpublished changes. A later peer connection does not by itself guarantee that every missed publication is replayed, and Swarmbase does not promise automatic reconnection. Applications must expose failures and design explicit recovery or resynchronization.
+### Offline editing (loaded replicas only)
 
-A network is normally required to:
+A Swarmbase document that has already been loaded can be edited offline. The `document.change()` call applies the mutation to the local Yjs or Automerge replica immediately and returns a promise that covers signing, encryption, storage to the local Helia blockstore, and publication to connected peers.
 
-- onboard a new reader and deliver identity/KEM material and a Welcome;
-- load a replica that is not already available locally;
-- recover missing blocks, keys, graph state, or identity material;
-- synchronize with collaborators.
+```ts
+await todos.change((state) => {
+  state.getArray<string>('items').push(['buy milk']);
+});
+```
 
-Browser defaults use IndexedDB-backed Helia stores, but complete close/restart recovery from persisted document state is not verified. Persistence is therefore partial, not a durable offline guarantee.
+If no peers are connected, the encrypted block is still stored locally in IndexedDB. When peers reconnect, they will discover and fetch the new blocks.
 
-Concurrent changes are interpreted by the selected CRDT. Causal predecessors must be applied appropriately; concurrent operations use the adapter's merge semantics. This supports convergence when replicas eventually receive compatible changes, but it does not guarantee preservation of human intent, absence of semantic conflicts, or absence of data loss elsewhere in the system.
+### What `change()` covers
 
-## Infrastructure boundary
+The `document.change()` promise resolves when:
 
-“Local-first” does not mean “infrastructure-free.” A browser deployment commonly needs reachable bootstrap and Circuit Relay infrastructure, may need STUN or TURN for WebRTC connectivity, and remains vulnerable to relay outage or censorship. Durable retention is a separate integration: relays forward traffic but do not provide a storage or pinning guarantee. See [Networking](../networking/) and [Storage](../storage/).
+1. The CRDT provider has applied the mutation to the local replica
+2. The update has been serialized into a `CRDTChangeBlock`
+3. The block has been signed with the writer's ECDSA P-384 key
+4. The signed block has been encrypted with the document's AES-GCM key
+5. The encrypted block has been stored in the local Helia blockstore
+6. The CID has been published to connected peers via GossipSub
+
+If storage or publication fails (e.g., IndexedDB quota exceeded, network error), the CRDT mutation **may already be applied**. The CRDT state reflects the mutation even if the remote sync path failed. There is no automatic rollback.
+
+## What is not yet implemented
+
+### No durable outbox
+
+If a peer is unreachable when `change()` publishes to GossipSub, the update may not reach them. Swarmbase does not persist a queue of outgoing changes to retry later. There is no delivery acknowledgment or guaranteed-at-least-once semantics.
+
+### No delivery acknowledgment
+
+When a change is published, there is no confirmation that remote peers received, verified, or applied it. The application must implement its own acknowledgment protocol if it needs delivery guarantees.
+
+### No automatic reconnection
+
+If the libp2p connection drops, Swarmbase does not automatically reconnect. The application must detect disconnection and reinitialize the transport. See the [networking page](../networking/) for transport details.
+
+### No close/restart recovery verified in CI
+
+Documents store encrypted blocks in browser IndexedDB via Helia's blockstore. Local persistence works in single-session tests, but complete browser close → reopen → verify document state has not been proven in CI. See the [roadmap](../../community/roadmap/) for current status.
+
+### Automerge/Yjs mutation persistence on rejection
+
+If part of the `change()` pipeline fails (e.g., storage quota exceeded), the CRDT mutation may already be applied to the local replica. The mutation persists locally even though the remote sync failed. There is no automatic undo or rollback of the CRDT state.
+
+## The infrastructure boundary
+
+"Local-first" does not mean "infrastructure-free." Browser peers cannot listen for incoming connections and cannot participate in a DHT without a bootstrap node. Most Swarmbase deployments need:
+
+- **Relay nodes** to bridge NAT for browser peers
+- **Bootstrap nodes** as well-known entry points for the libp2p network
+- **STUN/TURN servers** for WebRTC hole-punching (optional, for direct peer connections)
+
+These infrastructure components carry **encrypted traffic only** — they never see document plaintext. But they are necessary for peers to discover and reach each other.
+
+See [running a relay](../../cookbook/running-a-relay/) for the development relay setup.
+
+## What local-first Swarmbase is a good fit for
+
+Swarmbase's local-first model works well for:
+
+- **Small collaborative documents** (todos, notes, wikis, password vaults) where the document fits in a single CRDT replica
+- **Applications that own identity and recovery** — Swarmbase does not provide authentication or key recovery
+- **Deployments where you control the relay infrastructure** — there is no cloud service to delegate to
+- **Experiments and prototypes** learning about local-first architecture
+
+It is not a good fit for:
+
+- Large datasets (hundreds of megabytes per document)
+- Applications that need SQL or relational queries
+- Production systems requiring guaranteed delivery and durability
+- Applications expecting a managed backend service
 
 ## CI-backed evidence
 
-Current CI verifies the Yjs and Automerge adapters in isolation and exercises a real encrypted Automerge document load across a relay-backed NAT topology. Create/open/change/close/sync, IndexedDB-backed browser storage, persistence across restart, and system partition/rejoin are only partially covered. Live post-load cross-browser mutation, real reconnect behavior, and durable recovery are not default acceptance guarantees.
+These behaviors are verified by CI:
 
-## Fit
+- Document creation, local mutation, and retrieval in a single browser session
+- Encrypted block storage and retrieval through a Circuit Relay
+- Automerge and Yjs provider initialization and basic operation
+- Crypto operations (signing, encryption, key generation)
 
-Swarmbase may fit small collaborative documents where temporary divergence is acceptable and the application can own identity, recovery, infrastructure, and operational failure handling. Do not use it as a payment, inventory, reservation, high-throughput system of record, or as the sole copy of important data. Read [Limitations](../limitations/) before adopting it.
+These behaviors are **not** verified:
+
+- Browser restart and document recovery
+- Multi-session persistence across browser closes
+- Offline editing with later reconnection
+- Automatic reconnection after transport failure
+
+## Next steps
+
+- [Architecture](../architecture/) — data flow and system structure
+- [CRDT model](../crdts/) — how Yjs and Automerge integrate
+- [Limitations](../limitations/) — complete list of current gaps

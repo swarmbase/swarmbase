@@ -23,3 +23,10 @@ If you suspect a vulnerability, open this repository's **Security** tab and use 
 State exactly what a change or test demonstrates. A unit test for a cryptographic or CRDT primitive does not by itself prove browser interoperability, persistence, multi-peer convergence, invitation acceptance, revocation under attack, or production suitability. Use the [feature and verification audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) as the current evidence map.
 
 Swarmbase and all six package manifests use the MIT License.
+
+## More resources
+
+- [FAQ](faq/) — answers to common questions about production readiness, key management, relay requirements, and more
+- [Roadmap](roadmap/) — current development priorities and future directions
+- [Contributing](contributing/) — development setup, build commands, and PR expectations
+- [Help wanted](help-wanted/) — specific contribution areas with the highest impact

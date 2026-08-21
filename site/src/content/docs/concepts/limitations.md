@@ -1,56 +1,89 @@
 ---
 title: Limitations
-description: Current Swarmbase production, durability, networking, security, scale, and verification limits.
+description: Current alpha limitations — what is not yet implemented, verified, or production-ready in Swarmbase.
 ---
 
-Swarmbase is **alpha software**. It has no independent security audit, production SLA, durability SLA, or compatibility guarantee. Do not use it as the only copy of important data or for production workloads that require assured availability, recovery, or revocation.
+Swarmbase is alpha software. This page catalogs the known gaps between the current implementation and a production-ready system. Every limitation listed here is either not yet implemented or not yet verified in CI.
+
+See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) for the evidence backing each claim, and the [roadmap](../../community/roadmap/) for current development priorities.
 
 ## Distribution and operations
 
-- Workspace packages build in the repository but are not published, and clean external-package installation is not an acceptance test.
-- Production deployment is documentation-only: there is no automated deployment, upgrade, rollback, backup, or restore validation.
-- The relay server has unit/build coverage, but operational scaling and multi-relay behavior are not proven.
+- **Packages are unpublished.** The `@swarmbase/*` packages are source workspaces, not published to npm. You must clone and build from source.
+- **No deployment automation.** There is no CI/CD pipeline for deploying relays, bootstrap nodes, or pinning services.
+- **No upgrade or migration path.** API changes between commits may break your application without warning. There is no changelog, no semver, and no deprecation period.
 
-## Local and durable operation
+## Offline and durability
 
-- Offline changes apply only to an already-loaded replica with the necessary local state and keys.
-- A change promise includes authorization, storage, optional signing, encryption, publication, handlers, and possible compaction; it is not merely an in-memory UI edit.
-- There is no durable outbox, publish acknowledgement, automatic retry, or guaranteed automatic reconnect. A direct `change()` can reject after leaving local Automerge or Yjs state modified. Transaction rollback restores immutable document references but is only best effort for in-place Yjs mutation.
-- Browser defaults use IndexedDB-backed stores, but complete document recovery after close/restart is not verified. Browsers may evict or clear storage.
-- Recovery requires discoverable CIDs/graph state, retained blocks, epoch keys, identity and KEM material, compatible configuration, and reachable peers. Loss of keys or identity may be unrecoverable.
+- **Offline editing requires an already-loaded replica.** A document must be opened and loaded before it can be edited offline. Fresh documents cannot be created offline — `Collabswarm.initialize()` starts local Helia/libp2p services which can run without network access, but onboarding a new document (resolving its ID to a CID, loading its blocks, establishing quorum agreement) requires network connectivity.
+- **No durable outbox.** Changes are published to GossipSub and stored locally, but there is no queue with retry for unreachable peers. If a peer is offline when a change is published, it may never receive it.
+- **No delivery acknowledgment.** There is no confirmation that remote peers received, verified, or applied a change. The `document.change()` promise covers local operations only.
+- **No automatic reconnection.** If the libp2p connection drops, Swarmbase does not reconnect. The application must detect and handle reconnection.
+- **No guaranteed at-least-once delivery.** GossipSub is best-effort. Messages may be dropped, delayed, or duplicated.
+- **Browser restart recovery not verified.** IndexedDB persists blocks locally, but complete browser restart → reopen → verify document state is not proven in CI.
+- **Key loss may be unrecoverable.** Signing keys, KEM keys, and document keys are application-managed. Swarmbase has no key backup, recovery, or rotation.
 
-## Storage, snapshots, and pinning
+## Storage and persistence
 
-- There is no automatic replication-factor guarantee.
-- Pinning is incomplete: `CollabswarmNode` listens for document-publish pin requests, but the core commit path does not publish them; no generic pinning service is integrated.
-- Automatic compaction is off by default. Pruning changes what a peer can serve, and optional block GC is destructive.
-- After snapshot compaction or pruning, a new replica can fail to bootstrap: it may lack the trusted writer ACL needed to accept the snapshot, retained tail changes may not reconstruct pruned state, required data may be unavailable, or default tip-hash quorum may not agree on served frontiers.
-- Concurrent snapshots can represent different local states; deterministic preference does not prove equivalence.
+- **No replication factor guarantee.** Swarmbase does not ensure blocks are stored on at least N peers. The last online peer is the last surviving copy.
+- **Pinning is incomplete.** A `CollabswarmNode` listener exists but the core commit path does not publish to it. No generic IPFS pinning client exists. See [pinning cookbook](../../cookbook/pinning/).
+- **Compaction is off by default.** Snapshots are not automatic. Compaction can prune blocks needed for recovery.
+- **Bootstrap can fail after pruning.** If all pruned blocks are needed to reconstruct a document, and they are not available from any peer, the document cannot be loaded.
+- **No garbage collection policy.** GC is manual and destructive. There is no LRU, TTL, or size-limit-based automatic cleanup.
 
 ## Networking and availability
 
-- Browser deployments generally need bootstrap/relay infrastructure. Paths may be direct or relay-mediated; DCUtR, WebRTC, STUN, TURN, and direct upgrades are topology-dependent.
-- GossipSub is best effort and does not guarantee delivery to every subscriber.
-- Bootstrap, pubsub discovery, DHT, WebRTC, relay fallback, and NAT traversal are only partially system-tested. WebSocket and WebTransport synchronization are configuration claims without transport-specific acceptance tests.
-- Connection churn, large multi-peer meshes, relay failover during edits, bootstrap replacement, and partition/rejoin remain partially or untested.
-- Relays can observe metadata and can censor, delay, or partition traffic even though they need not see plaintext.
-- Relay identity is operational state: clients pinned to an old relay peer ID may not recover after replacement. Topic allowlists/caps and relay capacity can deny service.
+- **Browsers typically need a relay.** Browser peers cannot accept incoming connections directly. A Circuit Relay is needed for initial connectivity and as a fallback; direct WebRTC or WebTransport connections may be possible when NAT traversal succeeds, but this is not yet verified in CI.
+- **GossipSub is best-effort.** Message delivery is not guaranteed. Late-joining peers miss earlier announcements.
+- **Many transports are untested in CI.** WebRTC, WebTransport, and DCUtR are configuration claims without transport-specific sync tests. Only WebSocket has verified end-to-end sync.
+- **DHT and AutoNAT have no standalone CI tests.** They are included in the Docker-backed NAT topology but not stress-tested.
+- **Relays can censor or drop traffic.** There is no protection against relay-level denial of service. A malicious relay can blackhole all traffic for a peer or topic.
+- **Relay identity is not stable across restarts.** The relay generates a new libp2p peer ID on each start.
+- **No relay meshing or failover.** Each relay operates independently. If your relay goes down, peers cannot reach each other (unless they have a direct connection).
+- **No HTTP health endpoint on relay.** Load balancers and monitoring systems cannot probe relay health.
 
 ## Authorization and revocation
 
-- Application-level signing is on by default but can be disabled, removing normal sync-message authentication and binary ACL enforcement.
-- The active document path enforces reader/writer ACLs. Capability, UCAN, `UCANACL`, and ACL-chain code is standalone and not integrated end to end.
-- Every writer can administer ACLs. A valid sync signature proves only that some current writer key signed; it is not durable explicit authorship.
-- Initial-load quorum assumes enough independent reachable peer identities, is not Sybil-resistant, and trades availability for defense in depth. It covers the served frontier, not every concurrent head known anywhere.
-- BeeKEM's cryptographic core and focused Welcome/PathUpdate flows are tested, but important membership state is memory-only and PathUpdate delivery is best effort. Restart, missed update, multiwriter, and full-system revocation gaps remain.
-- Removing a writer blocks future acceptance under the current writer ACL; removing a reader attempts future key separation. Neither can erase plaintext or keys already copied, and no absolute post-revocation confidentiality guarantee is established.
-- History visibility is configured locally and cannot force other replicas to delete earlier epoch keys.
+- **Signing is currently optional.** A change without a valid writer signature may be accepted depending on configuration.
+- **Writer ACL admin is unguarded.** Any existing writer can add or remove other writers. There is no document owner concept or admin-only privilege.
+- **Quorum is not Sybil-resistant.** K-of-Q loading can be subverted by a peer controlling multiple bootstrap identities.
+- **BeeKEM rekey state is memory-only.** If the node restarts, all knowledge of key rotations is lost. Revoked readers may be able to decrypt content they previously had access to.
+- **PathUpdate is best-effort.** There is no guarantee that ACL change notifications reach all peers.
+- **No time-bound or conditional access.** Readers and writers are either in the ACL or not. There is no expiration, usage limit, or context-based access control.
+- **UCAN capabilities are standalone.** The UCAN module can issue and verify capability tokens, but the document change path does not check them.
+- **No automatic or restart-safe key rotation.** Document keys can be rotated on demand via `removeReader()`, which activates a new document key through BeeKEM, but rotation requires explicit application triggers, BeeKEM rekey state is memory-only, and PathUpdate delivery is best-effort.
 
 ## Convergence and verification
 
-- Adapter tests support Yjs and Automerge convergence claims at component level. Complete system partition/rejoin and live post-load cross-browser convergence are only partially covered.
-- A dedicated CI topology verifies initial encrypted Automerge document load across NAT through a relay; it does not verify every onboarding, mutation, reconnect, revocation, or recovery path.
-- Performance, crypto, sync, convergence, Bloom, and query benchmarks exist, but they have no pass/fail budgets. No bounded latency, memory, storage, load, or sync guarantee follows from them.
-- Large documents, long histories, high change rates, large groups, hostile graph shapes, prolonged churn, and production-scale swarms are unproven.
+- **System-level partition/rejoin is not proven.** Single-document convergence works, but multi-document, multi-peer partition/rejoin cycles have no CI coverage.
+- **No pass/fail performance budgets.** Benchmark suites exist but have no thresholds. A regression that doubles latency would not be caught in CI.
+- **Benchmark runner is broken.** Module resolution errors prevent benchmarks from running. See [roadmap](../../community/roadmap/).
+- **Cross-CRDT convergence is not tested.** A Yjs document and an Automerge document being edited by different peers in the same application has no CI coverage.
 
-Use a conventional transactional or managed database when you require linearizable state, central control, audited deletion, assured disaster recovery, high throughput, or an SLA. The other concept pages explain the narrower implemented behavior: [Local-first](../local-first/), [CRDTs](../crdts/), [Networking](../networking/), [Storage](../storage/), and [Security](../security/).
+## Examples and documentation
+
+- **Examples are startup smoke only.** The three example applications (browser-test, wiki-swarm, password-manager) verify single-browser startup. None demonstrate multi-peer collaboration end-to-end.
+- **Cookbook snippets are not validated.** Code examples in documentation may drift from the actual API. There is no CI check that documentation code blocks compile against the current source.
+- **No migration guide.** There is no guide for upgrading from one Swarmbase commit to another.
+- **No changelog.** Release notes and version history are not published.
+
+## What is verified
+
+Despite these limitations, several critical paths are verified end-to-end in CI:
+
+- Encrypted document creation, mutation, and retrieval (single browser)
+- Cross-NAT document retrieval through Circuit Relay (Docker-backed)
+- Document signing and signature verification
+- AES-GCM encryption and decryption
+- Reader/writer ACL enforcement
+- Libp2p peer discovery (bootstrap connection)
+- GossipSub message delivery (NAT topology)
+
+Every claim on this site should be understood against this evidence baseline. A positive unit test does not establish complete multi-peer behavior.
+
+## Next steps
+
+- [Roadmap](../../community/roadmap/) — current development priorities
+- [Help wanted](../../community/help-wanted/) — specific contribution opportunities
+- [Feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/feature-audit.md) — capability-to-evidence map
+- [FAQ](../../community/faq/) — answers to common questions

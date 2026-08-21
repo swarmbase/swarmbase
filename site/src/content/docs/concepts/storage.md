@@ -1,50 +1,158 @@
 ---
 title: Storage
-description: Swarmbase's encrypted CID-addressed blocks, shadow sync graph, persistence, pinning, and recovery limits.
+description: How Swarmbase stores documents — local IndexedDB persistence, the Helia blockstore, pinning, recovery, and compaction.
 ---
 
-Swarmbase stores CRDT changes as encrypted, CID-addressed blocks through Helia and exchanges a separate signed-when-enabled, encrypted shadow sync graph. This is not a conventional Merkle-DAG in which each stored block commits to parent CIDs.
+## Overview
+
+Swarmbase uses **Helia** (the JavaScript IPFS implementation) for content-addressed storage. Every document block — a signed, encrypted CRDT update — is stored in a local Helia blockstore backed by IndexedDB in the browser or the filesystem in Node.js. Blocks are addressed by their **CID** (Content Identifier), a SHA-256 hash of the encrypted content.
 
 ## Implemented model
 
-For each committed document or ACL change, Swarmbase encrypts and writes the serialized change bytes to the local blockstore. The resulting CID identifies those encrypted bytes. A sync message then carries a `CRDTChangeNode` shadow graph: its root CID names the current change block, `children` describe an older retained tree and cross-links, and a node can either include its change payload inline or omit it so the receiver fetches the block by CID.
+### Content-addressed blocks
 
-Inline payloads are part of the encrypted sync envelope. Their graph entries are not necessarily the bytes stored under each referenced CID, so do not infer conventional Merkle-DAG parent commitment or complete-history proofs from the shadow structure. Sync messages are signed by a writer when application signing is enabled; CID verification protects fetched bytes from substitution, while encryption protects contents.
+Every `CRDTChangeBlock` is stored as an opaque blob:
 
-A load responder serves its retained shadow tree or a snapshot plus retained changes. It may not serve every locally known concurrent head, and `getHistory()` is not the current network load path.
+```
+┌─────────────────────────────────────┐
+│          CRDTChangeBlock             │
+├─────────────────────────────────────┤
+│  parent: CID of previous tip        │
+│  epoch:  current document epoch     │
+│  signature: ECDSA P-384             │
+│  payload: AES-GCM encrypted         │
+│    └── serialized CRDT update       │
+├─────────────────────────────────────┤
+│  CID: sha256(entire block)          │
+└─────────────────────────────────────┘
+```
+
+Blocks are immutable. Once stored, a block's CID is stable forever. The document's current state is materialized by the CRDT layer from the **frontier** — the most recent block(s) at the head of the sync graph. New blocks added via `document.change()` extend the frontier, and the CRDT layer resolves any concurrent heads.
+
+### Inline vs deferred payloads
+
+To reduce block size and improve deduplication, Swarmbase can split payload content across referenced blocks:
+
+- **Inline**: The full encrypted update is embedded in the `CRDTChangeBlock`.
+- **Deferred**: The encrypted update is stored as a separate block referenced by CID from the `CRDTChangeBlock`. Useful when the same encrypted payload appears in multiple sync contexts.
+
+### No Merkle-DAG parent commitment
+
+Swarmbase's shadow sync graph does **not** use Merkle hash linking. Blocks reference parents by CID but do not commit to parent hashes. This means the graph structure can change after blocks are written (e.g., adding new parents during catch-up). This is intentional — it allows the sync layer to add concurrent parents discovered later without rewriting blocks.
 
 ## Browser persistence
 
-Browser defaults use IndexedDB-backed Helia blockstore and datastore instances. This verifies that bytes and metadata can use IndexedDB; it does not verify complete document, graph, key, ACL, identity, and subscription recovery after a full browser restart.
+In the browser, Helia stores blocks in **IndexedDB**:
 
-A peer can apply an inline payload without necessarily persisting every referenced block from the supplied shadow tree. Replication therefore follows observed synchronization and fetches; Swarmbase does not automatically enforce a replication factor or prove that a given number of independent peers retain every required block.
+```ts
+import { IDBBlockstore } from 'blockstore-idb';
+import { IDBDatastore } from 'datastore-idb';
+
+const blockstore = new IDBBlockstore('/collabswarm-blocks');
+// In practice, pass these via CollabswarmConfig.helia to initialize()
+```
+
+Encrypted blocks, IPNS records, and the libp2p peer store are all persisted to IndexedDB under the origin. This means a browser tab refresh should preserve document state.
+
+**Current status**: Local block storage works in single-session tests. Complete restart recovery (close browser → reopen → verify document state) has **not been proven in CI**. The blockstore persists, but Helia/libp2p reinitialization and document re-opening after a browser restart are not end-to-end tested.
+
+### No automatic replication factor
+
+Swarmbase does not replicate blocks automatically. If you have 3 peers and one stores a block, the other 2 may fetch it on demand (bitswap) or may not. There is no "store on at least N peers" guarantee.
 
 ## Pinning status
 
-`CollabswarmNode` contains a listener for a document-publish topic and code to pin announced and subsequently observed CIDs. Core document commits, however, do not publish to that pin-request topic. The listener therefore has no core publisher in the current path. There is also no integrated generic IPFS pinning-service client or automatic export of every required block.
+Pinning is **incomplete**. What exists:
 
-Treat pinning as incomplete integration, not a configured durability feature. An operator must build and test the publication, traversal, authorization, retention, monitoring, and restore path. A generic service can retain supplied CIDs, but Swarmbase currently does not supply the end-to-end discovery workflow.
+- A `CollabswarmNode` listener that fires when blocks are stored locally
+- No publisher in the core commit path (the listener is never notified)
+- No generic IPFS pinning client (e.g., to pin to a remote IPFS node, S3, or Filecoin)
+
+Without pinning:
+
+- The last online peer is the last surviving copy
+- If all peers go offline and their IndexedDB is cleared, the document is lost
+- A dedicated "pinning node" (always-on peer) can serve as a poor substitute, but is not integrated
+
+See the [pinning cookbook](../../cookbook/pinning/) for the integration checklist.
 
 ## Recovery requirements
 
-A usable recovery needs more than ciphertext blocks. At minimum it may require:
+The components a peer needs depend on what it needs to do:
 
-- the relevant root, frontier, snapshot, and change CIDs;
-- enough shadow graph or other indexing information to discover them;
-- retained blocks at reachable providers;
-- document epoch keys and the keychain state allowed by history visibility;
-- the application's signing identity and KEM state;
-- compatible CRDT, ACL, and serializer configuration;
-- network reachability and, by default, enough agreeing peers for initial-load quorum.
+### Read-only recovery
 
-Loss of keys or identity can make retained blocks unreadable or make future authorized writes impossible. Content addressing is integrity and lookup machinery, not backup or key recovery.
+A reader that only needs to reconstruct and verify existing document history requires:
+
+1. **The block data** — encrypted CRDT change blocks (from any peer or pinning service)
+2. **The graph structure** — which CIDs form the frontier and its ancestor chain (from the shadow sync graph)
+3. **The document key history** — AES-GCM keys to decrypt blocks for each epoch
+4. **The writers' public keys** — to verify signatures on existing blocks
+
+### Write recovery
+
+To issue new changes, a peer additionally needs:
+
+5. **The identity key** — ECDSA P-384 signing key to prove authorship
+
+### Membership recovery
+
+To participate in dynamic group membership (add/remove readers), a peer additionally needs:
+
+6. **The KEM state** — BeeKEM key material (memory-only currently; determining the set of active members requires this)
+
+### Configurable prerequisites
+
+7. **Network reachability** — connection to at least one peer or bootstrap node (needed to fetch missing blocks)
+8. **Q-of-K quorum** — agreement from bootstrap peers on the current frontier hash (enabled by default but configurable via `loadQuorumK`/`loadQuorumQ`)
+
+Losing any of these components may make the corresponding recovery path impossible. Key management and backup are application responsibilities.
 
 ## Compaction and garbage collection
 
-Automatic compaction is off by default. When enabled, pruning removes older document nodes from the served in-memory tree; optional block GC can then delete pruned local bytes. GC is destructive and separately off by default. ACL nodes are preserved by the pruning logic, but that does not guarantee a complete recoverable history.
+### Compaction
 
-Snapshot bootstrap can fail after peers compact or prune. A first-time quorum load may not yet have a trusted writer ACL and can reject the snapshot during writer verification; if earlier changes were pruned or garbage-collected, the retained tail may not reconstruct that state. The needed graph or blocks may also be unavailable, and tip-hash quorum can reject incompatible served frontiers. Deterministic snapshot preference does not make differing snapshots equivalent. Test backup and restore with the same compaction, quorum, and membership settings used in deployment.
+Compaction replaces a chain of blocks with a full-state snapshot. It is **off by default**:
+
+```ts
+await document.compact();
+```
+
+When compaction runs:
+1. The current CRDT state is serialized as a full snapshot
+2. The snapshot is signed and encrypted like any other block
+3. Older blocks in the chain may be pruned (removed from the local blockstore)
+
+Compaction reduces storage and load time (starting from a snapshot instead of replaying all history), but:
+- Pruned blocks cannot be recovered
+- Peers that only have pruned blocks cannot reconstruct the document
+- Snapshot-only bootstrap can fail if snapshots reference pruned data
+
+### Garbage collection
+
+GC removes blocks that are no longer referenced by any document. It is **destructive**:
+- Pruned blocks are deleted from IndexedDB
+- Recovery from GC is impossible — the data is gone
+- GC is not automatic; the application must trigger it
 
 ## CI-backed evidence
 
-Current CI verifies serialization, cross-links, snapshots, compaction, blockstore GC, and IndexedDB index/storage components. Content-addressed persistence and browser blockstore initialization are partial; full restart recovery and remote pinning are not default acceptance tests. No CI evidence establishes a replication factor, complete pinning workflow, or durable disaster recovery. See [Limitations](../limitations/).
+Verified in CI:
+
+- Block creation, storage, and retrieval in a single browser session
+- Encrypted blocks transmitted through Circuit Relay and stored in the recipient's blockstore
+- IndexedDB blockstore initialization and basic read/write
+
+Not verified:
+
+- Complete browser restart and document recovery
+- Multi-session persistence (close → reopen → verify)
+- Compaction and GC with subsequent recovery
+- Pinning publisher integration
+- Remote block fetch (bitswap/HTTP) of blocks stored by a different peer
+
+## Next steps
+
+- [Pinning cookbook](../../cookbook/pinning/) — what needs to happen for reliable remote persistence
+- [Security model](../security/) — how encryption and signing protect stored data
+- [Limitations](../limitations/) — storage-specific limitations
