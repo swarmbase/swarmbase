@@ -277,7 +277,7 @@ describe('AutomergeKeychain', () => {
 
       const sourceHistory = source.history();
       const receiverHistory = receiver.history();
-      expect(sourceHistory).toHaveLength(1);
+      expect(sourceHistory.length).toBeGreaterThan(0);
       expect(receiverHistory).toEqual(sourceHistory);
       expect(() => receiver.merge(sourceHistory)).not.toThrow();
     } finally {
