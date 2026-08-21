@@ -31,11 +31,18 @@ The libp2p peer ID is separate from the signing identity. This means:
 Each document has an access control list with two roles:
 
 ```ts
-// Grant read access (can decrypt document content)
-await document.addReader(peerSigningPublicKey, kemEncapsulatedKey);
+// Grant read access (the second argument is the reader's raw
+// SEC1-uncompressed P-256 ECDH public key bytes, optional)
+await document.addReader(peerSigningPublicKey, readerKemPublicKeyBytes);
 
-// Grant write access (can publish new changes)
+// Grant write access
 await document.addWriter(peerSigningPublicKey);
+```
+
+Before calling `addReader`, a founder node must set its KEM key pair:
+
+```ts
+await document.setKemKeyPair(kemKeyPair);
 ```
 
 - **Readers** receive the document key (via BeeKEM encapsulation) and can decrypt blocks.
@@ -130,10 +137,8 @@ What exists:
 ```ts
 // Be aware: BeeKEM state is memory-only
 await document.removeReader(revokedPeerSigningPublicKey);
-
-// PathUpdate is best-effort
-await document.pathUpdate(); // Notify peers of ACL change
 ```
+`removeReader` generates and distributes BeeKEM PathUpdates internally as part of the operation. PathUpdate distribution is best-effort — there is no guarantee that ACL change notifications reach all peers.
 
 ### Limitations of revocation
 

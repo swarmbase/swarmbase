@@ -72,14 +72,22 @@ This means:
 The `CRDTProvider` interface abstracts the CRDT library from Swarmbase's core:
 
 ```ts
-interface CRDTProvider {
-  createDoc(): CRDTDoc;
-  applyUpdate(doc: CRDTDoc, update: Uint8Array): void;
-  encodeStateAsUpdate(doc: CRDTDoc): Uint8Array;
-  encodeStateVector(doc: CRDTDoc): Uint8Array;
-  diffUpdate(doc: CRDTDoc, stateVector: Uint8Array): Uint8Array;
+interface CRDTProvider<DocType, ChangesType, ChangeFnType> {
+  newDocument(): DocType;
+  localChange(
+    document: DocType,
+    message: string,
+    changeFn: ChangeFnType,
+  ): [DocType, ChangesType];
+  remoteChange(document: DocType, changes: ChangesType): DocType;
+  getHistory(document: DocType): ChangesType;
+  getSnapshot?(document: DocType): ChangesType;
+  applySnapshot?(document: DocType, snapshot: ChangesType): DocType;
 }
 ```
+
+Four required methods (`newDocument`, `localChange`, `remoteChange`, `getHistory`)
+and two optional snapshot methods.
 
 Two implementations exist:
 

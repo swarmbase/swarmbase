@@ -65,16 +65,26 @@ Once a Swarmbase node is configured with the Yjs adapter, documents feel like
 familiar CRDT shared types wrapped in encryption and access control:
 
 ```ts
-import { createSwarmbaseNode, YjsProvider } from '@swarmbase/collabswarm';
+import { Collabswarm, SubtleCrypto, defaultConfig,
+  defaultBootstrapConfig } from '@swarmbase/collabswarm';
+import { YjsProvider, YjsACLProvider,
+  YjsKeychainProvider, YjsJSONSerializer } from '@swarmbase/collabswarm-yjs';
 
-const swarm = await createSwarmbaseNode({
-  signingKeyPair: await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-384' },
-    true,
-    ['sign', 'verify'],
-  ),
-  provider: new YjsProvider(),
-});
+const swarm = new Collabswarm(
+  userKeyPair.privateKey,
+  userKeyPair.publicKey,
+  new YjsProvider(),
+  new YjsJSONSerializer(),
+  new YjsJSONSerializer(),
+  new YjsJSONSerializer(),
+  new SubtleCrypto(),
+  new YjsACLProvider(),
+  new YjsKeychainProvider(),
+);
+await swarm.initialize(defaultConfig(defaultBootstrapConfig([])));
+
+// Optionally connect to bootstrap peers:
+// await swarm.connect(['/dns4/relay.example.com/tcp/443/wss/p2p/12D3...']);
 
 const todos = swarm.doc('/todo-list');
 await todos.open();

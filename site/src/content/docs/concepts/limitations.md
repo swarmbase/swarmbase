@@ -15,7 +15,7 @@ See the [feature audit](https://github.com/swarmbase/swarmbase/blob/main/docs/fe
 
 ## Offline and durability
 
-- **Offline editing requires an already-loaded replica.** A document must be opened and loaded before it can be edited offline. Fresh documents cannot be created offline — `createSwarmbaseNode` requires network access for libp2p initialization.
+- **Offline editing requires an already-loaded replica.** A document must be opened and loaded before it can be edited offline. Fresh documents cannot be created offline — `Collabswarm.initialize()` starts local Helia/libp2p services which can run without network access, but onboarding a new document (resolving its ID to a CID, loading its blocks, establishing quorum agreement) requires network connectivity.
 - **No durable outbox.** Changes are published to GossipSub and stored locally, but there is no queue with retry for unreachable peers. If a peer is offline when a change is published, it may never receive it.
 - **No delivery acknowledgment.** There is no confirmation that remote peers received, verified, or applied a change. The `document.change()` promise covers local operations only.
 - **No automatic reconnection.** If the libp2p connection drops, Swarmbase does not reconnect. The application must detect and handle reconnection.

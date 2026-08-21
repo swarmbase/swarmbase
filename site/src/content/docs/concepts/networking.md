@@ -22,15 +22,15 @@ Swarmbase supports these transport protocols. The actual set used depends on the
 ### Transport selection
 
 ```ts
-import { createSwarmbaseNode } from '@swarmbase/collabswarm';
+import { defaultConfig, defaultBootstrapConfig } from '@swarmbase/collabswarm';
 
-const swarm = await createSwarmbaseNode({
-  // ...
-  libp2p: {
-    transports: ['websocket', 'webtransport', 'webrtc'],
-    relay: '/dns4/relay.example.com/tcp/443/wss/p2p/12D3KooW...',
-  },
-});
+const bootstrapPeers = [
+  '/dns4/relay.example.com/tcp/443/wss/p2p/12D3KooW...',
+];
+const config = defaultConfig(defaultBootstrapConfig(bootstrapPeers));
+
+// Pass config to Collabswarm.initialize()
+await swarm.initialize(config);
 ```
 
 In practice, browser peers typically use WebSocket to reach a relay, and may upgrade to WebRTC or WebTransport for direct peer connections when NAT traversal succeeds.

@@ -13,7 +13,7 @@ Swarmbase occupies a specific niche: **encrypted, peer-to-peer CRDT document col
 |---|---|---|
 | **CRDT** | Adapts Yjs or Automerge | Built-in CRDT runtime |
 | **Encryption** | AES-GCM by default, BeeKEM key sharing | Application responsibility |
-| **Authentication** | ECDSA P-384 signing, UCAN capabilities | Application responsibility |
+| **Authentication** | ECDSA P-384 signing (optional; can be disabled with `enableSigning: false`); UCAN helpers exist but are not integrated into the document change path | Application responsibility |
 | **Access control** | Reader/writer ACL with cryptographic enforcement | Application responsibility |
 | **Storage** | Helia/IPFS (IndexedDB in browser) | Application responsibility (y-indexeddb plugin) |
 | **Networking** | libp2p (WebSocket, WebRTC, WebTransport, GossipSub) | y-websocket, y-webrtc providers |

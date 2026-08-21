@@ -45,11 +45,11 @@ Swarmbase's shadow sync graph does **not** use Merkle hash linking. Blocks refer
 In the browser, Helia stores blocks in **IndexedDB**:
 
 ```ts
-import { createHelia } from 'helia';
-import { createIDBBlockstore } from 'helia-blockstore-idb';
+import { IDBBlockstore } from 'blockstore-idb';
+import { IDBDatastore } from 'datastore-idb';
 
-const blockstore = createIDBBlockstore('/swarmbase/blocks');
-const helia = await createHelia({ blockstore });
+const blockstore = new IDBBlockstore('/collabswarm-blocks');
+// In practice, pass these via CollabswarmConfig.helia to initialize()
 ```
 
 Encrypted blocks, IPNS records, and the libp2p peer store are all persisted to IndexedDB under the origin. This means a browser tab refresh should preserve document state.
