@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Button from 'react-bootstrap/Button';
 import FormControl from 'react-bootstrap/FormControl';
 import InputGroup from 'react-bootstrap/InputGroup';
 import { Link } from 'react-router-dom';
@@ -17,8 +16,8 @@ export default function WikiNavbar() {
         value={currentSearch}
         onChange={e => setCurrentSearch(e.target.value)}
       />
-      <Link to={`/document/${currentSearch}`}>
-        <Button variant="outline-secondary">Search</Button>
+      <Link className="btn btn-outline-secondary" to={`/document/${currentSearch}`}>
+        Search
       </Link>
     </InputGroup>
   </div>
