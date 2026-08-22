@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Button from 'react-bootstrap/Button';
 import FormControl from 'react-bootstrap/FormControl';
 import InputGroup from 'react-bootstrap/InputGroup';
-import { LinkContainer } from 'react-router-bootstrap';
+import { Link } from 'react-router-dom';
 
 export default function WikiNavbar() {
   const [currentSearch, setCurrentSearch] = useState('');
@@ -17,9 +17,9 @@ export default function WikiNavbar() {
         value={currentSearch}
         onChange={e => setCurrentSearch(e.target.value)}
       />
-      <LinkContainer to={`/document/${currentSearch}`}>
+      <Link to={`/document/${currentSearch}`}>
         <Button variant="outline-secondary">Search</Button>
-      </LinkContainer>
+      </Link>
     </InputGroup>
   </div>
 }
