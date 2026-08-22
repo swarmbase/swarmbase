@@ -4746,7 +4746,7 @@ __metadata:
     "@types/react": "npm:^19.2.3"
     "@types/react-bootstrap": "npm:^1.1.0"
     "@types/react-dom": "npm:^19.2.3"
-    "@types/react-router-bootstrap": "npm:^0.26.6"
+    "@types/react-router-bootstrap": "npm:^0.26.8"
     "@types/react-router-dom": "npm:^5.3.3"
     "@types/uuid": "npm:^11.0.0"
     "@vitejs/plugin-react": "npm:^4.3.4"
@@ -4800,7 +4800,7 @@ __metadata:
     "@types/react-bootstrap": "npm:^1.1.0"
     "@types/react-dom": "npm:^19.2.3"
     "@types/react-redux": "npm:^7.1.34"
-    "@types/react-router-bootstrap": "npm:^0.26.6"
+    "@types/react-router-bootstrap": "npm:^0.26.8"
     "@types/react-router-dom": "npm:^5.3.3"
     "@types/slate": "npm:^0.47.16"
     "@vitejs/plugin-react": "npm:^4.3.4"
@@ -5412,12 +5412,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-router-bootstrap@npm:^0.26.6":
-  version: 0.26.6
-  resolution: "@types/react-router-bootstrap@npm:0.26.6"
+"@types/react-router-bootstrap@npm:^0.26.8":
+  version: 0.26.8
+  resolution: "@types/react-router-bootstrap@npm:0.26.8"
   dependencies:
     "@types/react": "npm:*"
-  checksum: 10/9a1d419c0b74186d1fa1795da77cb675725356d51fec03a40a436db8fddc0030eba6a18470cde038c8cacf758d7bad98e44f2dc132b22801c2ed34621022a82d
+  checksum: 10/a67c804ab0abb4972785be59f13293ecc6dd25661cd624298ccb989a17559e0af656bbf98859c5483cc69e912c00bac5ec79651e5892d488acd06443f1b249c9
   languageName: node
   linkType: hard
 
