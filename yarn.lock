@@ -4707,7 +4707,7 @@ __metadata:
     "@multiformats/multiaddr": "npm:^13.0.3"
     "@peculiar/webcrypto": "npm:^1.7.1"
     "@types/node": "npm:^22.7.5"
-    bl: "npm:^6.1.6"
+    bl: "npm:^7.0.12"
     blockstore-idb: "npm:^4.0.1"
     blockstore-idb-v3: "npm:blockstore-idb@3.0.1"
     datastore-idb: "npm:^5.0.1"
@@ -5460,15 +5460,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/readable-stream@npm:^4.0.0":
-  version: 4.0.23
-  resolution: "@types/readable-stream@npm:4.0.23"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10/2798c083eb74c9c5910cdda2e8132e333e2435362cc811eb866871e6a2ea77cd5a665dd3085be0e45ccc90a6d7b533d3d221f3b5ccfcf3080f4133517105b3fd
-  languageName: node
-  linkType: hard
-
 "@types/sax@npm:^1.2.1":
   version: 1.2.7
   resolution: "@types/sax@npm:1.2.7"
@@ -6150,15 +6141,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bl@npm:^6.1.6":
-  version: 6.1.6
-  resolution: "bl@npm:6.1.6"
-  dependencies:
-    "@types/readable-stream": "npm:^4.0.0"
-    buffer: "npm:^6.0.3"
-    inherits: "npm:^2.0.4"
-    readable-stream: "npm:^4.2.0"
-  checksum: 10/396f53ae7047046273e7b20f956e3368c1187bdc0520bd94c9a9db1fb337e469e1b30f09188d69507a344f27286e9ce3a57780f13204e031a15596b4bc5f0781
+"bl@npm:^7.0.12":
+  version: 7.0.12
+  resolution: "bl@npm:7.0.12"
+  checksum: 10/6fd645a67489968dcf9881115d3277217ad3dd81fd878e8782fa17b24a3e021a4c6ba647552207f803795a18712a5e3036184cfb2a53b62f684b46e5ab0779ba
   languageName: node
   linkType: hard
 
@@ -13208,7 +13194,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"readable-stream@npm:^4.2.0, readable-stream@npm:^4.7.0":
+"readable-stream@npm:^4.7.0":
   version: 4.7.0
   resolution: "readable-stream@npm:4.7.0"
   dependencies:
