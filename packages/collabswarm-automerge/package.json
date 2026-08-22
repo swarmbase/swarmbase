@@ -12,21 +12,22 @@
     "directory": "packages/collabswarm-automerge"
   },
   "scripts": {
-    "tsc": "tsc -b",
+    "tsc": "tsc -b && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'}))\"",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json"
   },
   "bin": {
-    "collabswarm-automerge-d": "dist/bin/collabswarm-automerge-d.js"
+    "collabswarm-automerge-d": "dist/esm/bin/collabswarm-automerge-d.js"
   },
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/cjs/src/index.js",
+  "types": "dist/esm/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
+      "types": "./dist/esm/src/index.d.ts",
+      "import": "./dist/esm/src/index.js",
+      "require": "./dist/cjs/src/index.js",
+      "default": "./dist/esm/src/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -104,5 +105,6 @@
       "^multiformats/(.*)$": "<rootDir>/jest.empty-mock.js",
       "^@multiformats/multiaddr$": "<rootDir>/jest.empty-mock.js"
     }
-  }
+  },
+  "module": "dist/esm/src/index.js"
 }

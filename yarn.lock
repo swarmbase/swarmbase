@@ -4592,7 +4592,7 @@ __metadata:
   peerDependencies:
     "@automerge/automerge": ^3.2.6
   bin:
-    collabswarm-automerge-d: dist/bin/collabswarm-automerge-d.js
+    collabswarm-automerge-d: dist/esm/bin/collabswarm-automerge-d.js
   languageName: unknown
   linkType: soft
 
@@ -4674,7 +4674,7 @@ __metadata:
   peerDependencies:
     yjs: ^13.6.30
   bin:
-    collabswarm-yjs-d: dist/bin/collabswarm-yjs-d.js
+    collabswarm-yjs-d: dist/esm/bin/collabswarm-yjs-d.js
   languageName: unknown
   linkType: soft
 

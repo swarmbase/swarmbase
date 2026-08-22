@@ -12,32 +12,35 @@
     "directory": "packages/collabswarm"
   },
   "scripts": {
-    "tsc": "tsc -b",
+    "tsc": "tsc -b && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'}))\"",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
     "doc": "typedoc --excludePrivate --excludeProtected --excludeInternal",
     "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
   },
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/cjs/src/index.js",
+  "types": "dist/esm/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
+      "types": "./dist/esm/src/index.d.ts",
+      "import": "./dist/esm/src/index.js",
+      "require": "./dist/cjs/src/index.js",
+      "default": "./dist/esm/src/index.js"
     },
+    "./package.json": "./package.json",
     "./node": {
-      "types": "./dist/src/collabswarm-node.d.ts",
-      "import": "./dist/src/collabswarm-node.js",
-      "default": "./dist/src/collabswarm-node.js"
+      "types": "./dist/esm/src/collabswarm-node.d.ts",
+      "import": "./dist/esm/src/collabswarm-node.js",
+      "require": "./dist/cjs/src/collabswarm-node.js",
+      "default": "./dist/esm/src/collabswarm-node.js"
     },
     "./browser-primitives": {
-      "types": "./dist/src/browser-primitives.d.ts",
-      "import": "./dist/src/browser-primitives.js",
-      "default": "./dist/src/browser-primitives.js"
-    },
-    "./package.json": "./package.json"
+      "types": "./dist/esm/src/browser-primitives.d.ts",
+      "import": "./dist/esm/src/browser-primitives.js",
+      "require": "./dist/cjs/src/browser-primitives.js",
+      "default": "./dist/esm/src/browser-primitives.js"
+    }
   },
   "files": [
     "dist",
@@ -136,5 +139,6 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     }
-  }
+  },
+  "module": "dist/esm/src/index.js"
 }

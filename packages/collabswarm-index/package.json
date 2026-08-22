@@ -12,26 +12,28 @@
     "directory": "packages/collabswarm-index"
   },
   "scripts": {
-    "tsc": "tsc -b",
+    "tsc": "tsc -b && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'}))\"",
     "prepublishOnly": "yarn tsc",
     "test": "jest",
     "tsc-watch": "tsc -w -p tsconfig.json",
     "benchmark": "tsc -b tsconfig.benchmark.json && node -e \"require('fs').writeFileSync('dist-bench/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node dist-bench/__benchmarks__/run.js"
   },
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/cjs/src/index.js",
+  "types": "dist/esm/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
+      "types": "./dist/esm/src/index.d.ts",
+      "import": "./dist/esm/src/index.js",
+      "require": "./dist/cjs/src/index.js",
+      "default": "./dist/esm/src/index.js"
     },
+    "./package.json": "./package.json",
     "./react": {
-      "types": "./dist/src/react.d.ts",
-      "import": "./dist/src/react.js",
-      "default": "./dist/src/react.js"
-    },
-    "./package.json": "./package.json"
+      "types": "./dist/esm/src/react.d.ts",
+      "import": "./dist/esm/src/react.js",
+      "require": "./dist/cjs/src/react.js",
+      "default": "./dist/esm/src/react.js"
+    }
   },
   "files": [
     "dist",
@@ -141,5 +143,6 @@
       "^multiformats/(.*)$": "<rootDir>/src/__mocks__/empty-module.cjs",
       "^@multiformats/multiaddr$": "<rootDir>/src/__mocks__/empty-module.cjs"
     }
-  }
+  },
+  "module": "dist/esm/src/index.js"
 }

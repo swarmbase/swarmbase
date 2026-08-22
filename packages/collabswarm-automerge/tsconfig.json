@@ -13,13 +13,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist",
+    "outDir": "dist/esm",
     "composite": true
   },
   "exclude": [
     "node_modules",
     "extras",
-    "src/**/*.test.ts"
+"src/**/*.test.ts",
+    "src/**/__benchmarks__/**",
+    "src/**/__mocks__/**"
   ],
   "include": [
     "src",
