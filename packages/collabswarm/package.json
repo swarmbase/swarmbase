@@ -100,7 +100,7 @@
     "@libp2p/websockets": "^10.1.19",
     "@libp2p/webtransport": "^6.0.35",
     "@multiformats/multiaddr": "^13.0.3",
-    "bl": "^6.1.6",
+    "bl": "^7.0.12",
     "blockstore-idb": "^4.0.1",
     "datastore-idb": "^5.0.1",
     "helia": "^7.1.7",
