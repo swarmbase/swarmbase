@@ -129,6 +129,7 @@ export default defineConfig({
             'concepts/networking',
             'concepts/storage',
             'concepts/security',
+            'concepts/performance',
             'concepts/limitations',
           ],
         },
